@@ -193,6 +193,15 @@ static const JsonCase CASES[] = {
     {40, "foreach on parsed list",
      "#main\n  xs = json.parse_list('a,b')\n  foreach(xs, k, '#loop')\n  OK\n#loop\n  io.out(k)\n  return\n",
      "printf '' | " VM, 0, "ab"},
+    {41, "json u escape ascii",
+     "#main\n  xs = json.parse_list('[\"\\u0041\\u0042\"]')\n  io.outln(xs)\n  OK\n",
+     "printf '' | " VM, 0, "AB"},
+    {42, "json u escape utf8",
+     "#main\n  s = json.parse('\"\\u0219\\u021B\"')\n  io.outln(s)\n  OK\n",
+     "printf '' | " VM, 0, "\xC8\x99\xC8\x9B"},
+    {43, "json u surrogate pair",
+     "#main\n  s = json.parse('\"\\uD83D\\uDE00\"')\n  io.outln(s)\n  OK\n",
+     "printf '' | " VM, 0, "\xF0\x9F\x98\x80"},
 };
 
 int main(void) {

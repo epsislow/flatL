@@ -1,0 +1,4 @@
+#main
+  xs = json.parse_list('["\u0041\u0042"]')
+  io.outln(xs)
+  OK

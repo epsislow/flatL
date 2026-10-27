@@ -1,0 +1,4 @@
+#main
+  s = json.parse('"\uD83D\uDE00"')
+  io.outln(s)
+  OK

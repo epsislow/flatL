@@ -31,6 +31,100 @@ static int append_char(char *buf, size_t *pos, size_t max, char c) {
     return 0;
 }
 
+static int hex_value(char c) {
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return -1;
+}
+
+static int read_u16_hex(const char **p, uint16_t *out) {
+    uint16_t v = 0;
+    for (int i = 0; i < 4; i++) {
+        int h = hex_value(**p);
+        if (h < 0) {
+            return -1;
+        }
+        (*p)++;
+        v = (uint16_t)((v << 4) | (uint16_t)h);
+    }
+    *out = v;
+    return 0;
+}
+
+static int append_utf8_cp(char *buf, size_t *len, size_t max, uint32_t cp) {
+    if (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF)) {
+        return -1;
+    }
+    if (cp <= 0x7F) {
+        if (*len + 1 >= max) {
+            return -1;
+        }
+        buf[(*len)++] = (char)cp;
+    } else if (cp <= 0x7FF) {
+        if (*len + 2 >= max) {
+            return -1;
+        }
+        buf[(*len)++] = (char)(0xC0 | (cp >> 6));
+        buf[(*len)++] = (char)(0x80 | (cp & 0x3F));
+    } else if (cp <= 0xFFFF) {
+        if (*len + 3 >= max) {
+            return -1;
+        }
+        buf[(*len)++] = (char)(0xE0 | (cp >> 12));
+        buf[(*len)++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        buf[(*len)++] = (char)(0x80 | (cp & 0x3F));
+    } else {
+        if (*len + 4 >= max) {
+            return -1;
+        }
+        buf[(*len)++] = (char)(0xF0 | (cp >> 18));
+        buf[(*len)++] = (char)(0x80 | ((cp >> 12) & 0x3F));
+        buf[(*len)++] = (char)(0x80 | ((cp >> 6) & 0x3F));
+        buf[(*len)++] = (char)(0x80 | (cp & 0x3F));
+    }
+    return 0;
+}
+
+/* After '\\u', *p points at first hex digit; advances *p past the escape(s). */
+static int parse_json_u_escape(const char **p, uint32_t *out_cp) {
+    uint16_t hi;
+    uint32_t cp;
+
+    if (read_u16_hex(p, &hi) != 0) {
+        return -1;
+    }
+    if (hi >= 0xD800 && hi <= 0xDBFF) {
+        const char *q = *p;
+        uint16_t lo;
+        if (q[0] != '\\' || q[1] != 'u') {
+            return -1;
+        }
+        q += 2;
+        if (read_u16_hex(&q, &lo) != 0) {
+            return -1;
+        }
+        if (lo < 0xDC00 || lo > 0xDFFF) {
+            return -1;
+        }
+        cp = 0x10000u + (((uint32_t)(hi - 0xD800) << 10) | (uint32_t)(lo - 0xDC00));
+        *p = q;
+    } else {
+        if (hi >= 0xDC00 && hi <= 0xDFFF) {
+            return -1;
+        }
+        cp = hi;
+    }
+    *out_cp = cp;
+    return 0;
+}
+
 static int set_str_from_bytes(FlatValue *out, FlatStringPool *pool, const char *s, size_t len) {
     if (len <= FLAT_INLINE_STR_MAX) {
         return flat_value_set_str_inline(out, s, len);
@@ -56,6 +150,17 @@ static int unescape_simple_token(const char *in, char *out, size_t out_max) {
                 c = '\r';
             } else if (c == 't') {
                 c = '\t';
+            } else if (c == 'u') {
+                const char *q = in + i + 1;
+                uint32_t cp;
+                if (parse_json_u_escape(&q, &cp) != 0) {
+                    return -1;
+                }
+                if (append_utf8_cp(out, &j, out_max, cp) != 0) {
+                    return -1;
+                }
+                i = (size_t)(q - in) - 1;
+                continue;
             }
             if (j + 1 >= out_max) {
                 return -1;
@@ -265,7 +370,12 @@ static int parse_json_string_at(JsonCtx *ctx, FlatValue *out) {
             } else if (c == 't') {
                 c = '\t';
             } else if (c == 'u') {
-                return -1;
+                uint32_t cp;
+                if (parse_json_u_escape(&p, &cp) != 0 ||
+                    append_utf8_cp(buf, &len, sizeof buf, cp) != 0) {
+                    return -1;
+                }
+                continue;
             }
             if (len + 1 >= sizeof buf) {
                 return -1;
