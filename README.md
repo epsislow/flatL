@@ -85,11 +85,24 @@ Lexical rules (summary):
 
 Reference implementation direction: **C** — static IR structs, linear memory layout, switch-dispatch VM (no string parsing at runtime).
 
+## Build & test (WSL)
+
+```bash
+make              # bin/flc, bin/flvm, bin/run_tests
+make test         # declarative cases under test/cases/
+bin/run_tests -h
+bin/run_tests smoke[1-3] -v
+```
+
+See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for repo layout and `case.toml` format.
+
 ## Roadmap
 
-- [ ] Lexer & parser (`.fl` → FGIR in memory)
-- [ ] Compiler (`flc`: FGIR → `.fb`)
-- [ ] Virtual machine (`flvm`)
+- [x] Toolchain skeleton + C test runner (`run_tests`)
+- [ ] Virtual machine (`flvm`) — load `.fb`, opcodes
+- [ ] Compiler (`flc`: `.fl` → `.fb`)
+- [ ] Lexer & parser (FGIR)
+- [ ] Native std libraries (no VM built-in functions)
 - [ ] Optional modular / dynamic linking (`.so` / `.dll`) for hot-swappable blocks
 
 ## License

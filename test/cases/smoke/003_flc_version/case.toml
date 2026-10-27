@@ -1,0 +1,8 @@
+suite = "smoke"
+id = 3
+desc = "flc --version exits 0"
+kind = "exec"
+
+cmd = "{root}/bin/flc --version"
+expect_exit = 0
+stdout_contains = "flc"

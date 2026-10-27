@@ -1,0 +1,8 @@
+suite = "smoke"
+id = 2
+desc = "flvm --version exits 0"
+kind = "exec"
+
+cmd = "{root}/bin/flvm --version"
+expect_exit = 0
+stdout_contains = "flvm"

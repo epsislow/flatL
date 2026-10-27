@@ -1,82 +1,270 @@
-# flatL — architecture reference (draft)
+# flatL — Architecture & Binary Specification (draft)
 
-Consolidated from project design notes. Authoritative details will move here as `flc` and `flvm` land in the repo.
+Consolidated from project design notes. Normative details will be refined as `flc` and `flvm` are implemented in the repository.
 
-## 1. Flat graph philosophy (FGIR v1.0)
+**Related:** FGIR (Flat Graph Intermediate Representation) v1.0 · `.fb` bytecode & VM v1.1
 
-Programs are **not** syntax trees. They are a **flat graph** of **basic blocks**:
+---
 
-- Each block is a contiguous sequence of instructions (`#main`, `#verifica_balanta`, …).
-- Control flow is **explicit**: guards, backtrack labels, panic labels, and `call` targets are known at compile time.
-- **Logical failure** (`FAIL`, failed guards) is separate from **infrastructure panic** (I/O errors, OOM, timeouts).
+## 1. Flat graph model (FGIR)
 
-### Backtrack addressing
+Programs are **not** abstract syntax trees. They are a **flat graph** of **basic blocks**:
 
-When guard at instruction index *n* in block `#target` fails, runtime seeks:
+- Each block is a contiguous, linear sequence of instructions (e.g. `#main`, `#check_balance`).
+- Control flow is **explicit**: guards, backtrack labels, panic labels, and `call` targets are resolved at **compile time**.
+- **Logical failure** (`FAIL`, failed guards) is separate from **infrastructure panic** (I/O errors, OOM, timeouts, network faults).
+
+### 1.1 Lexical and structural rules
+
+| Construct | Meaning |
+|-----------|---------|
+| `#name` | Block declaration |
+| `#name(arg1, arg2)` | Block with parameter list |
+| Indented lines under a block | Sequential execution (implicit AND), top to bottom |
+| `call #block(args) -> var` | Invoke another block; bind result to `var` |
+| `expr == value` | Guard; on false, branch to backtrack address |
+| `OK` / `FAIL` | Terminal success / logical failure |
+| `return expr` | Return from block to caller |
+| `foreach(coll, item, '#loop')` | Iterate collection via sub-block |
+| `// …` | Line comment |
+
+There is **no programmer-visible `goto`**. Jump targets are derived from block names and **1-based** instruction indices.
+
+### 1.1.1 Language keywords vs native libraries
+
+**Keywords** (compile to VM opcodes — not optional “built-in functions”):
+
+- `#block`, `call`, `return`, `foreach`, `OK`, `FAIL`, `->` (call result binding)
+- Guards and assignment lines (`=`, `==`) map to `OP_ASSIGN` / `OP_GUARD`
+
+**Native libraries** (dotted calls such as `str.concat`, `kv.get`, `end.msg`):
+
+- Implemented as registered C modules under `src/lib/` (planned)
+- Resolved at compile time to `(module, function)` IDs in bytecode
+- No special-case function names in the VM dispatch loop
+
+### 1.2 Backtrack addressing
+
+When the guard at instruction index *n* in block `#target` evaluates to false, the runtime transfers control to:
 
 ```text
 #backtrack.#target.n
 ```
 
-If no block exists, the enclosing flow aborts with `FAIL`.
+If no such block exists, the enclosing flow aborts with logical **FAIL**.
 
-### Panic addressing
+Example:
 
-On infrastructure fault at index *n* in `#target`:
+```text
+#main
+  uid = form.userId
+  amount = form.amount
+  call #check_balance(uid, amount) -> has_funds
+  has_funds == true
+  call #process_payment(uid, amount) -> payment_status
+  payment_status == 'SUCCESS'
+  end.msg('Order completed')
+  OK
+
+#backtrack.#main.4
+  end.err('Insufficient funds')
+  FAIL
+
+#backtrack.#main.6
+  end.err('Payment declined')
+  FAIL
+```
+
+### 1.3 Panic addressing
+
+On an **infrastructure** fault at index *n* in block `#target`, the runtime routes to:
 
 ```text
 #panic.#target.n
 ```
 
-Fallback: `#panic.any` (e.g. transaction rollback via `tstop()`).
+If no handler exists for that index, control falls through to **`#panic.any`** (e.g. transaction rollback via `tstop()`).
 
-## 2. Iteration
+Example:
+
+```text
+#check_balance(userId, amount)
+  key = str.concat('user:wallet:', userId)
+  balance = kget(key)
+  result = calc(balance >= amount)
+  return result
+
+#panic.#check_balance.2
+  redis.log('Balance lookup failed')
+  return false
+```
+
+### 1.4 Iteration
 
 `foreach(collection, key_var, '#loop_body')`:
 
-1. Bind iterator over `collection`.
-2. Jump to `#loop_body` for each element.
-3. At end of loop block, resume `foreach` cursor; when exhausted, continue sequentially below `foreach`.
+1. Bind an iterator over `collection`.
+2. For each element, jump to `#loop_body` with `key_var` set.
+3. When the loop block finishes, resume the foreach cursor; when the collection is exhausted, execution continues on the line below `foreach`.
 
-Empty backtrack body on a loop guard implies **continue** to next item.
+An **empty** backtrack block for a guard inside the loop body means **continue** to the next collection item.
 
-## 3. Binary format (v1.1)
+---
 
-See [README](../README.md#fb-binary-layout-v11) for header and opcode table.
+## 2. Toolchain
 
-Instruction packets in the payload segment:
+```text
+ program.fl  ──►  flc  ──►  program.fb  ──►  flvm  ──►  process exit status
+ (source)              (bytecode)              (dispatch loop)
+```
+
+| Extension | Role |
+|-----------|------|
+| `.fl` | Human-readable flatL source |
+| `.fb` | **flat Bytecodes** — binary image for the VM |
+
+```bash
+./flc program.fl -o program.fb
+./flvm program.fb
+```
+
+---
+
+## 3. `.fb` binary layout (v1.1)
+
+### 3.1 File structure
+
+```text
++------------------------------------------------------------------+
+| MAGIC (4 bytes): 0x46 0x4C 0x41 0x54  ('F','L','A','T')          |
++------------------------------------------------------------------+
+| BLOCK COUNT (2 bytes, uint16)                                    |
++------------------------------------------------------------------+
+| BLOCK DIRECTORY (repeat count times)                             |
+|   - Block ID / hash (4 bytes)                                    |
+|   - Byte offset in instruction stream (4 bytes)                  |
++------------------------------------------------------------------+
+| BYTECODE INSTRUCTION STREAM                                      |
++------------------------------------------------------------------+
+```
+
+### 3.2 Instruction packet
 
 ```text
 +--------+--------------+---------------------------+
-| Opcode | Payload size | Metadata / jump indices   |
+| Opcode | Payload size | Payload / jump metadata   |
 | 1 byte | 1 byte       | variable                  |
 +--------+--------------+---------------------------+
 ```
 
-Compilation example — source:
+Payload interpretation is **opcode-specific** (see below). The compiler replaces textual labels with numeric offsets or indices in the binary image.
+
+### 3.3 Opcode table
+
+| Name | Hex | Role |
+|------|-----|------|
+| `OP_ASSIGN` | `0x01` | State mutation / side-effect assignment (payload: opaque expression bytes at first) |
+| `OP_GUARD` | `0x02` | Boolean guard; if false, jump to backtrack target in payload |
+| `OP_CALL` | `0x03` | Enter target block; push return address on call stack |
+| `OP_RETURN` | `0x04` | Pop call stack; resume caller |
+| `OP_FOREACH` | `0x05` | Setup collection iteration; enter loop block |
+| `OP_OK` | `0x06` | Halt with success |
+| `OP_FAIL` | `0x07` | Halt with logical failure |
+| `OP_PANIC` | `0x08` | Route to panic handler address |
+
+### 3.4 Compilation sketch
+
+Source:
 
 ```text
 #main
   is_empty == true
-  end.msg('Succes')
+  end.msg('Success')
   OK
 ```
 
-Bytecode sequence (conceptual):
+Conceptual bytecode for `#main`:
 
-1. `OP_GUARD` — payload: backtrack jump address  
-2. `OP_ASSIGN` — payload: `end.msg('Succes')`  
+1. `OP_GUARD` — payload includes backtrack jump address  
+2. `OP_ASSIGN` — payload encodes `end.msg('Success')`  
 3. `OP_OK`
 
-## 4. Planned C IR shapes
+---
 
-- `Instruction` — statement text + index (parser phase)  
-- `BasicBlock` — label, instructions[], parameters[]  
-- `ExecutableProgramIR` — block array  
-- Software call stack: `return_block_label`, `return_instruction_index`
+## 4. Compiler IR (planned C shapes)
 
-VM: load `.fb`, directory lookup by hash/offset, `switch(opcode)` dispatch loop with instruction pointer and call stack.
+During parsing, `.fl` is lowered to an in-memory **ExecutableProgramIR** before emission to `.fb`:
 
-## 5. Future: dynamic modules
+- **`Instruction`** — source text (or parsed form) + **1-based** index within block  
+- **`BasicBlock`** — label string, instruction array, optional parameter names  
+- **`ExecutableProgramIR`** — array of blocks; single `#main` entry  
 
-Independent modules compiled to native shared libraries; block lookup via `dlopen` / `dlsym`; rebinding without full process restart.
+**Call stack (software):** frames hold `return_block` reference and `return_instruction_index`.
+
+The VM loads `.fb`, resolves blocks via the directory (hash/offset), and runs a **`switch(opcode)`** dispatch loop with an instruction pointer and call stack. **No source string parsing at runtime.**
+
+---
+
+## 5. Virtual machine (behavioral summary)
+
+- **Guards:** evaluate condition; on false, set IP to compiled backtrack target (or fail if unmapped).  
+- **Calls:** push frame, jump to block entry; **return** pops and resumes after the call site.  
+- **Terminals:** `OP_OK` and `OP_FAIL` end execution with distinct exit codes.  
+- **Panic:** infrastructure errors trigger `OP_PANIC` routing, not ordinary guard backtrack.
+
+Reference implementation language: **C11**, minimal dependencies, suitable for WSL/Linux first.
+
+---
+
+## 6. Future: dynamic modules
+
+Independent compilation units may become native shared libraries (`.so` / `.dll`). Block entry points could be resolved via `dlopen` / `dlsym`, allowing rebinding of handlers without restarting the host process. Initial milestone is **static** `.fb` only.
+
+---
+
+## 7. Repository layout & automated tests
+
+Built artifacts live under **`bin/`** (gitignored): `flc`, `flvm`, `run_tests`.
+
+```text
+flatL/
+  Makefile
+  include/          # flat.h, shared headers
+  src/
+    flc/
+    flvm/
+    run_tests/      # C test runner (no Node/JS)
+    common/
+    lib/              # native std modules (planned)
+  examples/         # sample .fl programs
+  test/cases/       # declarative cases only
+    <suite>/<id>_<name>/
+      case.toml
+      … fixtures …
+  docs/
+  bin/              # build output
+```
+
+### 7.1 `case.toml` kinds
+
+| kind | Purpose |
+|------|---------|
+| `files` | Assert paths exist under repo root (`check = "relative/path"`) |
+| `exec` | Run shell command (`cmd`, `expect_exit`, optional `stdout_contains`) |
+| `pipeline` | `flc` then `flvm` (planned) |
+
+Discovery: `bin/run_tests` scans `test/cases/*/*/case.toml`.
+
+```bash
+make          # builds bin/flc, bin/flvm, bin/run_tests
+make test     # runs all cases
+bin/run_tests smoke[1-3] -v -e
+```
+
+Suite names match directories under `test/cases/` (`smoke`, `flvm`, `flc`, `e2e`, …).
+
+---
+
+## 8. Document status
+
+This file is a **draft**. Opcode payload layouts, exact directory entry fields, and exit-code conventions will be pinned once `flvm` and `flc` accept conformance fixtures under `test/cases/` and `examples/`.

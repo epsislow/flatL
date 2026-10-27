@@ -1,0 +1,8 @@
+suite = "smoke"
+id = 1
+desc = "core repo paths exist"
+kind = "files"
+
+check = "include/flat.h"
+check = "docs/SPECIFICATION.md"
+check = "Makefile"
