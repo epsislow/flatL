@@ -291,8 +291,19 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
     }
 
     if (c->kind == CASE_KIND_PIPELINE) {
-        char tmpdir[] = "/tmp/flatl_caseXXXXXX";
-        char src_path[FLAT_CASE_MAX_PATH + 64];
+   //char tmpdir[] = "/tmp/flatl_caseXXXXXX";
+        
+char tmpdir[512];
+const char *env_tmp = getenv("TMPDIR");
+if (env_tmp != NULL) {
+	    snprintf(tmpdir, sizeof(tmpdir), "%s/flatl_caseXXXXXX", env_tmp);
+} else {
+	    snprintf(tmpdir, sizeof(tmpdir), "/tmp/flatl_caseXXXXXX");
+}
+
+
+
+	char src_path[FLAT_CASE_MAX_PATH + 64];
         char compile_cmd[FLAT_CASE_MAX_CMD];
         char run_cmd[FLAT_CASE_MAX_CMD];
         char out_fb[FLAT_CASE_MAX_PATH];
