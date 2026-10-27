@@ -1,6 +1,6 @@
 # flatL (Flat Language)
 
-**flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards, structural backtracking, `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fL`) into packed bytecode (`.fB`) executed by a small virtual machine (**flvm**).
+**flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards, structural backtracking, `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
 
 > FGIR (Flat Graph Intermediate Representation) spec v1.0 · Binary & VM spec v1.1
 
@@ -12,7 +12,7 @@ Traditional block nesting (`if`, `try/catch`, deep indentation) hides where succ
 - **Panics** — infrastructure faults route to `#panic.#block.index` or `#panic.any`, separate from logical `FAIL`.
 - **No programmer `goto`** — targets are derived at compile time from block name and instruction index.
 
-## Example (`.fL`)
+## Example (`.fl`)
 
 ```text
 #main
@@ -50,21 +50,21 @@ Lexical rules (summary):
 ## Toolchain pipeline
 
 ```text
- program.fL  ──►  flc  ──►  program.fB  ──►  flvm  ──►  execution
+ program.fl  ──►  flc  ──►  program.fb  ──►  flvm  ──►  execution
  (source)              (bytecode)              (VM loop)
 ```
 
 | Extension | Role |
 |-----------|------|
-| `.fL` | flatL source — indent-delimited graph DSL |
-| `.fB` | **flat Bytecodes** — magic header, block directory, opcode stream |
+| `.fl` | flatL source — indent-delimited graph DSL |
+| `.fb` | **flat Bytecodes** — magic header, block directory, opcode stream |
 
 ```bash
-./flc program.fL -o program.fB
-./flvm program.fB
+./flc program.fl -o program.fb
+./flvm program.fb
 ```
 
-## `.fB` binary layout (v1.1)
+## `.fb` binary layout (v1.1)
 
 1. **Magic** — `0x46 0x4C 0x41 0x54` (`FLAT`)
 2. **Block directory** — count + entries (block id/hash, byte offset)
@@ -87,8 +87,8 @@ Reference implementation direction: **C** — static IR structs, linear memory l
 
 ## Roadmap
 
-- [ ] Lexer & parser (`.fL` → FGIR in memory)
-- [ ] Compiler (`flc`: FGIR → `.fB`)
+- [ ] Lexer & parser (`.fl` → FGIR in memory)
+- [ ] Compiler (`flc`: FGIR → `.fb`)
 - [ ] Virtual machine (`flvm`)
 - [ ] Optional modular / dynamic linking (`.so` / `.dll`) for hot-swappable blocks
 

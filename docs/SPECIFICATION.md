@@ -75,7 +75,7 @@ Bytecode sequence (conceptual):
 - `ExecutableProgramIR` — block array  
 - Software call stack: `return_block_label`, `return_instruction_index`
 
-VM: load `.fB`, directory lookup by hash/offset, `switch(opcode)` dispatch loop with instruction pointer and call stack.
+VM: load `.fb`, directory lookup by hash/offset, `switch(opcode)` dispatch loop with instruction pointer and call stack.
 
 ## 5. Future: dynamic modules
 
