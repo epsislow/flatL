@@ -2,7 +2,8 @@
 
 **flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards, structural backtracking, `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
 
-> FGIR (Flat Graph Intermediate Representation) spec v1.0 · Binary & VM spec v1.1
+> FGIR (Flat Graph Intermediate Representation) spec v1.0 · Binary & VM spec v1.1  
+> **Documentation is in English** — index: [docs/README.md](docs/README.md)
 
 ## Why flatL?
 
@@ -17,23 +18,23 @@ Traditional block nesting (`if`, `try/catch`, deep indentation) hides where succ
 ```text
 #main
   uid = form.userId
-  pret = form.amount
-  call #verifica_balanta(uid, pret) -> are_bani
-  are_bani == true
-  call #proceseaza_plata(uid, pret) -> status_plata
-  status_plata == 'SUCCESS'
-  end.msg('Comandă finalizată!')
+  amount = form.amount
+  call #check_balance(uid, amount) -> has_funds
+  has_funds == true
+  call #process_payment(uid, amount) -> payment_status
+  payment_status == 'SUCCESS'
+  end.msg('Order completed')
   OK
 
 #backtrack.#main.4
-  end.err('Fonduri insuficiente!')
+  end.err('Insufficient funds')
   FAIL
 
-#verifica_balanta(userId, amount)
+#check_balance(userId, amount)
   u_key = str.concat('user:wallet:', userId)
-  balanta = kget(u_key)
-  rezultat = calc(balanta >= amount)
-  return rezultat
+  balance = kget(u_key)
+  result = calc(balance >= amount)
+  return result
 ```
 
 Lexical rules (summary):
@@ -88,15 +89,13 @@ Reference implementation direction: **C** — static IR structs, linear memory l
 ## Build & test (WSL)
 
 ```bash
-make              # bin/flc, bin/flvm, bin/run_tests, bin/mkfb
-make test         # declarative cases under test/cases/
+make help         # list make targets
+make              # compile bin/ (no tests run)
+make test         # compile + run test/cases/
 bin/run_tests -h
-bin/run_tests smoke[1-3] -v
 ```
 
-**Developer guide (all CLI tools):** [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)  
-**Language & binary format:** [docs/SPECIFICATION.md](docs/SPECIFICATION.md)  
-**Types & limits (STRING ref, NUMBER, BOOL):** [docs/LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)
+**Docs:** [docs/README.md](docs/README.md) · [TOOLCHAIN.md](docs/TOOLCHAIN.md) · [SPECIFICATION.md](docs/SPECIFICATION.md) · [LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)
 
 ## Roadmap
 

@@ -1,5 +1,7 @@
 # flatL — Architecture & Binary Specification (draft)
 
+Documentation index: [README.md](./README.md) (English).
+
 Consolidated from project design notes. Normative details will be refined as `flc` and `flvm` are implemented in the repository.
 
 **Related:** FGIR (Flat Graph Intermediate Representation) v1.0 · `.fb` bytecode & VM v1.1

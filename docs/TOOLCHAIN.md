@@ -1,5 +1,7 @@
 # flatL toolchain — build & CLI
 
+Documentation index: [README.md](./README.md) (English).
+
 Run all commands from the **repository root** (directory containing `Makefile` and `include/flat.h`).
 
 Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make**, and a POSIX shell (WSL/Linux).

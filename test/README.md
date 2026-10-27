@@ -1,5 +1,7 @@
 # Tests
 
+Project documentation is in **English** — see [docs/README.md](../docs/README.md).
+
 Automated checks live under **`cases/`** — one directory per case:
 
 ```text

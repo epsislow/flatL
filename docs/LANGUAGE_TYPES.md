@@ -1,5 +1,7 @@
 # flatL — language types & runtime limits
 
+Documentation index: [README.md](./README.md) (English).
+
 Normative reference for **value types**, **STRING ref pool**, and **limits** in the VM (`flvm` v0.2+).  
 Architecture overview: [SPECIFICATION.md](./SPECIFICATION.md). Tooling: [TOOLCHAIN.md](./TOOLCHAIN.md).
 
