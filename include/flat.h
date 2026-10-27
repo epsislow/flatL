@@ -12,7 +12,8 @@ typedef enum {
     OP_FOREACH = 0x05,
     OP_OK      = 0x06,
     OP_FAIL    = 0x07,
-    OP_PANIC   = 0x08
+    OP_PANIC   = 0x08,
+    OP_IO      = 0x09
 } OpCode;
 
 #endif

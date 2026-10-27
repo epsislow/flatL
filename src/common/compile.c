@@ -173,6 +173,13 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             break;
         }
+        case FGIR_IO: {
+            uint8_t plen = (uint8_t)(strlen(ins->text) + 1);
+            if (emit_instr(code, OP_IO, ins->text, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
         case FGIR_RAISE_PANIC: {
             uint8_t payload[4];
             char plab[FGIR_MAX_LABEL];

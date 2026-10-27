@@ -201,6 +201,33 @@ static int obj_find(const ObjBody *ob, const char *key) {
     return -1;
 }
 
+int flat_obj_len(const FlatCollectionPool *pool, uint32_t obj_id, int *out_len) {
+    if (!pool || !out_len || obj_id >= (uint32_t)pool->obj_count) {
+        return -1;
+    }
+    *out_len = pool->objects[obj_id].len;
+    return 0;
+}
+
+int flat_obj_entry_at(const FlatCollectionPool *pool, uint32_t obj_id, int index,
+                      const char **out_key, FlatValue *out_val) {
+    const ObjBody *ob;
+    if (!pool || index < 0 || obj_id >= (uint32_t)pool->obj_count) {
+        return -1;
+    }
+    ob = &pool->objects[obj_id];
+    if (index >= ob->len) {
+        return -1;
+    }
+    if (out_key) {
+        *out_key = ob->entries[index].key;
+    }
+    if (out_val) {
+        *out_val = ob->entries[index].val;
+    }
+    return 0;
+}
+
 int flat_obj_get(const FlatCollectionPool *pool, uint32_t obj_id, const char *key,
                  FlatValue *out) {
     const ObjBody *ob;

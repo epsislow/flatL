@@ -12,26 +12,46 @@ static void print_version(void) {
 
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
-    fprintf(stderr, "       %s program.fb\n", prog);
+    fprintf(stderr, "       %s [--trace] [--trace-vars] program.fb\n", prog);
+    fprintf(stderr, "\n  --trace       log each opcode to stderr\n");
+    fprintf(stderr, "  --trace-vars  log opcode + variable snapshot to stderr\n");
     return 2;
 }
 
 int main(int argc, char **argv) {
     FlatBytecode bc;
+    FlatVmOptions opts = {0, 0};
+    const char *fb_path = NULL;
     int rc;
+    int i;
 
-    if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)) {
-        print_version();
-        return 0;
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
+            print_version();
+            return 0;
+        }
+        if (strcmp(argv[i], "--trace") == 0) {
+            opts.trace = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--trace-vars") == 0) {
+            opts.trace = 1;
+            opts.trace_vars = 1;
+            continue;
+        }
+        if (argv[i][0] == '-') {
+            return usage(argv[0]);
+        }
+        fb_path = argv[i];
     }
-    if (argc != 2) {
+    if (!fb_path) {
         return usage(argv[0]);
     }
 
-    if (flat_fb_load_file(argv[1], &bc) != 0) {
+    if (flat_fb_load_file(fb_path, &bc) != 0) {
         return 1;
     }
-    rc = flat_vm_run(&bc);
+    rc = flat_vm_run_opts(&bc, &opts);
     flat_fb_free(&bc);
     return rc;
 }

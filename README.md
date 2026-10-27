@@ -37,7 +37,7 @@ Parses, compiles, and runs with current `flc` / `flvm` (see `make test`):
 ```
 
 Types: `true` / `false`, numbers, quoted strings; `call #block`; guards with `==` (and `>=`, etc. on numbers).  
-Helpers (bootstrap until natives land): `__ref__`, `__slice__`; **LIST/OBJECT** literals `[ … ]`, `{ key: val }` and `__list_*` / `__obj_*` ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)).
+Helpers (bootstrap until natives land): `__ref__`, `__slice__`; **LIST/OBJECT** literals; **`io.outln` / `io.outvar`** for stdout; **`flvm --trace`** for stderr debug ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md), [TOOLCHAIN.md](docs/TOOLCHAIN.md)).
 
 Minimal sample: [examples/hello.fl](examples/hello.fl).
 

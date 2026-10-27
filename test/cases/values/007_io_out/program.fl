@@ -1,0 +1,5 @@
+#main
+  o = { qty: 3 }
+  io.outln('hello flatL')
+  io.outvar(o)
+  OK

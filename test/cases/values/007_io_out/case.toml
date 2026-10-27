@@ -1,0 +1,10 @@
+suite = "values"
+id = 7
+desc = "io.outln and io.outvar"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "hello flatL"

@@ -205,11 +205,64 @@ static void vm_teardown(VmState *st, int rc) {
     flat_pool_destroy(st->pool);
 }
 
+static const char *opcode_name(uint8_t opcode) {
+    switch ((OpCode)opcode) {
+    case OP_ASSIGN:
+        return "ASSIGN";
+    case OP_GUARD:
+        return "GUARD";
+    case OP_CALL:
+        return "CALL";
+    case OP_RETURN:
+        return "RETURN";
+    case OP_FOREACH:
+        return "FOREACH";
+    case OP_OK:
+        return "OK";
+    case OP_FAIL:
+        return "FAIL";
+    case OP_PANIC:
+        return "PANIC";
+    case OP_IO:
+        return "IO";
+    default:
+        return "?";
+    }
+}
+
+static void trace_vars_dump(const VmState *st) {
+    int i;
+    fprintf(stderr, "[trace-vars] %d var(s):\n", st->var_count);
+    for (i = 0; i < st->var_count; i++) {
+        fprintf(stderr, "  %s = ", st->vars[i].name);
+        flat_value_fprint(stderr, &st->vars[i].val, st->pool, st->coll);
+        fputc('\n', stderr);
+    }
+}
+
+static void apply_io(VmState *st, const char *line) {
+    char names[FLAT_MAX_VARS][64];
+    FlatValue vals[FLAT_MAX_VARS];
+    int i;
+
+    var_names_table(st, names);
+    for (i = 0; i < st->var_count; i++) {
+        vals[i] = st->vars[i].val;
+    }
+    (void)flat_io_exec_line(line, st->pool, st->coll, vals, st->var_count, names);
+}
+
 int flat_vm_run(const FlatBytecode *bc) {
+    return flat_vm_run_opts(bc, NULL);
+}
+
+int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     VmState st;
     uint32_t ip;
     size_t entry_index = 0;
     char guard_names[FLAT_MAX_VARS][64];
+    int trace = opts && opts->trace;
+    int trace_vars = opts && opts->trace_vars;
 
     if (!bc || !bc->data || bc->block_count == 0) {
         return 1;
@@ -249,6 +302,28 @@ int flat_vm_run(const FlatBytecode *bc) {
         }
         payload = &bc->data[ip + 2];
 
+        if (trace || trace_vars) {
+            fprintf(stderr, "[trace] ip=%u op=%s(0x%02x) len=%u", ip, opcode_name(opcode), opcode,
+                    (unsigned)payload_size);
+            if (opcode == OP_ASSIGN || opcode == OP_IO) {
+                size_t sl = payload_size;
+                const char *pt = (const char *)payload;
+                while (sl > 0 && pt[sl - 1] != '\0') {
+                    sl--;
+                }
+                if (sl > 0) {
+                    sl--;
+                }
+                fprintf(stderr, " %.*s", (int)sl, pt);
+            } else if (opcode == OP_GUARD && payload_size > 4) {
+                fprintf(stderr, " %s", (const char *)(payload + 4));
+            }
+            fputc('\n', stderr);
+        }
+        if (trace_vars) {
+            trace_vars_dump(&st);
+        }
+
         switch (opcode) {
         case OP_OK:
             vm_teardown(&st, 0);
@@ -284,6 +359,10 @@ int flat_vm_run(const FlatBytecode *bc) {
             continue;
         case OP_ASSIGN:
             apply_assign(&st, (const char *)payload);
+            ip += 2u + payload_size;
+            continue;
+        case OP_IO:
+            apply_io(&st, (const char *)payload);
             ip += 2u + payload_size;
             continue;
         case OP_GUARD: {

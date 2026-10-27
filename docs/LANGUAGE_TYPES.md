@@ -132,3 +132,23 @@ Future: VM handle passed into natives for binding outputs; `obj.get` / `list.pus
 
 `OK`, `FAIL`, `call`, `foreach`, etc. are **language keywords**, not types.  
 Dotted calls (`kv.get`) will return STRING REF via natives — see SPECIFICATION §1.1.1.
+
+---
+
+## 8. I/O (output & debug)
+
+| API | Effect |
+|-----|--------|
+| **`io.outln(expr)`** | Print any value + newline → **stdout** |
+| **`io.outvar(name)`** | Print bound variable → **stdout** |
+| **`io.inln()`** | *Planned* — read one line from stdin → STRING |
+
+Host debug (not part of `.fl`):
+
+| Flag | Effect |
+|------|--------|
+| `flvm --trace` | Opcode log → **stderr** |
+| `flvm --trace-vars` | Opcode + variable dump → **stderr** |
+
+Implementation today: `OP_IO` in bytecode (same family as future `src/lib/io` natives).  
+Formatting: `flat_value_fprint` (strings, numbers, nested LIST/OBJECT).

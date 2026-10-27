@@ -57,6 +57,10 @@ static const uint8_t *pool_resolve(const FlatStringPool *pool, int id, size_t *o
     return s->data;
 }
 
+const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *out_len) {
+    return pool_resolve(pool, (int)id, out_len);
+}
+
 int flat_pool_alloc_copy(FlatStringPool *pool, const void *data, size_t len, uint32_t *out_id) {
     PoolSlot *s;
     if (!pool || !data || !out_id || len == 0) {

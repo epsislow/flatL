@@ -36,7 +36,11 @@ make clean        # remove bin/ and generated min_ok.fb copies
 ```bash
 bin/flvm --version
 bin/flvm program.fb
+bin/flvm --trace program.fb          # opcode log → stderr
+bin/flvm --trace-vars program.fb     # opcode + variables → stderr
 ```
+
+Program output uses **`io.outln(...)`** and **`io.outvar(name)`** on **stdout** (see [LANGUAGE_TYPES.md §8](./LANGUAGE_TYPES.md#8-io-output--debug)).
 
 | Exit | Meaning |
 |------|---------|

@@ -18,7 +18,8 @@ typedef enum {
     FGIR_GUARD,
     FGIR_CALL,
     FGIR_FOREACH,
-    FGIR_RAISE_PANIC
+    FGIR_RAISE_PANIC,
+    FGIR_IO
 } FgirInstrKind;
 
 typedef struct {
