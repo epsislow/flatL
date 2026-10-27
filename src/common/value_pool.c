@@ -219,9 +219,19 @@ int flat_value_equals(const FlatValue *a, const FlatValue *b, const FlatStringPo
     case VAL_LIST:
     case VAL_OBJECT:
         return a->u.coll_id == b->u.coll_id;
+    case VAL_NULL:
+        return 1;
     default:
         return 0;
     }
+}
+
+int flat_value_set_null(FlatValue *v) {
+    if (!v) {
+        return -1;
+    }
+    v->tag = VAL_NULL;
+    return 0;
 }
 
 int flat_value_compare_number(const FlatValue *v, double rhs, int op) {

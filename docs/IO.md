@@ -34,7 +34,7 @@ Recovered PANIC (handler `#panic.*` / `#panic.any`) does **not** log to stderr b
 | STRING | Raw bytes (no surrounding quotes) |
 | NUMBER | `%g` style |
 | BOOL | `true` / `false` |
-| LIST / OBJECT | Quoted keys + nested structure (debug shape; LIST/OBJECT stdin not in v0.3) |
+| LIST / OBJECT | v0.3: debug shape; **planned:** LIST simple comma line, OBJECT `json.stringify` — [IO_COLLECTIONS.md §6](./IO_COLLECTIONS.md#6-output) |
 
 Examples:
 
@@ -152,8 +152,11 @@ Catalog source: **`src/io_generate_tests/main.c`**. Output directories are **com
 
 ---
 
-## 10. Not in v0.3
+## 10. Collections & JSON (v0.4)
 
-- LIST/OBJECT on `io.in*` / special `io.out` (discuss later)
+- **`io.in_list` / `io.in_object` / `io.in_bools`**, **`json.*`** — [IO_COLLECTIONS.md](./IO_COLLECTIONS.md), guide [LIST_OBJECT.md](./LIST_OBJECT.md), tests `test/cases/json/`
+
+## 11. Not in v0.3
+
 - `io.inln_allow_empty`, `str.try_to_*`
 - Native module registry (`D12` in plan)

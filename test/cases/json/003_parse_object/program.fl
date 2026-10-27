@@ -1,0 +1,4 @@
+#main
+  o = json.parse_object('{"a":1}')
+  io.outln(o)
+  OK

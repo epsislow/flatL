@@ -104,6 +104,10 @@ static int find_var(VmState *st, const char *name) {
     return -1;
 }
 
+static int var_name_forbidden(const char *name) {
+    return strcmp(name, "null") == 0 || strcmp(name, "true") == 0 || strcmp(name, "false") == 0;
+}
+
 static void var_names_table(VmState *st, char (*names)[64]) {
     int i;
     for (i = 0; i < st->var_count; i++) {
@@ -118,6 +122,9 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
         return 0;
     }
     if (st->var_count >= FLAT_MAX_VARS) {
+        return -1;
+    }
+    if (var_name_forbidden(name)) {
         return -1;
     }
     snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
@@ -141,7 +148,8 @@ static char *trim(char *s) {
 }
 
 static int rhs_is_io_or_str_call(const char *rhs) {
-    return strncmp(rhs, "io.", 3) == 0 || strncmp(rhs, "str.to_", 7) == 0;
+    return strncmp(rhs, "io.", 3) == 0 || strncmp(rhs, "str.to_", 7) == 0 ||
+           strncmp(rhs, "json.", 5) == 0;
 }
 
 static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *line,
@@ -164,6 +172,9 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
     *eq = '\0';
     lhs = trim(buf);
     rhs = trim(eq + 1);
+    if (var_name_forbidden(lhs)) {
+        return 0;
+    }
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
         vals[i] = st->vars[i].val;

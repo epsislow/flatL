@@ -578,6 +578,11 @@ static int flat_value_parse_at(const char **p, FlatValue *out, FlatStringPool *p
         *p = s + 5;
         return flat_value_set_bool(out, 0);
     }
+    if (strncmp(s, "null", 4) == 0 &&
+        (s[4] == '\0' || !(isalnum((unsigned char)s[4]) || s[4] == '_'))) {
+        *p = s + 4;
+        return flat_value_set_null(out);
+    }
     if (isdigit((unsigned char)*s) || *s == '-' || *s == '+') {
         return parse_number_at(p, out);
     }
@@ -658,6 +663,9 @@ static int literal_to_value(const char *lit, FlatValue *out) {
     }
     if (strcmp(lit, "false") == 0) {
         return flat_value_set_bool(out, 0);
+    }
+    if (strcmp(lit, "null") == 0) {
+        return flat_value_set_null(out);
     }
     if (try_parse_number(lit, &num) == 0) {
         return flat_value_set_number(out, num);

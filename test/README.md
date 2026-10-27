@@ -17,6 +17,15 @@ bin/run_tests <suite>[id-range] -v
 
 See [docs/TOOLCHAIN.md](../docs/TOOLCHAIN.md) for filters, `case.toml` fields, and **portability** (Windows vs WSL, shell vs `io_generate_tests`).
 
+### JSON / collection I/O (`cases/json/`)
+
+Tests for `json.*`, `io.in_list` / `in_object` / `in_bools`, `null`, simple-list rules.  
+Guide: [docs/LIST_OBJECT.md](../docs/LIST_OBJECT.md).
+
+```bash
+bin/run_tests json -v
+```
+
 ## I/O suite (`cases/io/`)
 
 Thirty pipeline tests for `io.*` / `str.to_*` (stdin simulation, stdout checks). Spec: [docs/IO.md](../docs/IO.md).

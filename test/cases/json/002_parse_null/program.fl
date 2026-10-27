@@ -1,0 +1,5 @@
+#main
+  io.outln(null)
+  x = null
+  x == null
+  OK

@@ -19,6 +19,8 @@
 #define FLAT_OBJ_MAX_KEYS 128
 #define FLAT_OBJ_KEY_MAX 127
 
+#define FLAT_JSON_MAX_DEPTH 128
+
 typedef enum {
     VAL_EMPTY,
     VAL_BOOL,
@@ -26,7 +28,8 @@ typedef enum {
     VAL_STR_INLINE,
     VAL_STR_REF,
     VAL_LIST,
-    VAL_OBJECT
+    VAL_OBJECT,
+    VAL_NULL
 } FlatValueTag;
 
 typedef struct {
@@ -71,6 +74,7 @@ int flat_value_set_str_inline(FlatValue *v, const char *s, size_t len);
 int flat_value_set_str_ref(FlatValue *v, uint32_t ref_id);
 int flat_value_set_list(FlatValue *v, uint32_t list_id);
 int flat_value_set_object(FlatValue *v, uint32_t obj_id);
+int flat_value_set_null(FlatValue *v);
 
 FlatCollectionPool *flat_coll_create(void);
 void flat_coll_destroy(FlatCollectionPool *pool);
@@ -120,5 +124,24 @@ int flat_parse_number_token(const char *token, double *out_num);
 int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                       FlatValue *vars, int var_count, const char (*var_names)[64],
                       FlatValue *out_result, FlatIoStatus *out_status);
+
+int flat_json_parse(const char *s, FlatValue *out, FlatStringPool *pool, FlatCollectionPool *coll);
+int flat_json_parse_list(const char *s, FlatValue *out, FlatStringPool *pool,
+                         FlatCollectionPool *coll);
+int flat_json_parse_object(const char *s, FlatValue *out, FlatStringPool *pool,
+                           FlatCollectionPool *coll);
+int flat_json_parse_bools(const char *s, FlatValue *out, FlatStringPool *pool,
+                          FlatCollectionPool *coll);
+int flat_json_parse_bools_io(const char *s, FlatValue *out, FlatStringPool *pool,
+                             FlatCollectionPool *coll);
+int flat_json_stringify(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
+                        char *out, size_t out_size);
+int flat_json_list_is_homogeneous_numbers(const FlatCollectionPool *coll, uint32_t list_id);
+int flat_json_list_is_homogeneous_strings(const FlatCollectionPool *coll, uint32_t list_id);
+int flat_json_fprint_list_io(FILE *out, const FlatValue *v, FlatStringPool *pool,
+                             FlatCollectionPool *coll);
+int flat_json_fprint_object_io(FILE *out, const FlatValue *v, FlatStringPool *pool,
+                               FlatCollectionPool *coll);
+int flat_json_fprint_null_io(FILE *out);
 
 #endif

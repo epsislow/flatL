@@ -17,6 +17,7 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 | **NUMBER** | `n = 42`, `n = -3.5` | `VAL_NUMBER` (IEEE-754 `double`) |
 | **STRING** | `'hello'`, `"path"`, long data via ref | `VAL_STR_INLINE` or `VAL_STR_REF` |
 | **LIST** | `[1, 'a', { x: 1 }]`, `__list__()` | `VAL_LIST` (pool id) |
+| **NULL** | literal **`null`**, `json.parse('null')`, `json.parse('')` | **`VAL_NULL`** (not `VAL_EMPTY`; guards `x == null`) |
 | **OBJECT** | `{ qty: 3, name: 'x' }`, `__obj__()` | `VAL_OBJECT` (pool id) |
 
 **LIST** and **OBJECT** are **distinct** types (JSON array vs object). Either may nest the other as elements or field values.

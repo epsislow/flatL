@@ -140,6 +140,22 @@ static int read_line(char *buf, size_t buf_size, FlatIoStatus *st) {
     return 0;
 }
 
+static int read_line_allow_empty(char *buf, size_t buf_size, FlatIoStatus *st) {
+    if (!fgets(buf, (int)buf_size, stdin)) {
+        *st = FLAT_IO_PANIC_EOF;
+        return 0;
+    }
+    {
+        size_t n = strlen(buf);
+        if (n > 0 && buf[n - 1] == '\n') {
+            buf[n - 1] = '\0';
+        }
+    }
+    trim(buf);
+    *st = FLAT_IO_OK;
+    return 0;
+}
+
 static int read_one_char(FlatValue *out, FlatStringPool *pool, FlatIoStatus *st) {
     int c = fgetc(stdin);
     char ch[2];
@@ -238,6 +254,107 @@ static int run_str(const char *func, const char *inner, FlatStringPool *pool, Fl
     return -1;
 }
 
+static int run_json(const char *func, const char *inner, FlatStringPool *pool, FlatCollectionPool *coll,
+                    FlatValue *vars, int var_count, const char (*names)[64], FlatValue *out,
+                    FlatIoStatus *st) {
+    FlatValue src;
+    char token[65536];
+    char *p;
+    char inner_buf[4096];
+
+    *st = FLAT_IO_OK;
+    if (strcmp(func, "stringify") == 0) {
+        FlatValue v;
+        if (flat_value_parse_assign_rhs(trim((char *)inner), &v, pool, coll, vars, var_count,
+                                        names) != 0) {
+            *st = FLAT_IO_ERR;
+            return -1;
+        }
+        if (flat_json_stringify(&v, pool, coll, token, sizeof token) != 0) {
+            *st = FLAT_IO_ERR;
+            return -1;
+        }
+        return flat_value_set_str_inline(out, token, strlen(token));
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", inner);
+    if (flat_value_parse_assign_rhs(trim(inner_buf), &src, pool, coll, vars, var_count, names) !=
+        0) {
+        *st = FLAT_IO_ERR;
+        return -1;
+    }
+    if (src.tag != VAL_STR_INLINE && src.tag != VAL_STR_REF) {
+        *st = FLAT_IO_ERR;
+        return -1;
+    }
+    if (src.tag == VAL_STR_INLINE) {
+        snprintf(token, sizeof token, "%s", src.u.ins.bytes);
+    } else {
+        size_t len = 0;
+        const uint8_t *bp = flat_pool_read(pool, src.u.ref_id, &len);
+        if (!bp || len >= sizeof token) {
+            *st = FLAT_IO_ERR;
+            return -1;
+        }
+        memcpy(token, bp, len);
+        token[len] = '\0';
+    }
+    p = trim(token);
+    if (strcmp(func, "parse") == 0) {
+        if (flat_json_parse(p, out, pool, coll) != 0) {
+            *st = FLAT_IO_ERR;
+            return -1;
+        }
+        return 0;
+    }
+    if (strcmp(func, "parse_list") == 0) {
+        if (flat_json_parse_list(p, out, pool, coll) != 0) {
+            *st = FLAT_IO_ERR;
+            return -1;
+        }
+        return 0;
+    }
+    if (strcmp(func, "parse_object") == 0) {
+        if (flat_json_parse_object(p, out, pool, coll) != 0) {
+            *st = FLAT_IO_ERR;
+            return -1;
+        }
+        return 0;
+    }
+    if (strcmp(func, "parse_bools") == 0) {
+        if (flat_json_parse_bools(p, out, pool, coll) != 0) {
+            *st = FLAT_IO_ERR;
+            return -1;
+        }
+        return 0;
+    }
+    *st = FLAT_IO_ERR;
+    return -1;
+}
+
+static int parse_in_collection_line(const char *linebuf, int mode, FlatValue *out,
+                                   FlatStringPool *pool, FlatCollectionPool *coll,
+                                   FlatIoStatus *st) {
+    int rc;
+
+    *st = FLAT_IO_OK;
+    if (mode == 0) {
+        rc = flat_json_parse_list(linebuf, out, pool, coll);
+    } else if (mode == 1) {
+        rc = flat_json_parse_object(linebuf, out, pool, coll);
+    } else {
+        rc = flat_json_parse_bools_io(linebuf, out, pool, coll);
+        if (rc == -2) {
+            *st = FLAT_IO_PANIC_CANCEL;
+            return 0;
+        }
+    }
+    if (rc != 0) {
+        *st = FLAT_IO_PANIC_PARSE;
+        return 0;
+    }
+    return 0;
+}
+
 int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                       FlatValue *vars, int var_count, const char (*var_names)[64],
                       FlatValue *out_result, FlatIoStatus *out_status) {
@@ -267,6 +384,13 @@ int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool
     if (strcmp(mod, "str") == 0) {
         if (!out_result || run_str(func, inner, pool, coll, vals, var_count, names, out_result,
                                    out_status) != 0) {
+            return -1;
+        }
+        return 0;
+    }
+    if (strcmp(mod, "json") == 0) {
+        if (!out_result ||
+            run_json(func, inner, pool, coll, vals, var_count, names, out_result, out_status) != 0) {
             return -1;
         }
         return 0;
@@ -341,6 +465,16 @@ int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool
         if (strcmp(func, "in_num") == 0) {
             return parse_in_line_num(linebuf, out_result, out_status);
         }
+    }
+    if (strcmp(func, "in_list") == 0 || strcmp(func, "in_object") == 0 ||
+        strcmp(func, "in_bools") == 0) {
+        int mode = strcmp(func, "in_object") == 0 ? 1 : (strcmp(func, "in_bools") == 0 ? 2 : 0);
+        emit_prompt(prompt);
+        read_line_allow_empty(linebuf, sizeof linebuf, out_status);
+        if (*out_status != FLAT_IO_OK) {
+            return 0;
+        }
+        return parse_in_collection_line(linebuf, mode, out_result, pool, coll, out_status);
     }
 
     return -1;

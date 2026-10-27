@@ -163,6 +163,25 @@ void flat_value_fprint_ln(FILE *out, const FlatValue *v, const FlatStringPool *p
 
 void flat_value_fprint_io(FILE *out, const FlatValue *v, const FlatStringPool *pool,
                           const FlatCollectionPool *coll) {
+    if (!v || !out) {
+        return;
+    }
+    if (v->tag == VAL_NULL) {
+        flat_json_fprint_null_io(out);
+        return;
+    }
+    if (v->tag == VAL_LIST) {
+        if (flat_json_fprint_list_io(out, v, (FlatStringPool *)pool, (FlatCollectionPool *)coll) ==
+            0) {
+            return;
+        }
+    }
+    if (v->tag == VAL_OBJECT) {
+        if (flat_json_fprint_object_io(out, v, (FlatStringPool *)pool,
+                                       (FlatCollectionPool *)coll) == 0) {
+            return;
+        }
+    }
     flat_value_fprint_ex(out, v, pool, coll, 1);
 }
 

@@ -48,7 +48,8 @@ static FgirInstrKind classify(const char *line) {
     if (starts_with_kw(line, "call")) {
         return FGIR_CALL;
     }
-    if (strncmp(line, "io.", 3) == 0 || strncmp(line, "str.to_", 7) == 0) {
+    if (strncmp(line, "io.", 3) == 0 || strncmp(line, "str.to_", 7) == 0 ||
+        strncmp(line, "json.", 5) == 0) {
         return FGIR_IO;
     }
     if (strstr(line, "==") != NULL) {

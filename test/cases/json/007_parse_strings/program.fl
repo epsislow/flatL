@@ -1,0 +1,4 @@
+#main
+  xs = json.parse_list('Mark, Joe')
+  io.outln(xs)
+  OK

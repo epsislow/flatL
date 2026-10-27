@@ -1,0 +1,4 @@
+#main
+  io.in_object() -> o
+  io.outln(o)
+  OK
