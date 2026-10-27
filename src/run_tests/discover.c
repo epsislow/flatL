@@ -5,11 +5,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define DISCOVER_PATH_MAX 1024
+
 typedef struct {
     FlatCase *items;
     int count;
     int cap;
 } CaseList;
+
+static void copy_suite_dir_name(char *dst, size_t dst_size, const char *dir_name) {
+    size_t n = 0;
+    while (n + 1 < dst_size && dir_name[n] != '\0') {
+        n++;
+    }
+    memcpy(dst, dir_name, n);
+    dst[n] = '\0';
+}
 
 static int case_list_push(CaseList *list, const FlatCase *c) {
     if (list->count >= list->cap) {
@@ -36,7 +47,7 @@ static int cmp_case(const void *a, const void *b) {
 }
 
 int flat_discover_cases(const char *repo_root, FlatCase **out_cases, int *out_count) {
-    char cases_root[512];
+    char cases_root[DISCOVER_PATH_MAX];
     DIR *suites;
     struct dirent *se;
     CaseList list = {0};
@@ -52,13 +63,16 @@ int flat_discover_cases(const char *repo_root, FlatCase **out_cases, int *out_co
     }
 
     while ((se = readdir(suites)) != NULL) {
-        char suite_path[512];
+        char suite_path[DISCOVER_PATH_MAX];
         DIR *ids;
 
         if (se->d_name[0] == '.') {
             continue;
         }
-        snprintf(suite_path, sizeof suite_path, "%s/%s", cases_root, se->d_name);
+        if (snprintf(suite_path, sizeof suite_path, "%s/%s", cases_root, se->d_name) >=
+            (int)sizeof suite_path) {
+            continue;
+        }
         ids = opendir(suite_path);
         if (!ids) {
             continue;
@@ -66,20 +80,25 @@ int flat_discover_cases(const char *repo_root, FlatCase **out_cases, int *out_co
         {
             struct dirent *ie;
             while ((ie = readdir(ids)) != NULL) {
-                char case_path[512];
-                char toml[512];
+                char case_path[DISCOVER_PATH_MAX];
+                char toml[DISCOVER_PATH_MAX];
                 FlatCase c;
 
                 if (ie->d_name[0] == '.') {
                     continue;
                 }
-                snprintf(case_path, sizeof case_path, "%s/%s", suite_path, ie->d_name);
-                snprintf(toml, sizeof toml, "%s/case.toml", case_path);
+                if (snprintf(case_path, sizeof case_path, "%s/%s", suite_path, ie->d_name) >=
+                    (int)sizeof case_path) {
+                    continue;
+                }
+                if (snprintf(toml, sizeof toml, "%s/case.toml", case_path) >= (int)sizeof toml) {
+                    continue;
+                }
                 if (flat_case_load(toml, &c) != 0) {
                     continue;
                 }
                 if (c.suite[0] == '\0') {
-                    snprintf(c.suite, sizeof c.suite, "%s", se->d_name);
+                    copy_suite_dir_name(c.suite, sizeof c.suite, se->d_name);
                 }
                 if (case_list_push(&list, &c) != 0) {
                     closedir(ids);

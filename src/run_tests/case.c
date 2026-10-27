@@ -292,7 +292,7 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
 
     if (c->kind == CASE_KIND_PIPELINE) {
         char tmpdir[] = "/tmp/flatl_caseXXXXXX";
-        char src_path[FLAT_CASE_MAX_PATH];
+        char src_path[FLAT_CASE_MAX_PATH + 64];
         char compile_cmd[FLAT_CASE_MAX_CMD];
         char run_cmd[FLAT_CASE_MAX_CMD];
         char out_fb[FLAT_CASE_MAX_PATH];
@@ -307,8 +307,12 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
             snprintf(err, (size_t)err_size, "mkdtemp failed");
             return -1;
         }
-        snprintf(src_path, sizeof src_path, "%s/%s", c->case_dir,
-                 c->pipeline_source[0] ? c->pipeline_source : "program.fl");
+        if (snprintf(src_path, sizeof src_path, "%s/%s", c->case_dir,
+                     c->pipeline_source[0] ? c->pipeline_source : "program.fl") >=
+            (int)sizeof src_path) {
+            snprintf(err, (size_t)err_size, "pipeline source path too long");
+            return -1;
+        }
         snprintf(out_fb, sizeof out_fb, "%s/out.fb", tmpdir);
         expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                             src_path, c->pipeline_compile);

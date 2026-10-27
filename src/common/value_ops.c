@@ -19,7 +19,7 @@ static char *trim(char *s) {
     return s;
 }
 
-static int find_var_index(const char *name, FlatValue *vars, int var_count, const char (*names)[64]) {
+static int find_var_index(const char *name, int var_count, const char (*names)[64]) {
     int i;
     for (i = 0; i < var_count; i++) {
         if (strcmp(names[i], name) == 0) {
@@ -170,7 +170,7 @@ static int parse_slice_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         return -1;
     }
     len = (size_t)strtoul(trim(tok), NULL, 10);
-    vi = find_var_index(varname, vars, var_count, names);
+    vi = find_var_index(varname, var_count, names);
     if (vi < 0 || vars[vi].tag != VAL_STR_REF) {
         return -1;
     }
@@ -301,14 +301,14 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     lhs = trim(buf);
     rhs = trim(oppos + (op <= 2 ? 2 : 1));
 
-    li = find_var_index(lhs, vars, var_count, names);
+    li = find_var_index(lhs, var_count, names);
     if (li >= 0) {
         lv = vars[li];
     } else if (literal_to_value(lhs, &lv) != 0) {
         return 0;
     }
     if (literal_to_value(rhs, &rv) != 0) {
-        li = find_var_index(rhs, vars, var_count, names);
+        li = find_var_index(rhs, var_count, names);
         if (li >= 0) {
             rv = vars[li];
         } else {

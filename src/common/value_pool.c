@@ -21,31 +21,6 @@ FlatStringPool *flat_pool_create(void) {
     return calloc(1, sizeof(FlatStringPool));
 }
 
-static void pool_release_slot(FlatStringPool *pool, int id) {
-    PoolSlot *s;
-    if (!pool || id < 0 || id >= pool->slot_count) {
-        return;
-    }
-    s = &pool->slots[id];
-    s->refcnt--;
-    if (s->refcnt > 0) {
-        return;
-    }
-    if (s->parent_id >= 0) {
-        pool_release_slot(pool, s->parent_id);
-        s->parent_id = -1;
-        s->data = NULL;
-        s->len = 0;
-        return;
-    }
-    if (s->data) {
-        pool->total_bytes -= s->len;
-        free(s->data);
-        s->data = NULL;
-    }
-    s->len = 0;
-}
-
 void flat_pool_destroy(FlatStringPool *pool) {
     int i;
     if (!pool) {

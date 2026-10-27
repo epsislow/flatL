@@ -7,10 +7,20 @@ Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make*
 ## Build
 
 ```bash
-make              # bin/flc, bin/flvm, bin/run_tests, bin/mkfb + .fb fixtures
+make help         # list all make targets (recommended first run)
+make              # compile only: flc, flvm, mkfb, run_tests + fixtures (no tests run)
+make tools        # flc, flvm, mkfb only
+make test         # compile, then ./bin/run_tests
 make clean        # remove bin/ and generated min_ok.fb copies
-make test         # build + run all declarative tests
 ```
+
+| Target | Effect |
+|--------|--------|
+| `make` / `make all` | Build all `bin/*` + regenerate `min_ok.fb` fixtures |
+| `make tools` | `flc`, `flvm`, `mkfb` only |
+| `make flvm` / `flc` / `mkfb` / `run_tests` | Single binary |
+| `make fixtures` | Run `mkfb` for test/example `.fb` |
+| `make test` | **Runs** the test suite (not part of plain `make`) |
 
 | Binary | Role |
 |--------|------|
