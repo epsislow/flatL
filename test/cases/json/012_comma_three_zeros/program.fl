@@ -1,0 +1,4 @@
+#main
+  xs = json.parse_list(',,')
+  io.outln(xs)
+  OK

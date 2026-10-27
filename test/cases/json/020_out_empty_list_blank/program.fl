@@ -1,0 +1,5 @@
+#main
+  xs = json.parse_list('')
+  io.outln(xs)
+  io.out('x')
+  OK

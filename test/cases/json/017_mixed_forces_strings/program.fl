@@ -1,0 +1,4 @@
+#main
+  xs = json.parse_list('1, TV')
+  io.outln(xs)
+  OK

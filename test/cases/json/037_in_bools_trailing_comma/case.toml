@@ -1,0 +1,10 @@
+suite = "json"
+id = 37
+desc = "in bools trailing comma"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf 'true,\n' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "true,false"

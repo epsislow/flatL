@@ -1,0 +1,4 @@
+#main
+  bs = json.parse_bools('[true,false]')
+  io.outln(bs)
+  OK

@@ -1,0 +1,4 @@
+#main
+  o = json.parse_object('{"b":2,"a":1}')
+  io.outln(o)
+  OK

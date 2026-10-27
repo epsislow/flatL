@@ -91,4 +91,4 @@ bin/run_tests json -v
 make test
 ```
 
-Suite: `test/cases/json/` (parse, in_list/in_object, null, bools).
+Suite: `test/cases/json/` (**40** cases; regenerate: `make json_generate_tests`).

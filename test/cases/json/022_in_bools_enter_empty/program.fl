@@ -1,0 +1,4 @@
+#main
+  io.in_bools() -> bs
+  io.outln(bs)
+  OK

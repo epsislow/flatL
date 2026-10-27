@@ -1,0 +1,4 @@
+#main
+  x = json.parse('null')
+  x == null
+  OK

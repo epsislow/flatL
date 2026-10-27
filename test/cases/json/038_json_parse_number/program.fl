@@ -1,0 +1,4 @@
+#main
+  x = json.parse('99')
+  io.outln(x)
+  OK

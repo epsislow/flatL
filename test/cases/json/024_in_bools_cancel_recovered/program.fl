@@ -1,0 +1,8 @@
+#main
+  io.in_bools() -> bs
+  io.outln('bad')
+  OK
+
+#panic.any
+  io.outln('cancelled')
+  OK

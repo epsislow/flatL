@@ -1,0 +1,6 @@
+#main
+  o = json.parse_object('{"n":42}')
+  s = json.stringify(o)
+  o2 = json.parse_object(s)
+  io.outln(o2)
+  OK

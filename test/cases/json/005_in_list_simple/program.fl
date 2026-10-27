@@ -1,4 +1,0 @@
-#main
-  io.in_list('nums:') -> xs
-  io.outln(xs)
-  OK

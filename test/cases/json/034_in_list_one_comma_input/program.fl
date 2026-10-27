@@ -1,0 +1,4 @@
+#main
+  io.in_list() -> xs
+  io.outln(xs)
+  OK

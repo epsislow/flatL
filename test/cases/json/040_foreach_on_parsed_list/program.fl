@@ -1,0 +1,7 @@
+#main
+  xs = json.parse_list('a,b')
+  foreach(xs, k, '#loop')
+  OK
+#loop
+  io.out(k)
+  return

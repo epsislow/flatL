@@ -1,0 +1,5 @@
+#main
+  xs = json.parse_list('7,8')
+  s = json.stringify(xs)
+  io.outln(s)
+  OK

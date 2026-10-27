@@ -1,0 +1,5 @@
+#main
+  x = 1
+  x == null
+  FAIL
+  OK

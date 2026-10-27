@@ -24,7 +24,10 @@ Guide: [docs/LIST_OBJECT.md](../docs/LIST_OBJECT.md).
 
 ```bash
 bin/run_tests json -v
+make json_generate_tests   # regenerate from src/json_generate_tests/main.c
 ```
+
+Catalog: **`src/json_generate_tests/main.c`** (40 cases).
 
 ## I/O suite (`cases/io/`)
 

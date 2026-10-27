@@ -1,0 +1,8 @@
+#main
+  io.in_list() -> xs
+  io.outln('bad')
+  OK
+
+#panic.any
+  io.outln('parse')
+  OK

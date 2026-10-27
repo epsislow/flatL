@@ -1,0 +1,4 @@
+#main
+  io.in_list('P:') -> xs
+  io.outln(xs)
+  OK
