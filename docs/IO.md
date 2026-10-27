@@ -139,13 +139,16 @@ Unhandled PANIC: stderr `flvm: unhandled panic: …` and exit **1**.
 
 ## 9. Tests
 
-Suite `test/cases/io/` (30 cases). Regenerate stubs:
+Suite **`test/cases/io/`** — 30 pipeline cases (`stdout_contains`, stdin via `printf … | flvm` in `case.toml`).
 
-```bash
-test/cases/io/gen_cases.sh
-```
+| Action | Command |
+|--------|---------|
+| Run I/O tests | `bin/run_tests io` or `make test` |
+| Regenerate stubs (after editing catalog) | `make io_generate_tests` |
 
-Pipeline tests pipe stdin, e.g. `printf 'line\n' | bin/flvm out.fb`.
+Catalog source: **`src/io_generate_tests/main.c`**. Output directories are **committed**; most developers never regenerate.
+
+**Portability (Windows, Bash, WSL):** [TOOLCHAIN.md — Portability](./TOOLCHAIN.md#portability-windows-shell-and-io-tests) and [test/README.md](../test/README.md). Summary: **`io_generate_tests` needs no Bash**; **`run_tests`** still uses a POSIX shell for pipeline `run` lines.
 
 ---
 

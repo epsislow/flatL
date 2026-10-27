@@ -14,7 +14,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test fixtures tools flvm flc mkfb run_tests rebuild
+.PHONY: all help clean test fixtures tools flvm flc mkfb run_tests io_generate_tests rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -27,6 +27,7 @@ help:
 	@echo "  make flc          rebuild compiler only"
 	@echo "  make mkfb         rebuild fixture helper only"
 	@echo "  make run_tests    rebuild test runner only"
+	@echo "  make io_generate_tests  rebuild bin/io_generate_tests and regenerate test/cases/io/*"
 	@echo "  make fixtures     regenerate min_ok.fb examples"
 	@echo "  make rebuild      make clean && make all (force full recompile)"
 	@echo ""
@@ -61,6 +62,9 @@ mkfb: $(BINDIR)/mkfb
 run_tests: $(BINDIR)/run_tests
 	@echo "OK: bin/run_tests"
 
+io_generate_tests: $(BINDIR)/io_generate_tests
+	$(BINDIR)/io_generate_tests
+
 rebuild: clean all
 
 fixtures: $(MIN_OK_FB)
@@ -83,6 +87,9 @@ RUN_TESTS_SRCS = \
 
 $(BINDIR)/run_tests: $(RUN_TESTS_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(RUN_TESTS_SRCS) $(LDFLAGS)
+
+$(BINDIR)/io_generate_tests: src/io_generate_tests/main.c src/common/repo.c | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ src/io_generate_tests/main.c src/common/repo.c $(LDFLAGS)
 
 $(BINDIR):
 	mkdir -p $(BINDIR)

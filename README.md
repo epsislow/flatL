@@ -135,7 +135,9 @@ make test         # compile + run test/cases/
 bin/run_tests -h
 ```
 
-**Docs:** [docs/README.md](docs/README.md) · [TOOLCHAIN.md](docs/TOOLCHAIN.md) · [SPECIFICATION.md](docs/SPECIFICATION.md) · [LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)
+**Cross-platform:** `flc` and `flvm` are portable C; **`make test`** uses `run_tests`, which runs pipeline commands through a **POSIX shell** (e.g. `printf … | flvm`). On Windows, use **WSL** for the full suite, or compile/run bytecode manually. I/O test files under `test/cases/io/` are committed — regenerate only when changing the catalog: `make io_generate_tests` (`bin/io_generate_tests`, no Bash). Details: [docs/TOOLCHAIN.md — Portability](docs/TOOLCHAIN.md#portability-windows-shell-and-io-tests) · [test/README.md](test/README.md).
+
+**Docs:** [docs/README.md](docs/README.md) · [TOOLCHAIN.md](docs/TOOLCHAIN.md) · [SPECIFICATION.md](docs/SPECIFICATION.md) · [LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md) · [IO.md](docs/IO.md)
 
 ## Roadmap
 
