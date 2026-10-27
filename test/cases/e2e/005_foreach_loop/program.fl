@@ -1,0 +1,7 @@
+#main
+  keys = 'a,b'
+  foreach(keys, k, '#loop')
+  OK
+
+#loop
+  return

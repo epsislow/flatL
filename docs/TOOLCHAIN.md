@@ -9,14 +9,15 @@ Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make*
 ```bash
 make              # bin/flc, bin/flvm, bin/run_tests, bin/mkfb + .fb fixtures
 make clean        # remove bin/ and generated min_ok.fb copies
+make test         # build + run all declarative tests
 ```
 
 | Binary | Role |
 |--------|------|
-| `bin/flc` | Compiler: `.fl` → `.fb` (in progress) |
+| `bin/flc` | Compiler: `.fl` → FGIR → `.fb` |
 | `bin/flvm` | Virtual machine: runs `.fb` |
-| `bin/run_tests` | Discovers and runs declarative tests under `test/cases/` |
-| `bin/mkfb` | Dev helper to emit bytecode fixtures |
+| `bin/run_tests` | Discovers and runs tests under `test/cases/` |
+| `bin/mkfb` | Emits minimal `.fb` fixtures (`--min-ok`) |
 
 ## `flvm`
 
@@ -25,71 +26,76 @@ bin/flvm --version
 bin/flvm program.fb
 ```
 
-Exit codes (current):
-
-| Code | Meaning |
+| Exit | Meaning |
 |------|---------|
-| 0 | `OP_OK` / success |
-| 1 | Load error, bad magic, truncated file, unsupported opcode |
-| 2 | `OP_FAIL` (logical failure) |
+| 0 | Success (`OP_OK`) |
+| 1 | Load/bytecode error, unknown opcode |
+| 2 | Logical failure (`OP_FAIL` or unmapped guard) |
+
+See [SPECIFICATION.md §5](./SPECIFICATION.md#5-virtual-machine-flvm) for opcode behavior.
 
 ## `flc`
 
 ```bash
 bin/flc --version
-bin/flc -o out.fb program.fl
+bin/flc --dump-ir program.fl    # print FGIR after parse
+bin/flc -o out.fb program.fl    # compile to bytecode
 ```
 
-Compilation is still being implemented; see the project plan in `.cursor/plans/flc-flvm.plan.md`.
+Parse/compile errors print to stderr and exit **1**.
 
 ## `mkfb`
-
-Generates a minimal valid `.fb` (single block, one `OP_OK`) for tests and examples.
 
 ```bash
 bin/mkfb --min-ok -o path/to/out.fb
 ```
 
-`make` also writes:
-
-- `examples/min_ok.fb`
-- `test/cases/flvm/001_min_ok/min_ok.fb`
+`make` also generates `examples/min_ok.fb` and `test/cases/flvm/001_min_ok/min_ok.fb`.
 
 ## `run_tests`
 
-No Node.js — the runner is C. It scans `test/cases/<suite>/<case>/case.toml`.
+C runner — no Node.js. Scans `test/cases/<suite>/<id>_*/case.toml`.
 
 ```bash
-make test                    # make all, then bin/run_tests
-bin/run_tests                # all cases
-bin/run_tests -h             # help
-bin/run_tests smoke[1-3]     # filter by suite and numeric id
-bin/run_tests flvm[1] smoke  # multiple filters
-bin/run_tests -v             # print failure details
-bin/run_tests -e             # progress grouped by suite
+bin/run_tests
+bin/run_tests -h
+bin/run_tests e2e[1-7] flc -v -e
 ```
 
-### Filter syntax
+### Filters
 
-- `suite` — all cases in that suite (directory name under `test/cases/`)
-- `suite[1]` — case with `id = 1` in `case.toml`
-- `suite[1-3,5]` — id ranges and lists
+- `suite` — all cases in suite
+- `suite[1]` / `suite[1-3,5]` — by `id` in `case.toml`
 
-Placeholders in `case.toml` commands:
+### Placeholders
 
-- `{root}` — repository root path
+| Token | Expands to |
+|-------|------------|
+| `{root}` | Repository root |
+| `{case}` | Directory containing `case.toml` |
+| `{tmp}` | Temp dir (pipeline only) |
+| `{src}` | Path to `program.fl` (pipeline) |
 
-### Case kinds (`case.toml`)
+### Case kinds
 
-| kind | Use |
-|------|-----|
-| `files` | `check = "relative/path"` must exist under repo root |
-| `exec` | `cmd`, `expect_exit`, optional `stdout_contains` / `stderr_contains` |
-| `pipeline` | `flc` then `flvm` (planned) |
+| kind | Fields |
+|------|--------|
+| `files` | `check = "path"` (repeatable) |
+| `exec` | `cmd`, `expect_exit`, optional `stdout_contains` |
+| `pipeline` | `source`, `compile`, `run`, `expect_exit` |
 
-Full layout and language spec: [SPECIFICATION.md](./SPECIFICATION.md).
+Example pipeline (`test/cases/e2e/001_hello_ok/case.toml`):
+
+```toml
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+```
 
 ## Related docs
 
-- [SPECIFICATION.md](./SPECIFICATION.md) — language, `.fb` format, repo layout
-- [../README.md](../README.md) — project overview
+- [SPECIFICATION.md](./SPECIFICATION.md) — language, `.fb` layout, VM semantics
+- [../test/README.md](../test/README.md) — test layout
+- [../README.md](../README.md) — overview

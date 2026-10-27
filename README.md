@@ -100,11 +100,12 @@ bin/run_tests smoke[1-3] -v
 ## Roadmap
 
 - [x] Toolchain skeleton + C test runner (`run_tests`)
-- [x] Virtual machine (`flvm`) — load `.fb`, `OP_OK` / `OP_FAIL` exit codes (more opcodes pending)
-- [ ] Compiler (`flc`: `.fl` → `.fb`)
-- [ ] Lexer & parser (FGIR)
-- [ ] Native std libraries (no VM built-in functions)
-- [ ] Optional modular / dynamic linking (`.so` / `.dll`) for hot-swappable blocks
+- [x] `flvm` — opcodes v0.1 (OK/FAIL/GUARD/ASSIGN/CALL/RETURN/FOREACH/PANIC)
+- [x] `flc` — parse `.fl` → FGIR, `--dump-ir`, emit `.fb`
+- [x] E2E tests (`make test` — 13 cases)
+- [ ] Native std libraries (`str`, `kv`, …) — no VM built-in functions
+- [ ] Full expression language + infrastructure panic from natives
+- [ ] Optional dynamic modules (`.so`)
 
 ## License
 

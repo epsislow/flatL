@@ -22,8 +22,6 @@ typedef struct {
 int flat_fb_load_file(const char *path, FlatBytecode *out);
 void flat_fb_free(FlatBytecode *bc);
 
-int flat_vm_run(const FlatBytecode *bc);
-
 int flat_fb_write_min_ok(const char *path);
 
 #endif

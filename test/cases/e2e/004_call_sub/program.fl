@@ -1,0 +1,6 @@
+#main
+  call #sub
+  OK
+
+#sub
+  return

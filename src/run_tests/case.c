@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+/* mkdtemp */
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -147,11 +149,13 @@ static int path_exists_at(const char *repo, const char *rel) {
     return access(full, F_OK) == 0;
 }
 
-static void expand_root(char *dst, int dst_size, const char *repo, const char *cmd) {
+static void expand_placeholders(char *dst, int dst_size, const char *repo, const char *case_dir,
+                                const char *tmp, const char *src_path, const char *cmd) {
     const char *src = cmd;
     char *d = dst;
     int left = dst_size - 1;
 
+    (void)src_path;
     while (*src && left > 0) {
         if (strncmp(src, "{root}", 6) == 0) {
             int n = snprintf(d, (size_t)left + 1, "%s", repo);
@@ -161,6 +165,36 @@ static void expand_root(char *dst, int dst_size, const char *repo, const char *c
             d += n;
             left -= n;
             src += 6;
+            continue;
+        }
+        if (strncmp(src, "{case}", 6) == 0) {
+            int n = snprintf(d, (size_t)left + 1, "%s", case_dir ? case_dir : "");
+            if (n > left) {
+                break;
+            }
+            d += n;
+            left -= n;
+            src += 6;
+            continue;
+        }
+        if (strncmp(src, "{tmp}", 5) == 0) {
+            int n = snprintf(d, (size_t)left + 1, "%s", tmp ? tmp : "/tmp");
+            if (n > left) {
+                break;
+            }
+            d += n;
+            left -= n;
+            src += 5;
+            continue;
+        }
+        if (strncmp(src, "{src}", 5) == 0) {
+            int n = snprintf(d, (size_t)left + 1, "%s", src_path ? src_path : "");
+            if (n > left) {
+                break;
+            }
+            d += n;
+            left -= n;
+            src += 5;
             continue;
         }
         *d++ = *src++;
@@ -238,7 +272,7 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
         char out[4096];
         int code = -1;
 
-        expand_root(cmd, sizeof cmd, repo_root, c->cmd);
+        expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
         if (run_shell_capture(cmd, &code, out, sizeof out) != 0) {
             snprintf(err, (size_t)err_size, "failed to run: %s", cmd);
             return -1;
@@ -257,8 +291,49 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
     }
 
     if (c->kind == CASE_KIND_PIPELINE) {
-        snprintf(err, (size_t)err_size, "pipeline kind not implemented yet");
-        return -1;
+        char tmpdir[] = "/tmp/flatl_caseXXXXXX";
+        char src_path[FLAT_CASE_MAX_PATH];
+        char compile_cmd[FLAT_CASE_MAX_CMD];
+        char run_cmd[FLAT_CASE_MAX_CMD];
+        char out_fb[FLAT_CASE_MAX_PATH];
+        char out[4096];
+        int code;
+
+        if (c->pipeline_compile[0] == '\0' || c->pipeline_run[0] == '\0') {
+            snprintf(err, (size_t)err_size, "pipeline missing compile/run");
+            return -1;
+        }
+        if (!mkdtemp(tmpdir)) {
+            snprintf(err, (size_t)err_size, "mkdtemp failed");
+            return -1;
+        }
+        snprintf(src_path, sizeof src_path, "%s/%s", c->case_dir,
+                 c->pipeline_source[0] ? c->pipeline_source : "program.fl");
+        snprintf(out_fb, sizeof out_fb, "%s/out.fb", tmpdir);
+        expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                            src_path, c->pipeline_compile);
+        expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
+                            c->pipeline_run);
+        if (run_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
+            snprintf(err, (size_t)err_size, "compile failed: %s", compile_cmd);
+            return -1;
+        }
+        if (code != 0) {
+            snprintf(err, (size_t)err_size, "flc exit %d: %s", code, compile_cmd);
+            return -1;
+        }
+        if (run_shell_capture(run_cmd, &code, out, sizeof out) != 0) {
+            snprintf(err, (size_t)err_size, "run failed: %s", run_cmd);
+            return -1;
+        }
+        if (code != c->expect_exit) {
+            snprintf(err, (size_t)err_size, "vm exit %d want %d", code, c->expect_exit);
+            return -1;
+        }
+        if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+            return -1;
+        }
+        return 0;
     }
 
     snprintf(err, (size_t)err_size, "unknown or unset case kind");

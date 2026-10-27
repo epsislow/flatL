@@ -1,5 +1,6 @@
 #include "fb_format.h"
 #include "flat.h"
+#include "vm.h"
 
 #include <stdio.h>
 #include <stdlib.h>

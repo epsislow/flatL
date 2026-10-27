@@ -1,0 +1,7 @@
+#main
+  ready = true
+  ready == true
+  OK
+
+#backtrack.#main.2
+  FAIL

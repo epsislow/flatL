@@ -161,16 +161,20 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 
 ### 3.3 Opcode table
 
-| Name | Hex | Role |
-|------|-----|------|
-| `OP_ASSIGN` | `0x01` | State mutation / side-effect assignment (payload: opaque expression bytes at first) |
-| `OP_GUARD` | `0x02` | Boolean guard; if false, jump to backtrack target in payload |
-| `OP_CALL` | `0x03` | Enter target block; push return address on call stack |
-| `OP_RETURN` | `0x04` | Pop call stack; resume caller |
-| `OP_FOREACH` | `0x05` | Setup collection iteration; enter loop block |
-| `OP_OK` | `0x06` | Halt with success |
-| `OP_FAIL` | `0x07` | Halt with logical failure |
-| `OP_PANIC` | `0x08` | Route to panic handler address |
+| Name | Hex | Payload (v0.1) |
+|------|-----|----------------|
+| `OP_ASSIGN` | `0x01` | Source line as UTF-8 **NUL-terminated** string (VM: simple `name = value` store) |
+| `OP_GUARD` | `0x02` | `uint32` absolute IP of `#backtrack.<block>.<index>` + guard expr **NUL-terminated** |
+| `OP_CALL` | `0x03` | `uint32` target block IP + output var name **NUL-terminated** (may be empty) |
+| `OP_RETURN` | `0x04` | Empty — pops call or advances `foreach` |
+| `OP_FOREACH` | `0x05` | `uint32` loop block IP + original `foreach(...)` line **NUL-terminated** |
+| `OP_OK` | `0x06` | Empty — process exit **0** |
+| `OP_FAIL` | `0x07` | Empty — process exit **2** |
+| `OP_PANIC` | `0x08` | `uint32` handler IP (`#panic.<block>.<index>` or `#panic.any`) |
+
+Block directory **block id**: `0` for `#main`; other blocks use a stable hash of the label string.
+
+If a guard fails and the backtrack offset is **0**, the VM exits with code **2** (unmapped logical failure).
 
 ### 3.4 Compilation sketch
 
@@ -191,28 +195,51 @@ Conceptual bytecode for `#main`:
 
 ---
 
-## 4. Compiler IR (planned C shapes)
+## 4. Compiler pipeline (FGIR)
 
-During parsing, `.fl` is lowered to an in-memory **ExecutableProgramIR** before emission to `.fb`:
+`flc` parses `.fl` into **FGIR** (Flat Graph IR) in memory, then emits `.fb`.
 
-- **`Instruction`** — source text (or parsed form) + **1-based** index within block  
-- **`BasicBlock`** — label string, instruction array, optional parameter names  
-- **`ExecutableProgramIR`** — array of blocks; single `#main` entry  
+| Stage | Command | Output |
+|-------|---------|--------|
+| Parse | (internal) | `FgirProgram`: blocks, 1-based instruction indices |
+| Inspect | `flc --dump-ir file.fl` | Human-readable block/instruction listing |
+| Emit | `flc -o out.fb file.fl` | Binary `.fb` |
 
-**Call stack (software):** frames hold `return_block` reference and `return_instruction_index`.
+**Parser rules (v0.1):**
 
-The VM loads `.fb`, resolves blocks via the directory (hash/offset), and runs a **`switch(opcode)`** dispatch loop with an instruction pointer and call stack. **No source string parsing at runtime.**
+- Block headers: `#name` or `#name(a, b)`; exactly one `#main`.
+- Lines under a block are instructions; `//` full-line comments skipped.
+- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `call #…`, lines with `==` (guard), else `assign`.
+
+**Compile-time linking:**
+
+- Guard at index *n* in `#B` → `#backtrack.#B.n` (must exist or backtrack offset 0).
+- `PANIC` at index *n* → `#panic.#B.n`, else fallback `#panic.any`.
 
 ---
 
-## 5. Virtual machine (behavioral summary)
+## 5. Virtual machine (`flvm`)
 
-- **Guards:** evaluate condition; on false, set IP to compiled backtrack target (or fail if unmapped).  
-- **Calls:** push frame, jump to block entry; **return** pops and resumes after the call site.  
-- **Terminals:** `OP_OK` and `OP_FAIL` end execution with distinct exit codes.  
-- **Panic:** infrastructure errors trigger `OP_PANIC` routing, not ordinary guard backtrack.
+Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser** — guards and assigns use a small interpreter over the payload strings.
 
-Reference implementation language: **C11**, minimal dependencies, suitable for WSL/Linux first.
+| Mechanism | Behavior |
+|-----------|----------|
+| **Variables** | Up to 32 string bindings from `name = value` (`value` may be quoted). |
+| **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to backtrack IP or exit 2 if unmapped. |
+| **Call** | Push return IP, jump to target block. |
+| **Return** | If inside `foreach` body: next item or resume after `foreach`; else pop call frame; if no frame, exit 0. |
+| **Foreach** | Reads collection variable as comma-separated list; binds item var; enters loop block; `return` advances iterator. |
+| **PANIC** | Keyword in source emits `OP_PANIC`; jumps to handler block (handler may end with `OK`). |
+
+**Process exit codes:**
+
+| Code | Cause |
+|------|--------|
+| 0 | `OP_OK` or end of top-level execution |
+| 1 | Bad file, truncated bytecode, unknown opcode |
+| 2 | `OP_FAIL` or failed guard with no backtrack block |
+
+Reference implementation: **C11**, WSL/Linux.
 
 ---
 
@@ -251,7 +278,7 @@ flatL/
 |------|---------|
 | `files` | Assert paths exist under repo root (`check = "relative/path"`) |
 | `exec` | Run shell command (`cmd`, `expect_exit`, optional `stdout_contains`) |
-| `pipeline` | `flc` then `flvm` (planned) |
+| `pipeline` | `source`, `compile`, `run`, `expect_exit` — see [TOOLCHAIN.md](./TOOLCHAIN.md) |
 
 Discovery: `bin/run_tests` scans `test/cases/*/*/case.toml`.
 
@@ -269,4 +296,4 @@ Command reference for `flc`, `flvm`, `mkfb`, and `run_tests`: [TOOLCHAIN.md](./T
 
 ## 8. Document status
 
-This file is a **draft**. Opcode payload layouts, exact directory entry fields, and exit-code conventions will be pinned once `flvm` and `flc` accept conformance fixtures under `test/cases/` and `examples/`.
+**v0.1** — `flc`/`flvm` implement the opcodes above; conformance coverage in `test/cases/` (`smoke`, `flvm`, `flc`, `e2e`). Native dotted calls (`kv.get`, …) and full expression evaluation are **not** implemented yet.

@@ -1,0 +1,8 @@
+suite = "flc"
+id = 1
+desc = "flc --dump-ir prints FGIR"
+kind = "exec"
+
+cmd = "{root}/bin/flc --dump-ir {case}/program.fl"
+expect_exit = 0
+stdout_contains = "FGIR"
