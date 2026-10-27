@@ -1,5 +1,6 @@
 #include "vm.h"
 #include "flat.h"
+#include "flat_native.h"
 #include "flat_value.h"
 
 #include <ctype.h>
@@ -147,9 +148,8 @@ static char *trim(char *s) {
     return s;
 }
 
-static int rhs_is_io_or_str_call(const char *rhs) {
-    return strncmp(rhs, "io.", 3) == 0 || strncmp(rhs, "str.to_", 7) == 0 ||
-           strncmp(rhs, "json.", 5) == 0;
+static int rhs_is_native_call(const char *rhs) {
+    return flat_native_is_call_line(rhs);
 }
 
 static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *line,
@@ -179,7 +179,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
     for (i = 0; i < st->var_count; i++) {
         vals[i] = st->vars[i].val;
     }
-    if (rhs_is_io_or_str_call(rhs)) {
+    if (rhs_is_native_call(rhs)) {
         if (flat_io_exec_line(rhs, st->pool, st->coll, vals, st->var_count, names, &v, &ios) != 0) {
             return 0;
         }
@@ -307,6 +307,8 @@ static const char *opcode_name(uint8_t opcode) {
         return "PANIC";
     case OP_IO:
         return "IO";
+    case OP_NATIVE:
+        return "NATIVE";
     default:
         return "?";
     }
@@ -322,33 +324,69 @@ static void trace_vars_dump(const VmState *st) {
     }
 }
 
-static int apply_io(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *payload,
-                    int trace) {
+static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, uint16_t native_id,
+                           const char *inner, const char *bind, int trace) {
     char names[FLAT_MAX_VARS][64];
     FlatValue vals[FLAT_MAX_VARS];
     FlatValue result;
     FlatIoStatus ios;
-    const char *line;
-    const char *bind;
+    FlatNativeCtx ctx;
     int i;
 
-    line = payload;
-    bind = line + strlen(line) + 1;
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
         vals[i] = st->vars[i].val;
     }
-    if (flat_io_exec_line(line, st->pool, st->coll, vals, st->var_count, names, &result, &ios) !=
-        0) {
+    ctx.pool = st->pool;
+    ctx.coll = st->coll;
+    ctx.vars = vals;
+    ctx.var_count = st->var_count;
+    ctx.var_names = names;
+    ctx.inner = inner;
+    ctx.out = &result;
+    ctx.io_status = &ios;
+    ios = FLAT_IO_ERR;
+    if (flat_native_invoke(native_id, &ctx) != 0) {
         return 0;
     }
     if (vm_handle_io_status(st, bc, ip, ios, trace) != 0) {
         return 1;
     }
-    if (ios == FLAT_IO_OK && bind[0] != '\0') {
+    if (ios == FLAT_IO_OK && bind && bind[0] != '\0') {
         set_var_value(st, bind, &result);
     }
     return 0;
+}
+
+static int apply_io_legacy(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *payload,
+                           int trace) {
+    const char *line = payload;
+    const char *bind = line + strlen(line) + 1;
+    uint16_t id;
+    char inner[4096];
+
+    if (flat_native_split_call(line, &id, inner, sizeof inner) != 0) {
+        return 0;
+    }
+    return run_native_call(st, bc, ip, id, inner, bind, trace);
+}
+
+static int apply_native(VmState *st, const FlatBytecode *bc, uint32_t *ip, const uint8_t *payload,
+                        uint8_t payload_size, int trace) {
+    uint16_t id;
+    const char *inner;
+    const char *bind;
+
+    if (payload_size < 3) {
+        return 0;
+    }
+    id = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
+    inner = (const char *)(payload + 2);
+    bind = inner + strlen(inner) + 1;
+    if ((size_t)(bind - (const char *)payload) + strlen(bind) + 1 > payload_size) {
+        return 0;
+    }
+    return run_native_call(st, bc, ip, id, inner, bind, trace);
 }
 
 int flat_vm_run(const FlatBytecode *bc) {
@@ -404,7 +442,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         if (trace || trace_vars) {
             fprintf(stderr, "[trace] ip=%u op=%s(0x%02x) len=%u", ip, opcode_name(opcode), opcode,
                     (unsigned)payload_size);
-            if (opcode == OP_ASSIGN || opcode == OP_IO) {
+            if (opcode == OP_ASSIGN) {
                 size_t sl = payload_size;
                 const char *pt = (const char *)payload;
                 while (sl > 0 && pt[sl - 1] != '\0') {
@@ -414,6 +452,11 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                     sl--;
                 }
                 fprintf(stderr, " %.*s", (int)sl, pt);
+            } else if (opcode == OP_IO) {
+                fprintf(stderr, " %s", (const char *)payload);
+            } else if (opcode == OP_NATIVE && payload_size >= 2) {
+                uint16_t nid = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
+                fprintf(stderr, " %s", flat_native_name(nid));
             } else if (opcode == OP_GUARD && payload_size > 4) {
                 fprintf(stderr, " %s", (const char *)(payload + 4));
             }
@@ -469,7 +512,18 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         }
         case OP_IO: {
             uint32_t ip_before = ip;
-            if (apply_io(&st, bc, &ip, (const char *)payload, trace) != 0) {
+            if (apply_io_legacy(&st, bc, &ip, (const char *)payload, trace) != 0) {
+                vm_teardown(&st, 1);
+                return 1;
+            }
+            if (ip == ip_before) {
+                ip += 2u + payload_size;
+            }
+            continue;
+        }
+        case OP_NATIVE: {
+            uint32_t ip_before = ip;
+            if (apply_native(&st, bc, &ip, payload, payload_size, trace) != 0) {
                 vm_teardown(&st, 1);
                 return 1;
             }

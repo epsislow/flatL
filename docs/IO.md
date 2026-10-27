@@ -1,7 +1,7 @@
 # flatL — I/O (`io.*`, `str.to_*`)
 
 Normative behavior for program **stdout/stdin** and host **stderr** debug.  
-Implementation status: **v0.3** (`OP_IO` in VM; future `src/lib/io` registry).
+Implementation status: **v0.4** — natives in **`src/lib/`** registry; bytecode **`OP_NATIVE`** (id + args). Legacy **`OP_IO`** still decoded for old `.fb`.
 
 See also: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (types), [TOOLCHAIN.md](./TOOLCHAIN.md) (`flvm --trace`), plan [.cursor/plans/debug-io.plan.md](../.cursor/plans/debug-io.plan.md).
 
@@ -80,7 +80,8 @@ line = io.inln()
 n = str.to_num(raw)
 ```
 
-Bytecode stores optional bind name after the call text in `OP_IO` payload.
+**`OP_NATIVE` payload:** `uint16` native id, then argument string (paren contents) `\0`, then optional bind name `\0`.  
+Registry: `include/flat_native.h`, table in `src/lib/native_registry.c`, handlers in `mod_io.c` / `mod_str.c` / `mod_json.c`.
 
 ---
 
@@ -159,4 +160,4 @@ Catalog source: **`src/io_generate_tests/main.c`**. Output directories are **com
 ## 11. Not in v0.3
 
 - `io.inln_allow_empty`, `str.try_to_*`
-- Native module registry (`D12` in plan)
+- Native module registry (`src/lib/`, `flat_native.h`) — D12 done

@@ -4,10 +4,13 @@ LDFLAGS ?=
 
 BINDIR  = bin
 FB_SRC  = src/common/fb_format.c
+NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
+                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c
+NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
 VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_collection.c \
           src/common/value_ops.c src/common/value_parse.c src/common/value_format.c \
-          src/common/value_io.c src/common/value_json.c
-FGIR_SRC = src/common/parse.c src/common/compile.c
+          src/common/value_io.c src/common/value_json.c $(NATIVE_VM_SRC)
+FGIR_SRC = src/common/parse.c src/common/compile.c $(NATIVE_FLC_SRC)
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 

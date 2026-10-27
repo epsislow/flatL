@@ -296,8 +296,8 @@ io.outln({ a: 1 })            → {"a":1}\n   (JSON object)
 
 1. Implement **`json.parse` / `parse_list` / `parse_object` / `parse_bools` / `stringify`** in C (`src/common/` or `src/lib/json.c`) as pure functions on `FlatValue`.
 2. Wire **`io.in_list` / `io.in_object` / `io.in_bools`** to existing stdin + line read, then call typed parsers (same as today’s `io.in_num` → parse).
-3. **Phase 1:** register **`json.*`** (and new **`io.in_*`**) via **`OP_IO`** / compile stubs if D12 registry is not ready.
-4. **Phase 2 (D12):** move to native module table; drop duplicated opcode strings.
+3. **Phase 1 (done):** C parsers + VM wiring.
+4. **Phase 2 (D12, done):** **`flat_native_*`** registry; compiler emits **`OP_NATIVE`**; **`flvm --trace`** prints `io.outln`, `json.parse_list`, etc.
 
 One parser implementation; no second grammar in the VM.
 

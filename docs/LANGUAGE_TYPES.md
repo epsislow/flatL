@@ -151,4 +151,4 @@ Summary:
 
 Host: `flvm --trace` / `--trace-vars` → **stderr**. Unhandled PANIC → stderr; recovered PANIC → silent on stderr.
 
-Implementation: **`OP_IO`** bytecode (future `src/lib/io` + `str` natives).
+Implementation: **`OP_NATIVE`** via **`src/lib/`** module registry (`io`, `str`, `json`).

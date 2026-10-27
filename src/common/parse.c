@@ -1,4 +1,5 @@
 #include "fgir.h"
+#include "flat_native.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -48,8 +49,7 @@ static FgirInstrKind classify(const char *line) {
     if (starts_with_kw(line, "call")) {
         return FGIR_CALL;
     }
-    if (strncmp(line, "io.", 3) == 0 || strncmp(line, "str.to_", 7) == 0 ||
-        strncmp(line, "json.", 5) == 0) {
+    if (flat_native_is_call_line(line)) {
         return FGIR_IO;
     }
     if (strstr(line, "==") != NULL) {

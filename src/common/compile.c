@@ -1,5 +1,6 @@
 #include "fgir.h"
 #include "flat.h"
+#include "flat_native.h"
 #include "fb_format.h"
 
 #include <stdio.h>
@@ -174,18 +175,31 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             break;
         }
         case FGIR_IO: {
-            uint8_t payload[FGIR_MAX_LINE + 64];
-            size_t tl = strlen(ins->text) + 1;
-            size_t bl = strlen(ins->call_out) + 1;
+            uint8_t payload[2 + FGIR_MAX_LINE + 64];
+            uint16_t native_id;
+            char inner[FGIR_MAX_LINE];
+            size_t il;
+            size_t bl;
+            size_t total;
             uint8_t plen;
-            if (tl + bl > sizeof payload) {
-                snprintf(err, err_size, "io payload too long");
+
+            if (flat_native_split_call(ins->text, &native_id, inner, sizeof inner) != 0) {
+                snprintf(err, err_size, "unknown native call: %s", ins->text);
                 return -1;
             }
-            memcpy(payload, ins->text, tl);
-            memcpy(payload + tl, ins->call_out, bl);
-            plen = (uint8_t)(tl + bl);
-            if (emit_instr(code, OP_IO, payload, plen) != 0) {
+            il = strlen(inner) + 1;
+            bl = strlen(ins->call_out) + 1;
+            total = 2 + il + bl;
+            if (total > sizeof payload || total > 255) {
+                snprintf(err, err_size, "native payload too long");
+                return -1;
+            }
+            payload[0] = (uint8_t)(native_id & 0xffu);
+            payload[1] = (uint8_t)((native_id >> 8) & 0xffu);
+            memcpy(payload + 2, inner, il);
+            memcpy(payload + 2 + il, ins->call_out, bl);
+            plen = (uint8_t)total;
+            if (emit_instr(code, OP_NATIVE, payload, plen) != 0) {
                 return -1;
             }
             break;

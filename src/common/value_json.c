@@ -253,6 +253,7 @@ static int parse_simple_list(const char *line, FlatValue *out, FlatStringPool *p
     int i;
     FlatValue *items = NULL;
 
+    (void)pool;
     if (split_simple_commas(line, tokens, &count) != 0) {
         return -1;
     }
