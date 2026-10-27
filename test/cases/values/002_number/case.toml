@@ -1,0 +1,9 @@
+suite = "values"
+id = 2
+desc = "NUMBER assign and guard"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

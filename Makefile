@@ -4,7 +4,7 @@ LDFLAGS ?=
 
 BINDIR  = bin
 FB_SRC  = src/common/fb_format.c
-VM_SRC  = src/common/vm.c
+VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_ops.c
 FGIR_SRC = src/common/parse.c src/common/compile.c
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb

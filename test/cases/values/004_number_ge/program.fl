@@ -1,0 +1,7 @@
+#main
+  n = 15
+  n >= 10
+  OK
+
+#backtrack.#main.2
+  FAIL

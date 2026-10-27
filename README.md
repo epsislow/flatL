@@ -95,14 +95,16 @@ bin/run_tests smoke[1-3] -v
 ```
 
 **Developer guide (all CLI tools):** [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)  
-**Language & binary format:** [docs/SPECIFICATION.md](docs/SPECIFICATION.md)
+**Language & binary format:** [docs/SPECIFICATION.md](docs/SPECIFICATION.md)  
+**Types & limits (STRING ref, NUMBER, BOOL):** [docs/LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)
 
 ## Roadmap
 
 - [x] Toolchain skeleton + C test runner (`run_tests`)
 - [x] `flvm` — opcodes v0.1 (OK/FAIL/GUARD/ASSIGN/CALL/RETURN/FOREACH/PANIC)
 - [x] `flc` — parse `.fl` → FGIR, `--dump-ir`, emit `.fb`
-- [x] E2E tests (`make test` — 13 cases)
+- [x] E2E tests (`make test`)
+- [x] Runtime values v0.2 — STRING REF pool, NUMBER, BOOL ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md))
 - [ ] Native std libraries (`str`, `kv`, …) — no VM built-in functions
 - [ ] Full expression language + infrastructure panic from natives
 - [ ] Optional dynamic modules (`.so`)

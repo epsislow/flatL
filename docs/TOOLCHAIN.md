@@ -32,7 +32,8 @@ bin/flvm program.fb
 | 1 | Load/bytecode error, unknown opcode |
 | 2 | Logical failure (`OP_FAIL` or unmapped guard) |
 
-See [SPECIFICATION.md §5](./SPECIFICATION.md#5-virtual-machine-flvm) for opcode behavior.
+See [SPECIFICATION.md §5](./SPECIFICATION.md#5-virtual-machine-flvm) for opcode behavior.  
+Value types (STRING REF, NUMBER, BOOL): [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md).
 
 ## `flc`
 

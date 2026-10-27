@@ -1,24 +1,23 @@
 #include "vm.h"
 #include "flat.h"
+#include "flat_value.h"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define VM_MAX_VARS 32
 #define VM_MAX_CALL 64
 #define VM_MAX_FOREACH 8
 #define VM_MAX_LIST 16
 
 typedef struct {
-    char name[64];
-    char value[128];
-} VmVar;
+    char name[FLAT_VAR_NAME_MAX + 1];
+    FlatValue val;
+} NamedVar;
 
 typedef struct {
     uint32_t return_ip;
-    int has_frame;
 } CallFrame;
 
 typedef struct {
@@ -27,11 +26,12 @@ typedef struct {
     char items[VM_MAX_LIST][64];
     int item_count;
     int index;
-    char item_var[64];
+    char item_var[FLAT_VAR_NAME_MAX + 1];
 } ForeachFrame;
 
 typedef struct {
-    VmVar vars[VM_MAX_VARS];
+    FlatStringPool *pool;
+    NamedVar vars[FLAT_MAX_VARS];
     int var_count;
     CallFrame calls[VM_MAX_CALL];
     int call_sp;
@@ -49,23 +49,26 @@ static int find_var(VmState *st, const char *name) {
     return -1;
 }
 
-static void set_var(VmState *st, const char *name, const char *val) {
-    int i = find_var(st, name);
-    if (i >= 0) {
-        snprintf(st->vars[i].value, sizeof st->vars[i].value, "%s", val);
-        return;
+static void var_names_table(VmState *st, char (*names)[64]) {
+    int i;
+    for (i = 0; i < st->var_count; i++) {
+        snprintf(names[i], 64, "%s", st->vars[i].name);
     }
-    if (st->var_count >= VM_MAX_VARS) {
-        return;
-    }
-    snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
-    snprintf(st->vars[st->var_count].value, sizeof st->vars[st->var_count].value, "%s", val);
-    st->var_count++;
 }
 
-static const char *get_var(VmState *st, const char *name) {
+static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
     int i = find_var(st, name);
-    return i >= 0 ? st->vars[i].value : "";
+    if (i >= 0) {
+        st->vars[i].val = *val;
+        return 0;
+    }
+    if (st->var_count >= FLAT_MAX_VARS) {
+        return -1;
+    }
+    snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
+    st->vars[st->var_count].val = *val;
+    st->var_count++;
+    return 0;
 }
 
 static char *trim(char *s) {
@@ -83,77 +86,57 @@ static char *trim(char *s) {
 }
 
 static void apply_assign(VmState *st, const char *line) {
-    char buf[256];
+    char buf[4096];
     char *eq;
     char *lhs;
     char *rhs;
+    FlatValue v;
+    char names[FLAT_MAX_VARS][64];
+
     snprintf(buf, sizeof buf, "%s", line);
-    eq = strstr(buf, "=");
+    eq = strchr(buf, '=');
     if (!eq) {
         return;
     }
     *eq = '\0';
     lhs = trim(buf);
     rhs = trim(eq + 1);
-    if (rhs[0] == '\'' || rhs[0] == '"') {
-        size_t n = strlen(rhs);
-        if (n >= 2) {
-            rhs[n - 1] = '\0';
-            rhs++;
-        }
+    FlatValue vals[FLAT_MAX_VARS];
+    int i;
+    var_names_table(st, names);
+    for (i = 0; i < st->var_count; i++) {
+        vals[i] = st->vars[i].val;
     }
-    set_var(st, lhs, rhs);
+    if (flat_value_parse_assign_rhs(rhs, &v, st->pool, vals, st->var_count, names) != 0) {
+        return;
+    }
+    set_var_value(st, lhs, &v);
 }
 
-static int eval_guard(VmState *st, const char *expr) {
-    char buf[256];
-    char *eq;
-    char *lhs;
-    char *rhs;
-    snprintf(buf, sizeof buf, "%s", expr);
-    eq = strstr(buf, "==");
-    if (!eq) {
-        return 0;
-    }
-    *eq = '\0';
-    lhs = trim(buf);
-    rhs = trim(eq + 2);
-    if (strcmp(lhs, "false") == 0) {
-        return strcmp(rhs, "true") == 0 ? 0 : 1;
-    }
-    if (strcmp(lhs, "true") == 0) {
-        return strcmp(rhs, "true") == 0 ? 1 : 0;
-    }
-    {
-        const char *v = get_var(st, lhs);
-        if (rhs[0] == '\'' || rhs[0] == '"') {
-            char r[128];
-            snprintf(r, sizeof r, "%s", rhs + 1);
-            if (r[strlen(r) - 1] == '\'' || r[strlen(r) - 1] == '"') {
-                r[strlen(r) - 1] = '\0';
-            }
-            return strcmp(v, r) == 0;
-        }
-        if (strcmp(rhs, "true") == 0) {
-            return strcmp(v, "true") == 0 || strcmp(v, "1") == 0;
-        }
-        if (strcmp(rhs, "false") == 0) {
-            return strcmp(v, "false") == 0;
-        }
-        return strcmp(v, rhs) == 0;
-    }
-}
-
-static int split_csv(const char *s, char items[][64], int max) {
-    char buf[256];
+static int split_csv_from_var(VmState *st, const char *coll, char items[][64], int max) {
+    char buf[4096];
+    int vi = find_var(st, coll);
     char *tok;
     int n = 0;
-    snprintf(buf, sizeof buf, "%s", s);
+
+    if (vi < 0) {
+        return 0;
+    }
+    if (flat_value_get_cstr(&st->vars[vi].val, st->pool, buf, sizeof buf) != 0) {
+        return 0;
+    }
     for (tok = strtok(buf, ","); tok && n < max; tok = strtok(NULL, ",")) {
         snprintf(items[n], 64, "%s", trim(tok));
         n++;
     }
     return n;
+}
+
+static void set_var_from_cstr(VmState *st, const char *name, const char *val) {
+    FlatValue v;
+    if (flat_value_set_str_inline(&v, val, strlen(val)) == 0) {
+        set_var_value(st, name, &v);
+    }
 }
 
 static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uint32_t block_off) {
@@ -162,7 +145,6 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
     const char *lp = strchr(line, '(');
     const char *rp = strrchr(line, ')');
     ForeachFrame *fr;
-    const char *src;
 
     if (lp && rp && rp > lp) {
         char inner[256];
@@ -184,42 +166,27 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
     fr->resume_ip = resume_ip;
     fr->loop_block_ip = block_off;
     snprintf(fr->item_var, sizeof fr->item_var, "%s", item);
-    src = get_var(st, coll);
-    fr->item_count = split_csv(src, fr->items, VM_MAX_LIST);
+    fr->item_count = split_csv_from_var(st, coll, fr->items, VM_MAX_LIST);
     fr->index = 0;
     if (fr->item_count > 0) {
-        set_var(st, fr->item_var, fr->items[0]);
+        set_var_from_cstr(st, fr->item_var, fr->items[0]);
     }
-}
-
-static int block_end_return(VmState *st, uint32_t *ip) {
-    if (st->loop_sp > 0) {
-        ForeachFrame *fr = &st->loops[st->loop_sp - 1];
-        fr->index++;
-        if (fr->index < fr->item_count) {
-            set_var(st, fr->item_var, fr->items[fr->index]);
-            return 2; /* re-enter loop block — caller sets ip from loop frame */
-        }
-        st->loop_sp--;
-        *ip = fr->resume_ip;
-        return 1;
-    }
-    if (st->call_sp > 0) {
-        CallFrame *cf = &st->calls[--st->call_sp];
-        *ip = cf->return_ip;
-        return 1;
-    }
-    return 0;
 }
 
 int flat_vm_run(const FlatBytecode *bc) {
     VmState st;
     uint32_t ip;
     size_t entry_index = 0;
+    char guard_names[FLAT_MAX_VARS][64];
+
     if (!bc || !bc->data || bc->block_count == 0) {
         return 1;
     }
     memset(&st, 0, sizeof st);
+    st.pool = flat_pool_create();
+    if (!st.pool) {
+        return 1;
+    }
 
     for (entry_index = 0; entry_index < bc->block_count; entry_index++) {
         if (bc->blocks[entry_index].block_id == FLAT_FB_BLOCK_ID_MAIN) {
@@ -237,29 +204,29 @@ int flat_vm_run(const FlatBytecode *bc) {
         const uint8_t *payload;
 
         if ((size_t)ip + 2 > bc->size) {
-            if (block_end_return(&st, &ip)) {
-                continue;
-            }
             return 1;
         }
         opcode = bc->data[ip];
         payload_size = bc->data[ip + 1];
         if ((size_t)ip + 2 + payload_size > bc->size) {
+            flat_pool_destroy(st.pool);
             return 1;
         }
         payload = &bc->data[ip + 2];
 
         switch (opcode) {
         case OP_OK:
+            flat_pool_destroy(st.pool);
             return 0;
         case OP_FAIL:
+            flat_pool_destroy(st.pool);
             return 2;
         case OP_RETURN:
             if (st.loop_sp > 0) {
                 ForeachFrame *fr = &st.loops[st.loop_sp - 1];
                 fr->index++;
                 if (fr->index < fr->item_count) {
-                    set_var(&st, fr->item_var, fr->items[fr->index]);
+                    set_var_from_cstr(&st, fr->item_var, fr->items[fr->index]);
                     ip = fr->loop_block_ip;
                     continue;
                 }
@@ -268,6 +235,7 @@ int flat_vm_run(const FlatBytecode *bc) {
                 continue;
             }
             if (st.call_sp == 0) {
+                flat_pool_destroy(st.pool);
                 return 0;
             }
             ip = st.calls[--st.call_sp].return_ip;
@@ -279,10 +247,17 @@ int flat_vm_run(const FlatBytecode *bc) {
         case OP_GUARD: {
             uint32_t bt = 0;
             const char *expr;
+            var_names_table(&st, guard_names);
             memcpy(&bt, payload, 4);
             expr = (const char *)(payload + 4);
-            if (!eval_guard(&st, expr)) {
+            FlatValue gvals[FLAT_MAX_VARS];
+            int gi;
+            for (gi = 0; gi < st.var_count; gi++) {
+                gvals[gi] = st.vars[gi].val;
+            }
+            if (!flat_value_eval_guard(expr, gvals, st.var_count, guard_names, st.pool)) {
                 if (bt == 0) {
+                    flat_pool_destroy(st.pool);
                     return 2;
                 }
                 ip = bt;
@@ -293,16 +268,12 @@ int flat_vm_run(const FlatBytecode *bc) {
         }
         case OP_CALL: {
             uint32_t target = 0;
-            const char *out_name;
             memcpy(&target, payload, 4);
-            out_name = (const char *)(payload + 4);
             if (st.call_sp >= VM_MAX_CALL) {
+                flat_pool_destroy(st.pool);
                 return 1;
             }
-            st.calls[st.call_sp].return_ip = ip + 2u + payload_size;
-            st.calls[st.call_sp].has_frame = 1;
-            st.call_sp++;
-            (void)out_name;
+            st.calls[st.call_sp++].return_ip = ip + 2u + payload_size;
             ip = target;
             continue;
         }
@@ -323,6 +294,7 @@ int flat_vm_run(const FlatBytecode *bc) {
                 memcpy(&target, payload, 4);
             }
             if (target == 0) {
+                flat_pool_destroy(st.pool);
                 return 1;
             }
             ip = target;
@@ -330,6 +302,7 @@ int flat_vm_run(const FlatBytecode *bc) {
         }
         default:
             fprintf(stderr, "flvm: unsupported opcode 0x%02x at %u\n", opcode, ip);
+            flat_pool_destroy(st.pool);
             return 1;
         }
     }

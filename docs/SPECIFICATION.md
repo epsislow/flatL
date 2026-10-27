@@ -224,7 +224,7 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 
 | Mechanism | Behavior |
 |-----------|----------|
-| **Variables** | Up to 32 string bindings from `name = value` (`value` may be quoted). |
+| **Variables** | v0.2: tagged **BOOL**, **NUMBER**, **STRING** (INLINE ≤127 B or REF pool + slice views). Details: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md). |
 | **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to backtrack IP or exit 2 if unmapped. |
 | **Call** | Push return IP, jump to target block. |
 | **Return** | If inside `foreach` body: next item or resume after `foreach`; else pop call frame; if no frame, exit 0. |
@@ -297,3 +297,5 @@ Command reference for `flc`, `flvm`, `mkfb`, and `run_tests`: [TOOLCHAIN.md](./T
 ## 8. Document status
 
 **v0.1** — `flc`/`flvm` implement the opcodes above; conformance coverage in `test/cases/` (`smoke`, `flvm`, `flc`, `e2e`). Native dotted calls (`kv.get`, …) and full expression evaluation are **not** implemented yet.
+
+**v0.2:** runtime value model — [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (limits, refs, slice views).
