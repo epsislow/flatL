@@ -182,10 +182,439 @@ static int parse_slice_call(const char *rhs, FlatValue *out, FlatStringPool *poo
     return flat_value_set_str_ref(out, slice_id);
 }
 
+static const char *skip_ws(const char *p) {
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    return p;
+}
+
+static int parse_ident(const char **p, char *out, size_t out_max) {
+    const char *s = *p;
+    size_t n = 0;
+
+    if (!((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || *s == '_')) {
+        return -1;
+    }
+    while ((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || (*s >= '0' && *s <= '9') ||
+           *s == '_') {
+        if (n + 1 >= out_max) {
+            return -1;
+        }
+        out[n++] = *s++;
+    }
+    out[n] = '\0';
+    *p = s;
+    return 0;
+}
+
+static int flat_value_parse_at(const char **p, FlatValue *out, FlatStringPool *pool,
+                               FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                               const char (*var_names)[64]);
+
+static int parse_list_literal(const char **p, FlatValue *out, FlatStringPool *pool,
+                              FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                              const char (*var_names)[64]) {
+    FlatValue *items = NULL;
+    int count = 0;
+    int cap = 0;
+    uint32_t id;
+
+    *p = skip_ws(*p);
+    if (**p != '[') {
+        return -1;
+    }
+    (*p)++;
+    for (;;) {
+        *p = skip_ws(*p);
+        if (**p == ']') {
+            (*p)++;
+            break;
+        }
+        if (count >= cap) {
+            int ncap = cap ? cap * 2 : 4;
+            FlatValue *grown = items ? realloc(items, (size_t)ncap * sizeof(FlatValue))
+                                     : malloc((size_t)ncap * sizeof(FlatValue));
+            if (!grown) {
+                free(items);
+                return -1;
+            }
+            items = grown;
+            cap = ncap;
+        }
+        if (flat_value_parse_at(p, &items[count], pool, coll, vars, var_count, var_names) != 0) {
+            free(items);
+            return -1;
+        }
+        count++;
+        *p = skip_ws(*p);
+        if (**p == ',') {
+            (*p)++;
+            continue;
+        }
+        if (**p == ']') {
+            (*p)++;
+            break;
+        }
+        free(items);
+        return -1;
+    }
+    if (!coll) {
+        free(items);
+        return -1;
+    }
+    if (flat_list_build(coll, items, count, &id) != 0) {
+        free(items);
+        return -1;
+    }
+    free(items);
+    return flat_value_set_list(out, id);
+}
+
+static int parse_object_key(const char **p, char *key, size_t key_max) {
+    char buf[FLAT_OBJ_KEY_MAX + 1];
+    size_t len = 0;
+    char q;
+
+    *p = skip_ws(*p);
+    if (**p == '\'' || **p == '"') {
+        q = **p;
+        if (parse_quoted_payload(*p, buf, sizeof buf, &len) != 0) {
+            return -1;
+        }
+        (*p)++;
+        while (**p && **p != q) {
+            (*p)++;
+        }
+        if (**p == q) {
+            (*p)++;
+        }
+        if (len >= key_max) {
+            return -1;
+        }
+        memcpy(key, buf, len);
+        key[len] = '\0';
+        return 0;
+    }
+    return parse_ident(p, key, key_max);
+}
+
+static int parse_object_literal(const char **p, FlatValue *out, FlatStringPool *pool,
+                                FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                                const char (*var_names)[64]) {
+    char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1];
+    FlatValue vals[FLAT_OBJ_MAX_KEYS];
+    int count = 0;
+    uint32_t id;
+
+    *p = skip_ws(*p);
+    if (**p != '{') {
+        return -1;
+    }
+    (*p)++;
+    for (;;) {
+        *p = skip_ws(*p);
+        if (**p == '}') {
+            (*p)++;
+            break;
+        }
+        if (count >= FLAT_OBJ_MAX_KEYS) {
+            return -1;
+        }
+        if (parse_object_key(p, keys[count], sizeof keys[count]) != 0) {
+            return -1;
+        }
+        *p = skip_ws(*p);
+        if (**p != ':') {
+            return -1;
+        }
+        (*p)++;
+        if (flat_value_parse_at(p, &vals[count], pool, coll, vars, var_count, var_names) != 0) {
+            return -1;
+        }
+        count++;
+        *p = skip_ws(*p);
+        if (**p == ',') {
+            (*p)++;
+            continue;
+        }
+        if (**p == '}') {
+            (*p)++;
+            break;
+        }
+        return -1;
+    }
+    if (!coll) {
+        return -1;
+    }
+    if (flat_obj_build(coll, keys, vals, count, &id) != 0) {
+        return -1;
+    }
+    return flat_value_set_object(out, id);
+}
+
+static int parse_quoted_string_at(const char **p, FlatValue *out, FlatStringPool *pool) {
+    char buf[FLAT_INLINE_STR_MAX + 1];
+    size_t len = 0;
+    char q;
+
+    if (**p != '\'' && **p != '"') {
+        return -1;
+    }
+    q = **p;
+    if (parse_quoted_payload(*p, buf, sizeof buf, &len) != 0) {
+        return -1;
+    }
+    (*p)++;
+    while (**p && **p != q) {
+        (*p)++;
+    }
+    if (**p == q) {
+        (*p)++;
+    }
+    if (len > FLAT_INLINE_STR_MAX) {
+        uint32_t id;
+        if (flat_pool_alloc_copy(pool, buf, len, &id) != 0) {
+            return -1;
+        }
+        return flat_value_set_str_ref(out, id);
+    }
+    return flat_value_set_str_inline(out, buf, len);
+}
+
+static int parse_number_at(const char **p, FlatValue *out) {
+    char tmp[64];
+    char *end = NULL;
+    double v;
+    size_t i = 0;
+    const char *s = *p;
+
+    while (*s && (isdigit((unsigned char)*s) || *s == '.' || *s == '-' || *s == '+') &&
+           i + 1 < sizeof tmp) {
+        tmp[i++] = *s++;
+    }
+    tmp[i] = '\0';
+    if (i == 0) {
+        return -1;
+    }
+    v = strtod(tmp, &end);
+    if (end == tmp || (end && *end != '\0')) {
+        return -1;
+    }
+    *p = s;
+    return flat_value_set_number(out, v);
+}
+
+static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *pool,
+                            FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                            const char (*var_names)[64]) {
+    char inner[2048];
+    char name[64];
+    const char *p = rhs;
+    char *close;
+    char *tok;
+    int vi;
+    uint32_t new_id;
+    FlatValue item;
+    char key[FLAT_OBJ_KEY_MAX + 1];
+
+    if (parse_ident(&p, name, sizeof name) != 0) {
+        return -1;
+    }
+    p = skip_ws(p);
+    if (*p != '(') {
+        return -1;
+    }
+    snprintf(inner, sizeof inner, "%s", p + 1);
+    close = strrchr(inner, ')');
+    if (!close) {
+        return -1;
+    }
+    *close = '\0';
+
+    if (strcmp(name, "__list__") == 0 && inner[0] == '\0') {
+        if (!coll || flat_list_empty(coll, &new_id) != 0) {
+            return -1;
+        }
+        return flat_value_set_list(out, new_id);
+    }
+    if (strcmp(name, "__obj__") == 0 && inner[0] == '\0') {
+        if (!coll || flat_obj_empty(coll, &new_id) != 0) {
+            return -1;
+        }
+        return flat_value_set_object(out, new_id);
+    }
+    if (strcmp(name, "__list_push__") == 0) {
+        tok = strtok(inner, ",");
+        if (!tok) {
+            return -1;
+        }
+        vi = find_var_index(trim(tok), var_count, var_names);
+        if (vi < 0 || vars[vi].tag != VAL_LIST) {
+            return -1;
+        }
+        tok = strtok(NULL, "");
+        if (!tok) {
+            return -1;
+        }
+        p = skip_ws(tok);
+        if (flat_value_parse_at(&p, &item, pool, coll, vars, var_count, var_names) != 0) {
+            return -1;
+        }
+        if (flat_list_push_copy(coll, vars[vi].u.coll_id, &item, &new_id) != 0) {
+            return -1;
+        }
+        return flat_value_set_list(out, new_id);
+    }
+    if (strcmp(name, "__obj_set__") == 0) {
+        tok = strtok(inner, ",");
+        if (!tok) {
+            return -1;
+        }
+        vi = find_var_index(trim(tok), var_count, var_names);
+        if (vi < 0 || vars[vi].tag != VAL_OBJECT) {
+            return -1;
+        }
+        tok = strtok(NULL, ",");
+        if (!tok) {
+            return -1;
+        }
+        p = skip_ws(trim(tok));
+        if (parse_object_key(&p, key, sizeof key) != 0) {
+            return -1;
+        }
+        tok = strtok(NULL, "");
+        if (!tok) {
+            return -1;
+        }
+        p = skip_ws(tok);
+        if (flat_value_parse_at(&p, &item, pool, coll, vars, var_count, var_names) != 0) {
+            return -1;
+        }
+        if (flat_obj_set_copy(coll, vars[vi].u.coll_id, key, &item, &new_id) != 0) {
+            return -1;
+        }
+        return flat_value_set_object(out, new_id);
+    }
+    if (strcmp(name, "__obj_get__") == 0) {
+        tok = strtok(inner, ",");
+        if (!tok) {
+            return -1;
+        }
+        vi = find_var_index(trim(tok), var_count, var_names);
+        if (vi < 0 || vars[vi].tag != VAL_OBJECT) {
+            return -1;
+        }
+        tok = strtok(NULL, "");
+        if (!tok) {
+            return -1;
+        }
+        p = skip_ws(trim(tok));
+        if (parse_object_key(&p, key, sizeof key) != 0) {
+            return -1;
+        }
+        return flat_obj_get(coll, vars[vi].u.coll_id, key, out);
+    }
+    if (strcmp(name, "__list_len__") == 0) {
+        int len = 0;
+        tok = trim(inner);
+        vi = find_var_index(tok, var_count, var_names);
+        if (vi < 0 || vars[vi].tag != VAL_LIST || !coll) {
+            return -1;
+        }
+        if (flat_list_len(coll, vars[vi].u.coll_id, &len) != 0) {
+            return -1;
+        }
+        return flat_value_set_number(out, (double)len);
+    }
+    if (strcmp(name, "__list_get__") == 0) {
+        int ix;
+        tok = strtok(inner, ",");
+        if (!tok) {
+            return -1;
+        }
+        vi = find_var_index(trim(tok), var_count, var_names);
+        if (vi < 0 || vars[vi].tag != VAL_LIST || !coll) {
+            return -1;
+        }
+        tok = strtok(NULL, "");
+        if (!tok) {
+            return -1;
+        }
+        ix = (int)strtol(trim(tok), NULL, 10);
+        return flat_list_get(coll, vars[vi].u.coll_id, ix, out);
+    }
+    return -1;
+}
+
+static int flat_value_parse_at(const char **p, FlatValue *out, FlatStringPool *pool,
+                               FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                               const char (*var_names)[64]) {
+    char ident[64];
+    const char *s;
+    int vi;
+
+    if (!p || !*p || !out) {
+        return -1;
+    }
+    s = skip_ws(*p);
+    *p = s;
+    if (*s == '[') {
+        return parse_list_literal(p, out, pool, coll, vars, var_count, var_names);
+    }
+    if (*s == '{') {
+        return parse_object_literal(p, out, pool, coll, vars, var_count, var_names);
+    }
+    if (*s == '\'' || *s == '"') {
+        return parse_quoted_string_at(p, out, pool);
+    }
+    if (strncmp(s, "true", 4) == 0 &&
+        (s[4] == '\0' || !(isalnum((unsigned char)s[4]) || s[4] == '_'))) {
+        *p = s + 4;
+        return flat_value_set_bool(out, 1);
+    }
+    if (strncmp(s, "false", 5) == 0 &&
+        (s[5] == '\0' || !(isalnum((unsigned char)s[5]) || s[5] == '_'))) {
+        *p = s + 5;
+        return flat_value_set_bool(out, 0);
+    }
+    if (isdigit((unsigned char)*s) || *s == '-' || *s == '+') {
+        return parse_number_at(p, out);
+    }
+    if (parse_ident(&s, ident, sizeof ident) == 0) {
+        vi = find_var_index(ident, var_count, var_names);
+        if (vi >= 0) {
+            *p = s;
+            *out = vars[vi];
+            return 0;
+        }
+        if (*s == '(') {
+            char line[4096];
+            const char *end = strchr(s, ')');
+            size_t n;
+            if (!end) {
+                return -1;
+            }
+            n = (size_t)(end - *p + 1);
+            if (n >= sizeof line) {
+                return -1;
+            }
+            memcpy(line, *p, n);
+            line[n] = '\0';
+            if (parse_paren_call(line, out, pool, coll, vars, var_count, var_names) == 0) {
+                *p = end + 1;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
 int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPool *pool,
-                                FlatValue *vars, int var_count, const char (*var_names)[64]) {
+                                FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                                const char (*var_names)[64]) {
     char rhs[4096];
-    double num;
+    const char *p;
 
     if (!rhs_in || !out) {
         return -1;
@@ -199,31 +628,24 @@ int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPo
     if (parse_slice_call(rhs, out, pool, vars, var_count, var_names) == 0) {
         return 0;
     }
-    if (strcmp(rhs, "true") == 0) {
-        return flat_value_set_bool(out, 1);
-    }
-    if (strcmp(rhs, "false") == 0) {
-        return flat_value_set_bool(out, 0);
-    }
-    if (try_parse_number(rhs, &num) == 0) {
-        return flat_value_set_number(out, num);
-    }
-    if (rhs[0] == '\'' || rhs[0] == '"') {
-        char buf[FLAT_INLINE_STR_MAX + 1];
-        size_t len = 0;
-        if (parse_quoted_payload(rhs, buf, sizeof buf, &len) != 0) {
-            return -1;
+    if (strchr(rhs, '(') &&
+        (strncmp(rhs, "__list__", 8) == 0 || strncmp(rhs, "__obj__", 7) == 0 ||
+         strncmp(rhs, "__list_push__", 13) == 0 || strncmp(rhs, "__list_len__", 12) == 0 ||
+         strncmp(rhs, "__list_get__", 12) == 0 || strncmp(rhs, "__obj_set__", 11) == 0 ||
+         strncmp(rhs, "__obj_get__", 11) == 0)) {
+        if (parse_paren_call(rhs, out, pool, coll, vars, var_count, var_names) == 0) {
+            return 0;
         }
-        if (len > FLAT_INLINE_STR_MAX) {
-            uint32_t id;
-            if (flat_pool_alloc_copy(pool, buf, len, &id) != 0) {
-                return -1;
-            }
-            return flat_value_set_str_ref(out, id);
-        }
-        return flat_value_set_str_inline(out, buf, len);
     }
-    return -1;
+    p = rhs;
+    if (flat_value_parse_at(&p, out, pool, coll, vars, var_count, var_names) != 0) {
+        return -1;
+    }
+    p = skip_ws(p);
+    if (*p != '\0') {
+        return -1;
+    }
+    return 0;
 }
 
 static int literal_to_value(const char *lit, FlatValue *out) {

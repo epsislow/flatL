@@ -9,13 +9,25 @@ Architecture overview: [SPECIFICATION.md](./SPECIFICATION.md). Tooling: [TOOLCHA
 
 ## 1. Value types (logical)
 
-The language exposes three logical types. There is **no separate BLOB type** — large byte content uses **STRING / REF**.
+The language exposes five logical value kinds. There is **no separate BLOB type** — large byte content uses **STRING / REF**.
 
 | Type | Examples in source | VM tag |
 |------|-------------------|--------|
 | **BOOL** | `ok = true`, `ok = false` | `VAL_BOOL` |
 | **NUMBER** | `n = 42`, `n = -3.5` | `VAL_NUMBER` (IEEE-754 `double`) |
 | **STRING** | `'hello'`, `"path"`, long data via ref | `VAL_STR_INLINE` or `VAL_STR_REF` |
+| **LIST** | `[1, 'a', { x: 1 }]`, `__list__()` | `VAL_LIST` (pool id) |
+| **OBJECT** | `{ qty: 3, name: 'x' }`, `__obj__()` | `VAL_OBJECT` (pool id) |
+
+**LIST** and **OBJECT** are **distinct** types (JSON array vs object). Either may nest the other as elements or field values.
+
+**Construction (v0.3):**
+
+- Literals: `items = [1, 2]`, `doc = { id: 'a', n: 2 }` (keys: identifier or quoted string).
+- Bootstrap helpers (replaced later by `list.*` / `obj.*` natives): `__list__()`, `__list_push__(list, val)`, `__list_len__(list)`, `__list_get__(list, index)`, `__obj__()`, `__obj_set__(obj, 'key', val)`, `__obj_get__(obj, 'key')`.
+- `__obj_set__` returns a **new** object (copy-on-write); the old binding is unchanged.
+
+**`foreach`:** on a **LIST**, binds each element (any type). On a **STRING**, legacy comma-separated CSV iteration still works.
 
 **Mixed-type comparison** (`==`, `>=`, …): if types differ → result is **false** (no implicit coercion).
 
@@ -89,6 +101,11 @@ Allocates pool copy. Replaced by natives (e.g. `file.read`) later — not for pr
 | `FLAT_POOL_MAX_CHUNK` | 16 MiB | Max single allocation |
 | `FLAT_POOL_MAX_TOTAL` | 64 MiB | Max sum of owned bytes |
 | `FLAT_VAR_NAME_MAX` | 63 | Identifier length |
+| `FLAT_COLL_MAX_LISTS` | 256 | Max LIST values in pool |
+| `FLAT_COLL_MAX_OBJECTS` | 256 | Max OBJECT values in pool |
+| `FLAT_LIST_MAX_ELEMS` | 1024 | Max elements per LIST |
+| `FLAT_OBJ_MAX_KEYS` | 128 | Max keys per OBJECT |
+| `FLAT_OBJ_KEY_MAX` | 127 | Max key string bytes |
 
 Overflow → assign/alloc fails silently in VM today; future: compile-time or panic.
 
@@ -104,9 +121,10 @@ Header: `include/flat_value.h`
 | `flat_pool_alloc_copy` | Insert bytes → ref id |
 | `flat_pool_slice` | View into existing ref |
 | `flat_value_set_*` | Build `FlatValue` |
-| `flat_value_equals` | Guard equality (STRING cross INLINE/REF) |
+| `flat_value_equals` | Guard equality (STRING cross INLINE/REF; LIST/OBJECT by pool id) |
+| `flat_coll_*`, `flat_list_*`, `flat_obj_*` | Collection pool (LIST / OBJECT) |
 
-Future: VM handle passed into natives for binding outputs.
+Future: VM handle passed into natives for binding outputs; `obj.get` / `list.push` replace `__obj_*` / `__list_*` helpers.
 
 ---
 

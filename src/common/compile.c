@@ -160,14 +160,14 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             uint8_t payload[4 + FGIR_MAX_LINE];
             int tgt = find_block_idx(prog, ins->foreach_block);
             uint32_t off32 = 0;
-            uint8_t plen = (uint8_t)(4 + strlen(ins->text));
+            uint8_t plen = (uint8_t)(4 + strlen(ins->text) + 1);
             if (tgt < 0) {
                 snprintf(err, err_size, "unknown foreach block %s", ins->foreach_block);
                 return -1;
             }
             off32 = (uint32_t)offs[tgt].abs_offset;
             memcpy(payload, &off32, 4);
-            memcpy(payload + 4, ins->text, strlen(ins->text));
+            memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
             if (emit_instr(code, OP_FOREACH, payload, plen) != 0) {
                 return -1;
             }

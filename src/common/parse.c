@@ -25,7 +25,8 @@ static int line_is_comment(const char *p) {
 
 static int starts_with_kw(const char *s, const char *kw) {
     size_t n = strlen(kw);
-    return strncmp(s, kw, n) == 0 && (s[n] == '\0' || isspace((unsigned char)s[n]));
+    return strncmp(s, kw, n) == 0 &&
+           (s[n] == '\0' || isspace((unsigned char)s[n]) || s[n] == '(');
 }
 
 static FgirInstrKind classify(const char *line) {

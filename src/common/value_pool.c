@@ -212,6 +212,9 @@ int flat_value_equals(const FlatValue *a, const FlatValue *b, const FlatStringPo
         return a->u.boolean == b->u.boolean;
     case VAL_NUMBER:
         return a->u.number == b->u.number;
+    case VAL_LIST:
+    case VAL_OBJECT:
+        return a->u.coll_id == b->u.coll_id;
     default:
         return 0;
     }

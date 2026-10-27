@@ -1,0 +1,8 @@
+#main
+  items = [3, 7]
+  foreach(items, x, '#loop')
+  x == 7
+  OK
+
+#loop
+  return

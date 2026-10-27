@@ -13,7 +13,37 @@ Traditional block nesting (`if`, `try/catch`, deep indentation) hides where succ
 - **Panics** — infrastructure faults route to `#panic.#block.index` or `#panic.any`, separate from logical `FAIL`.
 - **No programmer `goto`** — targets are derived at compile time from block name and instruction index.
 
-## Example (`.fl`)
+## Examples (`.fl`)
+
+### Runnable today (toolchain v0.2)
+
+Parses, compiles, and runs with current `flc` / `flvm` (see `make test`):
+
+```text
+#main
+  amount = 100
+  has_funds = true
+  has_funds == true
+  call #check_balance
+  payment_status = 'SUCCESS'
+  payment_status == 'SUCCESS'
+  OK
+
+#backtrack.#main.2
+  FAIL
+
+#check_balance
+  return
+```
+
+Types: `true` / `false`, numbers, quoted strings; `call #block`; guards with `==` (and `>=`, etc. on numbers).  
+Helpers (bootstrap until natives land): `__ref__`, `__slice__`; **LIST/OBJECT** literals `[ … ]`, `{ key: val }` and `__list_*` / `__obj_*` ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)).
+
+Minimal sample: [examples/hello.fl](examples/hello.fl).
+
+### Target syntax (illustrative — not all implemented yet)
+
+Shows the **intended** shape once native libraries and full expressions land (`form.*`, `str.*`, `kv.*`, `end.*`, call arguments, block parameters):
 
 ```text
 #main
@@ -32,10 +62,20 @@ Traditional block nesting (`if`, `try/catch`, deep indentation) hides where succ
 
 #check_balance(userId, amount)
   u_key = str.concat('user:wallet:', userId)
-  balance = kget(u_key)
+  balance = kv.get(u_key)
   result = calc(balance >= amount)
   return result
 ```
+
+| Feature in example | v0.2 status |
+|--------------------|-------------|
+| `#main`, `#backtrack…`, `OK` / `FAIL` | Yes |
+| Guards `==`, `>=` on vars | Yes |
+| `call #block` (no args) | Yes |
+| `call #block(a, b) -> out` | Parsed; **args / return binding not executed** |
+| `#block(param, …)` headers | Parsed; **params not bound at runtime** |
+| `form.userId`, `str.*`, `kv.*`, `end.*`, `calc(...)` | **No** — planned via native libs |
+| `return expr` | `return` only (no value) |
 
 Lexical rules (summary):
 
