@@ -263,6 +263,8 @@ bin/run_tests smoke[1-3] -v -e
 
 Suite names match directories under `test/cases/` (`smoke`, `flvm`, `flc`, `e2e`, …).
 
+Command reference for `flc`, `flvm`, `mkfb`, and `run_tests`: [TOOLCHAIN.md](./TOOLCHAIN.md).
+
 ---
 
 ## 8. Document status

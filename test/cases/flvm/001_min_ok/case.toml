@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 1
+desc = "min_ok.fb exits 0"
+kind = "exec"
+
+cmd = "{root}/bin/flvm {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 0

@@ -88,18 +88,19 @@ Reference implementation direction: **C** — static IR structs, linear memory l
 ## Build & test (WSL)
 
 ```bash
-make              # bin/flc, bin/flvm, bin/run_tests
+make              # bin/flc, bin/flvm, bin/run_tests, bin/mkfb
 make test         # declarative cases under test/cases/
 bin/run_tests -h
 bin/run_tests smoke[1-3] -v
 ```
 
-See [docs/SPECIFICATION.md](docs/SPECIFICATION.md) for repo layout and `case.toml` format.
+**Developer guide (all CLI tools):** [docs/TOOLCHAIN.md](docs/TOOLCHAIN.md)  
+**Language & binary format:** [docs/SPECIFICATION.md](docs/SPECIFICATION.md)
 
 ## Roadmap
 
 - [x] Toolchain skeleton + C test runner (`run_tests`)
-- [ ] Virtual machine (`flvm`) — load `.fb`, opcodes
+- [x] Virtual machine (`flvm`) — load `.fb`, `OP_OK` / `OP_FAIL` exit codes (more opcodes pending)
 - [ ] Compiler (`flc`: `.fl` → `.fb`)
 - [ ] Lexer & parser (FGIR)
 - [ ] Native std libraries (no VM built-in functions)

@@ -1,3 +1,4 @@
+#include "fb_format.h"
 #include "flat.h"
 
 #include <stdio.h>
@@ -10,11 +11,14 @@ static void print_version(void) {
 
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
-    fprintf(stderr, "       %s program.fb   (not implemented yet)\n", prog);
+    fprintf(stderr, "       %s program.fb\n", prog);
     return 2;
 }
 
 int main(int argc, char **argv) {
+    FlatBytecode bc;
+    int rc;
+
     if (argc == 2 && (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-V") == 0)) {
         print_version();
         return 0;
@@ -22,6 +26,11 @@ int main(int argc, char **argv) {
     if (argc != 2) {
         return usage(argv[0]);
     }
-    fprintf(stderr, "flvm: execution not implemented yet (%s)\n", argv[1]);
-    return 1;
+
+    if (flat_fb_load_file(argv[1], &bc) != 0) {
+        return 1;
+    }
+    rc = flat_vm_run(&bc);
+    flat_fb_free(&bc);
+    return rc;
 }
