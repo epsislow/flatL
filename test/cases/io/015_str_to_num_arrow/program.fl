@@ -1,0 +1,5 @@
+#main
+  raw = '12'
+  str.to_num(raw) -> n
+  io.outln(n)
+  OK

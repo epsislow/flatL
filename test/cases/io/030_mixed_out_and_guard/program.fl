@@ -1,0 +1,5 @@
+#main
+  io.outln('start')
+  1 == 1
+  io.outln('end')
+  OK

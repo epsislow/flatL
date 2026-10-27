@@ -1,0 +1,4 @@
+#main
+  io.inln() -> s
+  io.outln(s)
+  OK

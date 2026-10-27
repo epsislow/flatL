@@ -1,0 +1,5 @@
+#main
+  io.out('ab')
+  io.out('cd')
+  io.outln('')
+  OK

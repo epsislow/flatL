@@ -137,18 +137,17 @@ Dotted calls (`kv.get`) will return STRING REF via natives — see SPECIFICATION
 
 ## 8. I/O (output & debug)
 
+**Full normative spec:** [IO.md](./IO.md) (prompts, `->` binding, cancel/EOF, BOOL tokens, PANIC rules).
+
+Summary:
+
 | API | Effect |
 |-----|--------|
-| **`io.outln(expr)`** | Print any value + newline → **stdout** |
-| **`io.outvar(name)`** | Print bound variable → **stdout** |
-| **`io.inln()`** | *Planned* — read one line from stdin → STRING |
+| **`io.out` / `io.outln` / `io.outvar`** | Print to **stdout** (STRINGs raw; LIST/OBJECT debug form) |
+| **`io.in` / `io.inln` / `io.in_num` / `io.in_bool`** | Read **stdin**; optional prompt STRING |
+| **`str.to_num` / `str.to_bool`** | Parse STRING → NUMBER / BOOL (no stdin) |
+| **`… -> var`** or **`var = …`** | Bind result of `io.*` / `str.to_*` |
 
-Host debug (not part of `.fl`):
+Host: `flvm --trace` / `--trace-vars` → **stderr**. Unhandled PANIC → stderr; recovered PANIC → silent on stderr.
 
-| Flag | Effect |
-|------|--------|
-| `flvm --trace` | Opcode log → **stderr** |
-| `flvm --trace-vars` | Opcode + variable dump → **stderr** |
-
-Implementation today: `OP_IO` in bytecode (same family as future `src/lib/io` natives).  
-Formatting: `flat_value_fprint` (strings, numbers, nested LIST/OBJECT).
+Implementation: **`OP_IO`** bytecode (future `src/lib/io` + `str` natives).

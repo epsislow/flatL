@@ -1,0 +1,5 @@
+#main
+  io.out(1)
+  io.out(2)
+  io.outln(3)
+  OK

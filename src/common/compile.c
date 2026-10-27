@@ -174,8 +174,18 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             break;
         }
         case FGIR_IO: {
-            uint8_t plen = (uint8_t)(strlen(ins->text) + 1);
-            if (emit_instr(code, OP_IO, ins->text, plen) != 0) {
+            uint8_t payload[FGIR_MAX_LINE + 64];
+            size_t tl = strlen(ins->text) + 1;
+            size_t bl = strlen(ins->call_out) + 1;
+            uint8_t plen;
+            if (tl + bl > sizeof payload) {
+                snprintf(err, err_size, "io payload too long");
+                return -1;
+            }
+            memcpy(payload, ins->text, tl);
+            memcpy(payload + tl, ins->call_out, bl);
+            plen = (uint8_t)(tl + bl);
+            if (emit_instr(code, OP_IO, payload, plen) != 0) {
                 return -1;
             }
             break;

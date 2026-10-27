@@ -1,0 +1,4 @@
+#main
+  b = str.to_bool('T')
+  io.outln(b)
+  OK

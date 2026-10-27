@@ -1,0 +1,4 @@
+#main
+  io.in_bool() -> ok
+  io.outln(ok)
+  OK

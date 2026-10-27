@@ -1,0 +1,4 @@
+#main
+  line = io.inln()
+  io.outln(line)
+  OK

@@ -40,7 +40,59 @@ typedef struct {
     int call_sp;
     ForeachFrame loops[VM_MAX_FOREACH];
     int loop_sp;
+    char panic_reason[64];
 } VmState;
+
+static uint32_t flat_label_hash(const char *label) {
+    uint32_t h = 5381u;
+    const unsigned char *p;
+    for (p = (const unsigned char *)label; *p; p++) {
+        h = h * 33u + *p;
+    }
+    return h;
+}
+
+static int vm_jump_panic_any(const FlatBytecode *bc, uint32_t *ip, const char *reason, int trace) {
+    size_t i;
+    uint32_t want = flat_label_hash("#panic.any");
+
+    if (trace) {
+        fprintf(stderr, "[trace] panic reason=%s handler=#panic.any\n", reason);
+    }
+    for (i = 0; i < bc->block_count; i++) {
+        if (bc->blocks[i].block_id == want) {
+            *ip = bc->blocks[i].offset;
+            return 0;
+        }
+    }
+    fprintf(stderr, "flvm: unhandled panic: %s\n", reason);
+    return 1;
+}
+
+static const char *io_status_reason(FlatIoStatus st) {
+    switch (st) {
+    case FLAT_IO_PANIC_EOF:
+        return "io.eof";
+    case FLAT_IO_PANIC_CANCEL:
+        return "io.user_cancel";
+    case FLAT_IO_PANIC_PARSE:
+        return "io.parse";
+    default:
+        return "io.error";
+    }
+}
+
+static int vm_handle_io_status(VmState *st, const FlatBytecode *bc, uint32_t *ip, FlatIoStatus ios,
+                               int trace) {
+    if (ios == FLAT_IO_OK) {
+        return 0;
+    }
+    if (ios == FLAT_IO_ERR) {
+        return 0;
+    }
+    snprintf(st->panic_reason, sizeof st->panic_reason, "%s", io_status_reason(ios));
+    return vm_jump_panic_any(bc, ip, st->panic_reason, trace);
+}
 
 static int find_var(VmState *st, const char *name) {
     int i;
@@ -88,32 +140,51 @@ static char *trim(char *s) {
     return s;
 }
 
-static void apply_assign(VmState *st, const char *line) {
+static int rhs_is_io_or_str_call(const char *rhs) {
+    return strncmp(rhs, "io.", 3) == 0 || strncmp(rhs, "str.to_", 7) == 0;
+}
+
+static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *line,
+                        int trace) {
     char buf[4096];
     char *eq;
     char *lhs;
     char *rhs;
     FlatValue v;
     char names[FLAT_MAX_VARS][64];
+    FlatIoStatus ios;
+    FlatValue vals[FLAT_MAX_VARS];
+    int i;
 
     snprintf(buf, sizeof buf, "%s", line);
     eq = strchr(buf, '=');
     if (!eq) {
-        return;
+        return 0;
     }
     *eq = '\0';
     lhs = trim(buf);
     rhs = trim(eq + 1);
-    FlatValue vals[FLAT_MAX_VARS];
-    int i;
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
         vals[i] = st->vars[i].val;
     }
+    if (rhs_is_io_or_str_call(rhs)) {
+        if (flat_io_exec_line(rhs, st->pool, st->coll, vals, st->var_count, names, &v, &ios) != 0) {
+            return 0;
+        }
+        if (vm_handle_io_status(st, bc, ip, ios, trace) != 0) {
+            return 1;
+        }
+        if (ios == FLAT_IO_OK) {
+            set_var_value(st, lhs, &v);
+        }
+        return 0;
+    }
     if (flat_value_parse_assign_rhs(rhs, &v, st->pool, st->coll, vals, st->var_count, names) != 0) {
-        return;
+        return 0;
     }
     set_var_value(st, lhs, &v);
+    return 0;
 }
 
 static int split_csv_from_var(VmState *st, const char *coll, char items[][64], int max) {
@@ -240,16 +311,33 @@ static void trace_vars_dump(const VmState *st) {
     }
 }
 
-static void apply_io(VmState *st, const char *line) {
+static int apply_io(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *payload,
+                    int trace) {
     char names[FLAT_MAX_VARS][64];
     FlatValue vals[FLAT_MAX_VARS];
+    FlatValue result;
+    FlatIoStatus ios;
+    const char *line;
+    const char *bind;
     int i;
 
+    line = payload;
+    bind = line + strlen(line) + 1;
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
         vals[i] = st->vars[i].val;
     }
-    (void)flat_io_exec_line(line, st->pool, st->coll, vals, st->var_count, names);
+    if (flat_io_exec_line(line, st->pool, st->coll, vals, st->var_count, names, &result, &ios) !=
+        0) {
+        return 0;
+    }
+    if (vm_handle_io_status(st, bc, ip, ios, trace) != 0) {
+        return 1;
+    }
+    if (ios == FLAT_IO_OK && bind[0] != '\0') {
+        set_var_value(st, bind, &result);
+    }
+    return 0;
 }
 
 int flat_vm_run(const FlatBytecode *bc) {
@@ -357,14 +445,28 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             }
             ip = st.calls[--st.call_sp].return_ip;
             continue;
-        case OP_ASSIGN:
-            apply_assign(&st, (const char *)payload);
-            ip += 2u + payload_size;
+        case OP_ASSIGN: {
+            uint32_t ip_before = ip;
+            if (apply_assign(&st, bc, &ip, (const char *)payload, trace) != 0) {
+                vm_teardown(&st, 1);
+                return 1;
+            }
+            if (ip == ip_before) {
+                ip += 2u + payload_size;
+            }
             continue;
-        case OP_IO:
-            apply_io(&st, (const char *)payload);
-            ip += 2u + payload_size;
+        }
+        case OP_IO: {
+            uint32_t ip_before = ip;
+            if (apply_io(&st, bc, &ip, (const char *)payload, trace) != 0) {
+                vm_teardown(&st, 1);
+                return 1;
+            }
+            if (ip == ip_before) {
+                ip += 2u + payload_size;
+            }
             continue;
+        }
         case OP_GUARD: {
             uint32_t bt = 0;
             const char *expr;

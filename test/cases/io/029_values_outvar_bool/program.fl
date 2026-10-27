@@ -1,0 +1,4 @@
+#main
+  ok = false
+  io.outvar(ok)
+  OK

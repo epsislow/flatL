@@ -1,0 +1,4 @@
+#main
+  b = str.to_bool('OFF')
+  io.outln(b)
+  OK

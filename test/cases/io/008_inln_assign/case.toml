@@ -1,0 +1,10 @@
+suite = "io"
+id = 8
+desc = "inln assign"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf 'world\n' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "world"

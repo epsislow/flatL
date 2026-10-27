@@ -1,5 +1,6 @@
 #main
   o = { qty: 3 }
-  io.outln('hello flatL')
+  io.out('hello ')
+  io.outln('flatL')
   io.outvar(o)
   OK

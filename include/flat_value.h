@@ -54,10 +54,16 @@ int flat_pool_slice(FlatStringPool *pool, uint32_t parent_id, size_t offset, siz
                     uint32_t *out_id);
 const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *out_len);
 
+void flat_value_fprint_ex(FILE *out, const FlatValue *v, const FlatStringPool *pool,
+                          const FlatCollectionPool *coll, int raw_strings);
 void flat_value_fprint(FILE *out, const FlatValue *v, const FlatStringPool *pool,
                        const FlatCollectionPool *coll);
 void flat_value_fprint_ln(FILE *out, const FlatValue *v, const FlatStringPool *pool,
                           const FlatCollectionPool *coll);
+void flat_value_fprint_io(FILE *out, const FlatValue *v, const FlatStringPool *pool,
+                          const FlatCollectionPool *coll);
+void flat_value_fprint_io_ln(FILE *out, const FlatValue *v, const FlatStringPool *pool,
+                             const FlatCollectionPool *coll);
 
 int flat_value_set_bool(FlatValue *v, int b);
 int flat_value_set_number(FlatValue *v, double n);
@@ -99,7 +105,20 @@ int flat_value_parse_assign_rhs(const char *rhs, FlatValue *out, FlatStringPool 
 int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count,
                           const char (*names)[64], const FlatStringPool *pool);
 
+typedef enum {
+    FLAT_IO_OK = 0,
+    FLAT_IO_ERR = 1,
+    FLAT_IO_PANIC_EOF = 2,
+    FLAT_IO_PANIC_CANCEL = 3,
+    FLAT_IO_PANIC_PARSE = 4
+} FlatIoStatus;
+
+int flat_parse_bool_token(const char *token, int *out_bool);
+int flat_parse_bool_cancel_token(const char *token);
+int flat_parse_number_token(const char *token, double *out_num);
+
 int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
-                      FlatValue *vars, int var_count, const char (*var_names)[64]);
+                      FlatValue *vars, int var_count, const char (*var_names)[64],
+                      FlatValue *out_result, FlatIoStatus *out_status);
 
 #endif

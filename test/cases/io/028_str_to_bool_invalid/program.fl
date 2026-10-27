@@ -1,0 +1,5 @@
+#main
+  ok = false
+  ok = str.to_bool('maybe')
+  ok == false
+  OK

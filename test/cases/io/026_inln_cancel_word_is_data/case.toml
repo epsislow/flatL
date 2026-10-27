@@ -1,0 +1,10 @@
+suite = "io"
+id = 26
+desc = "inln cancel word is data"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf 'cancel\n' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "cancel"

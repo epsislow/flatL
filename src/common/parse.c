@@ -48,7 +48,7 @@ static FgirInstrKind classify(const char *line) {
     if (starts_with_kw(line, "call")) {
         return FGIR_CALL;
     }
-    if (strncmp(line, "io.", 3) == 0) {
+    if (strncmp(line, "io.", 3) == 0 || strncmp(line, "str.to_", 7) == 0) {
         return FGIR_IO;
     }
     if (strstr(line, "==") != NULL) {
@@ -104,6 +104,20 @@ static void parse_call_extras(FgirInstr *ins) {
     }
     if (arrow) {
         snprintf(ins->call_out, sizeof ins->call_out, "%s", trim((char *)(arrow + 2)));
+    }
+}
+
+static void parse_io_bind(FgirInstr *ins) {
+    char *arrow = strstr(ins->text, "->");
+    if (!arrow) {
+        ins->call_out[0] = '\0';
+        return;
+    }
+    {
+        char *bind = trim(arrow + 2);
+        *arrow = '\0';
+        trim(ins->text);
+        snprintf(ins->call_out, sizeof ins->call_out, "%s", bind);
     }
 }
 
@@ -205,6 +219,9 @@ int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_si
             }
             if (ins->kind == FGIR_FOREACH) {
                 parse_foreach_extras(ins);
+            }
+            if (ins->kind == FGIR_IO) {
+                parse_io_bind(ins);
             }
             b->instr_count++;
         }

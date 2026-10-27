@@ -1,0 +1,4 @@
+#main
+  o = { a: 1, b: 'x' }
+  io.outln(o)
+  OK

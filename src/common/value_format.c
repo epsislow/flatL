@@ -20,7 +20,7 @@ static void fprint_quoted(FILE *out, const char *s, size_t len) {
 }
 
 static void flat_value_fprint_impl(FILE *out, const FlatValue *v, const FlatStringPool *pool,
-                                   const FlatCollectionPool *coll, int depth);
+                                   const FlatCollectionPool *coll, int depth, int raw_strings);
 
 static void fprint_list(FILE *out, const FlatStringPool *pool, const FlatCollectionPool *coll,
                         uint32_t id, int depth) {
@@ -45,7 +45,7 @@ static void fprint_list(FILE *out, const FlatStringPool *pool, const FlatCollect
             fputs("?", out);
             continue;
         }
-        flat_value_fprint_impl(out, &el, pool, coll, depth + 1);
+        flat_value_fprint_impl(out, &el, pool, coll, depth + 1, 0);
     }
     fputc(']', out);
 }
@@ -76,13 +76,13 @@ static void fprint_object(FILE *out, const FlatStringPool *pool, const FlatColle
         }
         fprint_quoted(out, key, strlen(key));
         fputs(": ", out);
-        flat_value_fprint_impl(out, &val, pool, coll, depth + 1);
+        flat_value_fprint_impl(out, &val, pool, coll, depth + 1, 0);
     }
     fputc('}', out);
 }
 
 static void flat_value_fprint_impl(FILE *out, const FlatValue *v, const FlatStringPool *pool,
-                                   const FlatCollectionPool *coll, int depth) {
+                                   const FlatCollectionPool *coll, int depth, int raw_strings) {
     size_t len = 0;
     const uint8_t *p;
 
@@ -101,7 +101,11 @@ static void flat_value_fprint_impl(FILE *out, const FlatValue *v, const FlatStri
         fprintf(out, "%.17g", v->u.number);
         break;
     case VAL_STR_INLINE:
-        fprint_quoted(out, v->u.ins.bytes, v->u.ins.len);
+        if (raw_strings && depth == 0) {
+            fwrite(v->u.ins.bytes, 1, v->u.ins.len, out);
+        } else {
+            fprint_quoted(out, v->u.ins.bytes, v->u.ins.len);
+        }
         break;
     case VAL_STR_REF:
         if (!pool) {
@@ -113,7 +117,16 @@ static void flat_value_fprint_impl(FILE *out, const FlatValue *v, const FlatStri
             fputs("<str-ref?>", out);
             break;
         }
-        if (len > FMT_STR_PREVIEW) {
+        if (raw_strings && depth == 0) {
+            size_t n = len;
+            if (n > FMT_STR_PREVIEW) {
+                n = FMT_STR_PREVIEW;
+            }
+            fwrite(p, 1, n, out);
+            if (len > FMT_STR_PREVIEW) {
+                fprintf(out, "…+%zu", len - FMT_STR_PREVIEW);
+            }
+        } else if (len > FMT_STR_PREVIEW) {
             fprint_quoted(out, (const char *)p, FMT_STR_PREVIEW);
             fprintf(out, "…+%zu", len - FMT_STR_PREVIEW);
         } else {
@@ -132,13 +145,29 @@ static void flat_value_fprint_impl(FILE *out, const FlatValue *v, const FlatStri
     }
 }
 
+void flat_value_fprint_ex(FILE *out, const FlatValue *v, const FlatStringPool *pool,
+                          const FlatCollectionPool *coll, int raw_strings) {
+    flat_value_fprint_impl(out, v, pool, coll, 0, raw_strings ? 1 : 0);
+}
+
 void flat_value_fprint(FILE *out, const FlatValue *v, const FlatStringPool *pool,
                        const FlatCollectionPool *coll) {
-    flat_value_fprint_impl(out, v, pool, coll, 0);
+    flat_value_fprint_ex(out, v, pool, coll, 0);
 }
 
 void flat_value_fprint_ln(FILE *out, const FlatValue *v, const FlatStringPool *pool,
                           const FlatCollectionPool *coll) {
     flat_value_fprint(out, v, pool, coll);
+    fputc('\n', out);
+}
+
+void flat_value_fprint_io(FILE *out, const FlatValue *v, const FlatStringPool *pool,
+                          const FlatCollectionPool *coll) {
+    flat_value_fprint_ex(out, v, pool, coll, 1);
+}
+
+void flat_value_fprint_io_ln(FILE *out, const FlatValue *v, const FlatStringPool *pool,
+                             const FlatCollectionPool *coll) {
+    flat_value_fprint_io(out, v, pool, coll);
     fputc('\n', out);
 }

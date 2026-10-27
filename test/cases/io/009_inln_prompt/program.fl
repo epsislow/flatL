@@ -1,0 +1,4 @@
+#main
+  io.inln('Name:') -> name
+  io.outln(name)
+  OK

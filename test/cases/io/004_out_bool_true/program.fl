@@ -1,0 +1,4 @@
+#main
+  ok = true
+  io.outln(ok)
+  OK
