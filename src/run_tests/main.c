@@ -32,6 +32,7 @@ static void print_help(const char *prog) {
     printf("Usage:\n");
     printf("  %s [filters...] [options]\n\n", prog);
     printf("Filters:\n");
+    printf("  suite            e.g. flatl  json  (all cases in that suite)\n");
     printf("  suite[id-spec]   e.g. smoke[1]  smoke[1-3,5]  (omit = all cases)\n\n");
     printf("Options:\n");
     printf("  -h, --help       show help\n");
@@ -121,8 +122,11 @@ static int parse_args(int argc, char **argv, FilterList *fl, int *verbose, int *
         } else {
             const char *lb = strchr(arg, '[');
             if (!lb) {
-                fprintf(stderr, "Unknown argument: %s\n", arg);
-                return -1;
+                if (filter_push(fl, arg, NULL) != 0) {
+                    fprintf(stderr, "Invalid filter: %s\n", arg);
+                    return -1;
+                }
+                continue;
             }
             {
                 char suite[FLAT_CASE_SUITE_LEN];
