@@ -247,15 +247,21 @@ static int split_simple_commas(const char *line, char tokens[][SIMPLE_TOKEN_MAX]
 
 static int parse_simple_list(const char *line, FlatValue *out, FlatStringPool *pool,
                              FlatCollectionPool *coll) {
-    char tokens[SIMPLE_MAX_TOKENS][SIMPLE_TOKEN_MAX];
+    /* ~4 MiB; must not live on stack (Windows default thread stack is ~1 MiB). */
+    char (*tokens)[SIMPLE_TOKEN_MAX] = calloc(SIMPLE_MAX_TOKENS, SIMPLE_TOKEN_MAX);
     int count = 0;
     int all_num = 1;
     int i;
     FlatValue *items = NULL;
+    int rc = -1;
+    uint32_t id;
 
     (void)pool;
-    if (split_simple_commas(line, tokens, &count) != 0) {
+    if (!tokens) {
         return -1;
+    }
+    if (split_simple_commas(line, tokens, &count) != 0) {
+        goto done;
     }
     for (i = 0; i < count; i++) {
         if (tokens[i][0] != '\0') {
@@ -268,87 +274,91 @@ static int parse_simple_list(const char *line, FlatValue *out, FlatStringPool *p
     }
     items = calloc((size_t)count, sizeof(FlatValue));
     if (!items && count > 0) {
-        return -1;
+        goto done;
     }
     for (i = 0; i < count; i++) {
         if (all_num) {
             double n = 0;
             if (tokens[i][0] != '\0') {
                 if (flat_parse_number_token(tokens[i], &n) != 0) {
-                    free(items);
-                    return -1;
+                    goto done;
                 }
             }
             if (flat_value_set_number(&items[i], n) != 0) {
-                free(items);
-                return -1;
+                goto done;
             }
         } else {
             if (flat_value_set_str_inline(&items[i], tokens[i], strlen(tokens[i])) != 0) {
-                free(items);
-                return -1;
+                goto done;
             }
         }
     }
-    {
-        uint32_t id;
-        if (count == 0) {
-            free(items);
-            return flat_list_empty(coll, &id) == 0 ? flat_value_set_list(out, id) : -1;
+    if (count == 0) {
+        if (flat_list_empty(coll, &id) != 0) {
+            goto done;
         }
-        if (flat_list_build(coll, items, count, &id) != 0) {
-            free(items);
-            return -1;
-        }
-        free(items);
-        return flat_value_set_list(out, id);
+        rc = flat_value_set_list(out, id);
+        goto done;
     }
+    if (flat_list_build(coll, items, count, &id) != 0) {
+        goto done;
+    }
+    rc = flat_value_set_list(out, id);
+done:
+    free(items);
+    free(tokens);
+    return rc;
 }
 
 static int parse_simple_bools(const char *line, FlatValue *out, FlatStringPool *pool,
                               FlatCollectionPool *coll, int io_panic_cancel) {
-    char tokens[SIMPLE_MAX_TOKENS][SIMPLE_TOKEN_MAX];
+    char (*tokens)[SIMPLE_TOKEN_MAX] = calloc(SIMPLE_MAX_TOKENS, SIMPLE_TOKEN_MAX);
     int count = 0;
     int i;
     FlatValue *items = NULL;
+    int rc = -1;
+    uint32_t id;
 
     (void)pool;
-    if (split_simple_commas(line, tokens, &count) != 0) {
+    if (!tokens) {
         return -1;
+    }
+    if (split_simple_commas(line, tokens, &count) != 0) {
+        goto done;
     }
     items = calloc((size_t)count, sizeof(FlatValue));
     if (!items && count > 0) {
-        return -1;
+        goto done;
     }
     for (i = 0; i < count; i++) {
         int b = 0;
         if (tokens[i][0] == '\0') {
             b = 0;
         } else if (io_panic_cancel && flat_parse_bool_cancel_token(tokens[i])) {
-            free(items);
-            return -2;
+            rc = -2;
+            goto done;
         } else if (flat_parse_bool_token(tokens[i], &b) != 0) {
-            free(items);
-            return -1;
+            goto done;
         }
         if (flat_value_set_bool(&items[i], b) != 0) {
-            free(items);
-            return -1;
+            goto done;
         }
     }
-    {
-        uint32_t id;
-        if (count == 0) {
-            free(items);
-            return flat_list_empty(coll, &id) == 0 ? flat_value_set_list(out, id) : -1;
+    if (count == 0) {
+        if (flat_list_empty(coll, &id) != 0) {
+            goto done;
         }
-        if (flat_list_build(coll, items, count, &id) != 0) {
-            free(items);
-            return -1;
-        }
-        free(items);
-        return flat_value_set_list(out, id);
+        rc = flat_value_set_list(out, id);
+        goto done;
     }
+    if (flat_list_build(coll, items, count, &id) != 0) {
+        goto done;
+    }
+    rc = flat_value_set_list(out, id);
+done:
+    free(items);
+    free(tokens);
+    return rc;
 }
 
 static int parse_json_string_at(JsonCtx *ctx, FlatValue *out) {

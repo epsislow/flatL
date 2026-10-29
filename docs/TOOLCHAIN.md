@@ -89,7 +89,7 @@ bin\flc.exe -o out.fb examples\program.fl
 bin\flvm.exe out.fb
 ```
 
-**Tests fail with `flc exit -1073741571`:** Windows **stack overflow** (`0xC00000FD`). Rebuild after syncing sources (`FgirProgram` on **heap** in `flc`). Quick check: `bin/flc.exe -o out.fb test/cases/e2e/001_hello_ok/program.fl` → exit **0**.
+**Tests fail with `flc` or `flvm` exit `-1073741571`:** Windows **stack overflow** (`0xC00000FD`). Typical causes: old `flc` with **`FgirProgram` on the stack**, or JSON **`parse_simple_list`** token buffer on the stack (~4 MiB). Sync and rebuild `make clean && make all`. Quick check: `bin/flc.exe -o out.fb test/cases/e2e/001_hello_ok/program.fl` → **0**; json cases should no longer crash the VM.
 
 **Exit 127, no version line printed:** (1) Invoke the file you see in `ls`: **`./bin/flc.exe --version`** if only `flc.exe` exists. (2) If still silent/127, the binary may be an **old build** that kept **`FgirProgram` on the stack** (Windows stack overflow before any output). Sync `src/flc/main.c` (heap IR + early `--version`), then `make clean && make flc`. Confirm from cmd: `cmd //c D:\\wamp64\\www\\flatL\\bin\\flc.exe --version`. `ldd bin/flc.exe` should show only system DLLs (no missing `libgcc`).
 
