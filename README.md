@@ -135,7 +135,8 @@ Reference implementation direction: **C** — static IR structs, linear memory l
 ```bash
 make help         # list make targets
 make              # compile bin/ (no tests run)
-make test         # compile + run test/cases/
+make test         # compile + run test/cases/ (flc + flvm)
+make test-flatl   # same cases via [flatl] in case.toml
 bin/run_tests -h
 ```
 

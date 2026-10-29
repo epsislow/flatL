@@ -44,6 +44,17 @@ static int parse_kind(const char *v, CaseKind *out) {
     return -1;
 }
 
+static void apply_kv_flatl(FlatCase *c, const char *key, char *val) {
+    strip_quotes(val);
+    if (strcmp(key, "crun") == 0) {
+        snprintf(c->flatl_crun, sizeof c->flatl_crun, "%s", val);
+    } else if (strcmp(key, "compile") == 0) {
+        snprintf(c->flatl_compile, sizeof c->flatl_compile, "%s", val);
+    } else if (strcmp(key, "run") == 0) {
+        snprintf(c->flatl_run, sizeof c->flatl_run, "%s", val);
+    }
+}
+
 static void apply_kv(FlatCase *c, const char *key, char *val) {
     strip_quotes(val);
     if (strcmp(key, "suite") == 0) {
@@ -125,8 +136,12 @@ int flat_case_load(const char *case_toml_path, FlatCase *out) {
             *eq = '\0';
             char *key = trim(p);
             char *val = trim(eq + 1);
-            (void)section;
-            apply_kv(out, key, val);
+            if (strcmp(section, "flatl") == 0) {
+                out->flatl_section_seen = 1;
+                apply_kv_flatl(out, key, val);
+            } else {
+                apply_kv(out, key, val);
+            }
         }
     }
     fclose(f);
@@ -238,6 +253,10 @@ static void replace_token(char *cmd, size_t cap, const char *from, const char *t
 }
 
 static void subst_flvm_with_flatl_run(char *cmd, size_t cap) {
+    replace_token(cmd, cap, "/bin/flvm --trace ", "/bin/flatl run --trace ");
+    replace_token(cmd, cap, "/bin/flvm.exe --trace ", "/bin/flatl.exe run --trace ");
+    replace_token(cmd, cap, "\\bin\\flvm --trace ", "\\bin\\flatl run --trace ");
+    replace_token(cmd, cap, "\\bin\\flvm.exe --trace ", "\\bin\\flatl.exe run --trace ");
     replace_token(cmd, cap, "/bin/flvm ", "/bin/flatl run ");
     replace_token(cmd, cap, "/bin/flvm.exe ", "/bin/flatl.exe run ");
     replace_token(cmd, cap, "\\bin\\flvm ", "\\bin\\flatl run ");
@@ -310,6 +329,71 @@ int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char 
             return -1;
         }
         flat_port_path_to_native(src_path);
+
+        if (use_flatl && c->flatl_crun[0] != '\0') {
+            if (c->flatl_compile[0] != '\0' || c->flatl_run[0] != '\0') {
+                snprintf(err, (size_t)err_size, "[flatl]: use crun or compile+run, not both");
+                return -1;
+            }
+            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                                src_path, c->flatl_crun);
+            flat_port_prepare_shell_cmd(compile_cmd, sizeof compile_cmd);
+            if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
+                snprintf(err, (size_t)err_size, "flatl crun failed: %s", compile_cmd);
+                return -1;
+            }
+            if (code != c->expect_exit) {
+                snprintf(err, (size_t)err_size, "flatl crun exit %d want %d", code,
+                         c->expect_exit);
+                return -1;
+            }
+            if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+                return -1;
+            }
+            if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+                return -1;
+            }
+            return 0;
+        }
+
+        if (use_flatl && c->flatl_compile[0] != '\0' && c->flatl_run[0] != '\0') {
+            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                                src_path, c->flatl_compile);
+            expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
+                                c->flatl_run);
+            flat_port_prepare_shell_cmd(compile_cmd, sizeof compile_cmd);
+            flat_port_prepare_shell_cmd(run_cmd, sizeof run_cmd);
+            if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
+                snprintf(err, (size_t)err_size, "flatl compile failed: %s", compile_cmd);
+                return -1;
+            }
+            if (code != 0) {
+                snprintf(err, (size_t)err_size, "flatl compile exit %d: %s", code, compile_cmd);
+                return -1;
+            }
+            if (flat_port_shell_capture(run_cmd, &code, out, sizeof out) != 0) {
+                snprintf(err, (size_t)err_size, "flatl run failed: %s", run_cmd);
+                return -1;
+            }
+            if (code != c->expect_exit) {
+                snprintf(err, (size_t)err_size, "flatl run exit %d want %d", code, c->expect_exit);
+                return -1;
+            }
+            if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+                return -1;
+            }
+            if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+                return -1;
+            }
+            return 0;
+        }
+
+        if (use_flatl && c->flatl_section_seen) {
+            snprintf(err, (size_t)err_size,
+                     "[flatl] section incomplete (need crun or compile+run)");
+            return -1;
+        }
+
         if (use_flatl) {
             expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                                 src_path, FLATL_COMPILE);
@@ -343,6 +427,9 @@ int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char 
             return -1;
         }
         if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+            return -1;
+        }
+        if (check_output(out, c->stderr_contains, err, err_size) != 0) {
             return -1;
         }
         return 0;

@@ -12,7 +12,8 @@ Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make*
 make help         # list all make targets (recommended first run)
 make              # compile only: flc, flvm, mkfb, run_tests + fixtures (no tests run)
 make tools        # flc, flvm, mkfb only
-make test         # compile, then ./bin/run_tests
+make test         # compile, then ./bin/run_tests (flc + flvm)
+make test-flatl   # same cases via [flatl] in case.toml (see run_tests --flatl)
 make clean        # remove bin/ and generated min_ok.fb copies
 ```
 
@@ -24,7 +25,7 @@ make clean        # remove bin/ and generated min_ok.fb copies
 | `make fixtures` | Run `mkfb` for test/example `.fb` |
 | `make io_generate_tests` | Build `io_generate_tests` and rewrite `test/cases/io/*` from C catalog |
 | `make test` | **Runs** the full suite via **`flc` + `flvm`** (default) |
-| `make test-flatl` | Same cases; pipeline steps use **`flatl compile`** + **`flatl run`** (`run_tests --flatl`) |
+| `make test-flatl` | Same **101** cases; pipelines use **`[flatl]`** in `case.toml` when set (`crun` or `compile`+`run`), else fallback — `run_tests --flatl` |
 
 | Binary | Role |
 |--------|------|
@@ -61,7 +62,7 @@ flatl crun [--trace] [-o out.fb] program.fl
 **Tests**
 
 - **`make test`** (**101** cases): pipelines use **`flc`** and **`flvm`** from each `case.toml` (default contract).
-- **`make test-flatl`**: same discovery and expectations; for **`kind = pipeline`** the runner uses **`flatl compile -o {tmp}/out.fb {src}`** and rewrites **`flvm` → `flatl run`** in the `run = "…"` line (so **`printf … | flvm`** I/O tests keep their stdin pipes).
+- **`make test-flatl`**: for **`kind = pipeline`**, uses optional **`[flatl]`** in each `case.toml` when present; otherwise falls back to auto **`flatl compile`** + **`flvm` → `flatl run`** substitution (see below).
 - Six smoke cases under `test/cases/flatl/` target **`flatl`** subcommands directly:
 
 ```bash
@@ -211,16 +212,33 @@ Progress prints `.` / `F` in ANSI color; after every **N** characters (see **`-w
 | `-v` | Failure messages after each `F` |
 | `-e` | Yellow suite header; progress **`(n/suite_total)`** resets per suite |
 | `-w N` | Max `.` / `F` characters per line before wrapping |
-| `--flatl` | Pipeline driver: **`flatl compile`** + **`flatl run`** (see **`make test-flatl`**) |
+| `--flatl` | Pipeline driver: **`[flatl]`** section or fallback (see **`make test-flatl`**) |
 
 **`make test` vs `make test-flatl`**
 
 | Target | Pipeline execution |
 |--------|-------------------|
-| `make test` | `compile` / `run` strings from `case.toml` (`flc`, `flvm`) |
-| `make test-flatl` | Fixed compile via **`flatl compile`**; `run` line unchanged except **`flvm` → `flatl run`** |
+| `make test` | Root **`compile`** / **`run`** only (`flc`, `flvm`). **`[flatl]`** is ignored. |
+| `make test-flatl` | 1) **`[flatl] crun = "…"`** → one step; 2) else **`[flatl] compile` + `run`**; 3) else fallback (fixed **`flatl compile`** + **`flvm` → `flatl run`** on root **`run`**) |
 
 `exec` and `files` cases are identical in both modes. Banner: `[driver: flatl]` when `--flatl` is set.
+
+**`[flatl]` section** (pipeline cases only; expectations stay at file root):
+
+```toml
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+```
+
+Or, when the test needs a shell pipe on stdin:
+
+```toml
+[flatl]
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"
+```
+
+Use **`crun`** or **`compile`+`run`**, not both. An empty/incomplete **`[flatl]`** section is an error under **`--flatl`**.
 
 ### Placeholders
 
@@ -237,7 +255,7 @@ Progress prints `.` / `F` in ANSI color; after every **N** characters (see **`-w
 |------|--------|
 | `files` | `check = "path"` (repeatable) |
 | `exec` | `cmd`, `expect_exit`, optional `stdout_contains` |
-| `pipeline` | `source`, `compile`, `run`, `expect_exit` |
+| `pipeline` | `source`, `compile`, `run`, `expect_exit`; optional **`[flatl]`** with `crun` or `compile`+`run` |
 
 Example pipeline (`test/cases/e2e/001_hello_ok/case.toml`):
 
@@ -247,6 +265,21 @@ source = "program.fl"
 compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
 run = "{root}/bin/flvm {tmp}/out.fb"
 expect_exit = 0
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+```
+
+I/O-style stdin (`test/cases/io/001_outln_string/case.toml`):
+
+```toml
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+stdout_contains = "hi"
+
+[flatl]
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"
 ```
 
 Pipeline cases may set `stdout_contains` / `stderr_contains`. The runner merges stderr into captured output when executing `run` (`2>&1`), so substring checks usually target the combined stream.
@@ -289,6 +322,8 @@ The **`test/cases/io/`** tree (30 pipeline cases) is **committed to git**. Cloni
 | Optional wrapper | `test/cases/io/gen_cases.sh` | Yes — calls `bin/io_generate_tests` if built |
 
 **Source of truth for I/O case definitions:** `src/io_generate_tests/main.c` (same scenarios as the legacy shell generator). Run **`make io_generate_tests`** (builds and runs the tool) or **`bin/io_generate_tests`** after the binary exists.
+
+**Note:** `io_generate_tests` / `json_generate_tests` rewrite root `compile` / `run` only. They do **not** emit **`[flatl]`** blocks. After regenerating a catalog, restore **`[flatl]`** sections (copy from a sibling case or re-run the repo’s flatl-section sync) before expecting **`make test-flatl`** to match **`make test`**.
 
 ### Manual I/O check without the test runner
 

@@ -7,3 +7,6 @@ source = "program.fl"
 compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
 run = "{root}/bin/flatl run {tmp}/out.fb"
 expect_exit = 0
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"

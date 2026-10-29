@@ -31,6 +31,11 @@ typedef struct {
     char pipeline_compile[FLAT_CASE_MAX_CMD];
     char pipeline_run[FLAT_CASE_MAX_CMD];
     char pipeline_source[FLAT_CASE_MAX_PATH];
+
+    int flatl_section_seen;
+    char flatl_crun[FLAT_CASE_MAX_CMD];
+    char flatl_compile[FLAT_CASE_MAX_CMD];
+    char flatl_run[FLAT_CASE_MAX_CMD];
 } FlatCase;
 
 int flat_case_load(const char *case_toml_path, FlatCase *out);

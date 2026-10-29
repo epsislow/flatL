@@ -12,7 +12,7 @@ Run from repo root:
 
 ```bash
 make test                           # flc + flvm (default)
-make test-flatl                     # same cases, flatl compile + flatl run pipelines
+make test-flatl                     # same 101 cases; pipeline [flatl] in case.toml
 bin/run_tests <suite> -v          # e.g. flatl, json
 bin/run_tests <suite>[id-range] -v
 bin/run_tests --flatl             # same as make test-flatl (after build)
@@ -31,17 +31,17 @@ bin/run_tests json -v
 make json_generate_tests   # regenerate from src/json_generate_tests/main.c
 ```
 
-Catalog: **`src/json_generate_tests/main.c`** (40 cases).
+Catalog: **`src/json_generate_tests/main.c`** (40 cases). Regenerating rewrites `case.toml` without **`[flatl]`** — restore those blocks for **`make test-flatl`** ([TOOLCHAIN.md](../docs/TOOLCHAIN.md#run_tests)).
 
 ### `flatl` driver (`cases/flatl/`)
 
-Smoke tests for **`bin/flatl`** (`compile`, `run`, `crun`). The full regression suite still uses **`flc` / `flvm`** in pipeline commands.
+Smoke tests for **`bin/flatl`** (`compile`, `run`, `crun`). **`make test`** uses root **`flc`/`flvm`**; **`make test-flatl`** uses **`[flatl]`** on all pipeline cases (plus these six direct checks).
 
 ```bash
 bin/run_tests flatl -v
 ```
 
-See [docs/TOOLCHAIN.md](../docs/TOOLCHAIN.md#flatl-driver-optional-ux).
+See [docs/TOOLCHAIN.md](../docs/TOOLCHAIN.md#flatl-driver-optional-ux). Pipeline cases include an optional **`[flatl]`** block (`crun` or `compile`+`run`) used by **`make test-flatl`**.
 
 ### Portability (`cases/port/`)
 
@@ -70,6 +70,8 @@ When you add or change scenarios, edit **`src/io_generate_tests/main.c`**, then:
 ```bash
 make io_generate_tests
 ```
+
+Regeneration overwrites **`case.toml`** without **`[flatl]`**. Re-add **`[flatl]`** (`crun` or `compile`+`run`) for pipelines that need **`make test-flatl`** — see [TOOLCHAIN.md — `[flatl]` section](../docs/TOOLCHAIN.md#run_tests).
 
 This builds **`bin/io_generate_tests`** (C11, no Node/Bash logic) and rewrites `cases/io/NNN_*/program.fl` and `case.toml`.
 

@@ -6,7 +6,7 @@
 |----------|----------|
 | [SPECIFICATION.md](./SPECIFICATION.md) | Language model, keywords vs natives, `.fb` format, VM overview |
 | [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) | BOOL / NUMBER / STRING (INLINE + REF), pool, limits |
-| [TOOLCHAIN.md](./TOOLCHAIN.md) | `make`, `flc`, `flvm`, **`flatl`**, `run_tests`, test cases, **portability (Windows/WSL)** |
+| [TOOLCHAIN.md](./TOOLCHAIN.md) | `make`, `make test-flatl`, `flc`, `flvm`, **`flatl`**, **`[flatl]`** in `case.toml`, `run_tests`, **portability** |
 | [PORTABILITY.md](./PORTABILITY.md) | **Normative:** `flat_str`, `flat_port`, MSVC/GCC/Clang rules |
 | [IO.md](./IO.md) | **`io.*` / `str.to_*`**, stdin/stdout, cancel, PANIC, tests |
 | [IO_COLLECTIONS.md](./IO_COLLECTIONS.md) | Normative: `json.*`, collection stdin/stdout rules |

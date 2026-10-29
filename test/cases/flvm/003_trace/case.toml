@@ -8,3 +8,6 @@ compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
 run = "{root}/bin/flvm --trace {tmp}/out.fb"
 expect_exit = 0
 stderr_contains = "[trace]"
+
+[flatl]
+crun = "{root}/bin/flatl crun --trace -o {tmp}/out.fb {src}"

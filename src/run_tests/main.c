@@ -49,7 +49,7 @@ static void print_help(const char *prog) {
     printf("  -e, --each                 progress grouped per suite\n");
     printf("  -w, --progress-width N     max . / F characters per line (default: %d)\n",
            DEFAULT_PROGRESS_WIDTH);
-    printf("  --flatl                    pipeline: flatl compile + flatl run (keeps run pipes)\n");
+    printf("  --flatl                    pipeline: [flatl] in case.toml, else compile+run fallback\n");
 }
 
 static void progress_finish_line(Progress *p) {
