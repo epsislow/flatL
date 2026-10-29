@@ -128,7 +128,7 @@ Pipeline cases may set `stdout_contains` / `stderr_contains`. The runner merges 
 | Component | Dependency | Why |
 |-----------|------------|-----|
 | **`bin/run_tests`** | POSIX shell (`sh`) | Pipeline cases run the literal `run = "…"` string via `popen()` — often `printf '…' \| bin/flvm …` |
-| **`bin/run_tests`** | `/tmp`, `mkdtemp`, `wait` status | Temp dirs for compile-and-run pipeline cases |
+| **`bin/run_tests`** | `mkdtemp`, `wait` status | Temp dirs for pipeline cases — tries **`TMPDIR`**, **`TMP`**, **`TEMP`**, **`$PREFIX/tmp`** (Termux), **`$HOME/tmp`**, `/tmp`, then **`{repo}/.flatl_run_tmp`** |
 | **`make test`** | **make** + **gcc** | Standard Linux/WSL dev loop |
 
 On **Windows without WSL**, you can still build and use **`flc` / `flvm`** manually; running the **full** checked-in suite via `run_tests` matches the Linux/WSL environment documented above.

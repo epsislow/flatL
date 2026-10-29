@@ -1,4 +1,5 @@
 bin/
+.flatl_run_tmp/
 .cursor/
 .cursor
 .idea/

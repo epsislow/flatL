@@ -3,14 +3,93 @@
 #include "casefile.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* mkdtemp */
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+#define FLAT_CASE_TMP_SUFFIX "flatl_caseXXXXXX"
+#define FLAT_CASE_TMP_SUFFIX_LEN 16 /* strlen(FLAT_CASE_TMP_SUFFIX) */
+
+static int dir_is_writable(const char *dir) {
+    return dir && dir[0] != '\0' && access(dir, W_OK) == 0;
+}
+
+/* Pick a directory where mkdtemp(3) may create FLAT_CASE_TMP_SUFFIX. */
+static int resolve_temp_parent(char *parent, size_t parent_sz, const char *repo_root) {
+    const char *env;
+    char derived[FLAT_CASE_MAX_PATH];
+
+    env = getenv("TMPDIR");
+    if (dir_is_writable(env)) {
+        snprintf(parent, parent_sz, "%s", env);
+        return 0;
+    }
+    env = getenv("TMP");
+    if (dir_is_writable(env)) {
+        snprintf(parent, parent_sz, "%s", env);
+        return 0;
+    }
+    env = getenv("TEMP");
+    if (dir_is_writable(env)) {
+        snprintf(parent, parent_sz, "%s", env);
+        return 0;
+    }
+    env = getenv("PREFIX");
+    if (env && env[0] != '\0') {
+        snprintf(derived, sizeof derived, "%s/tmp", env);
+        if (dir_is_writable(derived)) {
+            snprintf(parent, parent_sz, "%s", derived);
+            return 0;
+        }
+    }
+    env = getenv("HOME");
+    if (env && env[0] != '\0') {
+        snprintf(derived, sizeof derived, "%s/tmp", env);
+        if (dir_is_writable(derived)) {
+            snprintf(parent, parent_sz, "%s", derived);
+            return 0;
+        }
+    }
+    if (dir_is_writable("/tmp")) {
+        snprintf(parent, parent_sz, "/tmp");
+        return 0;
+    }
+    if (repo_root && repo_root[0] != '\0') {
+        snprintf(derived, sizeof derived, "%s/.flatl_run_tmp", repo_root);
+        if (mkdir(derived, 0700) != 0 && errno != EEXIST) {
+            return -1;
+        }
+        if (dir_is_writable(derived)) {
+            snprintf(parent, parent_sz, "%s", derived);
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int make_mkdtemp_template(char *tmpl, size_t tmpl_sz, const char *repo_root) {
+    char parent[FLAT_CASE_MAX_PATH];
+    size_t plen;
+    size_t need;
+
+    if (resolve_temp_parent(parent, sizeof parent, repo_root) != 0) {
+        return -1;
+    }
+    plen = strlen(parent);
+    need = plen + 1 + FLAT_CASE_TMP_SUFFIX_LEN + 1;
+    if (need > tmpl_sz) {
+        return -1;
+    }
+    if (snprintf(tmpl, tmpl_sz, "%s/" FLAT_CASE_TMP_SUFFIX, parent) >= (int)tmpl_sz) {
+        return -1;
+    }
+    return 0;
+}
 
 static char *trim(char *s) {
     while (*s && isspace((unsigned char)*s)) {
@@ -178,7 +257,16 @@ static void expand_placeholders(char *dst, int dst_size, const char *repo, const
             continue;
         }
         if (strncmp(src, "{tmp}", 5) == 0) {
-            int n = snprintf(d, (size_t)left + 1, "%s", tmp ? tmp : "/tmp");
+            char tmp_fallback[FLAT_CASE_MAX_PATH];
+            const char *t = tmp;
+            if (!t) {
+                if (resolve_temp_parent(tmp_fallback, sizeof tmp_fallback, repo) == 0) {
+                    t = tmp_fallback;
+                } else {
+                    t = "/tmp";
+                }
+            }
+            int n = snprintf(d, (size_t)left + 1, "%s", t);
             if (n > left) {
                 break;
             }
@@ -291,22 +379,10 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
     }
 
     if (c->kind == CASE_KIND_PIPELINE) {
-   //char tmpdir[] = "/tmp/flatl_caseXXXXXX";
-        
-char tmpdir[512];
-const char *env_tmp = getenv("TMPDIR");
-if (env_tmp != NULL) {
-	    snprintf(tmpdir, sizeof(tmpdir), "%s/flatl_caseXXXXXX", env_tmp);
-} else {
-	    snprintf(tmpdir, sizeof(tmpdir), "/tmp/flatl_caseXXXXXX");
-}
-
-
-
-	char src_path[FLAT_CASE_MAX_PATH + 64];
+        char tmpdir[FLAT_CASE_MAX_PATH];
+        char src_path[FLAT_CASE_MAX_PATH + 64];
         char compile_cmd[FLAT_CASE_MAX_CMD];
         char run_cmd[FLAT_CASE_MAX_CMD];
-        char out_fb[FLAT_CASE_MAX_PATH];
         char out[4096];
         int code;
 
@@ -314,8 +390,13 @@ if (env_tmp != NULL) {
             snprintf(err, (size_t)err_size, "pipeline missing compile/run");
             return -1;
         }
+        if (make_mkdtemp_template(tmpdir, sizeof tmpdir, repo_root) != 0) {
+            snprintf(err, (size_t)err_size,
+                     "no writable temp dir (try export TMPDIR=$HOME/tmp or PREFIX/tmp on Termux)");
+            return -1;
+        }
         if (!mkdtemp(tmpdir)) {
-            snprintf(err, (size_t)err_size, "mkdtemp failed");
+            snprintf(err, (size_t)err_size, "mkdtemp failed: %s", tmpdir);
             return -1;
         }
         if (snprintf(src_path, sizeof src_path, "%s/%s", c->case_dir,
@@ -324,7 +405,6 @@ if (env_tmp != NULL) {
             snprintf(err, (size_t)err_size, "pipeline source path too long");
             return -1;
         }
-        snprintf(out_fb, sizeof out_fb, "%s/out.fb", tmpdir);
         expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                             src_path, c->pipeline_compile);
         expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
