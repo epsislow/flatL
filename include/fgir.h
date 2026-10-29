@@ -6,7 +6,7 @@
 
 #define FGIR_MAX_LABEL 128
 #define FGIR_MAX_LINE 512
-#define FGIR_MAX_BLOCKS 64
+#define FGIR_MAX_BLOCKS 1024
 #define FGIR_MAX_INSTR 128
 #define FGIR_MAX_PARAMS 8
 
@@ -46,6 +46,7 @@ typedef struct {
     int main_index;
 } FgirProgram;
 
+int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *err, size_t err_size);
 int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_size);
 void flat_fgir_dump(const FgirProgram *prog, FILE *out);
 int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, size_t err_size);

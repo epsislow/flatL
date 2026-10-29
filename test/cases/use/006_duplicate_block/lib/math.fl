@@ -1,0 +1,6 @@
+#add
+  x == 0
+  OK
+
+#backtrack.#add.1
+  FAIL

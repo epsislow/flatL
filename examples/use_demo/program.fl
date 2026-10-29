@@ -1,0 +1,6 @@
+-- Entry: link lib/math.fl and call a prefixed block.
+use "lib/math.fl" as #math_
+
+#main
+  call #math_add
+  OK

@@ -1,0 +1,8 @@
+use "lib/math.fl" as #math_
+
+#backtrack.#math_add.1
+  FAIL
+
+#main
+  call #math_add
+  OK

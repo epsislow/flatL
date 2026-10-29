@@ -119,6 +119,35 @@ Example:
 
 An **empty** backtrack block for a guard inside the loop body means **continue** to the next collection item.
 
+### 1.2 Source units (`use`)
+
+Compile-time linking merges multiple `.fl` files into one FGIR program and one `.fb`. Native C libraries (`io.*`, `json.*`, …) are separate from `use`.
+
+**Entry file** (argument to `flc` / `flatl compile`): exactly one `#main`.
+
+**Imported modules:** no `#main`; only block definitions and handlers.
+
+**Header syntax** (before the first `#block`; comments allowed):
+
+```text
+use "lib/math.fl" as #math_
+```
+
+| Rule | Detail |
+|------|--------|
+| `as #Prefix` | Required. `#Prefix`: first character after `#` must be a letter; then letters, digits, `_`, `-`, `:`. No `.` in the prefix. |
+| Path | Resolved **only** relative to the directory of the file containing the `use` line. No `-I` in v1. |
+| Duplicate `use` | Same resolved file twice in one `.fl` → error. |
+| One module instance | Same file linked once program-wide; one prefix. Same file with a different `as` in another file → error. Same `as` elsewhere → silent dedupe. |
+| Block names | Local `#add` with `as #math_` becomes global `#math_add` (literal concat after `#`). |
+| In-module calls | `call #add` rewritten to `call #math_add`. Calls to other linked modules use the **already prefixed** name (`call #math_add`). |
+| `#backtrack` / `#panic` | In a module, write `#backtrack.#add.N`; after link, `#backtrack.#math_add.N`. In entry, you may define `#backtrack.#math_add.N` for an imported block if the module did not (duplicate label → error). |
+| Rewrite scope | Structural only (`call`, `foreach`, block labels) — not string payloads. |
+
+**Errors:** short message without absolute path, e.g. `lib/utils.fl:3: use: cannot resolve "lib/math.fl" relative to this file`. With `flc --verbose` / `flatl compile --verbose`, an extra line may print the absolute path tried.
+
+**Limits:** linked program up to `FGIR_MAX_BLOCKS` (1024 in v0.2). Further IR memory optimizations are planned separately.
+
 ---
 
 ## 2. Toolchain
@@ -135,6 +164,7 @@ An **empty** backtrack block for a guard inside the loop body means **continue**
 
 ```bash
 ./flc program.fl -o program.fb
+./flc --verbose program.fl -o program.fb   # link errors may show absolute path tried
 ./flvm program.fb
 ```
 

@@ -29,19 +29,31 @@ make clean        # remove bin/ and generated min_ok.fb copies
 
 | Binary | Role |
 |--------|------|
-| `bin/flc` | Compiler: `.fl` → FGIR → `.fb` |
+| `bin/flc` | Compiler: `.fl` → FGIR → `.fb` (follows `use` in file headers) |
 | `bin/flvm` | Virtual machine: runs `.fb` |
 | `bin/flatl` | Driver: `compile`, `run` (`.fb` only), `crun` (`.fl` → compile + run) |
 | `bin/run_tests` | Discovers and runs tests under `test/cases/` |
 | `bin/mkfb` | Emits minimal `.fb` fixtures (`--min-ok`) |
 | `bin/io_generate_tests` | Regenerates I/O test stubs under `test/cases/io/` (portable C; no Bash) |
 
+## `use` (multi-file compile)
+
+`flc` and `flatl compile` **link** the entry `.fl` plus any modules referenced by **`use "path" as #Prefix`** in file headers. Paths are resolved **only relative to the file that contains each `use` line** (see [SPECIFICATION.md §1.2](./SPECIFICATION.md#12-source-units-use)).
+
+```bash
+flc -o out.fb examples/use_demo/program.fl
+flc --verbose -o out.fb examples/use_demo/program.fl   # link errors: extra absolute path on stderr
+flatl compile -o out.fb examples/use_demo/program.fl
+```
+
+Tests: `test/cases/use/` (suite `use`). Normative rules: [SPECIFICATION.md §1.2](./SPECIFICATION.md#12-source-units-use).
+
 ## `flatl` driver (optional UX)
 
 `flc` and `flvm` remain the low-level tools. **`flatl`** wraps the same library code in-process (no extra shell for these subcommands).
 
 ```bash
-flatl compile -o out.fb program.fl
+flatl compile [--verbose] -o out.fb program.fl
 flatl run [--trace] [--trace-vars] program.fb
 flatl crun [--trace] [-o out.fb] program.fl
 ```
@@ -172,7 +184,7 @@ Value types (STRING REF, NUMBER, BOOL): [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md)
 
 ```bash
 bin/flc --version
-bin/flc --dump-ir program.fl    # print FGIR after parse
+bin/flc --dump-ir program.fl    # print FGIR after link (includes use modules)
 bin/flc -o out.fb program.fl    # compile to bytecode
 ```
 

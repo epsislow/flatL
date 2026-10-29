@@ -1,5 +1,6 @@
 #include "fgir.h"
 #include "flat.h"
+#include "flat_link.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,7 +13,7 @@ static void print_version(void) {
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
     fprintf(stderr, "       %s --dump-ir program.fl\n", prog);
-    fprintf(stderr, "       %s -o out.fb program.fl\n", prog);
+    fprintf(stderr, "       %s [--verbose] -o out.fb program.fl\n", prog);
     return 2;
 }
 
@@ -22,6 +23,7 @@ int main(int argc, char **argv) {
     const char *in_path = NULL;
     const char *out_path = NULL;
     int dump_ir = 0;
+    FlatLinkOptions link_opts = {0};
     int i;
     int rc = 0;
 
@@ -44,6 +46,10 @@ int main(int argc, char **argv) {
             dump_ir = 1;
             continue;
         }
+        if (strcmp(argv[i], "--verbose") == 0) {
+            link_opts.verbose = 1;
+            continue;
+        }
         if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
             out_path = argv[++i];
             continue;
@@ -60,8 +66,8 @@ int main(int argc, char **argv) {
         rc = usage(argv[0]);
         goto done;
     }
-    if (flat_parse_file(in_path, prog, err, sizeof err) != 0) {
-        fprintf(stderr, "flc: parse error: %s\n", err);
+    if (flat_link_program(in_path, &link_opts, prog, err, sizeof err) != 0) {
+        fprintf(stderr, "flc: %s\n", err);
         rc = 1;
         goto done;
     }

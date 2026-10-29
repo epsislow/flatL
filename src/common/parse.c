@@ -1,4 +1,5 @@
 #include "fgir.h"
+#include "flat_link.h"
 #include "flat_native.h"
 #include "flat_str.h"
 
@@ -167,12 +168,17 @@ static void parse_foreach_extras(FgirInstr *ins) {
     }
 }
 
-int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_size) {
+static int line_is_use_directive(const char *p) {
+    return starts_with_kw(p, "use");
+}
+
+int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *err, size_t err_size) {
     FILE *f;
     char line[FGIR_MAX_LINE + 8];
     int line_no = 0;
     int cur = -1;
     int in_block_comment = 0;
+    int in_header = 1;
 
     if (!path || !out) {
         return -1;
@@ -212,6 +218,21 @@ int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_si
         if (line_is_line_comment(p)) {
             continue;
         }
+        if (in_header) {
+            if (line_is_use_directive(p)) {
+                continue;
+            }
+            if (*p != '#') {
+                snprintf(err, err_size, "%s:%d: expected use directive or block", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            in_header = 0;
+        } else if (line_is_use_directive(p)) {
+            snprintf(err, err_size, "%s:%d: use must appear before any block", path, line_no);
+            fclose(f);
+            return -1;
+        }
         if (*p == '#') {
             if (out->block_count >= FGIR_MAX_BLOCKS) {
                 snprintf(err, err_size, "%s:%d: too many blocks", path, line_no);
@@ -225,6 +246,11 @@ int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_si
                 return -1;
             }
             if (strcmp(out->blocks[cur].label, "#main") == 0) {
+                if (!allow_main) {
+                    snprintf(err, err_size, "%s:%d: #main not allowed in imported module", path, line_no);
+                    fclose(f);
+                    return -1;
+                }
                 if (out->main_index >= 0) {
                     snprintf(err, err_size, "%s:%d: duplicate #main", path, line_no);
                     fclose(f);
@@ -271,11 +297,16 @@ int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_si
         return -1;
     }
 
-    if (out->main_index < 0) {
+    if (allow_main && out->main_index < 0) {
         snprintf(err, err_size, "%s: missing #main", path);
         return -1;
     }
     return 0;
+}
+
+int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_size) {
+    FlatLinkOptions opts = {0};
+    return flat_link_program(path, &opts, out, err, err_size);
 }
 
 void flat_fgir_dump(const FgirProgram *prog, FILE *out) {

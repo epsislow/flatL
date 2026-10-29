@@ -1,0 +1,5 @@
+use "lib/math.fl" as #math_
+use "lib/math.fl" as #math_
+
+#main
+  OK

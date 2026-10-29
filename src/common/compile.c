@@ -234,11 +234,17 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
 
 static size_t measure_block(const FgirProgram *prog, int bi) {
     EmitBuf tmp = {0};
-    BlockOff dummy[FGIR_MAX_BLOCKS] = {0};
+    BlockOff *dummy = NULL;
     char err[64];
     size_t n;
+
+    dummy = calloc((size_t)prog->block_count, sizeof(BlockOff));
+    if (!dummy) {
+        return 0;
+    }
     emit_block_code(&tmp, prog, bi, dummy, 0, err, sizeof err);
     n = tmp.len;
+    free(dummy);
     free(tmp.buf);
     return n;
 }

@@ -1,0 +1,7 @@
+use "lib/util.fl" as #util_
+use "lib/math.fl" as #math_
+
+#main
+  call #util_bump
+  call #math_add
+  OK

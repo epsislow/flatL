@@ -1,6 +1,7 @@
 #include "fb_format.h"
 #include "fgir.h"
 #include "flat.h"
+#include "flat_link.h"
 #include "flat_port.h"
 #include "vm.h"
 
@@ -14,7 +15,7 @@ static void print_version(void) {
 
 static int top_usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
-    fprintf(stderr, "       %s compile -o out.fb program.fl\n", prog);
+    fprintf(stderr, "       %s compile [--verbose] -o out.fb program.fl\n", prog);
     fprintf(stderr, "       %s run [--trace] [--trace-vars] program.fb\n", prog);
     fprintf(stderr, "       %s crun [--trace] [--trace-vars] [-o out.fb] program.fl\n", prog);
     return 2;
@@ -35,16 +36,19 @@ static int path_has_suffix(const char *path, const char *suffix) {
     return strcmp(path + plen - slen, suffix) == 0;
 }
 
-static int compile_fl_to_fb(const char *in_path, const char *out_path, char *err, size_t err_size) {
+static int compile_fl_to_fb(const char *in_path, const char *out_path, int verbose, char *err,
+                            size_t err_size) {
     FgirProgram *prog;
+    FlatLinkOptions link_opts = {0};
     int rc = 1;
 
+    link_opts.verbose = verbose;
     prog = calloc(1, sizeof(FgirProgram));
     if (!prog) {
         snprintf(err, err_size, "out of memory");
         return 1;
     }
-    if (flat_parse_file(in_path, prog, err, err_size) != 0) {
+    if (flat_link_program(in_path, &link_opts, prog, err, err_size) != 0) {
         goto done;
     }
     if (flat_compile_fgir(prog, out_path, err, err_size) != 0) {
@@ -98,11 +102,16 @@ static int cmd_compile(int argc, char **argv) {
     const char *in_path = NULL;
     const char *out_path = NULL;
     char err[512];
+    int verbose = 0;
     int i;
 
     for (i = 0; i < argc; i++) {
         if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
             out_path = argv[++i];
+            continue;
+        }
+        if (strcmp(argv[i], "--verbose") == 0) {
+            verbose = 1;
             continue;
         }
         if (argv[i][0] == '-') {
@@ -119,7 +128,7 @@ static int cmd_compile(int argc, char **argv) {
         fprintf(stderr, "flatl compile: expected a .fl source file\n");
         return 2;
     }
-    if (compile_fl_to_fb(in_path, out_path, err, sizeof err) != 0) {
+    if (compile_fl_to_fb(in_path, out_path, verbose, err, sizeof err) != 0) {
         fprintf(stderr, "flatl compile: %s\n", err);
         return 1;
     }
@@ -184,7 +193,7 @@ static int cmd_crun(int argc, char **argv) {
         }
         out_path = default_fb;
     }
-    if (compile_fl_to_fb(in_path, out_path, err, sizeof err) != 0) {
+    if (compile_fl_to_fb(in_path, out_path, 0, err, sizeof err) != 0) {
         fprintf(stderr, "flatl crun: %s\n", err);
         return 1;
     }
