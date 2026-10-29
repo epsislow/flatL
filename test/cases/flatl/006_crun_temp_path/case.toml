@@ -1,0 +1,8 @@
+suite = "flatl"
+id = 6
+desc = "flatl crun default -o under temp reports .fb path"
+kind = "exec"
+
+cmd = "{root}/bin/flatl crun {case}/program.fl"
+expect_exit = 0
+stderr_contains = ".fb"

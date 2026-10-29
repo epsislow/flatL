@@ -1,5 +1,6 @@
 bin/
 .flatl_run_tmp/
+test/cases/flatl/**/artifact.fb
 .cursor/
 .cursor
 .idea/

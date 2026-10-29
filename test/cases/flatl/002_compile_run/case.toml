@@ -1,0 +1,9 @@
+suite = "flatl"
+id = 2
+desc = "flatl compile + flatl run pipeline"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "{root}/bin/flatl run {tmp}/out.fb"
+expect_exit = 0

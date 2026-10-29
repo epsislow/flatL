@@ -118,6 +118,25 @@ int flat_port_make_temp_dir(char *out, size_t out_size, const char *repo_root) {
     return 0;
 }
 
+int flat_port_make_temp_fb_path(char *out, size_t out_size, const char *repo_root) {
+    char parent[FLAT_PORT_PATH_MAX];
+    unsigned long pid;
+    unsigned tick;
+
+    if (!out || out_size == 0) {
+        return -1;
+    }
+    if (flat_port_temp_parent(parent, sizeof parent, repo_root) != 0) {
+        return -1;
+    }
+    pid = (unsigned long)GetCurrentProcessId();
+    tick = (unsigned)GetTickCount();
+    if (snprintf(out, out_size, "%s\\flatl_%lu_%u.fb", parent, pid, tick) >= (int)out_size) {
+        return -1;
+    }
+    return 0;
+}
+
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size) {
     char shell_cmd[4096];
     FILE *fp;
@@ -190,6 +209,8 @@ void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
     replace_token(cmd, cmd_cap, "\\bin\\flvm ", "\\bin\\flvm.exe ");
     replace_token(cmd, cmd_cap, "/bin/flc ", "/bin/flc.exe ");
     replace_token(cmd, cmd_cap, "/bin/flvm ", "/bin/flvm.exe ");
+    replace_token(cmd, cmd_cap, "\\bin\\flatl ", "\\bin\\flatl.exe ");
+    replace_token(cmd, cmd_cap, "/bin/flatl ", "/bin/flatl.exe ");
 }
 
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx) {

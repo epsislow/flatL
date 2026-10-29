@@ -23,23 +23,25 @@ VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_collection.c 
           src/common/value_ops.c src/common/value_parse.c src/common/value_format.c \
           src/common/value_io.c src/common/value_json.c $(STR_SRC) $(NATIVE_VM_SRC)
 FGIR_SRC = src/common/parse.c src/common/compile.c $(STR_SRC) $(NATIVE_FLC_SRC)
+FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/compile.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test fixtures tools flvm flc mkfb run_tests io_generate_tests json_generate_tests rebuild
+.PHONY: all help clean test fixtures tools flvm flc flatl mkfb run_tests io_generate_tests json_generate_tests rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
 	@echo ""
 	@echo "Build (compile only, no tests executed):"
 	@echo "  make              same as make all"
-	@echo "  make all          bin/flc, bin/flvm, bin/mkfb, bin/run_tests + .fb fixtures"
-	@echo "  make tools        bin/flc, bin/flvm, bin/mkfb only (no run_tests, no fixtures)"
+	@echo "  make all          bin/flc, bin/flvm, bin/flatl, bin/run_tests + fixtures"
+	@echo "  make tools        bin/flc, bin/flvm, bin/flatl, bin/mkfb only"
 	@echo "  make flvm         rebuild VM only"
 	@echo "  make flc          rebuild compiler only"
+	@echo "  make flatl        rebuild driver (compile/run/crun) only"
 	@echo "  make mkfb         rebuild fixture helper only"
 	@echo "  make run_tests    rebuild test runner only"
 	@echo "  make io_generate_tests   rebuild bin/io_generate_tests and regenerate test/cases/io/*"
@@ -60,17 +62,20 @@ help:
 	@echo "Docs: docs/TOOLCHAIN.md  docs/LANGUAGE_TYPES.md"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
-all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) fixtures
-	@echo "OK: bin/flc bin/flvm bin/mkfb bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
+all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) fixtures
+	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
 
-tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT)
-	@echo "OK: bin/flc bin/flvm bin/mkfb"
+tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT)
+	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb"
 
 flvm: $(BINDIR)/flvm$(EXEEXT)
 	@echo "OK: bin/flvm"
 
 flc: $(BINDIR)/flc$(EXEEXT)
 	@echo "OK: bin/flc"
+
+flatl: $(BINDIR)/flatl$(EXEEXT)
+	@echo "OK: bin/flatl"
 
 mkfb: $(BINDIR)/mkfb$(EXEEXT)
 	@echo "OK: bin/mkfb"
@@ -95,6 +100,9 @@ $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) | $(BINDIR)
 
 $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
+
+$(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_SRC) $(LDFLAGS)

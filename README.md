@@ -103,7 +103,11 @@ Lexical rules (summary):
 ```bash
 ./flc program.fl -o program.fb
 ./flvm program.fb
+# optional driver (same engine, in-process):
+./flatl crun program.fl
 ```
+
+See [docs/TOOLCHAIN.md — flatl](docs/TOOLCHAIN.md#flatl-driver-optional-ux).
 
 ## `.fb` binary layout (v1.1)
 

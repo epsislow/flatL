@@ -1,0 +1,8 @@
+suite = "flatl"
+id = 5
+desc = "flatl crun -o keeps artifact on disk"
+kind = "exec"
+
+cmd = "{root}/bin/flatl crun -o {case}/artifact.fb {case}/program.fl"
+expect_exit = 0
+stderr_contains = "artifact.fb"

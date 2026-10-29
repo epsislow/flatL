@@ -15,6 +15,8 @@ int flat_port_mkdir(const char *path, int mode);
 /* Writable parent for temp dirs (does not create unique subdir). */
 int flat_port_temp_parent(char *parent, size_t parent_size, const char *repo_root);
 int flat_port_make_temp_dir(char *out, size_t out_size, const char *repo_root);
+/* Unique .fb path under temp parent (creates no file; for flatl crun). */
+int flat_port_make_temp_fb_path(char *out, size_t out_size, const char *repo_root);
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size);
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx);
 

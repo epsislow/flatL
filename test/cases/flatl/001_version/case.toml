@@ -1,0 +1,8 @@
+suite = "flatl"
+id = 1
+desc = "flatl --version exits 0"
+kind = "exec"
+
+cmd = "{root}/bin/flatl --version"
+expect_exit = 0
+stdout_contains = "flatl"

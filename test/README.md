@@ -29,6 +29,16 @@ make json_generate_tests   # regenerate from src/json_generate_tests/main.c
 
 Catalog: **`src/json_generate_tests/main.c`** (40 cases).
 
+### `flatl` driver (`cases/flatl/`)
+
+Smoke tests for **`bin/flatl`** (`compile`, `run`, `crun`). The full regression suite still uses **`flc` / `flvm`** in pipeline commands.
+
+```bash
+bin/run_tests flatl -v
+```
+
+See [docs/TOOLCHAIN.md](../docs/TOOLCHAIN.md#flatl-driver-optional-ux).
+
 ### Portability (`cases/port/`)
 
 Runs **`bin/port_check`** (self-test for **`flat_str`**). Rules: [docs/PORTABILITY.md](../docs/PORTABILITY.md).

@@ -10,6 +10,7 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 #define TEMP_SUFFIX "flatl_caseXXXXXX"
@@ -117,6 +118,22 @@ int flat_port_make_temp_dir(char *out, size_t out_size, const char *repo_root) {
         return -1;
     }
     if (!mkdtemp(out)) {
+        return -1;
+    }
+    return 0;
+}
+
+int flat_port_make_temp_fb_path(char *out, size_t out_size, const char *repo_root) {
+    char parent[FLAT_PORT_PATH_MAX];
+
+    if (!out || out_size == 0) {
+        return -1;
+    }
+    if (flat_port_temp_parent(parent, sizeof parent, repo_root) != 0) {
+        return -1;
+    }
+    if (snprintf(out, out_size, "%s/flatl_%ld_%ld.fb", parent, (long)getpid(),
+                 (long)time(NULL)) >= (int)out_size) {
         return -1;
     }
     return 0;

@@ -1,0 +1,8 @@
+suite = "flatl"
+id = 4
+desc = "flatl run rejects .fl sources"
+kind = "exec"
+
+cmd = "{root}/bin/flatl run {case}/program.fl"
+expect_exit = 2
+stderr_contains = "crun"

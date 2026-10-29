@@ -29,9 +29,39 @@ make clean        # remove bin/ and generated min_ok.fb copies
 |--------|------|
 | `bin/flc` | Compiler: `.fl` → FGIR → `.fb` |
 | `bin/flvm` | Virtual machine: runs `.fb` |
+| `bin/flatl` | Driver: `compile`, `run` (`.fb` only), `crun` (`.fl` → compile + run) |
 | `bin/run_tests` | Discovers and runs tests under `test/cases/` |
 | `bin/mkfb` | Emits minimal `.fb` fixtures (`--min-ok`) |
 | `bin/io_generate_tests` | Regenerates I/O test stubs under `test/cases/io/` (portable C; no Bash) |
+
+## `flatl` driver (optional UX)
+
+`flc` and `flvm` remain the low-level tools. **`flatl`** wraps the same library code in-process (no extra shell for these subcommands).
+
+```bash
+flatl compile -o out.fb program.fl
+flatl run [--trace] [--trace-vars] program.fb
+flatl crun [--trace] [-o out.fb] program.fl
+```
+
+| Subcommand | Input | Behavior |
+|------------|--------|----------|
+| **compile** | `.fl` | Same as `flc -o out.fb program.fl`. |
+| **run** | **`.fb` only** | Same as `flvm`. Passing a `.fl` file exits **2** with a hint to use **crun**. |
+| **crun** | **`.fl` only** | Compile to `.fb`, then run. The `.fb` file is **kept** after exit (not deleted). |
+
+**Output path for crun**
+
+- With **`-o path.fb`**: write there, then run that file.
+- Without **`-o`**: write under the same temp search order as `run_tests` (`TMPDIR`, `TEMP`, `TMP`, …, then `{repo}/.flatl_run_tmp`), filename `flatl_<pid>_<tick>.fb`. After a successful compile, prints `flatl: wrote <path>` on **stderr**.
+
+**Trace flags** (for `run` and `crun`): `--trace`, `--trace-vars` — same meaning as `flvm`.
+
+**Tests:** the main suite (`make test`, **101** cases) still exercises **`flc` and `flvm` via the shell** for almost all pipelines. Six smoke cases under `test/cases/flatl/` cover `flatl` only:
+
+```bash
+bin/run_tests flatl -v
+```
 
 ## Building on Windows (Command Prompt)
 

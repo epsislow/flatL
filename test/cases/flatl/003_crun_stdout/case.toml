@@ -1,0 +1,9 @@
+suite = "flatl"
+id = 3
+desc = "flatl crun runs .fl and prints stdout"
+kind = "exec"
+
+cmd = "{root}/bin/flatl crun {case}/program.fl"
+expect_exit = 0
+stdout_contains = "hi"
+stderr_contains = "flatl: wrote"
