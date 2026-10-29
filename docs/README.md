@@ -9,6 +9,8 @@
 | [TOOLCHAIN.md](./TOOLCHAIN.md) | `make`, `make test-flatl`, `flc`, `flvm`, **`flatl`**, **`[flatl]`** in `case.toml`, `run_tests`, **portability** |
 | [PORTABILITY.md](./PORTABILITY.md) | **Normative:** `flat_str`, `flat_port`, MSVC/GCC/Clang rules |
 | [IO.md](./IO.md) | **`io.*` / `str.to_*`**, stdin/stdout, cancel, PANIC, tests |
+| [natives/README.md](./natives/README.md) | **Optional** `use native … with …`; core vs optional; index |
+| [natives/math.trig.md](./natives/math.trig.md) | Pilot module **`math.trig`** (`sin`, `cos`, `tan`, `sqrt`) |
 | [IO_COLLECTIONS.md](./IO_COLLECTIONS.md) | Normative: `json.*`, collection stdin/stdout rules |
 | [LIST_OBJECT.md](./LIST_OBJECT.md) | **Guide:** LIST/OBJECT + JSON I/O for authors |
 

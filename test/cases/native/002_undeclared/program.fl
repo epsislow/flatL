@@ -1,0 +1,4 @@
+#main
+  math.trig.sin(0) -> s
+  io.outln(s)
+  OK

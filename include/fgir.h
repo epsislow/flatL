@@ -9,6 +9,14 @@
 #define FGIR_MAX_BLOCKS 1024
 #define FGIR_MAX_INSTR 128
 #define FGIR_MAX_PARAMS 8
+#define FGIR_MAX_OPTIONAL_NATIVES 32
+#define FGIR_NATIVE_MODULE_LEN 64
+#define FGIR_NATIVE_ALIAS_LEN 64
+
+typedef struct {
+    char module[FGIR_NATIVE_MODULE_LEN];
+    char alias[FGIR_NATIVE_ALIAS_LEN];
+} FlatOptionalNativeDecl;
 
 typedef enum {
     FGIR_OK,
@@ -44,6 +52,8 @@ typedef struct {
     FgirBlock blocks[FGIR_MAX_BLOCKS];
     int block_count;
     int main_index;
+    FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
+    int optional_native_count;
 } FgirProgram;
 
 int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *err, size_t err_size);

@@ -29,7 +29,18 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META("json", "parse_object"),
     META("json", "parse_bools"),
     META("json", "stringify"),
+    META("math.trig", "sin"),
+    META("math.trig", "cos"),
+    META("math.trig", "tan"),
+    META("math.trig", "sqrt"),
 };
+
+int flat_native_is_core_module(const char *mod) {
+    if (!mod) {
+        return 0;
+    }
+    return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0;
+}
 
 int flat_native_lookup(const char *mod, const char *func, uint16_t *out_id) {
     size_t i;
@@ -67,7 +78,35 @@ int flat_native_split_call(const char *line, uint16_t *out_id, char *inner, size
 }
 
 int flat_native_is_call_line(const char *line) {
-    uint16_t id;
+    char mod[64];
+    char func[32];
     char inner[64];
-    return flat_native_split_call(line, &id, inner, sizeof inner) == 0;
+    const char *lp;
+    const char *p;
+
+    if (!line) {
+        return 0;
+    }
+    lp = strchr(line, '(');
+    if (lp) {
+        for (p = line; p < lp; p++) {
+            if (*p == '=') {
+                return 0;
+            }
+        }
+    }
+    if (flat_native_parse_dotted_call(line, mod, sizeof mod, func, sizeof func, inner,
+                                      sizeof inner) != 0) {
+        return 0;
+    }
+    {
+        uint16_t id;
+        if (flat_native_lookup(mod, func, &id) == 0) {
+            return 1;
+        }
+    }
+    if (!flat_native_is_core_module(mod)) {
+        return 1;
+    }
+    return 0;
 }

@@ -21,4 +21,9 @@ int flat_native_json_parse_object(FlatNativeCtx *ctx);
 int flat_native_json_parse_bools(FlatNativeCtx *ctx);
 int flat_native_json_stringify(FlatNativeCtx *ctx);
 
+int flat_native_math_trig_sin(FlatNativeCtx *ctx);
+int flat_native_math_trig_cos(FlatNativeCtx *ctx);
+int flat_native_math_trig_tan(FlatNativeCtx *ctx);
+int flat_native_math_trig_sqrt(FlatNativeCtx *ctx);
+
 #endif

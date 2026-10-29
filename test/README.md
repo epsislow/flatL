@@ -43,6 +43,14 @@ bin/run_tests flatl -v
 
 See [docs/TOOLCHAIN.md](../docs/TOOLCHAIN.md#flatl-driver-optional-ux). Pipeline cases include an optional **`[flatl]`** block (`crun` or `compile`+`run`) used by **`make test-flatl`**.
 
+### Optional natives (`cases/native/`)
+
+`use native math.trig with trig`, alias/canonical calls, link-time union, compile errors. Docs: [docs/natives/README.md](../docs/natives/README.md).
+
+```bash
+bin/run_tests native -v
+```
+
 ### Portability (`cases/port/`)
 
 Runs **`bin/port_check`** (self-test for **`flat_str`**). Rules: [docs/PORTABILITY.md](../docs/PORTABILITY.md).

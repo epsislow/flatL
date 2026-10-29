@@ -32,8 +32,18 @@ int flat_native_parse_dotted_call(const char *line, char *mod, size_t mod_max, c
     if (!lp || !rp || rp <= lp) {
         return -1;
     }
-    dot = strchr(line, '.');
-    if (!dot || dot > lp) {
+    {
+        const char *last_dot = NULL;
+        const char *p;
+        for (p = lp - 1; p >= line; p--) {
+            if (*p == '.') {
+                last_dot = p;
+                break;
+            }
+        }
+        dot = last_dot;
+    }
+    if (!dot || dot <= line) {
         return -1;
     }
     n = (size_t)(dot - line);

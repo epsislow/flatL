@@ -1,6 +1,7 @@
 #include "fgir.h"
 #include "flat.h"
 #include "flat_native.h"
+#include "flat_native_use.h"
 #include "fb_format.h"
 
 #include <stdio.h>
@@ -183,7 +184,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             size_t total;
             uint8_t plen;
 
-            if (flat_native_split_call(ins->text, &native_id, inner, sizeof inner) != 0) {
+            if (flat_native_split_call_prog(ins->text, prog, &native_id, inner, sizeof inner) != 0) {
                 snprintf(err, err_size, "unknown native call: %s", ins->text);
                 return -1;
             }
@@ -258,6 +259,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     int i;
 
     if (!prog || !out_path) {
+        return -1;
+    }
+    if (flat_native_use_validate_program(prog, err, err_size) != 0) {
         return -1;
     }
 

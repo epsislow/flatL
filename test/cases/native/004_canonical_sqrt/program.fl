@@ -1,0 +1,6 @@
+use native math.trig
+
+#main
+  math.trig.sqrt(4) -> r
+  io.outln(r)
+  OK

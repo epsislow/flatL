@@ -17,13 +17,15 @@ STR_SRC = src/common/flat_str.c
 PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
-                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c
+                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_math_trig.c
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
 VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_collection.c \
           src/common/value_ops.c src/common/value_parse.c src/common/value_format.c \
           src/common/value_io.c src/common/value_json.c $(STR_SRC) $(NATIVE_VM_SRC)
-FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c $(STR_SRC) $(NATIVE_FLC_SRC)
-FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
+FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/native_use.c \
+           $(STR_SRC) $(NATIVE_FLC_SRC)
+FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \
+            src/common/native_use.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 
@@ -97,13 +99,13 @@ fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
 
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(LDFLAGS) -lm
 
 $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -lm
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_SRC) $(LDFLAGS)

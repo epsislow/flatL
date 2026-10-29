@@ -1,0 +1,6 @@
+use "lib/trig_decl.fl" as #trig_
+
+#main
+  trig.cos(0) -> c
+  io.outln(c)
+  OK

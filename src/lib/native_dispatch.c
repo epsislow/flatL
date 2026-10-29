@@ -40,6 +40,14 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
         return flat_native_json_parse_bools(ctx);
     case FLAT_NATIVE_JSON_STRINGIFY:
         return flat_native_json_stringify(ctx);
+    case FLAT_NATIVE_MATH_TRIG_SIN:
+        return flat_native_math_trig_sin(ctx);
+    case FLAT_NATIVE_MATH_TRIG_COS:
+        return flat_native_math_trig_cos(ctx);
+    case FLAT_NATIVE_MATH_TRIG_TAN:
+        return flat_native_math_trig_tan(ctx);
+    case FLAT_NATIVE_MATH_TRIG_SQRT:
+        return flat_native_math_trig_sqrt(ctx);
     default:
         return -1;
     }

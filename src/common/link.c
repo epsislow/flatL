@@ -3,6 +3,7 @@
 #endif
 
 #include "flat_link.h"
+#include "flat_native_use.h"
 #include "flat_port.h"
 
 #include <ctype.h>
@@ -163,6 +164,19 @@ static int starts_with_use(const char *s) {
     return strncmp(s, "use", 3) == 0 && (s[3] == '\0' || isspace((unsigned char)s[3]));
 }
 
+static int starts_with_use_native(const char *s) {
+    const char *p;
+    if (!starts_with_use(s)) {
+        return 0;
+    }
+    p = s + 3;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    return strncmp(p, "native", 6) == 0 &&
+           (p[6] == '\0' || isspace((unsigned char)p[6]));
+}
+
 static int parse_use_line(const char *line, FlatUseLine *out, char *err, size_t err_size) {
     char buf[FGIR_MAX_LINE];
     char *p;
@@ -251,6 +265,9 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
             continue;
         }
         if (in_header && starts_with_use(p)) {
+            if (starts_with_use_native(p)) {
+                continue;
+            }
             if (n >= max_uses) {
                 snprintf(err, err_size, "%s:%d: too many use directives", path, line_no);
                 fclose(f);
@@ -628,6 +645,18 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         return -1;
     }
     free(entry_prog);
+
+    if (flat_native_use_scan_file(entry_path, out, err, err_size) != 0) {
+        return -1;
+    }
+    for (i = 0; i < mod_count; i++) {
+        if (flat_native_use_scan_file(mods[i].canonical, out, err, err_size) != 0) {
+            return -1;
+        }
+    }
+    if (flat_native_use_validate_program(out, err, err_size) != 0) {
+        return -1;
+    }
 
     if (out->main_index < 0) {
         snprintf(err, err_size, "%s: missing #main", entry_path);

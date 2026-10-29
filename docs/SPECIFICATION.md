@@ -47,11 +47,23 @@ There is **no programmer-visible `goto`**. Jump targets are derived from block n
 - `#block`, `call`, `return`, `foreach`, `OK`, `FAIL`, `->` (call result binding)
 - Guards and assignment lines (`=`, `==`) map to `OP_ASSIGN` / `OP_GUARD`
 
-**Native libraries** (dotted calls such as `str.concat`, `kv.get`, `end.msg`):
+**Native libraries** (dotted calls such as `io.outln`, `str.to_num`, `json.parse`):
 
-- Implemented as registered C modules under `src/lib/` (planned)
-- Resolved at compile time to `(module, function)` IDs in bytecode
+- Implemented as registered C modules under `src/lib/`
+- Resolved at compile time to `(module, function)` IDs in bytecode (`OP_NATIVE`)
 - No special-case function names in the VM dispatch loop
+
+**Core natives** — always available: **`io`**, **`json`**, **`str`**. No header declaration.
+
+**Optional natives** — e.g. **`math.trig`**. Declare in the header:
+
+```text
+use native math.trig with trig
+```
+
+Then call `trig.sin(...)` and/or `math.trig.sin(...)`. Undeclared optional calls are a **compile** error. Full rules: [natives/README.md](./natives/README.md).
+
+`use "path.fl" as #Prefix` (source modules) and `use native …` are independent; both may appear in the header.
 
 ### 1.2 Backtrack addressing
 
