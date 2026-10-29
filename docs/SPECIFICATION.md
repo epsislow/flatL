@@ -28,7 +28,15 @@ Programs are **not** abstract syntax trees. They are a **flat graph** of **basic
 | `OK` / `FAIL` | Terminal success / logical failure |
 | `return expr` | Return from block to caller |
 | `foreach(coll, item, '#loop')` | Iterate collection via sub-block |
-| `// …` | Line comment |
+| `-- …` | Full-line comment (from `--` to end of line) |
+| `--<` … `-->` | Block comment (multiple lines; see below) |
+
+**Comments (v0.2):**
+
+- After trimming leading/trailing whitespace, a line starting with **`--`** (but not **`--<`**) is a **line comment** and is ignored. Examples: `-- todo: fix`, `-- note`, `-- #not-a-block`.
+- A line starting with **`--<`** opens a **block comment**; scanning continues until a line starting with **`-->`**. Blank lines inside the block are ignored. Nested **`--<`** is a parse error; an unclosed block at EOF is a parse error.
+- **No trailing comments** on instruction lines — `--` in the middle of a line is part of the instruction text.
+- Block comments and line comments may appear before blocks, between blocks, or between instructions.
 
 There is **no programmer-visible `goto`**. Jump targets are derived from block names and **1-based** instruction indices.
 
@@ -210,7 +218,7 @@ Conceptual bytecode for `#main`:
 **Parser rules (v0.1):**
 
 - Block headers: `#name` or `#name(a, b)`; exactly one `#main`.
-- Lines under a block are instructions; `//` full-line comments skipped.
+- Lines under a block are instructions; full-line `--` comments and `--<` … `-->` blocks skipped.
 - Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `call #…`, lines with `==` (guard), else `assign`.
 
 **Compile-time linking:**

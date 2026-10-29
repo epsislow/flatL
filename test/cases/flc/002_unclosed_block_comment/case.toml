@@ -1,0 +1,8 @@
+suite = "flc"
+id = 2
+desc = "unclosed --< block comment is parse error"
+kind = "exec"
+
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "unclosed block comment"

@@ -1,0 +1,10 @@
+-- todo: comment syntax smoke
+-- note 1
+--<
+ block comment here
+ comment #2324322
+-->
+
+#main
+  -- line before OK
+  OK

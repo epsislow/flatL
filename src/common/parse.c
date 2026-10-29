@@ -21,8 +21,20 @@ static char *trim(char *s) {
     return s;
 }
 
-static int line_is_comment(const char *p) {
-    return p[0] == '/' && p[1] == '/';
+static int line_starts_with(const char *p, const char *prefix) {
+    return strncmp(p, prefix, strlen(prefix)) == 0;
+}
+
+static int line_is_block_comment_open(const char *p) {
+    return line_starts_with(p, "--<");
+}
+
+static int line_is_block_comment_close(const char *p) {
+    return line_starts_with(p, "-->");
+}
+
+static int line_is_line_comment(const char *p) {
+    return line_starts_with(p, "--") && !line_is_block_comment_open(p);
 }
 
 static int starts_with_kw(const char *s, const char *kw) {
@@ -160,6 +172,7 @@ int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_si
     char line[FGIR_MAX_LINE + 8];
     int line_no = 0;
     int cur = -1;
+    int in_block_comment = 0;
 
     if (!path || !out) {
         return -1;
@@ -177,7 +190,26 @@ int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_si
         char *p;
         line_no++;
         p = trim(line);
-        if (*p == '\0' || line_is_comment(p)) {
+        if (in_block_comment) {
+            if (line_is_block_comment_close(p)) {
+                in_block_comment = 0;
+                continue;
+            }
+            if (line_is_block_comment_open(p)) {
+                snprintf(err, err_size, "%s:%d: nested block comment", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            continue;
+        }
+        if (*p == '\0') {
+            continue;
+        }
+        if (line_is_block_comment_open(p)) {
+            in_block_comment = 1;
+            continue;
+        }
+        if (line_is_line_comment(p)) {
             continue;
         }
         if (*p == '#') {
@@ -233,6 +265,11 @@ int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_si
         }
     }
     fclose(f);
+
+    if (in_block_comment) {
+        snprintf(err, err_size, "%s: unclosed block comment", path);
+        return -1;
+    }
 
     if (out->main_index < 0) {
         snprintf(err, err_size, "%s: missing #main", path);
