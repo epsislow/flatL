@@ -33,6 +33,82 @@ make clean        # remove bin/ and generated min_ok.fb copies
 | `bin/mkfb` | Emits minimal `.fb` fixtures (`--min-ok`) |
 | `bin/io_generate_tests` | Regenerates I/O test stubs under `test/cases/io/` (portable C; no Bash) |
 
+## Building on Windows (Command Prompt)
+
+**`make` is not available in plain `cmd.exe`.** Pick one of these:
+
+### Option A — WSL (recommended)
+
+Install [WSL](https://learn.microsoft.com/en-us/windows/wsl/), open **Ubuntu**, clone the repo inside Linux home (e.g. `~/flatL`), then:
+
+```bash
+sudo apt update && sudo apt install -y build-essential
+cd ~/flatL && make && make test
+```
+
+Same workflow as Linux; pipeline tests behave like CI.
+
+### Option B — MSYS2 / MinGW (`make` works in that shell)
+
+1. Install [MSYS2](https://www.msys2.org/).
+2. Open **MSYS2 UCRT64** (or MINGW64) and install tools:
+
+```bash
+pacman -S --needed mingw-w64-ucrt-x86_64-gcc make
+```
+
+3. From the repo root (path like `/c/Users/you/flatL`):
+
+```bash
+make tools
+```
+
+Uses **`flat_port_posix.c`** in that environment (POSIX API available in MSYS).
+
+### Option C — Native `cmd` + MSVC (`cl`)
+
+1. Open **“x64 Native Tools Command Prompt for VS”** (Visual Studio Build Tools).
+2. `cd` to the repo root.
+3. Create output folder: `mkdir bin`
+4. Build **compiler + VM** (one line each; run from repo root):
+
+```bat
+cl /nologo /W3 /std:c11 /Iinclude /Fe:bin\flc.exe src\flc\main.c src\common\parse.c src\common\compile.c src\common\flat_str.c src\lib\native_registry.c src\lib\native_util.c src\common\fb_format.c
+
+cl /nologo /W3 /std:c11 /Iinclude /Fe:bin\flvm.exe src\flvm\main.c src\common\fb_format.c src\common\vm.c src\common\value_pool.c src\common\value_collection.c src\common\value_ops.c src\common\value_parse.c src\common\value_format.c src\common\value_io.c src\common\value_json.c src\common\flat_str.c src\lib\native_registry.c src\lib\native_util.c src\lib\native_dispatch.c src\lib\mod_io.c src\lib\mod_str.c src\lib\mod_json.c
+```
+
+Optional **`mkfb`**: `cl ... /Fe:bin\mkfb.exe src\mkfb\main.c src\common\fb_format.c`
+
+**`run_tests`** on native Windows also needs `flat_port_win.c` and the runner sources (see `Makefile` `RUN_TESTS_SRCS`). Full suite still relies on shell pipelines in `case.toml`; WSL is easier for **`make test`**.
+
+Usage:
+
+```bat
+bin\flc.exe -o out.fb examples\program.fl
+bin\flvm.exe out.fb
+```
+
+**Tests fail with `flc exit -1073741571`:** that is Windows **stack overflow** (`0xC00000FD`). Older `flc` kept a large `FgirProgram` on the stack; current sources allocate it on the heap — rebuild with `make flc` / re-run `cl` for `flc.exe`.
+
+**Slow `run_tests.exe`:** each case runs **two** shell subprocesses (`flc` then `flvm`); on Windows `cmd /c` is slower than Linux `sh`. Use filters while developing: `bin\run_tests.exe e2e[1] -v`.
+
+**`-v` from MSYS2 UCRT64:** `cd /d/wamp64/www/flatL && ./bin/run_tests.exe -v` (same as from cmd; avoid relying on a non-existent `make tests` target — use **`make test`**).
+
+### Option D — Native `cmd` + GCC (MinGW in `PATH`)
+
+If `gcc` is on `PATH` (e.g. from MinGW, not MSYS shell):
+
+```bat
+set OS=Windows_NT
+mkdir bin
+gcc -Wall -Wextra -std=c11 -Iinclude -o bin/flc.exe src/flc/main.c src/common/parse.c src/common/compile.c src/common/flat_str.c src/lib/native_registry.c src/lib/native_util.c src/common/fb_format.c
+```
+
+Use forward slashes or escaped backslashes; link **`src\port\flat_port_win.c`** for tools that need `flat_port` (`run_tests`, generators). For **`flvm`**, use the same source list as in the `Makefile` `VM_SRC` rule (no `flat_port`).
+
+---
+
 ## `flvm`
 
 ```bash

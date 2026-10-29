@@ -17,16 +17,25 @@ static int usage(const char *prog) {
 }
 
 int main(int argc, char **argv) {
-    FgirProgram prog;
+    FgirProgram *prog;
     char err[512];
     const char *in_path = NULL;
     const char *out_path = NULL;
     int dump_ir = 0;
     int i;
+    int rc = 0;
+
+    /* FgirProgram is multi-MB; Windows default stack (~1 MiB) overflows if local. */
+    prog = calloc(1, sizeof(FgirProgram));
+    if (!prog) {
+        fprintf(stderr, "flc: out of memory\n");
+        return 1;
+    }
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
             print_version();
+            free(prog);
             return 0;
         }
         if (strcmp(argv[i], "--dump-ir") == 0) {
@@ -41,27 +50,36 @@ int main(int argc, char **argv) {
             in_path = argv[i];
             continue;
         }
-        return usage(argv[0]);
+        rc = usage(argv[0]);
+        goto done;
     }
 
     if (!in_path) {
-        return usage(argv[0]);
+        rc = usage(argv[0]);
+        goto done;
     }
-    if (flat_parse_file(in_path, &prog, err, sizeof err) != 0) {
+    if (flat_parse_file(in_path, prog, err, sizeof err) != 0) {
         fprintf(stderr, "flc: parse error: %s\n", err);
-        return 1;
+        rc = 1;
+        goto done;
     }
     if (dump_ir) {
-        flat_fgir_dump(&prog, stdout);
-        return 0;
+        flat_fgir_dump(prog, stdout);
+        rc = 0;
+        goto done;
     }
     if (!out_path) {
         fprintf(stderr, "flc: missing -o out.fb\n");
-        return 1;
+        rc = 1;
+        goto done;
     }
-    if (flat_compile_fgir(&prog, out_path, err, sizeof err) != 0) {
+    if (flat_compile_fgir(prog, out_path, err, sizeof err) != 0) {
         fprintf(stderr, "flc: compile error: %s\n", err);
-        return 1;
+        rc = 1;
+        goto done;
     }
-    return 0;
+    rc = 0;
+done:
+    free(prog);
+    return rc;
 }
