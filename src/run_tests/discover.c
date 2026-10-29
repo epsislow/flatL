@@ -1,6 +1,7 @@
 #include "casefile.h"
+#include "discover.h"
+#include "flat_port.h"
 
-#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +13,18 @@ typedef struct {
     int count;
     int cap;
 } CaseList;
+
+typedef struct {
+    CaseList *list;
+    const char *suite_name;
+    char suite_path[DISCOVER_PATH_MAX];
+} SuiteScanCtx;
+
+typedef struct {
+    CaseList *list;
+    const char *cases_root;
+    char cases_root_buf[DISCOVER_PATH_MAX];
+} RootScanCtx;
 
 static void copy_suite_dir_name(char *dst, size_t dst_size, const char *dir_name) {
     size_t n = 0;
@@ -46,71 +59,59 @@ static int cmp_case(const void *a, const void *b) {
     return ca->id - cb->id;
 }
 
+static int on_case_dir(const char *case_dir_name, void *ctx) {
+    SuiteScanCtx *sctx = ctx;
+    char case_path[DISCOVER_PATH_MAX];
+    char toml[DISCOVER_PATH_MAX];
+    FlatCase c;
+
+    if (snprintf(case_path, sizeof case_path, "%s/%s", sctx->suite_path, case_dir_name) >=
+        (int)sizeof case_path) {
+        return 0;
+    }
+    if (snprintf(toml, sizeof toml, "%s/case.toml", case_path) >= (int)sizeof toml) {
+        return 0;
+    }
+    if (flat_case_load(toml, &c) != 0) {
+        return 0;
+    }
+    if (c.suite[0] == '\0') {
+        copy_suite_dir_name(c.suite, sizeof c.suite, sctx->suite_name);
+    }
+    if (case_list_push(sctx->list, &c) != 0) {
+        return -1;
+    }
+    return 0;
+}
+
+static int on_suite_dir(const char *suite_name, void *ctx) {
+    RootScanCtx *rctx = ctx;
+    SuiteScanCtx sctx;
+
+    if (snprintf(sctx.suite_path, sizeof sctx.suite_path, "%s/%s", rctx->cases_root,
+                 suite_name) >= (int)sizeof sctx.suite_path) {
+        return 0;
+    }
+    sctx.list = rctx->list;
+    sctx.suite_name = suite_name;
+    return flat_port_scan_dir(sctx.suite_path, on_case_dir, &sctx);
+}
+
 int flat_discover_cases(const char *repo_root, FlatCase **out_cases, int *out_count) {
     char cases_root[DISCOVER_PATH_MAX];
-    DIR *suites;
-    struct dirent *se;
     CaseList list = {0};
+    RootScanCtx rctx;
 
     if (!repo_root || !out_cases || !out_count) {
         return -1;
     }
 
     snprintf(cases_root, sizeof cases_root, "%s/test/cases", repo_root);
-    suites = opendir(cases_root);
-    if (!suites) {
+    rctx.list = &list;
+    rctx.cases_root = cases_root;
+    if (flat_port_scan_dir(cases_root, on_suite_dir, &rctx) != 0) {
         return -1;
     }
-
-    while ((se = readdir(suites)) != NULL) {
-        char suite_path[DISCOVER_PATH_MAX];
-        DIR *ids;
-
-        if (se->d_name[0] == '.') {
-            continue;
-        }
-        if (snprintf(suite_path, sizeof suite_path, "%s/%s", cases_root, se->d_name) >=
-            (int)sizeof suite_path) {
-            continue;
-        }
-        ids = opendir(suite_path);
-        if (!ids) {
-            continue;
-        }
-        {
-            struct dirent *ie;
-            while ((ie = readdir(ids)) != NULL) {
-                char case_path[DISCOVER_PATH_MAX];
-                char toml[DISCOVER_PATH_MAX];
-                FlatCase c;
-
-                if (ie->d_name[0] == '.') {
-                    continue;
-                }
-                if (snprintf(case_path, sizeof case_path, "%s/%s", suite_path, ie->d_name) >=
-                    (int)sizeof case_path) {
-                    continue;
-                }
-                if (snprintf(toml, sizeof toml, "%s/case.toml", case_path) >= (int)sizeof toml) {
-                    continue;
-                }
-                if (flat_case_load(toml, &c) != 0) {
-                    continue;
-                }
-                if (c.suite[0] == '\0') {
-                    copy_suite_dir_name(c.suite, sizeof c.suite, se->d_name);
-                }
-                if (case_list_push(&list, &c) != 0) {
-                    closedir(ids);
-                    closedir(suites);
-                    free(list.items);
-                    return -1;
-                }
-            }
-        }
-        closedir(ids);
-    }
-    closedir(suites);
 
     if (list.count > 1) {
         qsort(list.items, (size_t)list.count, sizeof(FlatCase), cmp_case);

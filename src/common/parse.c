@@ -1,5 +1,6 @@
 #include "fgir.h"
 #include "flat_native.h"
+#include "flat_str.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -77,11 +78,12 @@ static int parse_block_header(char *line, FgirBlock *b) {
             *end = '\0';
             snprintf(args, sizeof args, "%s", paren + 1);
             {
-                char *tok = strtok(args, ",");
-                while (tok && b->param_count < FGIR_MAX_PARAMS) {
+                char *ap = args;
+                char *tok;
+                while (b->param_count < FGIR_MAX_PARAMS &&
+                       (tok = flat_str_next(&ap, ',')) != NULL) {
                     snprintf(b->params[b->param_count], 64, "%s", trim(tok));
                     b->param_count++;
-                    tok = strtok(NULL, ",");
                 }
             }
         }
@@ -132,10 +134,12 @@ static void parse_foreach_extras(FgirInstr *ins) {
     }
     {
         char inner[FGIR_MAX_LINE];
+        char *ip;
         char *tok;
         int part = 0;
         snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
-        for (tok = strtok(inner, ","); tok; tok = strtok(NULL, ","), part++) {
+        ip = inner;
+        while ((tok = flat_str_next(&ip, ',')) != NULL) {
             char *t = trim(tok);
             if (part == 1) {
                 snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", t);
@@ -146,6 +150,7 @@ static void parse_foreach_extras(FgirInstr *ins) {
                 }
                 snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", t);
             }
+            part++;
         }
     }
 }

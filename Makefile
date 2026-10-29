@@ -3,14 +3,21 @@ CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude
 LDFLAGS ?=
 
 BINDIR  = bin
+STR_SRC = src/common/flat_str.c
+ifeq ($(OS),Windows_NT)
+PORT_SRC = src/port/flat_port_win.c
+else
+PORT_SRC = src/port/flat_port_posix.c
+endif
+PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
                 src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
 VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_collection.c \
           src/common/value_ops.c src/common/value_parse.c src/common/value_format.c \
-          src/common/value_io.c src/common/value_json.c $(NATIVE_VM_SRC)
-FGIR_SRC = src/common/parse.c src/common/compile.c $(NATIVE_FLC_SRC)
+          src/common/value_io.c src/common/value_json.c $(STR_SRC) $(NATIVE_VM_SRC)
+FGIR_SRC = src/common/parse.c src/common/compile.c $(STR_SRC) $(NATIVE_FLC_SRC)
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 
@@ -48,8 +55,8 @@ help:
 	@echo "Docs: docs/TOOLCHAIN.md  docs/LANGUAGE_TYPES.md"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
-all: $(BINDIR)/flvm $(BINDIR)/flc $(BINDIR)/run_tests $(BINDIR)/mkfb fixtures
-	@echo "OK: bin/flc bin/flvm bin/mkfb bin/run_tests (+ min_ok.fb fixtures)"
+all: $(BINDIR)/flvm $(BINDIR)/flc $(BINDIR)/run_tests $(BINDIR)/port_check $(BINDIR)/mkfb fixtures
+	@echo "OK: bin/flc bin/flvm bin/mkfb bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
 
 tools: $(BINDIR)/flvm $(BINDIR)/flc $(BINDIR)/mkfb
 	@echo "OK: bin/flc bin/flvm bin/mkfb"
@@ -91,16 +98,22 @@ RUN_TESTS_SRCS = \
 	src/run_tests/main.c \
 	src/run_tests/discover.c \
 	src/run_tests/case.c \
-	src/common/repo.c
+	src/common/repo.c \
+	$(PORT_LIB)
 
 $(BINDIR)/run_tests: $(RUN_TESTS_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(RUN_TESTS_SRCS) $(LDFLAGS)
 
-$(BINDIR)/io_generate_tests: src/io_generate_tests/main.c src/common/repo.c | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/io_generate_tests/main.c src/common/repo.c $(LDFLAGS)
+$(BINDIR)/port_check: src/port_check/main.c $(STR_SRC) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ src/port_check/main.c $(STR_SRC) $(LDFLAGS)
 
-$(BINDIR)/json_generate_tests: src/json_generate_tests/main.c src/common/repo.c | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/json_generate_tests/main.c src/common/repo.c $(LDFLAGS)
+GEN_REPO_SRCS = src/common/repo.c $(PORT_LIB)
+
+$(BINDIR)/io_generate_tests: src/io_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ src/io_generate_tests/main.c $(GEN_REPO_SRCS) $(LDFLAGS)
+
+$(BINDIR)/json_generate_tests: src/json_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ src/json_generate_tests/main.c $(GEN_REPO_SRCS) $(LDFLAGS)
 
 $(BINDIR):
 	mkdir -p $(BINDIR)

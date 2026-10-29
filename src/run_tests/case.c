@@ -1,95 +1,10 @@
-#define _POSIX_C_SOURCE 200809L
-
 #include "casefile.h"
+#include "flat_port.h"
 
 #include <ctype.h>
-#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#include <sys/stat.h>
-#include <sys/wait.h>
-#include <unistd.h>
-
-#define FLAT_CASE_TMP_SUFFIX "flatl_caseXXXXXX"
-#define FLAT_CASE_TMP_SUFFIX_LEN 16 /* strlen(FLAT_CASE_TMP_SUFFIX) */
-
-static int dir_is_writable(const char *dir) {
-    return dir && dir[0] != '\0' && access(dir, W_OK) == 0;
-}
-
-/* Pick a directory where mkdtemp(3) may create FLAT_CASE_TMP_SUFFIX. */
-static int resolve_temp_parent(char *parent, size_t parent_sz, const char *repo_root) {
-    const char *env;
-    char derived[FLAT_CASE_MAX_PATH];
-
-    env = getenv("TMPDIR");
-    if (dir_is_writable(env)) {
-        snprintf(parent, parent_sz, "%s", env);
-        return 0;
-    }
-    env = getenv("TMP");
-    if (dir_is_writable(env)) {
-        snprintf(parent, parent_sz, "%s", env);
-        return 0;
-    }
-    env = getenv("TEMP");
-    if (dir_is_writable(env)) {
-        snprintf(parent, parent_sz, "%s", env);
-        return 0;
-    }
-    env = getenv("PREFIX");
-    if (env && env[0] != '\0') {
-        snprintf(derived, sizeof derived, "%s/tmp", env);
-        if (dir_is_writable(derived)) {
-            snprintf(parent, parent_sz, "%s", derived);
-            return 0;
-        }
-    }
-    env = getenv("HOME");
-    if (env && env[0] != '\0') {
-        snprintf(derived, sizeof derived, "%s/tmp", env);
-        if (dir_is_writable(derived)) {
-            snprintf(parent, parent_sz, "%s", derived);
-            return 0;
-        }
-    }
-    if (dir_is_writable("/tmp")) {
-        snprintf(parent, parent_sz, "/tmp");
-        return 0;
-    }
-    if (repo_root && repo_root[0] != '\0') {
-        snprintf(derived, sizeof derived, "%s/.flatl_run_tmp", repo_root);
-        if (mkdir(derived, 0700) != 0 && errno != EEXIST) {
-            return -1;
-        }
-        if (dir_is_writable(derived)) {
-            snprintf(parent, parent_sz, "%s", derived);
-            return 0;
-        }
-    }
-    return -1;
-}
-
-static int make_mkdtemp_template(char *tmpl, size_t tmpl_sz, const char *repo_root) {
-    char parent[FLAT_CASE_MAX_PATH];
-    size_t plen;
-    size_t need;
-
-    if (resolve_temp_parent(parent, sizeof parent, repo_root) != 0) {
-        return -1;
-    }
-    plen = strlen(parent);
-    need = plen + 1 + FLAT_CASE_TMP_SUFFIX_LEN + 1;
-    if (need > tmpl_sz) {
-        return -1;
-    }
-    if (snprintf(tmpl, tmpl_sz, "%s/" FLAT_CASE_TMP_SUFFIX, parent) >= (int)tmpl_sz) {
-        return -1;
-    }
-    return 0;
-}
 
 static char *trim(char *s) {
     while (*s && isspace((unsigned char)*s)) {
@@ -225,7 +140,7 @@ int flat_case_load(const char *case_toml_path, FlatCase *out) {
 static int path_exists_at(const char *repo, const char *rel) {
     char full[FLAT_CASE_MAX_PATH];
     snprintf(full, sizeof full, "%s/%s", repo, rel);
-    return access(full, F_OK) == 0;
+    return flat_port_path_exists(full);
 }
 
 static void expand_placeholders(char *dst, int dst_size, const char *repo, const char *case_dir,
@@ -260,7 +175,7 @@ static void expand_placeholders(char *dst, int dst_size, const char *repo, const
             char tmp_fallback[FLAT_CASE_MAX_PATH];
             const char *t = tmp;
             if (!t) {
-                if (resolve_temp_parent(tmp_fallback, sizeof tmp_fallback, repo) == 0) {
+                if (flat_port_temp_parent(tmp_fallback, sizeof tmp_fallback, repo) == 0) {
                     t = tmp_fallback;
                 } else {
                     t = "/tmp";
@@ -289,41 +204,6 @@ static void expand_placeholders(char *dst, int dst_size, const char *repo, const
         left--;
     }
     *d = '\0';
-}
-
-static int run_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_size) {
-    char shell_cmd[FLAT_CASE_MAX_CMD + 64];
-    FILE *fp;
-
-    snprintf(shell_cmd, sizeof shell_cmd, "%s 2>&1", cmd);
-    fp = popen(shell_cmd, "r");
-    if (!fp) {
-        return -1;
-    }
-    if (out_buf && out_size > 0) {
-        int n = 0;
-        int c;
-        out_buf[0] = '\0';
-        while (n < out_size - 1 && (c = fgetc(fp)) != EOF) {
-            out_buf[n++] = (char)c;
-        }
-        out_buf[n] = '\0';
-    } else {
-        while (fgetc(fp) != EOF) {
-        }
-    }
-    {
-        int st = pclose(fp);
-        if (st == -1) {
-            return -1;
-        }
-        if (WIFEXITED(st)) {
-            *exit_code = WEXITSTATUS(st);
-        } else {
-            *exit_code = 1;
-        }
-    }
-    return 0;
 }
 
 static int check_output(const char *hay, const char *needle, char *err, int err_size) {
@@ -361,7 +241,7 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
         int code = -1;
 
         expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
-        if (run_shell_capture(cmd, &code, out, sizeof out) != 0) {
+        if (flat_port_shell_capture(cmd, &code, out, sizeof out) != 0) {
             snprintf(err, (size_t)err_size, "failed to run: %s", cmd);
             return -1;
         }
@@ -390,13 +270,9 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
             snprintf(err, (size_t)err_size, "pipeline missing compile/run");
             return -1;
         }
-        if (make_mkdtemp_template(tmpdir, sizeof tmpdir, repo_root) != 0) {
+        if (flat_port_make_temp_dir(tmpdir, sizeof tmpdir, repo_root) != 0) {
             snprintf(err, (size_t)err_size,
                      "no writable temp dir (try export TMPDIR=$HOME/tmp or PREFIX/tmp on Termux)");
-            return -1;
-        }
-        if (!mkdtemp(tmpdir)) {
-            snprintf(err, (size_t)err_size, "mkdtemp failed: %s", tmpdir);
             return -1;
         }
         if (snprintf(src_path, sizeof src_path, "%s/%s", c->case_dir,
@@ -409,7 +285,7 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
                             src_path, c->pipeline_compile);
         expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                             c->pipeline_run);
-        if (run_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
+        if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
             snprintf(err, (size_t)err_size, "compile failed: %s", compile_cmd);
             return -1;
         }
@@ -417,7 +293,7 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
             snprintf(err, (size_t)err_size, "flc exit %d: %s", code, compile_cmd);
             return -1;
         }
-        if (run_shell_capture(run_cmd, &code, out, sizeof out) != 0) {
+        if (flat_port_shell_capture(run_cmd, &code, out, sizeof out) != 0) {
             snprintf(err, (size_t)err_size, "run failed: %s", run_cmd);
             return -1;
         }

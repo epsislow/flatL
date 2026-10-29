@@ -29,6 +29,15 @@ make json_generate_tests   # regenerate from src/json_generate_tests/main.c
 
 Catalog: **`src/json_generate_tests/main.c`** (40 cases).
 
+### Portability (`cases/port/`)
+
+Runs **`bin/port_check`** (self-test for **`flat_str`**). Rules: [docs/PORTABILITY.md](../docs/PORTABILITY.md).
+
+```bash
+bin/run_tests port -v
+bin/port_check
+```
+
 ## I/O suite (`cases/io/`)
 
 Thirty pipeline tests for `io.*` / `str.to_*` (stdin simulation, stdout checks). Spec: [docs/IO.md](../docs/IO.md).

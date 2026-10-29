@@ -121,15 +121,22 @@ Pipeline cases may set `stdout_contains` / `stderr_contains`. The runner merges 
 
 ### What is cross-platform
 
-**`flc`**, **`flvm`**, and **`mkfb`** are plain C11 programs. Once compiled for your OS, they do not require Bash or `make` at runtime. You can compile a `.fl` program and run bytecode with redirected stdin/stdout using your shell or IDE — the VM is meant to be embeddable everywhere.
+**`flc`**, **`flvm`**, and **`mkfb`** are **C11** only (no direct OS headers). String splitting uses **`flat_str`**; OS calls go through **`flat_port`** (`src/port/flat_port_posix.c` or `flat_port_win.c` — see [PORTABILITY.md](./PORTABILITY.md)).
 
-### What still assumes POSIX today
+| Compiler / OS | `PORT_SRC` (Makefile) |
+|---------------|------------------------|
+| GCC, Clang (Linux, WSL, Termux) | `flat_port_posix.c` |
+| MSVC (`OS=Windows_NT`) | `flat_port_win.c` |
+
+**`bin/port_check`** — small self-test for `flat_str`; case **`port/001_str_util`**.
+
+### What still assumes a shell today
 
 | Component | Dependency | Why |
 |-----------|------------|-----|
-| **`bin/run_tests`** | POSIX shell (`sh`) | Pipeline cases run the literal `run = "…"` string via `popen()` — often `printf '…' \| bin/flvm …` |
-| **`bin/run_tests`** | `mkdtemp`, `wait` status | Temp dirs for pipeline cases — tries **`TMPDIR`**, **`TMP`**, **`TEMP`**, **`$PREFIX/tmp`** (Termux), **`$HOME/tmp`**, `/tmp`, then **`{repo}/.flatl_run_tmp`** |
-| **`make test`** | **make** + **gcc** | Standard Linux/WSL dev loop |
+| **`bin/run_tests`** | Shell in `run = "…"` | Pipeline cases use `flat_port_shell_capture` (`popen` / `_popen` + `cmd /c` on Windows) |
+| **`bin/run_tests`** | Writable temp | `flat_port_make_temp_dir` — **`TMPDIR`**, **`TMP`**, **`TEMP`**, **`$PREFIX/tmp`** (Termux), **`$HOME/tmp`**, `/tmp`, **`{repo}/.flatl_run_tmp`** |
+| **`make test`** | **make** + C compiler | Dev loop; use **WSL** or native MSVC build of the same sources |
 
 On **Windows without WSL**, you can still build and use **`flc` / `flvm`** manually; running the **full** checked-in suite via `run_tests` matches the Linux/WSL environment documented above.
 

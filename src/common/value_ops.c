@@ -1,3 +1,4 @@
+#include "flat_str.h"
 #include "flat_value.h"
 
 #include <ctype.h>
@@ -155,21 +156,24 @@ static int parse_slice_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         }
         *close = '\0';
     }
-    tok = strtok(inner, ",");
-    if (!tok) {
-        return -1;
+    {
+        char *ip = inner;
+        tok = flat_str_next(&ip, ',');
+        if (!tok) {
+            return -1;
+        }
+        snprintf(varname, sizeof varname, "%s", trim(tok));
+        tok = flat_str_next(&ip, ',');
+        if (!tok) {
+            return -1;
+        }
+        off = (size_t)strtoul(trim(tok), NULL, 10);
+        tok = flat_str_next(&ip, ',');
+        if (!tok) {
+            return -1;
+        }
+        len = (size_t)strtoul(trim(tok), NULL, 10);
     }
-    snprintf(varname, sizeof varname, "%s", trim(tok));
-    tok = strtok(NULL, ",");
-    if (!tok) {
-        return -1;
-    }
-    off = (size_t)strtoul(trim(tok), NULL, 10);
-    tok = strtok(NULL, ",");
-    if (!tok) {
-        return -1;
-    }
-    len = (size_t)strtoul(trim(tok), NULL, 10);
     vi = find_var_index(varname, var_count, names);
     if (vi < 0 || vars[vi].tag != VAL_STR_REF) {
         return -1;
@@ -445,7 +449,8 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         return flat_value_set_object(out, new_id);
     }
     if (strcmp(name, "__list_push__") == 0) {
-        tok = strtok(inner, ",");
+        char *ip = inner;
+        tok = flat_str_next(&ip, ',');
         if (!tok) {
             return -1;
         }
@@ -453,11 +458,10 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         if (vi < 0 || vars[vi].tag != VAL_LIST) {
             return -1;
         }
-        tok = strtok(NULL, "");
-        if (!tok) {
+        if (!ip || *ip == '\0') {
             return -1;
         }
-        p = skip_ws(tok);
+        p = skip_ws(ip);
         if (flat_value_parse_at(&p, &item, pool, coll, vars, var_count, var_names) != 0) {
             return -1;
         }
@@ -467,7 +471,9 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         return flat_value_set_list(out, new_id);
     }
     if (strcmp(name, "__obj_set__") == 0) {
-        tok = strtok(inner, ",");
+        char *ip = inner;
+        char *key_part;
+        tok = flat_str_next(&ip, ',');
         if (!tok) {
             return -1;
         }
@@ -475,19 +481,18 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         if (vi < 0 || vars[vi].tag != VAL_OBJECT) {
             return -1;
         }
-        tok = strtok(NULL, ",");
-        if (!tok) {
+        key_part = flat_str_next(&ip, ',');
+        if (!key_part) {
             return -1;
         }
-        p = skip_ws(trim(tok));
+        p = skip_ws(trim(key_part));
         if (parse_object_key(&p, key, sizeof key) != 0) {
             return -1;
         }
-        tok = strtok(NULL, "");
-        if (!tok) {
+        if (!ip || *ip == '\0') {
             return -1;
         }
-        p = skip_ws(tok);
+        p = skip_ws(ip);
         if (flat_value_parse_at(&p, &item, pool, coll, vars, var_count, var_names) != 0) {
             return -1;
         }
@@ -497,7 +502,8 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         return flat_value_set_object(out, new_id);
     }
     if (strcmp(name, "__obj_get__") == 0) {
-        tok = strtok(inner, ",");
+        char *ip = inner;
+        tok = flat_str_next(&ip, ',');
         if (!tok) {
             return -1;
         }
@@ -505,11 +511,10 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         if (vi < 0 || vars[vi].tag != VAL_OBJECT) {
             return -1;
         }
-        tok = strtok(NULL, "");
-        if (!tok) {
+        if (!ip || *ip == '\0') {
             return -1;
         }
-        p = skip_ws(trim(tok));
+        p = skip_ws(trim(ip));
         if (parse_object_key(&p, key, sizeof key) != 0) {
             return -1;
         }
@@ -529,7 +534,8 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
     }
     if (strcmp(name, "__list_get__") == 0) {
         int ix;
-        tok = strtok(inner, ",");
+        char *ip = inner;
+        tok = flat_str_next(&ip, ',');
         if (!tok) {
             return -1;
         }
@@ -537,11 +543,10 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         if (vi < 0 || vars[vi].tag != VAL_LIST || !coll) {
             return -1;
         }
-        tok = strtok(NULL, "");
-        if (!tok) {
+        if (!ip || *ip == '\0') {
             return -1;
         }
-        ix = (int)strtol(trim(tok), NULL, 10);
+        ix = (int)strtol(trim(ip), NULL, 10);
         return flat_list_get(coll, vars[vi].u.coll_id, ix, out);
     }
     return -1;

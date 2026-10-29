@@ -1,5 +1,6 @@
 #include "casefile.h"
 #include "discover.h"
+#include "flat_str.h"
 #include "repo.h"
 
 #include <ctype.h>
@@ -40,16 +41,16 @@ static void print_help(const char *prog) {
 
 static int parse_id_spec(const char *spec, int **out_ids, int *out_count) {
     char buf[256];
+    char *bp;
     char *tok;
     int cap = 0;
     int count = 0;
     int *ids = NULL;
 
     snprintf(buf, sizeof buf, "%s", spec);
-    for (tok = strtok(buf, ","); tok; tok = strtok(NULL, ",")) {
-        while (*tok && isspace((unsigned char)*tok)) {
-            tok++;
-        }
+    bp = buf;
+    while ((tok = flat_str_next(&bp, ',')) != NULL) {
+        tok = flat_str_trim(tok);
         if (*tok == '\0') {
             continue;
         }

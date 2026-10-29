@@ -1,0 +1,8 @@
+suite = "port"
+id = 1
+desc = "flat_str helper self-check"
+kind = "exec"
+
+cmd = "{root}/bin/port_check"
+expect_exit = 0
+stdout_contains = "OK"

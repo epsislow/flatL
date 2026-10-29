@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "flat.h"
 #include "flat_native.h"
+#include "flat_str.h"
 #include "flat_value.h"
 
 #include <ctype.h>
@@ -201,6 +202,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
 static int split_csv_from_var(VmState *st, const char *coll, char items[][64], int max) {
     char buf[4096];
     int vi = find_var(st, coll);
+    char *bp;
     char *tok;
     int n = 0;
 
@@ -210,7 +212,8 @@ static int split_csv_from_var(VmState *st, const char *coll, char items[][64], i
     if (flat_value_get_cstr(&st->vars[vi].val, st->pool, buf, sizeof buf) != 0) {
         return 0;
     }
-    for (tok = strtok(buf, ","); tok && n < max; tok = strtok(NULL, ",")) {
+    bp = buf;
+    while (n < max && (tok = flat_str_next(&bp, ',')) != NULL) {
         snprintf(items[n], 64, "%s", trim(tok));
         n++;
     }
@@ -233,15 +236,18 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
 
     if (lp && rp && rp > lp) {
         char inner[256];
+        char *ip;
         char *tok;
         int part = 0;
         snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
-        for (tok = strtok(inner, ","); tok; tok = strtok(NULL, ","), part++) {
+        ip = inner;
+        while ((tok = flat_str_next(&ip, ',')) != NULL) {
             if (part == 0) {
                 snprintf(coll, sizeof coll, "%s", trim(tok));
             } else if (part == 1) {
                 snprintf(item, sizeof item, "%s", trim(tok));
             }
+            part++;
         }
     }
     if (st->loop_sp >= VM_MAX_FOREACH) {
