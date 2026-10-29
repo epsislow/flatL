@@ -23,7 +23,8 @@ make clean        # remove bin/ and generated min_ok.fb copies
 | `make flvm` / `flc` / `mkfb` / `run_tests` | Single binary |
 | `make fixtures` | Run `mkfb` for test/example `.fb` |
 | `make io_generate_tests` | Build `io_generate_tests` and rewrite `test/cases/io/*` from C catalog |
-| `make test` | **Runs** the test suite (not part of plain `make`) |
+| `make test` | **Runs** the full suite via **`flc` + `flvm`** (default) |
+| `make test-flatl` | Same cases; pipeline steps use **`flatl compile`** + **`flatl run`** (`run_tests --flatl`) |
 
 | Binary | Role |
 |--------|------|
@@ -57,10 +58,15 @@ flatl crun [--trace] [-o out.fb] program.fl
 
 **Trace flags** (for `run` and `crun`): `--trace`, `--trace-vars` — same meaning as `flvm`.
 
-**Tests:** the main suite (`make test`, **101** cases) still exercises **`flc` and `flvm` via the shell** for almost all pipelines. Six smoke cases under `test/cases/flatl/` cover `flatl` only:
+**Tests**
+
+- **`make test`** (**101** cases): pipelines use **`flc`** and **`flvm`** from each `case.toml` (default contract).
+- **`make test-flatl`**: same discovery and expectations; for **`kind = pipeline`** the runner uses **`flatl compile -o {tmp}/out.fb {src}`** and rewrites **`flvm` → `flatl run`** in the `run = "…"` line (so **`printf … | flvm`** I/O tests keep their stdin pipes).
+- Six smoke cases under `test/cases/flatl/` target **`flatl`** subcommands directly:
 
 ```bash
 bin/run_tests flatl -v
+make test-flatl
 ```
 
 ## Building on Windows (Command Prompt)
@@ -205,6 +211,16 @@ Progress prints `.` / `F` in ANSI color; after every **N** characters (see **`-w
 | `-v` | Failure messages after each `F` |
 | `-e` | Yellow suite header; progress **`(n/suite_total)`** resets per suite |
 | `-w N` | Max `.` / `F` characters per line before wrapping |
+| `--flatl` | Pipeline driver: **`flatl compile`** + **`flatl run`** (see **`make test-flatl`**) |
+
+**`make test` vs `make test-flatl`**
+
+| Target | Pipeline execution |
+|--------|-------------------|
+| `make test` | `compile` / `run` strings from `case.toml` (`flc`, `flvm`) |
+| `make test-flatl` | Fixed compile via **`flatl compile`**; `run` line unchanged except **`flvm` → `flatl run`** |
+
+`exec` and `files` cases are identical in both modes. Banner: `[driver: flatl]` when `--flatl` is set.
 
 ### Placeholders
 

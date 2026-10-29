@@ -30,7 +30,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test fixtures tools flvm flc flatl mkfb run_tests io_generate_tests json_generate_tests rebuild
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests io_generate_tests json_generate_tests rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -53,8 +53,9 @@ help:
 	@echo "      Targets still print 'OK: …' so you know nothing failed."
 	@echo ""
 	@echo "Test:"
-	@echo "  make test         make all, then ./bin/run_tests"
-	@echo "  bin/run_tests -h  filters, -v, -e, -w (see docs/TOOLCHAIN.md)"
+	@echo "  make test         make all, then ./bin/run_tests (flc + flvm pipelines)"
+	@echo "  make test-flatl   make all, then ./bin/run_tests --flatl"
+	@echo "  bin/run_tests -h  filters, -v, -e, -w, --flatl (see docs/TOOLCHAIN.md)"
 	@echo ""
 	@echo "Clean:"
 	@echo "  make clean        remove bin/ and generated min_ok.fb"
@@ -140,6 +141,10 @@ examples/min_ok.fb: $(BINDIR)/mkfb$(EXEEXT)
 test: all
 	./$(BINDIR)/run_tests$(EXEEXT)
 	@echo "OK: make test finished"
+
+test-flatl: all
+	./$(BINDIR)/run_tests$(EXEEXT) --flatl
+	@echo "OK: make test-flatl finished"
 
 clean:
 	rm -rf $(BINDIR)

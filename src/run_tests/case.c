@@ -217,7 +217,34 @@ static int check_output(const char *hay, const char *needle, char *err, int err_
     return 0;
 }
 
-int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_size) {
+static const char FLATL_COMPILE[] = "{root}/bin/flatl compile -o {tmp}/out.fb {src}";
+
+static void replace_token(char *cmd, size_t cap, const char *from, const char *to) {
+    size_t fl = strlen(from);
+    size_t tl = strlen(to);
+    char *pos;
+
+    if (fl == 0 || !cmd) {
+        return;
+    }
+    while ((pos = strstr(cmd, from)) != NULL) {
+        size_t tail = strlen(pos + fl);
+        if ((size_t)(pos - cmd) + tl + tail + 1 > cap) {
+            return;
+        }
+        memmove(pos + tl, pos + fl, tail + 1);
+        memcpy(pos, to, tl);
+    }
+}
+
+static void subst_flvm_with_flatl_run(char *cmd, size_t cap) {
+    replace_token(cmd, cap, "/bin/flvm ", "/bin/flatl run ");
+    replace_token(cmd, cap, "/bin/flvm.exe ", "/bin/flatl.exe run ");
+    replace_token(cmd, cap, "\\bin\\flvm ", "\\bin\\flatl run ");
+    replace_token(cmd, cap, "\\bin\\flvm.exe ", "\\bin\\flatl.exe run ");
+}
+
+int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char *err, int err_size) {
     int i;
 
     if (!c || !repo_root) {
@@ -283,10 +310,18 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
             return -1;
         }
         flat_port_path_to_native(src_path);
-        expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
-                            src_path, c->pipeline_compile);
+        if (use_flatl) {
+            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                                src_path, FLATL_COMPILE);
+        } else {
+            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                                src_path, c->pipeline_compile);
+        }
         expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                             c->pipeline_run);
+        if (use_flatl) {
+            subst_flvm_with_flatl_run(run_cmd, sizeof run_cmd);
+        }
         flat_port_prepare_shell_cmd(compile_cmd, sizeof compile_cmd);
         flat_port_prepare_shell_cmd(run_cmd, sizeof run_cmd);
         if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
@@ -294,7 +329,8 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
             return -1;
         }
         if (code != 0) {
-            snprintf(err, (size_t)err_size, "flc exit %d: %s", code, compile_cmd);
+            snprintf(err, (size_t)err_size, "%s exit %d: %s", use_flatl ? "flatl compile" : "flc",
+                     code, compile_cmd);
             return -1;
         }
         if (flat_port_shell_capture(run_cmd, &code, out, sizeof out) != 0) {
@@ -302,7 +338,8 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
             return -1;
         }
         if (code != c->expect_exit) {
-            snprintf(err, (size_t)err_size, "vm exit %d want %d", code, c->expect_exit);
+            snprintf(err, (size_t)err_size, "%s exit %d want %d", use_flatl ? "flatl run" : "vm",
+                     code, c->expect_exit);
             return -1;
         }
         if (check_output(out, c->stdout_contains, err, err_size) != 0) {

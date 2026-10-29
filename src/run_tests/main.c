@@ -49,6 +49,7 @@ static void print_help(const char *prog) {
     printf("  -e, --each                 progress grouped per suite\n");
     printf("  -w, --progress-width N     max . / F characters per line (default: %d)\n",
            DEFAULT_PROGRESS_WIDTH);
+    printf("  --flatl                    pipeline: flatl compile + flatl run (keeps run pipes)\n");
 }
 
 static void progress_finish_line(Progress *p) {
@@ -173,7 +174,7 @@ static int filter_push(FilterList *fl, const char *suite, const char *spec) {
 }
 
 static int parse_args(int argc, char **argv, FilterList *fl, int *verbose, int *each, int *help,
-                      int *progress_width) {
+                      int *progress_width, int *use_flatl) {
     int i;
     for (i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -183,6 +184,8 @@ static int parse_args(int argc, char **argv, FilterList *fl, int *verbose, int *
             *verbose = 1;
         } else if (strcmp(arg, "-e") == 0 || strcmp(arg, "--each") == 0) {
             *each = 1;
+        } else if (strcmp(arg, "--flatl") == 0) {
+            *use_flatl = 1;
         } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--progress-width") == 0) {
             if (i + 1 >= argc) {
                 fprintf(stderr, "%s requires a number\n", arg);
@@ -282,13 +285,15 @@ int main(int argc, char **argv) {
     int each = 0;
     int help = 0;
     int progress_width = DEFAULT_PROGRESS_WIDTH;
+    int use_flatl = 0;
     Progress progress;
     int run_total = 0;
     int passed = 0;
     int failed = 0;
     int i;
 
-    if (parse_args(argc, argv, &filters, &verbose, &each, &help, &progress_width) != 0) {
+    if (parse_args(argc, argv, &filters, &verbose, &each, &help, &progress_width, &use_flatl) !=
+        0) {
         return 2;
     }
     if (help) {
@@ -312,7 +317,11 @@ int main(int argc, char **argv) {
     run_total = count_filtered(cases, ncases, &filters, NULL);
     progress_init(&progress, run_total, progress_width);
 
-    printf("Running (%d discovered):\n", ncases);
+    printf("Running (%d discovered)", ncases);
+    if (use_flatl) {
+        printf("  %s[driver: flatl]%s", ANSI_YELLOW, ANSI_RESET);
+    }
+    printf(":\n");
     if (each) {
         printf("\n");
     }
@@ -338,7 +347,7 @@ int main(int argc, char **argv) {
                 printf("%s%s:%s\n", ANSI_YELLOW, c->suite, ANSI_RESET);
             }
 
-            ok = flat_case_run(c, repo, err, sizeof err) == 0;
+            ok = flat_case_run(c, repo, use_flatl, err, sizeof err) == 0;
             if (ok) {
                 passed++;
             } else {

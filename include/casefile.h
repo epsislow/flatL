@@ -34,6 +34,6 @@ typedef struct {
 } FlatCase;
 
 int flat_case_load(const char *case_toml_path, FlatCase *out);
-int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_size);
+int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char *err, int err_size);
 
 #endif
