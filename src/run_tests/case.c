@@ -275,16 +275,20 @@ int flat_case_run(const FlatCase *c, const char *repo_root, char *err, int err_s
                      "no writable temp dir (try export TMPDIR=$HOME/tmp or PREFIX/tmp on Termux)");
             return -1;
         }
+        flat_port_path_to_native(tmpdir);
         if (snprintf(src_path, sizeof src_path, "%s/%s", c->case_dir,
                      c->pipeline_source[0] ? c->pipeline_source : "program.fl") >=
             (int)sizeof src_path) {
             snprintf(err, (size_t)err_size, "pipeline source path too long");
             return -1;
         }
+        flat_port_path_to_native(src_path);
         expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                             src_path, c->pipeline_compile);
         expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                             c->pipeline_run);
+        flat_port_prepare_shell_cmd(compile_cmd, sizeof compile_cmd);
+        flat_port_prepare_shell_cmd(run_cmd, sizeof run_cmd);
         if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
             snprintf(err, (size_t)err_size, "compile failed: %s", compile_cmd);
             return -1;

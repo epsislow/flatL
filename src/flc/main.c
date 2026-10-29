@@ -25,6 +25,13 @@ int main(int argc, char **argv) {
     int i;
     int rc = 0;
 
+    for (i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
+            print_version();
+            return 0;
+        }
+    }
+
     /* FgirProgram is multi-MB; Windows default stack (~1 MiB) overflows if local. */
     prog = calloc(1, sizeof(FgirProgram));
     if (!prog) {
@@ -33,11 +40,6 @@ int main(int argc, char **argv) {
     }
 
     for (i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
-            print_version();
-            free(prog);
-            return 0;
-        }
         if (strcmp(argv[i], "--dump-ir") == 0) {
             dump_ir = 1;
             continue;

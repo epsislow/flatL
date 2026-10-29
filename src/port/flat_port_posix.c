@@ -160,6 +160,15 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
     return 0;
 }
 
+void flat_port_path_to_native(char *path) {
+    (void)path;
+}
+
+void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
+    (void)cmd;
+    (void)cmd_cap;
+}
+
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx) {
     DIR *d;
     struct dirent *de;

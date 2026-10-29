@@ -18,4 +18,8 @@ int flat_port_make_temp_dir(char *out, size_t out_size, const char *repo_root);
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size);
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx);
 
+/* In-place: native path separators; on Windows also flc.exe / flvm.exe in bin/ paths. */
+void flat_port_path_to_native(char *path);
+void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap);
+
 #endif

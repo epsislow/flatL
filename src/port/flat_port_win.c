@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <string.h>
+
 #include <windows.h>
 
 #ifndef F_OK
@@ -148,6 +150,46 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
         *exit_code = st;
     }
     return 0;
+}
+
+void flat_port_path_to_native(char *path) {
+    char *p;
+    if (!path) {
+        return;
+    }
+    for (p = path; *p; p++) {
+        if (*p == '/') {
+            *p = '\\';
+        }
+    }
+}
+
+static void replace_token(char *cmd, size_t cap, const char *from, const char *to) {
+    size_t fl = strlen(from);
+    size_t tl = strlen(to);
+    char *pos;
+    if (fl == 0 || tl == 0 || !cmd) {
+        return;
+    }
+    while ((pos = strstr(cmd, from)) != NULL) {
+        size_t tail = strlen(pos + fl);
+        if ((size_t)(pos - cmd) + tl + tail + 1 > cap) {
+            return;
+        }
+        memmove(pos + tl, pos + fl, tail + 1);
+        memcpy(pos, to, tl);
+    }
+}
+
+void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
+    if (!cmd || cmd_cap == 0) {
+        return;
+    }
+    flat_port_path_to_native(cmd);
+    replace_token(cmd, cmd_cap, "\\bin\\flc ", "\\bin\\flc.exe ");
+    replace_token(cmd, cmd_cap, "\\bin\\flvm ", "\\bin\\flvm.exe ");
+    replace_token(cmd, cmd_cap, "/bin/flc ", "/bin/flc.exe ");
+    replace_token(cmd, cmd_cap, "/bin/flvm ", "/bin/flvm.exe ");
 }
 
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx) {

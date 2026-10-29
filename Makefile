@@ -2,13 +2,18 @@ CC      ?= gcc
 CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude
 LDFLAGS ?=
 
+# Optional: FLC_LDFLAGS=-Wl,--stack,8388608 if an old flc ever overflows stack (heap IR is default).
+FLC_LDFLAGS ?=
+
 BINDIR  = bin
-STR_SRC = src/common/flat_str.c
 ifeq ($(OS),Windows_NT)
+EXEEXT = .exe
 PORT_SRC = src/port/flat_port_win.c
 else
+EXEEXT =
 PORT_SRC = src/port/flat_port_posix.c
 endif
+STR_SRC = src/common/flat_str.c
 PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
@@ -55,43 +60,43 @@ help:
 	@echo "Docs: docs/TOOLCHAIN.md  docs/LANGUAGE_TYPES.md"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
-all: $(BINDIR)/flvm $(BINDIR)/flc $(BINDIR)/run_tests $(BINDIR)/port_check $(BINDIR)/mkfb fixtures
+all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) fixtures
 	@echo "OK: bin/flc bin/flvm bin/mkfb bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
 
-tools: $(BINDIR)/flvm $(BINDIR)/flc $(BINDIR)/mkfb
+tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT)
 	@echo "OK: bin/flc bin/flvm bin/mkfb"
 
-flvm: $(BINDIR)/flvm
+flvm: $(BINDIR)/flvm$(EXEEXT)
 	@echo "OK: bin/flvm"
 
-flc: $(BINDIR)/flc
+flc: $(BINDIR)/flc$(EXEEXT)
 	@echo "OK: bin/flc"
 
-mkfb: $(BINDIR)/mkfb
+mkfb: $(BINDIR)/mkfb$(EXEEXT)
 	@echo "OK: bin/mkfb"
 
-run_tests: $(BINDIR)/run_tests
+run_tests: $(BINDIR)/run_tests$(EXEEXT)
 	@echo "OK: bin/run_tests"
 
-io_generate_tests: $(BINDIR)/io_generate_tests
-	$(BINDIR)/io_generate_tests
+io_generate_tests: $(BINDIR)/io_generate_tests$(EXEEXT)
+	$(BINDIR)/io_generate_tests$(EXEEXT)
 
-json_generate_tests: $(BINDIR)/json_generate_tests
+json_generate_tests: $(BINDIR)/json_generate_tests$(EXEEXT)
 	find test/cases/json -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
-	$(BINDIR)/json_generate_tests
+	$(BINDIR)/json_generate_tests$(EXEEXT)
 
 rebuild: clean all
 
 fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
 
-$(BINDIR)/flvm: src/flvm/main.c $(FB_SRC) $(VM_SRC) | $(BINDIR)
+$(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(LDFLAGS)
 
-$(BINDIR)/flc: src/flc/main.c $(FGIR_SRC) $(FB_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(LDFLAGS)
+$(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
 
-$(BINDIR)/mkfb: src/mkfb/main.c $(FB_SRC) | $(BINDIR)
+$(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_SRC) $(LDFLAGS)
 
 RUN_TESTS_SRCS = \
@@ -101,31 +106,31 @@ RUN_TESTS_SRCS = \
 	src/common/repo.c \
 	$(PORT_LIB)
 
-$(BINDIR)/run_tests: $(RUN_TESTS_SRCS) | $(BINDIR)
+$(BINDIR)/run_tests$(EXEEXT): $(RUN_TESTS_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(RUN_TESTS_SRCS) $(LDFLAGS)
 
-$(BINDIR)/port_check: src/port_check/main.c $(STR_SRC) | $(BINDIR)
+$(BINDIR)/port_check$(EXEEXT): src/port_check/main.c $(STR_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/port_check/main.c $(STR_SRC) $(LDFLAGS)
 
 GEN_REPO_SRCS = src/common/repo.c $(PORT_LIB)
 
-$(BINDIR)/io_generate_tests: src/io_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
+$(BINDIR)/io_generate_tests$(EXEEXT): src/io_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/io_generate_tests/main.c $(GEN_REPO_SRCS) $(LDFLAGS)
 
-$(BINDIR)/json_generate_tests: src/json_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
+$(BINDIR)/json_generate_tests$(EXEEXT): src/json_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/json_generate_tests/main.c $(GEN_REPO_SRCS) $(LDFLAGS)
 
 $(BINDIR):
 	mkdir -p $(BINDIR)
 
-test/cases/flvm/001_min_ok/min_ok.fb: $(BINDIR)/mkfb
-	$(BINDIR)/mkfb --min-ok -o $@
+test/cases/flvm/001_min_ok/min_ok.fb: $(BINDIR)/mkfb$(EXEEXT)
+	$(BINDIR)/mkfb$(EXEEXT) --min-ok -o $@
 
-examples/min_ok.fb: $(BINDIR)/mkfb
-	$(BINDIR)/mkfb --min-ok -o $@
+examples/min_ok.fb: $(BINDIR)/mkfb$(EXEEXT)
+	$(BINDIR)/mkfb$(EXEEXT) --min-ok -o $@
 
 test: all
-	./$(BINDIR)/run_tests
+	./$(BINDIR)/run_tests$(EXEEXT)
 	@echo "OK: make test finished"
 
 clean:
