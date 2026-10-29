@@ -186,13 +186,25 @@ C runner — no Node.js. Scans `test/cases/<suite>/<id>_*/case.toml`.
 ```bash
 bin/run_tests
 bin/run_tests -h
+bin/run_tests flatl -v
 bin/run_tests e2e[1-7] flc -v -e
+bin/run_tests -w 20          # wrap progress dots (default: 40 per line)
 ```
+
+Progress prints `.` / `F` in ANSI color; after every **N** characters (see **`-w` / `--progress-width`**, default **40**) a line ends with **`(run/total)`**, same idea as `sside`’s `node/run_tests.js`.
 
 ### Filters
 
-- `suite` — all cases in suite
+- `suite` — all cases in suite (e.g. `flatl`, `json`)
 - `suite[1]` / `suite[1-3,5]` — by `id` in `case.toml`
+
+### Options
+
+| Flag | Effect |
+|------|--------|
+| `-v` | Failure messages after each `F` |
+| `-e` | Yellow suite header; progress **`(n/suite_total)`** resets per suite |
+| `-w N` | Max `.` / `F` characters per line before wrapping |
 
 ### Placeholders
 

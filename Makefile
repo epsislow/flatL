@@ -54,7 +54,7 @@ help:
 	@echo ""
 	@echo "Test:"
 	@echo "  make test         make all, then ./bin/run_tests"
-	@echo "  bin/run_tests -h  filters, -v, -e (see docs/TOOLCHAIN.md)"
+	@echo "  bin/run_tests -h  filters, -v, -e, -w (see docs/TOOLCHAIN.md)"
 	@echo ""
 	@echo "Clean:"
 	@echo "  make clean        remove bin/ and generated min_ok.fb"

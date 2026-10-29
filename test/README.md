@@ -12,7 +12,9 @@ Run from repo root:
 
 ```bash
 make test
+bin/run_tests <suite> -v          # e.g. flatl, json
 bin/run_tests <suite>[id-range] -v
+bin/run_tests -w 40               # wrap progress dots (default 40)
 ```
 
 See [docs/TOOLCHAIN.md](../docs/TOOLCHAIN.md) for filters, `case.toml` fields, and **portability** (Windows vs WSL, shell vs `io_generate_tests`).
