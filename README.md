@@ -3,7 +3,7 @@
 **flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards, structural backtracking, `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
 
 > FGIR (Flat Graph Intermediate Representation) spec v1.0 · Binary & VM spec v1.1  
-> **Documentation is in English** — index: [docs/README.md](docs/README.md)
+> **Documentation is in English** — index: [docs/README.md](docs/README.md) · offline site: **`make docs`** → open [doc_site/index.html](doc_site/index.html)
 
 ## Why flatL?
 

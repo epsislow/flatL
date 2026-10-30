@@ -1,0 +1,9 @@
+suite = "docgen"
+id = 2
+desc = "doc_site output files exist after gen_doc_site"
+kind = "files"
+
+check = "doc_site/index.html"
+check = "doc_site/js/doc-data.js"
+check = "doc_site/js/doc-viewer.js"
+check = "doc_site/css/docs.css"

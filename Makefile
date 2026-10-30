@@ -51,7 +51,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests io_generate_tests json_generate_tests rebuild
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -68,6 +68,7 @@ help:
 	@echo "  make io_generate_tests   rebuild bin/io_generate_tests and regenerate test/cases/io/*"
 	@echo "  make json_generate_tests rebuild bin/json_generate_tests and regenerate test/cases/json/*"
 	@echo "  make fixtures     regenerate min_ok.fb examples"
+	@echo "  make docs         bin/gen_doc_site → doc_site/ (offline HTML docs)"
 	@echo "  make rebuild      make clean && make all (force full recompile)"
 	@echo ""
 	@echo "Note: if sources unchanged, make skips compile (up to date)."
@@ -84,8 +85,8 @@ help:
 	@echo "Docs: docs/TOOLCHAIN.md  docs/LANGUAGE_TYPES.md"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
-all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(PLUGIN_TARGET) fixtures
-	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
+all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/gen_doc_site$(EXEEXT) $(PLUGIN_TARGET) fixtures
+	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/gen_doc_site bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
 
 tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(PLUGIN_TARGET)
 	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb"
@@ -141,6 +142,13 @@ $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_SRC) $(LDFLAGS)
 
+$(BINDIR)/gen_doc_site$(EXEEXT): $(GEN_DOC_SITE_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ $(GEN_DOC_SITE_SRCS) $(LDFLAGS)
+
+docs gen_doc_site: $(BINDIR)/gen_doc_site$(EXEEXT)
+	$(BINDIR)/gen_doc_site$(EXEEXT)
+	@echo "OK: doc_site/"
+
 RUN_TESTS_SRCS = \
 	src/run_tests/main.c \
 	src/run_tests/discover.c \
@@ -155,6 +163,9 @@ $(BINDIR)/port_check$(EXEEXT): src/port_check/main.c $(STR_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/port_check/main.c $(STR_SRC) $(LDFLAGS)
 
 GEN_REPO_SRCS = src/common/repo.c $(PORT_LIB)
+
+GEN_DOC_SITE_SRCS = src/gen_doc_site/main.c src/gen_doc_site/index_json.c src/gen_doc_site/emit.c \
+                      src/gen_doc_site/fs_util.c $(GEN_REPO_SRCS)
 
 $(BINDIR)/io_generate_tests$(EXEEXT): src/io_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/io_generate_tests/main.c $(GEN_REPO_SRCS) $(LDFLAGS)

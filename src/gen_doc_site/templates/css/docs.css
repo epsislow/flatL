@@ -1,0 +1,160 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f8fa;
+  --panel: #fff;
+  --text: #1f2328;
+  --muted: #656d76;
+  --border: #d0d7de;
+  --link: #0969da;
+  --code-bg: #eef1f4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --panel: #161b22;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --border: #30363d;
+    --link: #58a6ff;
+    --code-bg: #21262d;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.docs-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+
+.docs-header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.docs-tagline {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.docs-layout {
+  display: flex;
+  min-height: calc(100vh - 5rem);
+}
+
+.docs-toc {
+  width: 16rem;
+  flex-shrink: 0;
+  padding: 1rem;
+  border-right: 1px solid var(--border);
+  background: var(--panel);
+  overflow-y: auto;
+}
+
+.docs-toc button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  margin-bottom: 0.15rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.92rem;
+}
+
+.docs-toc button:hover {
+  background: var(--code-bg);
+}
+
+.docs-toc button.active {
+  background: var(--code-bg);
+  font-weight: 600;
+}
+
+.docs-content {
+  flex: 1;
+  padding: 1.25rem 2rem 3rem;
+  max-width: 52rem;
+  overflow-y: auto;
+}
+
+.docs-content h1,
+.docs-content h2,
+.docs-content h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.6rem;
+  line-height: 1.25;
+}
+
+.docs-content p {
+  margin: 0.75rem 0;
+}
+
+.docs-content ul,
+.docs-content ol {
+  margin: 0.5rem 0 0.75rem 1.25rem;
+}
+
+.docs-content pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+  font-size: 0.88rem;
+}
+
+.docs-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.9em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.docs-content pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.docs-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+  font-size: 0.92rem;
+}
+
+.docs-content th,
+.docs-content td {
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+}
+
+.docs-content th {
+  background: var(--code-bg);
+}
+
+.docs-content a {
+  color: var(--link);
+}
+
+.docs-stub {
+  color: var(--muted);
+}

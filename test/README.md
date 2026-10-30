@@ -13,7 +13,7 @@ Run from repo root:
 ```bash
 make test                           # flc + flvm (default)
 make test-flatl                     # same 101 cases; pipeline [flatl] in case.toml
-bin/run_tests <suite> -v          # e.g. flatl, json
+bin/run_tests <suite> -v          # e.g. flatl, json, docgen
 bin/run_tests <suite>[id-range] -v
 bin/run_tests --flatl             # same as make test-flatl (after build)
 bin/run_tests -w 40               # wrap progress dots (default 40)

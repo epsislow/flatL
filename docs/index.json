@@ -1,0 +1,17 @@
+{
+  "title": "flatL documentation",
+  "sections": [
+    { "id": "specification", "label": "Specification", "file": "SPECIFICATION.md" },
+    { "id": "language-types", "label": "Language types", "file": "LANGUAGE_TYPES.md" },
+    { "id": "toolchain", "label": "Toolchain", "file": "TOOLCHAIN.md" },
+    { "id": "portability", "label": "Portability", "file": "PORTABILITY.md" },
+    { "id": "io", "label": "I/O", "file": "IO.md" },
+    { "id": "io-collections", "label": "I/O collections", "file": "IO_COLLECTIONS.md" },
+    { "id": "list-object", "label": "LIST / OBJECT guide", "file": "LIST_OBJECT.md" },
+    { "id": "natives", "label": "Optional natives", "file": "natives/README.md" },
+    { "id": "math", "label": "Native math", "file": "natives/math.md" },
+    { "id": "math-trig", "label": "Native math.trig", "file": "natives/math.trig.md" },
+    { "id": "math-stats", "label": "Native math.stats", "file": "natives/math.stats.md" },
+    { "id": "list-native", "label": "Native list", "file": "natives/list.md" }
+  ]
+}

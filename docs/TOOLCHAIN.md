@@ -190,6 +190,35 @@ bin/flc -o out.fb program.fl    # compile to bytecode
 
 Parse/compile errors print to stderr and exit **1**.
 
+## `gen_doc_site` / `make docs`
+
+Builds **`doc_site/`** at the repository root: static HTML + JS viewer over Markdown from **`docs/`**. No Node.js — the generator is **`bin/gen_doc_site`** (C).
+
+| Input | Role |
+|-------|------|
+| `docs/index.json` | Table of contents (`id`, `label`, `file` relative to `docs/`) |
+| `docs/**/*.md` | Section bodies |
+| `src/gen_doc_site/templates/` | Copied shell (`index.html`, CSS, `doc-viewer.js`) |
+
+Output (regenerated each run; **`doc_site/`** is in `.gitignore` by default):
+
+```text
+doc_site/index.html
+doc_site/css/docs.css
+doc_site/js/doc-viewer.js
+doc_site/js/doc-data.js    # bundled Markdown (generated)
+```
+
+```bash
+make docs
+# or
+bin/gen_doc_site --root .
+```
+
+Open **`doc_site/index.html`** in a browser (`file://` is fine). Internal links to other `.md` files in the index navigate between sections.
+
+Tests: **`bin/run_tests docgen -v`**.
+
 ## `mkfb`
 
 ```bash

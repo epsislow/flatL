@@ -2,6 +2,8 @@
 
 **Language:** all files under **`docs/`** (and the root [README.md](../README.md), [test/README.md](../test/README.md)) must be written in **English**. Source code and comments are **English** too. Cursor **plans** under [`.cursor/plans/`](../.cursor/plans/) may use Romanian.
 
+**Offline browser docs:** from the repo root, run **`make docs`** (or **`bin/gen_doc_site`**), then open **`doc_site/index.html`**. The table of contents is driven by **[index.json](./index.json)** — add a section there when you add a new normative doc page.
+
 | Document | Contents |
 |----------|----------|
 | [SPECIFICATION.md](./SPECIFICATION.md) | Language model, keywords vs natives, `.fb` format, VM overview |
@@ -13,7 +15,7 @@
 | [natives/math.md](./natives/math.md) | **`math`** — libm, aggregations, constants |
 | [natives/math.trig.md](./natives/math.trig.md) | **`math.trig`** — sin, cos, tan |
 | [natives/list.md](./natives/list.md) | **`list`** — pack, push, get, len |
-| [natives/math.stats.md](./natives/math.stats.md) | **`math.stats`** — sum, mean, min, max, median, var, stdev |
+| [natives/math.stats.md](./natives/math.stats.md) | **`math.stats`** — mean, median, var, stdev |
 | [IO_COLLECTIONS.md](./IO_COLLECTIONS.md) | Normative: `json.*`, collection stdin/stdout rules |
 | [LIST_OBJECT.md](./LIST_OBJECT.md) | **Guide:** LIST/OBJECT + JSON I/O for authors |
 
