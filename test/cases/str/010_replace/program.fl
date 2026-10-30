@@ -1,0 +1,4 @@
+#main
+  str.replace('foo bar', 'bar', 'baz') -> s
+  io.outln(s)
+  OK

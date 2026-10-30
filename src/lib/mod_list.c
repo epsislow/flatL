@@ -2,6 +2,7 @@
 #include "flat_native_util.h"
 #include "flat_value.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -538,4 +539,148 @@ int flat_native_list_splice(FlatNativeCtx *ctx) {
         return -1;
     }
     return flat_value_set_list(ctx->out, new_id);
+}
+
+static int parse_whole_number_expr(FlatNativeCtx *ctx, const char *expr, double *out) {
+    FlatValue v;
+    if (parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) {
+        return -1;
+    }
+    if (v.u.number != floor(v.u.number)) {
+        return -1;
+    }
+    *out = v.u.number;
+    return 0;
+}
+
+static int parse_nonneg_int_expr(FlatNativeCtx *ctx, const char *expr, int *out) {
+    double n;
+    if (parse_whole_number_expr(ctx, expr, &n) != 0 || n < 0.0) {
+        return -1;
+    }
+    *out = (int)n;
+    return 0;
+}
+
+static int build_range_list(FlatNativeCtx *ctx, double start, double stop, double step,
+                            uint32_t *out_id) {
+    FlatValue items[FLAT_LIST_MAX_ELEMS];
+    int n = 0;
+    double x;
+
+    if (!ctx->coll || !out_id) {
+        return -1;
+    }
+    if (step == 0.0) {
+        return -1;
+    }
+    if (step > 0.0) {
+        for (x = start; x < stop; x += step) {
+            if (n >= FLAT_LIST_MAX_ELEMS) {
+                return -1;
+            }
+            flat_value_set_number(&items[n], x);
+            n++;
+        }
+    } else {
+        for (x = start; x > stop; x += step) {
+            if (n >= FLAT_LIST_MAX_ELEMS) {
+                return -1;
+            }
+            flat_value_set_number(&items[n], x);
+            n++;
+        }
+    }
+    if (n == 0) {
+        return flat_list_empty(ctx->coll, ctx->pool, out_id);
+    }
+    return flat_list_build(ctx->coll, ctx->pool, items, n, out_id);
+}
+
+int flat_native_list_range(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *parts[3];
+    int argc;
+    double start = 0.0;
+    double stop;
+    double step = 1.0;
+    uint32_t id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_variadic_args(inner_buf, parts, 3, &argc) != 0 || argc < 1 || argc > 3) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (argc == 1) {
+        if (parse_whole_number_expr(ctx, parts[0], &stop) != 0) {
+            *ctx->io_status = FLAT_IO_ERR;
+            return -1;
+        }
+    } else if (argc == 2) {
+        if (parse_whole_number_expr(ctx, parts[0], &start) != 0 ||
+            parse_whole_number_expr(ctx, parts[1], &stop) != 0) {
+            *ctx->io_status = FLAT_IO_ERR;
+            return -1;
+        }
+    } else {
+        if (parse_whole_number_expr(ctx, parts[0], &start) != 0 ||
+            parse_whole_number_expr(ctx, parts[1], &stop) != 0 ||
+            parse_whole_number_expr(ctx, parts[2], &step) != 0) {
+            *ctx->io_status = FLAT_IO_ERR;
+            return -1;
+        }
+    }
+    if (build_range_list(ctx, start, stop, step, &id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, id);
+}
+
+int flat_native_list_repeat(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *n_s;
+    char *val_s;
+    FlatValue val;
+    int n;
+    FlatValue items[FLAT_LIST_MAX_ELEMS];
+    int i;
+    uint32_t id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &n_s, &val_s) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_nonneg_int_expr(ctx, n_s, &n) != 0 || n > FLAT_LIST_MAX_ELEMS) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, val_s, &val) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (n == 0) {
+        if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) {
+            *ctx->io_status = FLAT_IO_ERR;
+            return -1;
+        }
+        return flat_value_set_list(ctx->out, id);
+    }
+    for (i = 0; i < n; i++) {
+        items[i] = val;
+    }
+    if (flat_list_build(ctx->coll, ctx->pool, items, n, &id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, id);
 }

@@ -13,6 +13,7 @@
     { "id": "math-trig", "label": "Native math.trig", "file": "natives/math.trig.md" },
     { "id": "math-stats", "label": "Native math.stats", "file": "natives/math.stats.md" },
     { "id": "list-native", "label": "Native list", "file": "natives/list.md" },
+    { "id": "str-native", "label": "Native str", "file": "natives/str.md" },
     { "id": "mem-native", "label": "Native mem", "file": "natives/mem.md" }
   ]
 }

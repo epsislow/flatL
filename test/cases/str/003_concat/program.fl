@@ -1,0 +1,4 @@
+#main
+  str.concat('a', 'b', 'c') -> s
+  io.outln(s)
+  OK

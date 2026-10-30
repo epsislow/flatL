@@ -34,6 +34,36 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
         return flat_native_str_to_num(ctx);
     case FLAT_NATIVE_STR_TO_BOOL:
         return flat_native_str_to_bool(ctx);
+    case FLAT_NATIVE_STR_LEN:
+        return flat_native_str_len(ctx);
+    case FLAT_NATIVE_STR_REPEAT:
+        return flat_native_str_repeat(ctx);
+    case FLAT_NATIVE_STR_CONCAT:
+        return flat_native_str_concat(ctx);
+    case FLAT_NATIVE_STR_SLICE:
+        return flat_native_str_slice(ctx);
+    case FLAT_NATIVE_STR_INDEX_OF:
+        return flat_native_str_index_of(ctx);
+    case FLAT_NATIVE_STR_CONTAINS:
+        return flat_native_str_contains(ctx);
+    case FLAT_NATIVE_STR_STARTS_WITH:
+        return flat_native_str_starts_with(ctx);
+    case FLAT_NATIVE_STR_ENDS_WITH:
+        return flat_native_str_ends_with(ctx);
+    case FLAT_NATIVE_STR_TRIM:
+        return flat_native_str_trim(ctx);
+    case FLAT_NATIVE_STR_SPLIT:
+        return flat_native_str_split(ctx);
+    case FLAT_NATIVE_STR_JOIN:
+        return flat_native_str_join(ctx);
+    case FLAT_NATIVE_STR_LOWER:
+        return flat_native_str_lower(ctx);
+    case FLAT_NATIVE_STR_UPPER:
+        return flat_native_str_upper(ctx);
+    case FLAT_NATIVE_STR_REPLACE:
+        return flat_native_str_replace(ctx);
+    case FLAT_NATIVE_STR_REPLACE_ALL:
+        return flat_native_str_replace_all(ctx);
     case FLAT_NATIVE_JSON_PARSE:
         return flat_native_json_parse(ctx);
     case FLAT_NATIVE_JSON_PARSE_LIST:

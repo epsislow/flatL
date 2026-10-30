@@ -19,5 +19,7 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_LIST_REMOVE_AT, flat_native_list_remove_at);
     reg(FLAT_NATIVE_LIST_SLICE, flat_native_list_slice);
     reg(FLAT_NATIVE_LIST_SPLICE, flat_native_list_splice);
+    reg(FLAT_NATIVE_LIST_RANGE, flat_native_list_range);
+    reg(FLAT_NATIVE_LIST_REPEAT, flat_native_list_repeat);
     return 0;
 }

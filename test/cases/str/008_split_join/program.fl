@@ -1,0 +1,9 @@
+use native list with L
+
+#main
+  str.split('a,b,c', ',') -> xs
+  L.len(xs) -> n
+  str.join('-', xs) -> s
+  io.outln(n)
+  io.outln(s)
+  OK

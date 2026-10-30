@@ -49,17 +49,18 @@ Program text always uses **string** syntax; INLINE vs REF is internal.
 - **Refcount** on parent while views exist.
 - Freed when the VM run ends (`flat_pool_destroy`).
 
-### Slice views
+### Slicing strings
 
-Assign:
+Use the core native **`str.slice(s, start, end)`** — half-open byte range **`[start, end)`**, same convention as **`list.slice`**.
 
 ```text
-head = __slice__(body, 0, 4)
+head = str.slice(body, 0, 4)
 ```
 
-- `body` must be **STRING / REF**.
-- No copy; guard compares bytes at offset.
-- Production name will be `str.slice(...)` via native library; `__slice__` is the v0.2 VM helper.
+- **`s`** may be INLINE STRING or STRING REF (including **`__ref__(...)`** bodies).
+- Result is a new STRING (INLINE or REF); large slices may allocate in the pool.
+- Requires **`0 <= start <= end <= len(s)`**; otherwise assign / `->` fails silently.
+- The old parser helper **`__slice__(s, start, len)`** is **removed**; use **`str.slice(s, start, start + len)`**.
 
 ### Test / bootstrap helper
 
@@ -165,7 +166,8 @@ Summary:
 | **`io.out` / `io.outln` / `io.outvar`** | Print to **stdout** (STRINGs raw; LIST/OBJECT debug form) |
 | **`io.in` / `io.inln` / `io.in_num` / `io.in_bool`** | Read **stdin**; optional prompt STRING |
 | **`str.to_num` / `str.to_bool`** | Parse STRING → NUMBER / BOOL (no stdin) |
-| **`… -> var`** or **`var = …`** | Bind result of `io.*` / `str.to_*` |
+| **`str.len` / `str.slice` / …** | Full **`str.*`** catalog: [natives/str.md](./natives/str.md) |
+| **`… -> var`** or **`var = …`** | Bind result of `io.*` / `str.*` |
 
 Host: `flvm --trace` / `--trace-vars` → **stderr**. Unhandled PANIC → stderr; recovered PANIC → silent on stderr.
 

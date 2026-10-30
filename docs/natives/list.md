@@ -42,6 +42,14 @@ Mutators (**`push`**, **`prepend`**, **`insert`**, **`set`**, **`remove_at`**, *
 | `remove_at(list, index)` | LIST | LIST without element at **index** |
 | `slice(list, start, end)` | LIST | Sublist **[start, end)** (half-open) |
 | `splice(list, start, count)` | LIST | Remove **`count`** elements starting at **`start`** (delete-only; no variadic insert yet) |
+| `range(stop)` | LIST | **`[0, 1, …, stop − 1)`** — one arg: **`stop`** is exclusive upper bound (whole NUMBER) |
+| `range(start, stop)` | LIST | **`[start, start+1, …)`** while **`x < stop`** (step **1**) |
+| `range(start, stop, step)` | LIST | Arithmetic progression; **`step != 0`**; forward if **`step > 0`**, backward if **`step < 0`** |
+| `repeat(n, value)` | LIST | **`n`** copies of **`value`**; **`n`** non-negative whole NUMBER, **`0 … 1024`**; **`n == 0`** → `[]` |
+
+**`range`** follows Python-style half-open bounds (same spirit as **`list.slice`**). Element count is capped at **`FLAT_LIST_MAX_ELEMS` (1024)**. Floating-point NUMBER elements are stored as NUMBER (whole-number arguments only at the API).
+
+**`repeat`** does not deep-clone LIST/OBJECT internals beyond normal LIST construction (same element **`FlatValue`** repeated **`n`** times).
 
 Elements may be any value type (not only numbers).
 
@@ -60,7 +68,27 @@ use native list with L
   OK
 ```
 
-Use with **`math`**: `m.sum(L.pack(a, b, c))` when you do not use a literal `[a, b, c]`.
+**`range`** / **`repeat`**:
+
+```text
+use native list with L
+use native math with m
+
+#main
+  L.range(5) -> a
+  L.range(2, 5) -> b
+  L.range(0, 10, 2) -> c
+  m.sum(a) -> sa
+  L.len(b) -> lb
+  L.repeat(3, 0) -> zeros
+  io.outln(sa)
+  io.outln(lb)
+  io.outln(c)
+  io.outln(zeros)
+  OK
+```
+
+Use with **`math`**: `m.sum(L.pack(a, b, c))` or `m.sum(L.range(1, 11))` when you do not use a literal `[a, b, c]`.
 
 There is **no** `unpack` in v2.5; spread at call sites is a future language feature.
 

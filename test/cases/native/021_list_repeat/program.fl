@@ -1,0 +1,8 @@
+use native list with L
+
+#main
+  L.repeat(3, 0) -> xs
+  L.len(xs) -> n
+  io.outln(n)
+  io.outln(xs)
+  OK

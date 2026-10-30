@@ -1,0 +1,6 @@
+#main
+  str.repeat('ab', 3) -> s
+  io.outln(s)
+  str.repeat('x', 0) -> e
+  io.outln(e)
+  OK

@@ -1,0 +1,4 @@
+#main
+  str.len('abc') -> n
+  io.outln(n)
+  OK

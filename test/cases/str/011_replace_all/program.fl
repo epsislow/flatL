@@ -1,0 +1,4 @@
+#main
+  str.replace_all('a-a-a', '-', '') -> s
+  io.outln(s)
+  OK

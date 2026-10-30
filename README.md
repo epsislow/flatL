@@ -37,7 +37,7 @@ Parses, compiles, and runs with current `flc` / `flvm` (see `make test`):
 ```
 
 Types: `true` / `false`, numbers, quoted strings; `call #block`; guards with `==` (and `>=`, etc. on numbers).  
-**I/O:** `io.out` / `io.outln` / `io.inln` / `io.in_num` / `io.in_bool`, `str.to_num` / `str.to_bool`, binding `->` — see [docs/IO.md](docs/IO.md). Helpers: `__ref__`, `__slice__`, LIST/OBJECT literals ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)).
+**I/O:** `io.out` / `io.outln` / `io.inln` / `io.in_num` / `io.in_bool`, binding `->` — see [docs/IO.md](docs/IO.md). **Strings:** core **`str.*`** (`len`, `slice`, `concat`, `split`, …) — [docs/natives/str.md](docs/natives/str.md); parsing **`str.to_num`** / **`str.to_bool`** in [IO.md](docs/IO.md). Test helper **`__ref__`**; LIST/OBJECT literals ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)).
 
 Minimal sample: [examples/hello.fl](examples/hello.fl).
 

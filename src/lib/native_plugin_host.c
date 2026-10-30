@@ -220,6 +220,8 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         flat_native_plugin_register(FLAT_NATIVE_LIST_REMOVE_AT, flat_native_list_remove_at);
         flat_native_plugin_register(FLAT_NATIVE_LIST_SLICE, flat_native_list_slice);
         flat_native_plugin_register(FLAT_NATIVE_LIST_SPLICE, flat_native_list_splice);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_RANGE, flat_native_list_range);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_REPEAT, flat_native_list_repeat);
         g_loaded_list = 1;
         return 0;
     }

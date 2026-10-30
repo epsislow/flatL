@@ -1,0 +1,6 @@
+#main
+  str.lower('AbC') -> lo
+  str.upper('AbC') -> hi
+  io.outln(lo)
+  io.outln(hi)
+  OK

@@ -14,7 +14,8 @@
 | [natives/README.md](./natives/README.md) | **Optional** `use native … with …`; core vs optional; index |
 | [natives/math.md](./natives/math.md) | **`math`** — libm, aggregations, constants |
 | [natives/math.trig.md](./natives/math.trig.md) | **`math.trig`** — sin, cos, tan |
-| [natives/list.md](./natives/list.md) | **`list`** — pack, push/prepend/insert/set, slice, splice, search |
+| [natives/list.md](./natives/list.md) | **`list`** — pack, push/prepend/insert/set, slice, splice, range, repeat, search |
+| [natives/str.md](./natives/str.md) | **`str`** — len, slice, concat, split/join, search, trim, case, replace |
 | [natives/math.stats.md](./natives/math.stats.md) | **`math.stats`** — mean, median, var, stdev |
 | [IO_COLLECTIONS.md](./IO_COLLECTIONS.md) | Normative: `json.*`, collection stdin/stdout rules |
 | [LIST_OBJECT.md](./LIST_OBJECT.md) | **Guide:** LIST/OBJECT + JSON I/O for authors |

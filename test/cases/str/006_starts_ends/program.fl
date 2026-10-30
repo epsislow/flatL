@@ -1,0 +1,6 @@
+#main
+  str.starts_with('hello', 'he') -> a
+  str.ends_with('hello', 'lo') -> b
+  io.outln(a)
+  io.outln(b)
+  OK

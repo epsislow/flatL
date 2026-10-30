@@ -1,0 +1,13 @@
+use native list with L
+use native math with m
+
+#main
+  L.range(5) -> a
+  L.range(2, 5) -> b
+  L.range(0, 10, 2) -> c
+  m.sum(a) -> sa
+  L.len(b) -> lb
+  io.outln(sa)
+  io.outln(lb)
+  io.outln(c)
+  OK

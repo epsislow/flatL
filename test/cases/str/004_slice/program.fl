@@ -1,0 +1,4 @@
+#main
+  str.slice('hello', 1, 4) -> s
+  io.outln(s)
+  OK

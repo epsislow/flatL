@@ -1,0 +1,6 @@
+#main
+  str.index_of('aba', 'a') -> i
+  str.contains('aba', 'ba') -> c
+  io.outln(i)
+  io.outln(c)
+  OK

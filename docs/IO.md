@@ -94,6 +94,8 @@ Registry: `include/flat_native.h`, table in `src/lib/native_registry.c`, handler
 
 No stdin. Invalid parse → assign/`->` **fails silently** (variable unchanged); no PANIC.
 
+Other **`str.*`** functions (`len`, `slice`, `concat`, `split`, …) share the same silent-fail assign behavior and are documented in [natives/str.md](./natives/str.md).
+
 ---
 
 ## 6. BOOL tokens (no truthy)

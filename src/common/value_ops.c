@@ -133,59 +133,6 @@ done:
     return ok;
 }
 
-static int parse_slice_call(const char *rhs, FlatValue *out, FlatStringPool *pool, FlatValue *vars,
-                            int var_count, const char (*names)[64]) {
-    char inner[256];
-    char *tok;
-    char varname[64];
-    size_t off = 0;
-    size_t len = 0;
-    int vi;
-    FlatValue *src;
-    uint32_t ref_id;
-    uint32_t slice_id;
-
-    if (strncmp(rhs, "__slice__(", 10) != 0) {
-        return -1;
-    }
-    snprintf(inner, sizeof inner, "%s", rhs + 10);
-    {
-        char *close = strrchr(inner, ')');
-        if (!close) {
-            return -1;
-        }
-        *close = '\0';
-    }
-    {
-        char *ip = inner;
-        tok = flat_str_next(&ip, ',');
-        if (!tok) {
-            return -1;
-        }
-        snprintf(varname, sizeof varname, "%s", trim(tok));
-        tok = flat_str_next(&ip, ',');
-        if (!tok) {
-            return -1;
-        }
-        off = (size_t)strtoul(trim(tok), NULL, 10);
-        tok = flat_str_next(&ip, ',');
-        if (!tok) {
-            return -1;
-        }
-        len = (size_t)strtoul(trim(tok), NULL, 10);
-    }
-    vi = find_var_index(varname, var_count, names);
-    if (vi < 0 || vars[vi].tag != VAL_STR_REF) {
-        return -1;
-    }
-    src = &vars[vi];
-    ref_id = src->u.ref_id;
-    if (flat_pool_slice(pool, ref_id, off, len, &slice_id) != 0) {
-        return -1;
-    }
-    return flat_value_set_str_ref(out, slice_id);
-}
-
 static const char *skip_ws(const char *p) {
     while (*p && isspace((unsigned char)*p)) {
         p++;
@@ -633,9 +580,6 @@ int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPo
     trim(rhs);
 
     if (parse_ref_call(rhs, out, pool) == 0) {
-        return 0;
-    }
-    if (parse_slice_call(rhs, out, pool, vars, var_count, var_names) == 0) {
         return 0;
     }
     if (strchr(rhs, '(') &&
