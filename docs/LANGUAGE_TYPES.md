@@ -18,15 +18,15 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 | **STRING** | `'hello'`, `"path"`, long data via ref | `VAL_STR_INLINE` or `VAL_STR_REF` |
 | **LIST** | `[1, 'a', { x: 1 }]`, `__list__()` | `VAL_LIST` (pool id) |
 | **NULL** | literal **`null`**, `json.parse('null')`, `json.parse('')` | **`VAL_NULL`** (not `VAL_EMPTY`; guards `x == null`) |
-| **OBJECT** | `{ qty: 3, name: 'x' }`, `__obj__()` | `VAL_OBJECT` (pool id) |
+| **OBJECT** | `{ qty: 3, name: 'x' }`, `obj.empty()` (optional native) | `VAL_OBJECT` (pool id) |
 
 **LIST** and **OBJECT** are **distinct** types (JSON array vs object). Either may nest the other as elements or field values.
 
 **Construction (v0.3):**
 
 - Literals: `items = [1, 2]`, `doc = { id: 'a', n: 2 }` (keys: identifier or quoted string).
-- Bootstrap helpers (replaced later by `list.*` / `obj.*` natives): `__list__()`, `__list_push__(list, val)`, `__list_len__(list)`, `__list_get__(list, index)`, `__obj__()`, `__obj_set__(obj, 'key', val)`, `__obj_get__(obj, 'key')`.
-- `__obj_set__` returns a **new** object (copy-on-write); the old binding is unchanged.
+- Bootstrap helpers (legacy; prefer natives): `__list__()`, `__list_push__(list, val)`, … — **OBJECT** uses optional **`obj.*`** ([natives/obj.md](./natives/obj.md)): `empty`, `get`, `set`, `has`, `len`, `remove`, `keys`, `values`.
+- **`obj.set`** / **`obj.remove`** return a **new** object (copy-on-write); the old binding is unchanged.
 
 **`foreach`:** on a **LIST**, binds each element (any type). On a **STRING**, legacy comma-separated CSV iteration still works.
 
@@ -144,7 +144,7 @@ Header: `include/flat_value.h`
 | `flat_coll_*`, `flat_list_*`, `flat_obj_*` | Collection pool (LIST / OBJECT) |
 | `flat_value_retain` / `flat_value_release` | **`bindCount`** adjust for LIST/OBJECT handles |
 
-Future: VM handle passed into natives for binding outputs; `obj.get` / `list.push` replace `__obj_*` / `__list_*` helpers.
+Future: VM handle passed into natives for binding outputs; remaining `__list_*` helpers → `list.*` (partially done).
 
 ---
 

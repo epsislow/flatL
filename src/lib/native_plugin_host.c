@@ -20,6 +20,7 @@ static int g_loaded_math_trig;
 static int g_loaded_math_stats;
 static int g_loaded_math;
 static int g_loaded_list;
+static int g_loaded_obj;
 
 static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_VARS_MAX, flat_native_mem_vars_max);
@@ -114,6 +115,9 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         return 0;
     }
     if (strcmp(mod, FLAT_NATIVE_MODULE_LIST) == 0 && g_loaded_list) {
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_OBJ) == 0 && g_loaded_obj) {
         return 0;
     }
 
@@ -225,6 +229,18 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         g_loaded_list = 1;
         return 0;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_OBJ) == 0) {
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_EMPTY, flat_native_obj_empty);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_GET, flat_native_obj_get);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_SET, flat_native_obj_set);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_HAS, flat_native_obj_has);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_LEN, flat_native_obj_len);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_REMOVE, flat_native_obj_remove);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_KEYS, flat_native_obj_keys);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_VALUES, flat_native_obj_values);
+        g_loaded_obj = 1;
+        return 0;
+    }
 #endif
 
     snprintf(err, err_size, "optional native plugin not found for \"%s\" (tried FLAT_NATIVE_PATH, "
@@ -245,6 +261,9 @@ ok:
     if (strcmp(mod, FLAT_NATIVE_MODULE_LIST) == 0) {
         g_loaded_list = 1;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_OBJ) == 0) {
+        g_loaded_obj = 1;
+    }
     return 0;
 }
 
@@ -255,6 +274,7 @@ void flat_native_runtime_reset(void) {
     g_loaded_math_stats = 0;
     g_loaded_math = 0;
     g_loaded_list = 0;
+    g_loaded_obj = 0;
     g_search_dir[0] = '\0';
     register_embedded_mem();
 }

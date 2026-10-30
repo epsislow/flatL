@@ -1,0 +1,7 @@
+use native obj with O
+
+#main
+  O.empty() -> o
+  O.len(o) -> n
+  io.outln(n)
+  OK

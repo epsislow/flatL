@@ -34,6 +34,7 @@ Declarations in **any** linked source file apply to the **whole** program after 
 | `math.trig` | [math.trig.md](./math.trig.md) |
 | `math.stats` | [math.stats.md](./math.stats.md) |
 | `list` | [list.md](./list.md) |
+| `obj` | [obj.md](./obj.md) |
 | `str` | [str.md](./str.md) (core — no `use native` required) |
 | `mem` | [mem.md](./mem.md) (core — no `use native` required) |
 

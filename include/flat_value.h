@@ -126,6 +126,8 @@ int flat_obj_get(const FlatCollectionPool *pool, uint32_t obj_id, const char *ke
                  FlatValue *out);
 int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
                       const char *key, const FlatValue *val, uint32_t *out_id);
+int flat_obj_remove_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
+                         const char *key, uint32_t *out_id);
 int flat_obj_build(FlatCollectionPool *pool, FlatStringPool *str_pool,
                    const char (*keys)[FLAT_OBJ_KEY_MAX + 1], const FlatValue *vals, int count,
                    uint32_t *out_id);

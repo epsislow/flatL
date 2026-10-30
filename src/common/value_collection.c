@@ -718,6 +718,70 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
     return 0;
 }
 
+static int obj_clone_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
+                          uint32_t *out_id) {
+    const ObjBody *src;
+    ObjBody *dst;
+    int i;
+
+    if (!pool || !out_id || !obj_slot_valid(pool, obj_id)) {
+        return -1;
+    }
+    src = &pool->objects[obj_id];
+    if (flat_obj_empty(pool, str_pool, out_id) != 0) {
+        return -1;
+    }
+    dst = &pool->objects[*out_id];
+    if (src->len > 0 && obj_grow(dst, src->len) != 0) {
+        return -1;
+    }
+    for (i = 0; i < src->len; i++) {
+        dst->entries[i] = src->entries[i];
+        elem_bind(pool, str_pool, &dst->entries[i].val);
+    }
+    dst->len = src->len;
+    return 0;
+}
+
+int flat_obj_remove_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
+                         const char *key, uint32_t *out_id) {
+    const ObjBody *src;
+    ObjBody *dst;
+    int i;
+    int ix;
+    int dst_i;
+
+    if (!pool || !key || !out_id || !obj_slot_valid(pool, obj_id)) {
+        return -1;
+    }
+    if (strlen(key) > FLAT_OBJ_KEY_MAX) {
+        return -1;
+    }
+    src = &pool->objects[obj_id];
+    ix = obj_find(src, key);
+    if (ix < 0) {
+        return obj_clone_copy(pool, str_pool, obj_id, out_id);
+    }
+    if (flat_obj_empty(pool, str_pool, out_id) != 0) {
+        return -1;
+    }
+    dst = &pool->objects[*out_id];
+    if (src->len - 1 > 0 && obj_grow(dst, src->len - 1) != 0) {
+        return -1;
+    }
+    dst_i = 0;
+    for (i = 0; i < src->len; i++) {
+        if (i == ix) {
+            continue;
+        }
+        dst->entries[dst_i] = src->entries[i];
+        elem_bind(pool, str_pool, &dst->entries[i].val);
+        dst_i++;
+    }
+    dst->len = dst_i;
+    return 0;
+}
+
 int flat_obj_build(FlatCollectionPool *pool, FlatStringPool *str_pool,
                    const char (*keys)[FLAT_OBJ_KEY_MAX + 1], const FlatValue *vals, int count,
                    uint32_t *out_id) {

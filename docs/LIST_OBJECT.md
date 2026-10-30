@@ -13,7 +13,7 @@ Types overview: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md).
 | OBJECT | `o = { id: 1, name: 'x' }` | Keys in source: identifiers or quoted strings |
 | NULL | `x = null`, `json.parse('')` | Keyword **`null`**; not a variable name |
 
-Helpers (until native `list.*` / `obj.*`): `__list__`, `__list_push__`, `__obj_set__`, `__obj_get__`.
+Optional natives: **`list.*`**, **`obj.*`** — see [natives/list.md](./natives/list.md), [natives/obj.md](./natives/obj.md). Legacy **`__list_*`** helpers may still exist for bootstrap; **OBJECT** field access uses **`obj.get` / `obj.set`** (declare `use native obj`).
 
 ---
 

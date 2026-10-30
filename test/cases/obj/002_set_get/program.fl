@@ -1,0 +1,8 @@
+use native obj with O
+
+#main
+  o = { x: 1 }
+  O.set(o, 'x', 2) -> o2
+  O.get(o2, 'x') -> v
+  io.outln(v)
+  OK

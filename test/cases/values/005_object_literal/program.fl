@@ -1,8 +1,10 @@
+use native obj with O
+
 #main
   o = { qty: 3, name: 'box' }
-  q = __obj_get__(o, 'qty')
+  O.get(o, 'qty') -> q
   q == 3
-  o2 = __obj_set__(o, 'qty', 5)
-  q2 = __obj_get__(o2, 'qty')
+  O.set(o, 'qty', 5) -> o2
+  O.get(o2, 'qty') -> q2
   q2 == 5
   OK

@@ -1,0 +1,13 @@
+use native obj with O
+use native list with L
+
+#main
+  o = { first: 10, second: 20 }
+  O.keys(o) -> ks
+  O.values(o) -> vs
+  L.len(ks) -> nk
+  L.get(vs, 0) -> v0
+  io.outln(nk)
+  io.outln(ks)
+  io.outln(v0)
+  OK

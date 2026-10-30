@@ -367,7 +367,6 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
     int vi;
     uint32_t new_id;
     FlatValue item;
-    char key[FLAT_OBJ_KEY_MAX + 1];
 
     if (parse_ident(&p, name, sizeof name) != 0) {
         return -1;
@@ -388,12 +387,6 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
             return -1;
         }
         return flat_value_set_list(out, new_id);
-    }
-    if (strcmp(name, "__obj__") == 0 && inner[0] == '\0') {
-        if (!coll || flat_obj_empty(coll, pool, &new_id) != 0) {
-            return -1;
-        }
-        return flat_value_set_object(out, new_id);
     }
     if (strcmp(name, "__list_push__") == 0) {
         char *ip = inner;
@@ -416,56 +409,6 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
             return -1;
         }
         return flat_value_set_list(out, new_id);
-    }
-    if (strcmp(name, "__obj_set__") == 0) {
-        char *ip = inner;
-        char *key_part;
-        tok = flat_str_next(&ip, ',');
-        if (!tok) {
-            return -1;
-        }
-        vi = find_var_index(trim(tok), var_count, var_names);
-        if (vi < 0 || vars[vi].tag != VAL_OBJECT) {
-            return -1;
-        }
-        key_part = flat_str_next(&ip, ',');
-        if (!key_part) {
-            return -1;
-        }
-        p = skip_ws(trim(key_part));
-        if (parse_object_key(&p, key, sizeof key) != 0) {
-            return -1;
-        }
-        if (!ip || *ip == '\0') {
-            return -1;
-        }
-        p = skip_ws(ip);
-        if (flat_value_parse_at(&p, &item, pool, coll, vars, var_count, var_names) != 0) {
-            return -1;
-        }
-        if (flat_obj_set_copy(coll, pool, vars[vi].u.coll_id, key, &item, &new_id) != 0) {
-            return -1;
-        }
-        return flat_value_set_object(out, new_id);
-    }
-    if (strcmp(name, "__obj_get__") == 0) {
-        char *ip = inner;
-        tok = flat_str_next(&ip, ',');
-        if (!tok) {
-            return -1;
-        }
-        vi = find_var_index(trim(tok), var_count, var_names);
-        if (vi < 0 || vars[vi].tag != VAL_OBJECT) {
-            return -1;
-        }
-        if (!ip || *ip == '\0') {
-            return -1;
-        }
-        p = skip_ws(trim(ip));
-        if (parse_object_key(&p, key, sizeof key) != 0) {
-            return -1;
-        }
-        return flat_obj_get(coll, vars[vi].u.coll_id, key, out);
     }
     if (strcmp(name, "__list_len__") == 0) {
         int len = 0;
@@ -583,10 +526,8 @@ int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPo
         return 0;
     }
     if (strchr(rhs, '(') &&
-        (strncmp(rhs, "__list__", 8) == 0 || strncmp(rhs, "__obj__", 7) == 0 ||
-         strncmp(rhs, "__list_push__", 13) == 0 || strncmp(rhs, "__list_len__", 12) == 0 ||
-         strncmp(rhs, "__list_get__", 12) == 0 || strncmp(rhs, "__obj_set__", 11) == 0 ||
-         strncmp(rhs, "__obj_get__", 11) == 0)) {
+        (strncmp(rhs, "__list__", 8) == 0 || strncmp(rhs, "__list_push__", 13) == 0 ||
+         strncmp(rhs, "__list_len__", 12) == 0 || strncmp(rhs, "__list_get__", 12) == 0)) {
         if (parse_paren_call(rhs, out, pool, coll, vars, var_count, var_names) == 0) {
             return 0;
         }

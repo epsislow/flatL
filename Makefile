@@ -19,14 +19,14 @@ FB_SRC  = src/common/fb_format.c
 NATIVE_VM_PLUGIN = src/lib/native_plugin_host.c
 ifeq ($(OS),Windows_NT)
 NATIVE_VM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math.c \
-                 src/lib/mod_list.c
+                 src/lib/mod_list.c src/lib/mod_obj.c
 VM_EXTRA_LIBS =
 PLUGIN_TARGET =
 else
 NATIVE_VM_MATH =
 VM_EXTRA_LIBS = -ldl
 PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
-                $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so
+                $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so $(BINDIR)/libflat_obj.so
 PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/value_parse.c src/common/value_ops.c \
                src/common/value_pool.c src/common/value_collection.c src/common/value_live.c \
                src/common/flat_str.c
@@ -34,6 +34,7 @@ PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PL
 PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c $(PLUGIN_COMMON_SRCS)
+PLUGIN_OBJ_SRCS = src/lib/plugin_obj_entry.c src/lib/mod_obj.c $(PLUGIN_COMMON_SRCS)
 endif
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
                 src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_mem.c \
@@ -134,6 +135,9 @@ $(BINDIR)/libflat_math.so: $(PLUGIN_MATH_SRCS) | $(BINDIR)
 
 $(BINDIR)/libflat_list.so: $(PLUGIN_LIST_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_LIST_SRCS) $(LDFLAGS)
+
+$(BINDIR)/libflat_obj.so: $(PLUGIN_OBJ_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_OBJ_SRCS) $(LDFLAGS)
 
 $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS)

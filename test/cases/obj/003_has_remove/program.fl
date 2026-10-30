@@ -1,0 +1,12 @@
+use native obj with O
+
+#main
+  o = { a: 1, b: 2 }
+  O.has(o, 'a') -> ha
+  O.has(o, 'z') -> hz
+  O.remove(o, 'a') -> o2
+  O.len(o2) -> n
+  io.outln(ha)
+  io.outln(hz)
+  io.outln(n)
+  OK

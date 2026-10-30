@@ -88,6 +88,15 @@ int flat_native_list_splice(FlatNativeCtx *ctx);
 int flat_native_list_range(FlatNativeCtx *ctx);
 int flat_native_list_repeat(FlatNativeCtx *ctx);
 
+int flat_native_obj_empty(FlatNativeCtx *ctx);
+int flat_native_obj_get(FlatNativeCtx *ctx);
+int flat_native_obj_set(FlatNativeCtx *ctx);
+int flat_native_obj_has(FlatNativeCtx *ctx);
+int flat_native_obj_len(FlatNativeCtx *ctx);
+int flat_native_obj_remove(FlatNativeCtx *ctx);
+int flat_native_obj_keys(FlatNativeCtx *ctx);
+int flat_native_obj_values(FlatNativeCtx *ctx);
+
 int flat_native_mem_vars_max(FlatNativeCtx *ctx);
 int flat_native_mem_vars_used(FlatNativeCtx *ctx);
 int flat_native_mem_vars_avail(FlatNativeCtx *ctx);
