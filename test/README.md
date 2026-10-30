@@ -45,7 +45,7 @@ See [docs/TOOLCHAIN.md](../docs/TOOLCHAIN.md#flatl-driver-optional-ux). Pipeline
 
 ### Optional natives (`cases/native/`)
 
-`use native math.trig with trig`, alias/canonical calls, link-time union, compile errors. Docs: [docs/natives/README.md](../docs/natives/README.md).
+`use native math.trig with trig`, manifest in `.fb`, lazy plugin load, alias/canonical calls, link-time union, compile errors. Docs: [docs/natives/README.md](../docs/natives/README.md). Requires **`bin/libflat_math_trig.so`** on Unix (`make all`).
 
 ```bash
 bin/run_tests native -v

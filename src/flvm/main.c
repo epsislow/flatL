@@ -1,5 +1,6 @@
 #include "fb_format.h"
 #include "flat.h"
+#include "flat_native_plugin.h"
 #include "vm.h"
 
 #include <stdio.h>
@@ -48,6 +49,7 @@ int main(int argc, char **argv) {
         return usage(argv[0]);
     }
 
+    flat_native_runtime_set_search_dir_from_argv0(argv[0]);
     if (flat_fb_load_file(fb_path, &bc) != 0) {
         return 1;
     }

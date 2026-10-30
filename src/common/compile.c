@@ -1,5 +1,6 @@
 #include "fgir.h"
 #include "flat.h"
+#include "fb_format.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
 #include "fb_format.h"
@@ -274,7 +275,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
 
-    stream_base = 4 + 2 + (size_t)prog->block_count * 8;
+    stream_base = 12 + (size_t)prog->block_count * 8;
     {
         size_t cursor = stream_base;
         for (i = 0; i < prog->block_count; i++) {
@@ -303,9 +304,18 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     }
     {
         const uint8_t magic[4] = { 'F', 'L', 'A', 'T' };
+        const uint8_t sentinel = FLAT_FB_SENTINEL;
+        const uint8_t version = FLAT_FB_FORMAT_VERSION;
         uint16_t count = (uint16_t)prog->block_count;
+        uint32_t native_off = 0;
+        if (prog->optional_native_count > 0) {
+            native_off = (uint32_t)(stream_base + code.len);
+        }
         fwrite(magic, 1, 4, f);
+        fwrite(&sentinel, 1, 1, f);
+        fwrite(&version, 1, 1, f);
         fwrite(&count, 1, 2, f);
+        fwrite(&native_off, 1, 4, f);
         for (i = 0; i < prog->block_count; i++) {
             uint32_t id = block_ids[i];
             uint32_t off = (uint32_t)offs[i].abs_offset;
@@ -313,6 +323,17 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
             fwrite(&off, 1, 4, f);
         }
         fwrite(code.buf, 1, code.len, f);
+        if (native_off != 0) {
+            if (flat_fb_write_native_section(f, prog->optional_native_count,
+                                             prog->optional_natives) != 0) {
+                fclose(f);
+                snprintf(err, err_size, "failed to write native manifest");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+        }
     }
     fclose(f);
     free(offs);

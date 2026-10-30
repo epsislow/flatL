@@ -1,0 +1,8 @@
+suite = "native"
+id = 7
+desc = "use native io is rejected"
+kind = "exec"
+
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "core module"

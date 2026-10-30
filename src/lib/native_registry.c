@@ -1,6 +1,7 @@
 #include "flat_native.h"
 #include "flat_native_util.h"
 
+#include <stdio.h>
 #include <string.h>
 
 typedef struct {
@@ -61,6 +62,18 @@ const char *flat_native_name(uint16_t id) {
         return "?";
     }
     return NATIVES[id].name;
+}
+
+int flat_native_module_for_id(uint16_t id, char *mod_out, size_t mod_out_sz) {
+    if (id >= FLAT_NATIVE_COUNT || !mod_out || mod_out_sz == 0) {
+        return -1;
+    }
+    snprintf(mod_out, mod_out_sz, "%s", NATIVES[id].mod);
+    return 0;
+}
+
+int flat_native_is_optional_id(uint16_t id) {
+    return id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && id < (uint16_t)FLAT_NATIVE_COUNT;
 }
 
 int flat_native_split_call(const char *line, uint16_t *out_id, char *inner, size_t inner_max) {

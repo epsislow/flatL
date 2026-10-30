@@ -1,9 +1,13 @@
 #include "flat_native.h"
 #include "flat_native_mod.h"
+#include "flat_native_plugin.h"
 
 int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
     if (!ctx || id >= FLAT_NATIVE_COUNT) {
         return -1;
+    }
+    if (flat_native_is_optional_id(id)) {
+        return flat_native_invoke_optional(id, ctx);
     }
     switch ((FlatNativeId)id) {
     case FLAT_NATIVE_IO_OUTLN:
@@ -40,14 +44,6 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
         return flat_native_json_parse_bools(ctx);
     case FLAT_NATIVE_JSON_STRINGIFY:
         return flat_native_json_stringify(ctx);
-    case FLAT_NATIVE_MATH_TRIG_SIN:
-        return flat_native_math_trig_sin(ctx);
-    case FLAT_NATIVE_MATH_TRIG_COS:
-        return flat_native_math_trig_cos(ctx);
-    case FLAT_NATIVE_MATH_TRIG_TAN:
-        return flat_native_math_trig_tan(ctx);
-    case FLAT_NATIVE_MATH_TRIG_SQRT:
-        return flat_native_math_trig_sqrt(ctx);
     default:
         return -1;
     }

@@ -1,4 +1,5 @@
 #include "vm.h"
+#include "flat_native_plugin.h"
 #include "flat.h"
 #include "flat_native.h"
 #include "flat_str.h"
@@ -410,6 +411,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     if (!bc || !bc->data || bc->block_count == 0) {
         return 1;
     }
+    flat_native_runtime_reset();
+    flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);
     memset(&st, 0, sizeof st);
     st.pool = flat_pool_create();
     st.coll = flat_coll_create();

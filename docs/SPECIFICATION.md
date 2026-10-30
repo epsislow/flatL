@@ -182,23 +182,35 @@ use "lib/math.fl" as #math_
 
 ---
 
-## 3. `.fb` binary layout (v1.1)
+## 3. `.fb` binary layout (v1.2)
 
 ### 3.1 File structure
 
+**Current emit (`flc` / `flatl compile`) — format version 1:**
+
 ```text
 +------------------------------------------------------------------+
-| MAGIC (4 bytes): 0x46 0x4C 0x41 0x54  ('F','L','A','T')          |
+| MAGIC (4): 'F','L','A','T'                                       |
+| SENTINEL (1): 0xFF                                               |
+| FORMAT VERSION (1): 0x01                                         |
+| BLOCK COUNT (2, uint16 LE)                                       |
+| OPTIONAL NATIVE OFFSET (4, uint32 LE) — 0 if none                |
 +------------------------------------------------------------------+
-| BLOCK COUNT (2 bytes, uint16)                                    |
-+------------------------------------------------------------------+
-| BLOCK DIRECTORY (repeat count times)                             |
-|   - Block ID / hash (4 bytes)                                    |
-|   - Byte offset in instruction stream (4 bytes)                  |
+| BLOCK DIRECTORY (count × 8 bytes)                                  |
+|   Block ID (4) + instruction stream offset (4)                   |
 +------------------------------------------------------------------+
 | BYTECODE INSTRUCTION STREAM                                      |
 +------------------------------------------------------------------+
+| OPTIONAL NATIVE MANIFEST (only if offset ≠ 0)                    |
+|   uint16 count                                                   |
+|   repeat: u8 module_len, module bytes, u8 alias_len, alias bytes |
+|   uint32 tail magic 0x54414E46 ('FNAT' LE)                       |
++------------------------------------------------------------------+
 ```
+
+**Legacy load:** if byte at offset 4 is **not** `0xFF`, the file is treated as v0.1: block count at offset 4 (uint16), directory at offset 6, no native manifest.
+
+Optional natives declared in source (`use native …`) are aggregated at link time; the manifest lists module IDs and optional `with` aliases. `flvm` uses it to allow lazy loading of optional native plugins (see [natives/README.md](./natives/README.md)).
 
 ### 3.2 Instruction packet
 

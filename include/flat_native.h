@@ -50,6 +50,8 @@ int flat_native_lookup(const char *mod, const char *func, uint16_t *out_id);
 int flat_native_lookup_optional(const char *mod, const char *func, uint16_t *out_id);
 int flat_native_split_call(const char *line, uint16_t *out_id, char *inner, size_t inner_max);
 const char *flat_native_name(uint16_t id);
+int flat_native_module_for_id(uint16_t id, char *mod_out, size_t mod_out_sz);
+int flat_native_is_optional_id(uint16_t id);
 int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx);
 
 #endif

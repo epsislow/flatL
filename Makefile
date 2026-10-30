@@ -16,8 +16,22 @@ endif
 STR_SRC = src/common/flat_str.c
 PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
+NATIVE_VM_PLUGIN = src/lib/native_plugin_host.c
+ifeq ($(OS),Windows_NT)
+NATIVE_VM_MATH = src/lib/mod_math_trig.c
+VM_EXTRA_LIBS =
+PLUGIN_TARGET =
+else
+NATIVE_VM_MATH =
+VM_EXTRA_LIBS = -ldl
+PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so
+PLUGIN_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c src/lib/native_util.c \
+               src/common/value_parse.c src/common/value_ops.c src/common/value_pool.c \
+               src/common/value_collection.c src/common/flat_str.c
+endif
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
-                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_math_trig.c
+                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c $(NATIVE_VM_MATH) \
+                $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
 VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_collection.c \
           src/common/value_ops.c src/common/value_parse.c src/common/value_format.c \
@@ -65,10 +79,10 @@ help:
 	@echo "Docs: docs/TOOLCHAIN.md  docs/LANGUAGE_TYPES.md"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
-all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) fixtures
+all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(PLUGIN_TARGET) fixtures
 	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
 
-tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT)
+tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(PLUGIN_TARGET)
 	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb"
 
 flvm: $(BINDIR)/flvm$(EXEEXT)
@@ -99,13 +113,16 @@ fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
 
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(LDFLAGS) -lm
+	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(LDFLAGS) $(VM_EXTRA_LIBS) -lm
+
+$(BINDIR)/libflat_math_trig.so: $(PLUGIN_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_SRCS) $(LDFLAGS) -lm
 
 $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -lm
+	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) -lm
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_SRC) $(LDFLAGS)

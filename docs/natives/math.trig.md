@@ -46,4 +46,9 @@ Invalid or non-numeric arguments set I/O error status (same family as other nati
 | `include/flat_native.h` | IDs `FLAT_NATIVE_MATH_TRIG_*` |
 | `src/lib/native_registry.c` | Name table |
 
-Build: `flvm` / `flatl` link with **`-lm`** on Unix.
+Build:
+
+- **Plugin (Linux/macOS/BSD):** `bin/libflat_math_trig.so` — built by `make all`; loaded lazily at first call.
+- **Windows:** handlers linked statically into `flvm` until plugin loading is ported.
+
+Plugin and host link with **`-lm`** where libm is used.
