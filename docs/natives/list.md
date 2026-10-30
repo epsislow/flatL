@@ -21,7 +21,9 @@ Native calls on the **right-hand side** of **`=`** use the same handlers as **`-
 
 ## Copy-on-write
 
-Mutators (**`push`**, **`prepend`**, **`insert`**, **`set`**, **`remove_at`**, **`slice`**, **`splice`**) return a **new** LIST. Older bindings keep the previous list until you reassign them. The VM list pool is append-only for the run (see [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md)).
+Mutators (**`push`**, **`prepend`**, **`insert`**, **`set`**, **`remove_at`**, **`slice`**, **`splice`**) return a **new** LIST. Older bindings keep the previous list until you reassign them or use the **`free(var)`** keyword.
+
+**Memory:** LIST slots use **`bindCount`** and slot reuse (see [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §5). Reassigning **`xs = …`** releases the old list handle implicitly.
 
 ## Functions
 

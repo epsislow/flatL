@@ -78,6 +78,9 @@ int flat_value_set_list(FlatValue *v, uint32_t list_id);
 int flat_value_set_object(FlatValue *v, uint32_t obj_id);
 int flat_value_set_null(FlatValue *v);
 
+void flat_value_retain(FlatCollectionPool *coll, FlatStringPool *pool, const FlatValue *v);
+void flat_value_release(FlatCollectionPool *coll, FlatStringPool *pool, const FlatValue *v);
+
 FlatCollectionPool *flat_coll_create(void);
 void flat_coll_destroy(FlatCollectionPool *pool);
 int flat_list_empty(FlatCollectionPool *pool, uint32_t *out_id);

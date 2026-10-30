@@ -112,6 +112,23 @@ Overflow → assign/alloc fails silently in VM today; future: compile-time or pa
 
 ---
 
+## 5. Collection memory (`bindCount`, `free`)
+
+LIST and OBJECT slots in the VM collection pool use **reference counting** (**`bindCount`**) per slot id. The limit **`FLAT_COLL_MAX_LISTS` / `FLAT_COLL_MAX_OBJECTS` (256)** applies to **live** values (**`bindCount > 0`**), not total ids ever allocated — freed slots may be **reused**.
+
+| Mechanism | Behavior |
+|-----------|----------|
+| **`var = …` / `… -> var`** | **Unbind** previous value of **`var`** (decrement **`bindCount`**); bind new value (**increment**) |
+| **`free(var)`** | Keyword — unbind **`var`**; set **`var = null`**. **No-op** if **`var`** is already **`null`** or holds a scalar (NUMBER / BOOL / INLINE STRING). Idempotent. |
+| **Nested values** | A LIST/OBJECT that stores another LIST/OBJECT/REF in an element or field increments that slot’s **`bindCount`**. |
+| **COW natives** (`list.push`, …) | New slot for the result; old bindings unchanged until reassigned or **`free`**. |
+
+**STRING REF** pool: slice views and parent pins follow §2; full **`bindCount`** alignment for REF is in progress.
+
+**Compile:** **`free(ghost)`** when **`ghost`** was never assigned in that block → **compile error**.
+
+---
+
 ## 6. C API (for native libraries)
 
 Header: `include/flat_value.h`
@@ -124,6 +141,7 @@ Header: `include/flat_value.h`
 | `flat_value_set_*` | Build `FlatValue` |
 | `flat_value_equals` | Guard equality (STRING cross INLINE/REF; LIST/OBJECT by pool id) |
 | `flat_coll_*`, `flat_list_*`, `flat_obj_*` | Collection pool (LIST / OBJECT) |
+| `flat_value_retain` / `flat_value_release` | **`bindCount`** adjust for LIST/OBJECT handles |
 
 Future: VM handle passed into natives for binding outputs; `obj.get` / `list.push` replace `__obj_*` / `__list_*` helpers.
 

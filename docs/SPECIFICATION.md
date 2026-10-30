@@ -45,6 +45,7 @@ There is **no programmer-visible `goto`**. Jump targets are derived from block n
 **Keywords** (compile to VM opcodes — not optional “built-in functions”):
 
 - `#block`, `call`, `return`, `foreach`, `OK`, `FAIL`, `->` (call result binding)
+- **`free(var)`** — release pool-backed value held by **`var`**; **`var`** becomes **`null`** (see [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) §5)
 - Guards and assignment lines (`=`, `==`) map to `OP_ASSIGN` / `OP_GUARD`
 
 **Native libraries** (dotted calls such as `io.outln`, `str.to_num`, `json.parse`):
@@ -228,6 +229,7 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 | Name | Hex | Payload (v0.1) |
 |------|-----|----------------|
 | `OP_ASSIGN` | `0x01` | Source line as UTF-8 **NUL-terminated** string (VM: simple `name = value` store) |
+| `OP_FREE` | `0x0B` | Variable name **NUL-terminated** — unbind pool value; **`var = null`** |
 | `OP_GUARD` | `0x02` | `uint32` absolute IP of `#backtrack.<block>.<index>` + guard expr **NUL-terminated** |
 | `OP_CALL` | `0x03` | `uint32` target block IP + output var name **NUL-terminated** (may be empty) |
 | `OP_RETURN` | `0x04` | Empty — pops call or advances `foreach` |

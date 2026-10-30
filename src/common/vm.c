@@ -121,6 +121,8 @@ static void var_names_table(VmState *st, char (*names)[64]) {
 static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
     int i = find_var(st, name);
     if (i >= 0) {
+        flat_value_release(st->coll, st->pool, &st->vars[i].val);
+        flat_value_retain(st->coll, st->pool, val);
         st->vars[i].val = *val;
         return 0;
     }
@@ -130,9 +132,20 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
     if (var_name_forbidden(name)) {
         return -1;
     }
+    flat_value_retain(st->coll, st->pool, val);
     snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
     st->vars[st->var_count].val = *val;
     st->var_count++;
+    return 0;
+}
+
+static int apply_free(VmState *st, const char *varname) {
+    int i = find_var(st, varname);
+    if (i < 0) {
+        return 0;
+    }
+    flat_value_release(st->coll, st->pool, &st->vars[i].val);
+    flat_value_set_null(&st->vars[i].val);
     return 0;
 }
 
@@ -318,6 +331,8 @@ static const char *opcode_name(uint8_t opcode) {
         return "IO";
     case OP_NATIVE:
         return "NATIVE";
+    case OP_FREE:
+        return "FREE";
     default:
         return "?";
     }
@@ -519,6 +534,11 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             if (ip == ip_before) {
                 ip += 2u + payload_size;
             }
+            continue;
+        }
+        case OP_FREE: {
+            apply_free(&st, (const char *)payload);
+            ip += 2u + payload_size;
             continue;
         }
         case OP_IO: {

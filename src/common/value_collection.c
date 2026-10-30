@@ -23,10 +23,227 @@ typedef struct {
 
 struct FlatCollectionPool {
     ListBody lists[FLAT_COLL_MAX_LISTS];
-    int list_count;
+    int list_bind[FLAT_COLL_MAX_LISTS];
+    unsigned char list_active[FLAT_COLL_MAX_LISTS];
+    int list_free[FLAT_COLL_MAX_LISTS];
+    int list_free_n;
+
     ObjBody objects[FLAT_COLL_MAX_OBJECTS];
-    int obj_count;
+    int obj_bind[FLAT_COLL_MAX_OBJECTS];
+    unsigned char obj_active[FLAT_COLL_MAX_OBJECTS];
+    int obj_free[FLAT_COLL_MAX_OBJECTS];
+    int obj_free_n;
 };
+
+static int list_slot_valid(const FlatCollectionPool *pool, uint32_t id) {
+    return pool && id < (uint32_t)FLAT_COLL_MAX_LISTS && pool->list_active[id];
+}
+
+static int obj_slot_valid(const FlatCollectionPool *pool, uint32_t id) {
+    return pool && id < (uint32_t)FLAT_COLL_MAX_OBJECTS && pool->obj_active[id];
+}
+
+static int coll_live_list_slots(const FlatCollectionPool *pool) {
+    int i;
+    int n = 0;
+    if (!pool) {
+        return 0;
+    }
+    for (i = 0; i < FLAT_COLL_MAX_LISTS; i++) {
+        if (pool->list_active[i] && pool->list_bind[i] > 0) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static int coll_live_obj_slots(const FlatCollectionPool *pool) {
+    int i;
+    int n = 0;
+    if (!pool) {
+        return 0;
+    }
+    for (i = 0; i < FLAT_COLL_MAX_OBJECTS; i++) {
+        if (pool->obj_active[i] && pool->obj_bind[i] > 0) {
+            n++;
+        }
+    }
+    return n;
+}
+
+static void list_body_release_elements(FlatCollectionPool *coll, FlatStringPool *pool,
+                                         const ListBody *lb) {
+    int i;
+    if (!lb) {
+        return;
+    }
+    for (i = 0; i < lb->len; i++) {
+        flat_value_release(coll, pool, &lb->items[i]);
+    }
+}
+
+static void obj_body_release_entries(FlatCollectionPool *coll, FlatStringPool *pool,
+                                     const ObjBody *ob) {
+    int i;
+    if (!ob) {
+        return;
+    }
+    for (i = 0; i < ob->len; i++) {
+        flat_value_release(coll, pool, &ob->entries[i].val);
+    }
+}
+
+static void list_slot_destroy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t id) {
+    ListBody *lb;
+
+    if (!pool || !list_slot_valid(pool, id)) {
+        return;
+    }
+    lb = &pool->lists[id];
+    list_body_release_elements(pool, str_pool, lb);
+    free(lb->items);
+    memset(lb, 0, sizeof *lb);
+    pool->list_bind[id] = 0;
+    pool->list_active[id] = 0;
+    if (pool->list_free_n < FLAT_COLL_MAX_LISTS) {
+        pool->list_free[pool->list_free_n++] = (int)id;
+    }
+}
+
+static void obj_slot_destroy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t id) {
+    ObjBody *ob;
+
+    if (!pool || !obj_slot_valid(pool, id)) {
+        return;
+    }
+    ob = &pool->objects[id];
+    obj_body_release_entries(pool, str_pool, ob);
+    free(ob->entries);
+    memset(ob, 0, sizeof *ob);
+    pool->obj_bind[id] = 0;
+    pool->obj_active[id] = 0;
+    if (pool->obj_free_n < FLAT_COLL_MAX_OBJECTS) {
+        pool->obj_free[pool->obj_free_n++] = (int)id;
+    }
+}
+
+static void coll_retain_list(FlatCollectionPool *pool, uint32_t id) {
+    if (list_slot_valid(pool, id)) {
+        pool->list_bind[id]++;
+    }
+}
+
+static void coll_release_list(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t id) {
+    if (!list_slot_valid(pool, id)) {
+        return;
+    }
+    if (pool->list_bind[id] > 0) {
+        pool->list_bind[id]--;
+    }
+    if (pool->list_bind[id] == 0) {
+        list_slot_destroy(pool, str_pool, id);
+    }
+}
+
+static void coll_retain_obj(FlatCollectionPool *pool, uint32_t id) {
+    if (obj_slot_valid(pool, id)) {
+        pool->obj_bind[id]++;
+    }
+}
+
+static void coll_release_obj(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t id) {
+    if (!obj_slot_valid(pool, id)) {
+        return;
+    }
+    if (pool->obj_bind[id] > 0) {
+        pool->obj_bind[id]--;
+    }
+    if (pool->obj_bind[id] == 0) {
+        obj_slot_destroy(pool, str_pool, id);
+    }
+}
+
+static void list_reap_idle_slots(FlatCollectionPool *pool) {
+    int i;
+    if (!pool) {
+        return;
+    }
+    for (i = 0; i < FLAT_COLL_MAX_LISTS; i++) {
+        if (pool->list_active[i] && pool->list_bind[i] == 0) {
+            list_slot_destroy(pool, NULL, (uint32_t)i);
+        }
+    }
+}
+
+static void obj_reap_idle_slots(FlatCollectionPool *pool) {
+    int i;
+    if (!pool) {
+        return;
+    }
+    for (i = 0; i < FLAT_COLL_MAX_OBJECTS; i++) {
+        if (pool->obj_active[i] && pool->obj_bind[i] == 0) {
+            obj_slot_destroy(pool, NULL, (uint32_t)i);
+        }
+    }
+}
+
+static int list_slot_alloc(FlatCollectionPool *pool, uint32_t *out_id) {
+    uint32_t id;
+
+    if (!pool || !out_id) {
+        return -1;
+    }
+    list_reap_idle_slots(pool);
+    if (coll_live_list_slots(pool) >= FLAT_COLL_MAX_LISTS) {
+        return -1;
+    }
+    if (pool->list_free_n > 0) {
+        id = (uint32_t)pool->list_free[--pool->list_free_n];
+    } else {
+        for (id = 0; id < (uint32_t)FLAT_COLL_MAX_LISTS; id++) {
+            if (!pool->list_active[id]) {
+                break;
+            }
+        }
+        if (id >= (uint32_t)FLAT_COLL_MAX_LISTS) {
+            return -1;
+        }
+    }
+    memset(&pool->lists[id], 0, sizeof pool->lists[id]);
+    pool->list_bind[id] = 0;
+    pool->list_active[id] = 1;
+    *out_id = id;
+    return 0;
+}
+
+static int obj_slot_alloc(FlatCollectionPool *pool, uint32_t *out_id) {
+    uint32_t id;
+
+    if (!pool || !out_id) {
+        return -1;
+    }
+    obj_reap_idle_slots(pool);
+    if (coll_live_obj_slots(pool) >= FLAT_COLL_MAX_OBJECTS) {
+        return -1;
+    }
+    if (pool->obj_free_n > 0) {
+        id = (uint32_t)pool->obj_free[--pool->obj_free_n];
+    } else {
+        for (id = 0; id < (uint32_t)FLAT_COLL_MAX_OBJECTS; id++) {
+            if (!pool->obj_active[id]) {
+                break;
+            }
+        }
+        if (id >= (uint32_t)FLAT_COLL_MAX_OBJECTS) {
+            return -1;
+        }
+    }
+    memset(&pool->objects[id], 0, sizeof pool->objects[id]);
+    pool->obj_bind[id] = 0;
+    pool->obj_active[id] = 1;
+    *out_id = id;
+    return 0;
+}
 
 FlatCollectionPool *flat_coll_create(void) {
     return calloc(1, sizeof(FlatCollectionPool));
@@ -37,11 +254,17 @@ void flat_coll_destroy(FlatCollectionPool *pool) {
     if (!pool) {
         return;
     }
-    for (i = 0; i < pool->list_count; i++) {
-        free(pool->lists[i].items);
+    for (i = 0; i < FLAT_COLL_MAX_LISTS; i++) {
+        if (pool->list_active[i]) {
+            pool->list_bind[i] = 1;
+            list_slot_destroy(pool, NULL, (uint32_t)i);
+        }
     }
-    for (i = 0; i < pool->obj_count; i++) {
-        free(pool->objects[i].entries);
+    for (i = 0; i < FLAT_COLL_MAX_OBJECTS; i++) {
+        if (pool->obj_active[i]) {
+            pool->obj_bind[i] = 1;
+            obj_slot_destroy(pool, NULL, (uint32_t)i);
+        }
     }
     free(pool);
 }
@@ -91,19 +314,11 @@ static int obj_grow(ObjBody *ob, int need) {
 }
 
 int flat_list_empty(FlatCollectionPool *pool, uint32_t *out_id) {
-    ListBody *lb;
-    if (!pool || !out_id || pool->list_count >= FLAT_COLL_MAX_LISTS) {
-        return -1;
-    }
-    lb = &pool->lists[pool->list_count];
-    memset(lb, 0, sizeof *lb);
-    *out_id = (uint32_t)pool->list_count;
-    pool->list_count++;
-    return 0;
+    return list_slot_alloc(pool, out_id);
 }
 
 int flat_list_len(const FlatCollectionPool *pool, uint32_t list_id, int *out_len) {
-    if (!pool || !out_len || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !out_len || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     *out_len = pool->lists[list_id].len;
@@ -112,7 +327,7 @@ int flat_list_len(const FlatCollectionPool *pool, uint32_t list_id, int *out_len
 
 int flat_list_get(const FlatCollectionPool *pool, uint32_t list_id, int index, FlatValue *out) {
     const ListBody *lb;
-    if (!pool || !out || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !out || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     lb = &pool->lists[list_id];
@@ -123,13 +338,13 @@ int flat_list_get(const FlatCollectionPool *pool, uint32_t list_id, int index, F
     return 0;
 }
 
-static int list_clone_append(FlatCollectionPool *pool, uint32_t src_id, const FlatValue *extra,
-                             uint32_t *out_id) {
+static int list_clone_append(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t src_id,
+                             const FlatValue *extra, uint32_t *out_id) {
     const ListBody *src;
     ListBody *dst;
     int i;
 
-    if (!pool || !out_id || src_id >= (uint32_t)pool->list_count) {
+    if (!pool || !out_id || !list_slot_valid(pool, src_id)) {
         return -1;
     }
     src = &pool->lists[src_id];
@@ -142,17 +357,19 @@ static int list_clone_append(FlatCollectionPool *pool, uint32_t src_id, const Fl
     }
     for (i = 0; i < src->len; i++) {
         dst->items[i] = src->items[i];
+        flat_value_retain(pool, str_pool, &dst->items[i]);
     }
     dst->len = src->len;
     if (extra) {
         dst->items[dst->len++] = *extra;
+        flat_value_retain(pool, str_pool, extra);
     }
     return 0;
 }
 
 int flat_list_push_copy(FlatCollectionPool *pool, uint32_t list_id, const FlatValue *item,
                         uint32_t *out_id) {
-    return list_clone_append(pool, list_id, item, out_id);
+    return list_clone_append(pool, NULL, list_id, item, out_id);
 }
 
 int flat_list_insert_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
@@ -161,7 +378,7 @@ int flat_list_insert_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
     ListBody *dst;
     int i;
 
-    if (!pool || !item || !out_id || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !item || !out_id || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     src = &pool->lists[list_id];
@@ -177,10 +394,13 @@ int flat_list_insert_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
     }
     for (i = 0; i < index; i++) {
         dst->items[i] = src->items[i];
+        flat_value_retain(pool, NULL, &dst->items[i]);
     }
     dst->items[index] = *item;
+    flat_value_retain(pool, NULL, item);
     for (i = index; i < src->len; i++) {
         dst->items[i + 1] = src->items[i];
+        flat_value_retain(pool, NULL, &dst->items[i + 1]);
     }
     dst->len = src->len + 1;
     return 0;
@@ -197,7 +417,7 @@ int flat_list_set_copy(FlatCollectionPool *pool, uint32_t list_id, int index, co
     ListBody *dst;
     int i;
 
-    if (!pool || !val || !out_id || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !val || !out_id || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     src = &pool->lists[list_id];
@@ -213,9 +433,11 @@ int flat_list_set_copy(FlatCollectionPool *pool, uint32_t list_id, int index, co
     }
     for (i = 0; i < src->len; i++) {
         dst->items[i] = src->items[i];
+        flat_value_retain(pool, NULL, &dst->items[i]);
     }
     dst->len = src->len;
     dst->items[index] = *val;
+    flat_value_retain(pool, NULL, val);
     return 0;
 }
 
@@ -225,7 +447,7 @@ int flat_list_remove_at_copy(FlatCollectionPool *pool, uint32_t list_id, int ind
     ListBody *dst;
     int i;
 
-    if (!pool || !out_id || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !out_id || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     src = &pool->lists[list_id];
@@ -241,9 +463,11 @@ int flat_list_remove_at_copy(FlatCollectionPool *pool, uint32_t list_id, int ind
     }
     for (i = 0; i < index; i++) {
         dst->items[i] = src->items[i];
+        flat_value_retain(pool, NULL, &dst->items[i]);
     }
     for (i = index + 1; i < src->len; i++) {
         dst->items[i - 1] = src->items[i];
+        flat_value_retain(pool, NULL, &dst->items[i - 1]);
     }
     dst->len = src->len - 1;
     return 0;
@@ -256,7 +480,7 @@ int flat_list_slice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, 
     int n;
     int i;
 
-    if (!pool || !out_id || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !out_id || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     src = &pool->lists[list_id];
@@ -273,6 +497,7 @@ int flat_list_slice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, 
     }
     for (i = 0; i < n; i++) {
         dst->items[i] = src->items[start + i];
+        flat_value_retain(pool, NULL, &dst->items[i]);
     }
     dst->len = n;
     return 0;
@@ -286,7 +511,7 @@ int flat_list_splice_copy(FlatCollectionPool *pool, uint32_t list_id, int start,
     int i;
     int j;
 
-    if (!pool || !out_id || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !out_id || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     src = &pool->lists[list_id];
@@ -306,7 +531,9 @@ int flat_list_splice_copy(FlatCollectionPool *pool, uint32_t list_id, int start,
         if (i >= start && i < start + count) {
             continue;
         }
-        dst->items[j++] = src->items[i];
+        dst->items[j] = src->items[i];
+        flat_value_retain(pool, NULL, &dst->items[j]);
+        j++;
     }
     dst->len = new_len;
     return 0;
@@ -317,7 +544,7 @@ int flat_list_index_of(const FlatCollectionPool *pool, const FlatStringPool *str
     const ListBody *lb;
     int i;
 
-    if (!pool || !needle || !out_index || list_id >= (uint32_t)pool->list_count) {
+    if (!pool || !needle || !out_index || !list_slot_valid(pool, list_id)) {
         return -1;
     }
     lb = &pool->lists[list_id];
@@ -350,21 +577,14 @@ int flat_list_build(FlatCollectionPool *pool, const FlatValue *items, int count,
     }
     for (i = 0; i < count; i++) {
         lb->items[i] = items[i];
+        flat_value_retain(pool, NULL, &lb->items[i]);
     }
     lb->len = count;
     return 0;
 }
 
 int flat_obj_empty(FlatCollectionPool *pool, uint32_t *out_id) {
-    ObjBody *ob;
-    if (!pool || !out_id || pool->obj_count >= FLAT_COLL_MAX_OBJECTS) {
-        return -1;
-    }
-    ob = &pool->objects[pool->obj_count];
-    memset(ob, 0, sizeof *ob);
-    *out_id = (uint32_t)pool->obj_count;
-    pool->obj_count++;
-    return 0;
+    return obj_slot_alloc(pool, out_id);
 }
 
 static int obj_find(const ObjBody *ob, const char *key) {
@@ -378,7 +598,7 @@ static int obj_find(const ObjBody *ob, const char *key) {
 }
 
 int flat_obj_len(const FlatCollectionPool *pool, uint32_t obj_id, int *out_len) {
-    if (!pool || !out_len || obj_id >= (uint32_t)pool->obj_count) {
+    if (!pool || !out_len || !obj_slot_valid(pool, obj_id)) {
         return -1;
     }
     *out_len = pool->objects[obj_id].len;
@@ -388,7 +608,7 @@ int flat_obj_len(const FlatCollectionPool *pool, uint32_t obj_id, int *out_len) 
 int flat_obj_entry_at(const FlatCollectionPool *pool, uint32_t obj_id, int index,
                       const char **out_key, FlatValue *out_val) {
     const ObjBody *ob;
-    if (!pool || index < 0 || obj_id >= (uint32_t)pool->obj_count) {
+    if (!pool || index < 0 || !obj_slot_valid(pool, obj_id)) {
         return -1;
     }
     ob = &pool->objects[obj_id];
@@ -409,7 +629,7 @@ int flat_obj_get(const FlatCollectionPool *pool, uint32_t obj_id, const char *ke
     const ObjBody *ob;
     int ix;
 
-    if (!pool || !key || !out || obj_id >= (uint32_t)pool->obj_count) {
+    if (!pool || !key || !out || !obj_slot_valid(pool, obj_id)) {
         return -1;
     }
     ob = &pool->objects[obj_id];
@@ -428,7 +648,7 @@ int flat_obj_set_copy(FlatCollectionPool *pool, uint32_t obj_id, const char *key
     int i;
     int ix;
 
-    if (!pool || !key || !val || !out_id || obj_id >= (uint32_t)pool->obj_count) {
+    if (!pool || !key || !val || !out_id || !obj_slot_valid(pool, obj_id)) {
         return -1;
     }
     if (strlen(key) > FLAT_OBJ_KEY_MAX) {
@@ -444,17 +664,20 @@ int flat_obj_set_copy(FlatCollectionPool *pool, uint32_t obj_id, const char *key
     }
     for (i = 0; i < src->len; i++) {
         dst->entries[i] = src->entries[i];
+        flat_value_retain(pool, NULL, &dst->entries[i].val);
     }
     dst->len = src->len;
     ix = obj_find(dst, key);
     if (ix >= 0) {
         dst->entries[ix].val = *val;
+        flat_value_retain(pool, NULL, val);
     } else {
         if (dst->len >= FLAT_OBJ_MAX_KEYS) {
             return -1;
         }
         snprintf(dst->entries[dst->len].key, sizeof dst->entries[dst->len].key, "%s", key);
         dst->entries[dst->len].val = *val;
+        flat_value_retain(pool, NULL, val);
         dst->len++;
     }
     return 0;
@@ -481,9 +704,43 @@ int flat_obj_build(FlatCollectionPool *pool, const char (*keys)[FLAT_OBJ_KEY_MAX
     for (i = 0; i < count; i++) {
         snprintf(ob->entries[i].key, sizeof ob->entries[i].key, "%s", keys[i]);
         ob->entries[i].val = vals[i];
+        flat_value_retain(pool, NULL, &vals[i]);
     }
     ob->len = count;
     return 0;
+}
+
+void flat_value_retain(FlatCollectionPool *coll, FlatStringPool *pool, const FlatValue *v) {
+    (void)pool;
+    if (!coll || !v) {
+        return;
+    }
+    switch (v->tag) {
+    case VAL_LIST:
+        coll_retain_list(coll, v->u.coll_id);
+        break;
+    case VAL_OBJECT:
+        coll_retain_obj(coll, v->u.coll_id);
+        break;
+    default:
+        break;
+    }
+}
+
+void flat_value_release(FlatCollectionPool *coll, FlatStringPool *pool, const FlatValue *v) {
+    if (!coll || !v) {
+        return;
+    }
+    switch (v->tag) {
+    case VAL_LIST:
+        coll_release_list(coll, pool, v->u.coll_id);
+        break;
+    case VAL_OBJECT:
+        coll_release_obj(coll, pool, v->u.coll_id);
+        break;
+    default:
+        break;
+    }
 }
 
 int flat_value_set_list(FlatValue *v, uint32_t list_id) {

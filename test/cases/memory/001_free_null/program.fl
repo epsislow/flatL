@@ -1,0 +1,13 @@
+use native list with L
+
+#main
+  L.pack(1, 2) -> xs
+  free(xs)
+  io.outln(xs)
+  free(xs)
+  xs = null
+  free(xs)
+  io.outln(xs)
+  xs = [3, 4]
+  io.outln(xs)
+  OK

@@ -1,13 +1,98 @@
 #include "fgir.h"
 #include "flat.h"
+#include "flat_value.h"
 #include "fb_format.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
 #include "fb_format.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int var_in_list(const char *name, char known[][64], int n) {
+    int i;
+    for (i = 0; i < n; i++) {
+        if (strcmp(known[i], name) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int assign_record_lhs(const char *text, char known[][64], int *kn) {
+    char buf[FGIR_MAX_LINE];
+    char *eq;
+    char *lhs;
+
+    snprintf(buf, sizeof buf, "%s", text);
+    eq = strchr(buf, '=');
+    if (!eq || eq == buf) {
+        return 0;
+    }
+    *eq = '\0';
+    lhs = buf;
+    while (*lhs && isspace((unsigned char)*lhs)) {
+        lhs++;
+    }
+    {
+        char *end = lhs + strlen(lhs);
+        while (end > lhs && isspace((unsigned char)end[-1])) {
+            end--;
+        }
+        *end = '\0';
+    }
+    if (lhs[0] == '\0' || strlen(lhs) > FLAT_VAR_NAME_MAX) {
+        return 0;
+    }
+    if (*kn >= 128) {
+        return -1;
+    }
+    if (!var_in_list(lhs, known, *kn)) {
+        snprintf(known[*kn], 64, "%.*s", FLAT_VAR_NAME_MAX, lhs);
+        (*kn)++;
+    }
+    return 0;
+}
+
+static int validate_free_in_program(const FgirProgram *prog, char *err, size_t err_size) {
+    int bi, ii;
+    for (bi = 0; bi < prog->block_count; bi++) {
+        const FgirBlock *b = &prog->blocks[bi];
+        char known[128][64];
+        int kn = 0;
+        for (ii = 0; ii < b->instr_count; ii++) {
+            const FgirInstr *ins = &b->instr[ii];
+            if (ins->kind == FGIR_ASSIGN) {
+                if (assign_record_lhs(ins->text, known, &kn) != 0) {
+                    snprintf(err, err_size, "too many variables in block %s", b->label);
+                    return -1;
+                }
+            } else if (ins->kind == FGIR_IO && ins->call_out[0]) {
+                if (!var_in_list(ins->call_out, known, kn)) {
+                    if (kn >= 128) {
+                        snprintf(err, err_size, "too many variables in block %s", b->label);
+                        return -1;
+                    }
+                    snprintf(known[kn], 64, "%s", ins->call_out);
+                    kn++;
+                }
+            } else if (ins->kind == FGIR_FREE) {
+                char var[64];
+                if (flat_parse_free_varname(ins->text, var, sizeof var) != 0) {
+                    snprintf(err, err_size, "invalid free: %s", ins->text);
+                    return -1;
+                }
+                if (!var_in_list(var, known, kn)) {
+                    snprintf(err, err_size, "free of undeclared variable %s in %s", var, b->label);
+                    return -1;
+                }
+            }
+        }
+    }
+    return 0;
+}
 
 typedef struct {
     uint8_t *buf;
@@ -118,6 +203,19 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 return -1;
             }
             if (emit_instr(code, OP_ASSIGN, ins->text, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case FGIR_FREE: {
+            char var[64];
+            uint8_t plen;
+            if (flat_parse_free_varname(ins->text, var, sizeof var) != 0) {
+                snprintf(err, err_size, "invalid free: %s", ins->text);
+                return -1;
+            }
+            plen = (uint8_t)(strlen(var) + 1);
+            if (emit_instr(code, OP_FREE, var, plen) != 0) {
                 return -1;
             }
             break;
@@ -260,6 +358,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     int i;
 
     if (!prog || !out_path) {
+        return -1;
+    }
+    if (validate_free_in_program(prog, err, err_size) != 0) {
         return -1;
     }
     if (flat_native_use_validate_program(prog, err, err_size) != 0) {

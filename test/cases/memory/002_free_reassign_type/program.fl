@@ -1,0 +1,6 @@
+#main
+  xs = [1, 2]
+  xs = 99
+  xs = 'hi'
+  io.outln(xs)
+  OK

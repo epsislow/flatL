@@ -27,7 +27,8 @@ typedef enum {
     FGIR_CALL,
     FGIR_FOREACH,
     FGIR_RAISE_PANIC,
-    FGIR_IO
+    FGIR_IO,
+    FGIR_FREE
 } FgirInstrKind;
 
 typedef struct {
@@ -56,6 +57,7 @@ typedef struct {
     int optional_native_count;
 } FgirProgram;
 
+int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);
 int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *err, size_t err_size);
 int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_size);
 void flat_fgir_dump(const FgirProgram *prog, FILE *out);
