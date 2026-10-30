@@ -1,0 +1,8 @@
+#main
+  body = __ref__('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+  mem.strref_used() -> n1
+  free(body)
+  mem.strref_used() -> n2
+  io.outln(n1)
+  io.outln(n2)
+  OK

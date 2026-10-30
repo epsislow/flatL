@@ -9,12 +9,16 @@ typedef struct {
     int parent_id;
     size_t offset;
     int refcnt;
+    unsigned char in_use;
 } PoolSlot;
 
 struct FlatStringPool {
     PoolSlot slots[FLAT_POOL_MAX_SLOTS];
-    int slot_count;
-    size_t total_bytes;
+    int slot_count; /* high-water mark of slot indices ever used */
+    int free_list[FLAT_POOL_MAX_SLOTS];
+    int free_n;
+    int live_count; /* in_use slots (owned + slice views), always <= FLAT_POOL_MAX_SLOTS */
+    size_t total_bytes; /* owned bytes currently live */
 };
 
 FlatStringPool *flat_pool_create(void) {
@@ -28,21 +32,32 @@ void flat_pool_destroy(FlatStringPool *pool) {
     }
     for (i = 0; i < pool->slot_count; i++) {
         PoolSlot *s = &pool->slots[i];
-        if (s->parent_id < 0 && s->data) {
+        if (s->in_use && s->parent_id < 0 && s->data) {
             free(s->data);
         }
     }
     free(pool);
 }
 
+static int pool_slot_active(const FlatStringPool *pool, int id) {
+    return pool && id >= 0 && id < pool->slot_count && pool->slots[id].in_use;
+}
+
+/* Resolve only active (in_use) slots. A slot that was released to refcnt 0 is no longer
+ * in_use, so stale ids never resolve. Fresh allocations (refcnt 0, not yet bound) are
+ * still active until the VM reaps idle slots at an instruction boundary. */
 static const uint8_t *pool_resolve(const FlatStringPool *pool, int id, size_t *out_len) {
     const PoolSlot *s;
-    if (!pool || id < 0 || id >= pool->slot_count) {
+    if (!pool_slot_active(pool, id)) {
         return NULL;
     }
     s = &pool->slots[id];
     if (s->parent_id >= 0) {
-        const uint8_t *base = pool_resolve(pool, s->parent_id, NULL);
+        const uint8_t *base;
+        if (!pool_slot_active(pool, s->parent_id)) {
+            return NULL;
+        }
+        base = pool_resolve(pool, s->parent_id, NULL);
         if (!base || s->offset + s->len > pool->slots[s->parent_id].len) {
             return NULL;
         }
@@ -61,60 +76,149 @@ const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *o
     return pool_resolve(pool, (int)id, out_len);
 }
 
+static void pool_slot_free(FlatStringPool *pool, int id);
+
+void flat_pool_retain(FlatStringPool *pool, uint32_t id) {
+    if (!pool_slot_active(pool, (int)id)) {
+        return;
+    }
+    pool->slots[id].refcnt++;
+}
+
+void flat_pool_release(FlatStringPool *pool, uint32_t id) {
+    PoolSlot *s;
+    if (!pool_slot_active(pool, (int)id)) {
+        return;
+    }
+    s = &pool->slots[id];
+    if (s->refcnt > 0) {
+        s->refcnt--;
+    }
+    if (s->refcnt == 0) {
+        pool_slot_free(pool, (int)id);
+    }
+}
+
+static void pool_slot_free(FlatStringPool *pool, int id) {
+    PoolSlot *s = &pool->slots[id];
+    int parent = s->parent_id;
+
+    if (parent < 0) {
+        if (s->data) {
+            free(s->data);
+        }
+        if (pool->total_bytes >= s->len) {
+            pool->total_bytes -= s->len;
+        } else {
+            pool->total_bytes = 0;
+        }
+    }
+    memset(s, 0, sizeof *s);
+    s->parent_id = -1;
+    pool->live_count--;
+    pool->free_list[pool->free_n++] = id;
+    if (parent >= 0) {
+        flat_pool_release(pool, (uint32_t)parent); /* unpin parent */
+    }
+}
+
+static int pool_slot_take(FlatStringPool *pool, uint32_t *out_id) {
+    int id;
+    if (pool->live_count >= FLAT_POOL_MAX_SLOTS) {
+        return -1;
+    }
+    if (pool->free_n > 0) {
+        id = pool->free_list[--pool->free_n];
+    } else if (pool->slot_count < FLAT_POOL_MAX_SLOTS) {
+        id = pool->slot_count++;
+    } else {
+        return -1;
+    }
+    memset(&pool->slots[id], 0, sizeof pool->slots[id]);
+    pool->slots[id].parent_id = -1;
+    pool->slots[id].in_use = 1;
+    pool->live_count++;
+    *out_id = (uint32_t)id;
+    return 0;
+}
+
 int flat_pool_alloc_copy(FlatStringPool *pool, const void *data, size_t len, uint32_t *out_id) {
     PoolSlot *s;
+    uint8_t *copy;
+    uint32_t id;
+
     if (!pool || !data || !out_id || len == 0) {
         return -1;
     }
     if (len > FLAT_POOL_MAX_CHUNK || pool->total_bytes + len > FLAT_POOL_MAX_TOTAL) {
         return -1;
     }
-    if (pool->slot_count >= FLAT_POOL_MAX_SLOTS) {
+    if (pool->live_count >= FLAT_POOL_MAX_SLOTS) {
         return -1;
     }
-    s = &pool->slots[pool->slot_count];
-    s->data = malloc(len);
-    if (!s->data) {
+    copy = malloc(len);
+    if (!copy) {
         return -1;
     }
-    memcpy(s->data, data, len);
+    memcpy(copy, data, len);
+    if (pool_slot_take(pool, &id) != 0) {
+        free(copy);
+        return -1;
+    }
+    s = &pool->slots[id];
+    s->data = copy;
     s->len = len;
-    s->parent_id = -1;
-    s->offset = 0;
-    s->refcnt = 1;
+    s->refcnt = 0; /* first bind comes from flat_value_retain */
     pool->total_bytes += len;
-    *out_id = (uint32_t)pool->slot_count;
-    pool->slot_count++;
+    *out_id = id;
     return 0;
 }
 
 int flat_pool_slice(FlatStringPool *pool, uint32_t parent_id, size_t offset, size_t len,
                     uint32_t *out_id) {
-    PoolSlot *parent;
     PoolSlot *s;
+    uint32_t id;
     size_t plen;
 
-    if (!pool || !out_id || parent_id >= (uint32_t)pool->slot_count) {
+    if (!pool || !out_id || !pool_slot_active(pool, (int)parent_id)) {
         return -1;
     }
-    parent = &pool->slots[parent_id];
-    plen = parent->len;
-    if (offset + len > plen) {
+    plen = pool->slots[parent_id].len;
+    if (offset > plen || len > plen - offset) {
         return -1;
     }
-    if (pool->slot_count >= FLAT_POOL_MAX_SLOTS) {
+    if (pool_slot_take(pool, &id) != 0) {
         return -1;
     }
-    parent->refcnt++;
-    s = &pool->slots[pool->slot_count];
+    s = &pool->slots[id];
     s->data = NULL;
     s->len = len;
     s->parent_id = (int)parent_id;
     s->offset = offset;
-    s->refcnt = 1;
-    *out_id = (uint32_t)pool->slot_count;
-    pool->slot_count++;
+    s->refcnt = 0;
+    pool->slots[parent_id].refcnt++; /* pin parent while the view lives */
+    *out_id = id;
     return 0;
+}
+
+int flat_pool_live_slot_count(const FlatStringPool *pool) {
+    return pool ? pool->live_count : 0;
+}
+
+size_t flat_pool_bytes_used(const FlatStringPool *pool) {
+    return pool ? pool->total_bytes : 0;
+}
+
+void flat_pool_reap_idle(FlatStringPool *pool) {
+    int i;
+    if (!pool) {
+        return;
+    }
+    for (i = 0; i < pool->slot_count; i++) {
+        if (pool->slots[i].in_use && pool->slots[i].refcnt == 0) {
+            pool_slot_free(pool, i);
+        }
+    }
 }
 
 int flat_value_set_bool(FlatValue *v, int b) {

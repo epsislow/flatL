@@ -289,7 +289,8 @@ int flat_native_split_call_prog(const char *line, const FgirProgram *prog, uint1
     if (flat_native_lookup(resolved, func, out_id) != 0) {
         return -1;
     }
-    if (*out_id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && !optional_declared(prog, resolved)) {
+    if (*out_id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && !flat_native_is_core_module(resolved) &&
+        !optional_declared(prog, resolved)) {
         return -1;
     }
     return 0;

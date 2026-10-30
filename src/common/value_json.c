@@ -294,13 +294,13 @@ static int parse_simple_list(const char *line, FlatValue *out, FlatStringPool *p
         }
     }
     if (count == 0) {
-        if (flat_list_empty(coll, &id) != 0) {
+        if (flat_list_empty(coll, pool, &id) != 0) {
             goto done;
         }
         rc = flat_value_set_list(out, id);
         goto done;
     }
-    if (flat_list_build(coll, items, count, &id) != 0) {
+    if (flat_list_build(coll, pool, items, count, &id) != 0) {
         goto done;
     }
     rc = flat_value_set_list(out, id);
@@ -345,13 +345,13 @@ static int parse_simple_bools(const char *line, FlatValue *out, FlatStringPool *
         }
     }
     if (count == 0) {
-        if (flat_list_empty(coll, &id) != 0) {
+        if (flat_list_empty(coll, pool, &id) != 0) {
             goto done;
         }
         rc = flat_value_set_list(out, id);
         goto done;
     }
-    if (flat_list_build(coll, items, count, &id) != 0) {
+    if (flat_list_build(coll, pool, items, count, &id) != 0) {
         goto done;
     }
     rc = flat_value_set_list(out, id);
@@ -450,7 +450,7 @@ static int parse_json_array_at(JsonCtx *ctx, FlatValue *out, int depth) {
     if (*ctx->p == ']') {
         uint32_t id;
         ctx->p++;
-        if (flat_list_empty(ctx->coll, &id) != 0) {
+        if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) {
             return -1;
         }
         return flat_value_set_list(out, id);
@@ -493,7 +493,7 @@ static int parse_json_array_at(JsonCtx *ctx, FlatValue *out, int depth) {
     }
     {
         uint32_t id;
-        if (flat_list_build(ctx->coll, items, count, &id) != 0) {
+        if (flat_list_build(ctx->coll, ctx->pool, items, count, &id) != 0) {
             free(items);
             return -1;
         }
@@ -519,7 +519,7 @@ static int parse_json_object_at(JsonCtx *ctx, FlatValue *out, int depth) {
         ctx->p++;
         {
             uint32_t id;
-            return flat_obj_empty(ctx->coll, &id) == 0 ? flat_value_set_object(out, id) : -1;
+            return flat_obj_empty(ctx->coll, ctx->pool, &id) == 0 ? flat_value_set_object(out, id) : -1;
         }
     }
     for (;;) {
@@ -574,7 +574,7 @@ static int parse_json_object_at(JsonCtx *ctx, FlatValue *out, int depth) {
     }
     {
         uint32_t id;
-        if (flat_obj_build(ctx->coll, keys, vals, count, &id) != 0) {
+        if (flat_obj_build(ctx->coll, ctx->pool, keys, vals, count, &id) != 0) {
             return -1;
         }
         return flat_value_set_object(out, id);
@@ -655,7 +655,7 @@ int flat_json_parse_list(const char *s, FlatValue *out, FlatStringPool *pool,
     t = skip_ws(s);
     if (*t == '\0') {
         uint32_t id;
-        return flat_list_empty(coll, &id) == 0 ? flat_value_set_list(out, id) : -1;
+        return flat_list_empty(coll, pool, &id) == 0 ? flat_value_set_list(out, id) : -1;
     }
     if (*t == '[') {
         FlatValue v;
@@ -678,7 +678,7 @@ int flat_json_parse_object(const char *s, FlatValue *out, FlatStringPool *pool,
     t = skip_ws(s);
     if (*t == '\0') {
         uint32_t id;
-        return flat_obj_empty(coll, &id) == 0 ? flat_value_set_object(out, id) : -1;
+        return flat_obj_empty(coll, pool, &id) == 0 ? flat_value_set_object(out, id) : -1;
     }
     if (*t != '{') {
         return -1;
@@ -696,7 +696,7 @@ int flat_json_parse_bools(const char *s, FlatValue *out, FlatStringPool *pool,
     t = skip_ws(s);
     if (*t == '\0') {
         uint32_t id;
-        return flat_list_empty(coll, &id) == 0 ? flat_value_set_list(out, id) : -1;
+        return flat_list_empty(coll, pool, &id) == 0 ? flat_value_set_list(out, id) : -1;
     }
     if (*t == '[') {
         FlatValue v;
@@ -730,7 +730,7 @@ int flat_json_parse_bools_io(const char *s, FlatValue *out, FlatStringPool *pool
     t = skip_ws(s);
     if (*t == '\0') {
         uint32_t id;
-        return flat_list_empty(coll, &id) == 0 ? flat_value_set_list(out, id) : -1;
+        return flat_list_empty(coll, pool, &id) == 0 ? flat_value_set_list(out, id) : -1;
     }
     if (*t == '[') {
         return flat_json_parse_bools(s, out, pool, coll);

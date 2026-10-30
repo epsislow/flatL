@@ -70,6 +70,22 @@ typedef enum {
     FLAT_NATIVE_LIST_REMOVE_AT,
     FLAT_NATIVE_LIST_SLICE,
     FLAT_NATIVE_LIST_SPLICE,
+    FLAT_NATIVE_MEM_VARS_MAX,
+    FLAT_NATIVE_MEM_VARS_USED,
+    FLAT_NATIVE_MEM_VARS_AVAIL,
+    FLAT_NATIVE_MEM_LIST_MAX,
+    FLAT_NATIVE_MEM_LIST_USED,
+    FLAT_NATIVE_MEM_LIST_AVAIL,
+    FLAT_NATIVE_MEM_OBJECT_MAX,
+    FLAT_NATIVE_MEM_OBJECT_USED,
+    FLAT_NATIVE_MEM_OBJECT_AVAIL,
+    FLAT_NATIVE_MEM_STRREF_MAX,
+    FLAT_NATIVE_MEM_STRREF_USED,
+    FLAT_NATIVE_MEM_STRREF_AVAIL,
+    FLAT_NATIVE_MEM_STR_USED,
+    FLAT_NATIVE_MEM_BOOL_USED,
+    FLAT_NATIVE_MEM_NUM_USED,
+    FLAT_NATIVE_MEM_NULL_USED,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
@@ -78,6 +94,9 @@ typedef enum {
 #define FLAT_NATIVE_MODULE_MATH_STATS "math.stats"
 #define FLAT_NATIVE_MODULE_MATH "math"
 #define FLAT_NATIVE_MODULE_LIST "list"
+#define FLAT_NATIVE_MODULE_MEM "mem"
+
+struct FlatMemLiveStats;
 
 typedef struct {
     FlatStringPool *pool;
@@ -88,6 +107,8 @@ typedef struct {
     const char *inner;
     FlatValue *out;
     FlatIoStatus *io_status;
+    struct FlatMemLiveStats *mem_live;
+    uint32_t vars_max;
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

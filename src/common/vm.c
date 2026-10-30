@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "flat_native_plugin.h"
 #include "flat.h"
+#include "flat_mem_stats.h"
 #include "flat_native.h"
 #include "flat_str.h"
 #include "flat_value.h"
@@ -37,8 +38,10 @@ typedef struct {
 typedef struct {
     FlatStringPool *pool;
     FlatCollectionPool *coll;
-    NamedVar vars[FLAT_MAX_VARS];
+    NamedVar *vars;
+    uint32_t var_slots_max;
     int var_count;
+    FlatMemLiveStats live;
     CallFrame calls[VM_MAX_CALL];
     int call_sp;
     ForeachFrame loops[VM_MAX_FOREACH];
@@ -122,17 +125,19 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
     int i = find_var(st, name);
     if (i >= 0) {
         flat_value_release(st->coll, st->pool, &st->vars[i].val);
+        flat_value_live_replace(&st->live, &st->vars[i].val, val);
         flat_value_retain(st->coll, st->pool, val);
         st->vars[i].val = *val;
         return 0;
     }
-    if (st->var_count >= FLAT_MAX_VARS) {
+    if ((uint32_t)st->var_count >= st->var_slots_max) {
         return -1;
     }
     if (var_name_forbidden(name)) {
         return -1;
     }
     flat_value_retain(st->coll, st->pool, val);
+    flat_value_live_bind(&st->live, val);
     snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
     st->vars[st->var_count].val = *val;
     st->var_count++;
@@ -140,11 +145,14 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
 }
 
 static int apply_free(VmState *st, const char *varname) {
+    FlatValue nullv;
     int i = find_var(st, varname);
     if (i < 0) {
         return 0;
     }
     flat_value_release(st->coll, st->pool, &st->vars[i].val);
+    flat_value_set_null(&nullv);
+    flat_value_live_replace(&st->live, &st->vars[i].val, &nullv);
     flat_value_set_null(&st->vars[i].val);
     return 0;
 }
@@ -174,10 +182,21 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
     char *lhs;
     char *rhs;
     FlatValue v;
-    char names[FLAT_MAX_VARS][64];
     FlatIoStatus ios;
-    FlatValue vals[FLAT_MAX_VARS];
+    FlatValue *vals = NULL;
+    char (*names)[64] = NULL;
+    size_t scratch_n;
     int i;
+    int rc = 0;
+
+    scratch_n = st->var_slots_max > 0 ? st->var_slots_max : 1u;
+    vals = calloc(scratch_n, sizeof *vals);
+    names = calloc(scratch_n, 64);
+    if (!vals || !names) {
+        free(vals);
+        free(names);
+        return 0;
+    }
 
     snprintf(buf, sizeof buf, "%s", line);
     eq = strchr(buf, '=');
@@ -188,7 +207,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
     lhs = trim(buf);
     rhs = trim(eq + 1);
     if (var_name_forbidden(lhs)) {
-        return 0;
+        rc = 0;
+        goto done;
     }
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
@@ -198,21 +218,29 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
         if (flat_io_exec_line_manifest(rhs, st->pool, st->coll, vals, st->var_count, names, &v,
                                        &ios, bc->optional_natives, bc->optional_native_count) !=
             0) {
-            return 0;
+            rc = 0;
+            goto done;
         }
         if (vm_handle_io_status(st, bc, ip, ios, trace) != 0) {
-            return 1;
+            rc = 1;
+            goto done;
         }
         if (ios == FLAT_IO_OK) {
             set_var_value(st, lhs, &v);
         }
-        return 0;
+        rc = 0;
+        goto done;
     }
     if (flat_value_parse_assign_rhs(rhs, &v, st->pool, st->coll, vals, st->var_count, names) != 0) {
-        return 0;
+        rc = 0;
+        goto done;
     }
     set_var_value(st, lhs, &v);
-    return 0;
+    rc = 0;
+done:
+    free(vals);
+    free(names);
+    return rc;
 }
 
 static int split_csv_from_var(VmState *st, const char *coll, char items[][64], int max) {
@@ -304,7 +332,15 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
 }
 
 static void vm_teardown(VmState *st, int rc) {
+    int i;
     (void)rc;
+    if (st->vars) {
+        for (i = 0; i < st->var_count; i++) {
+            flat_value_release(st->coll, st->pool, &st->vars[i].val);
+        }
+        free(st->vars);
+        st->vars = NULL;
+    }
     flat_coll_destroy(st->coll);
     flat_pool_destroy(st->pool);
 }
@@ -350,12 +386,23 @@ static void trace_vars_dump(const VmState *st) {
 
 static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, uint16_t native_id,
                            const char *inner, const char *bind, int trace) {
-    char names[FLAT_MAX_VARS][64];
-    FlatValue vals[FLAT_MAX_VARS];
     FlatValue result;
     FlatIoStatus ios;
     FlatNativeCtx ctx;
+    FlatValue *vals = NULL;
+    char (*names)[64] = NULL;
+    size_t scratch_n;
     int i;
+    int rc = 0;
+
+    scratch_n = st->var_slots_max > 0 ? st->var_slots_max : 1u;
+    vals = calloc(scratch_n, sizeof *vals);
+    names = calloc(scratch_n, 64);
+    if (!vals || !names) {
+        free(vals);
+        free(names);
+        return 0;
+    }
 
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
@@ -369,17 +416,25 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.inner = inner;
     ctx.out = &result;
     ctx.io_status = &ios;
+    ctx.mem_live = &st->live;
+    ctx.vars_max = st->var_slots_max;
     ios = FLAT_IO_ERR;
     if (flat_native_invoke(native_id, &ctx) != 0) {
-        return 0;
+        rc = 0;
+        goto done;
     }
     if (vm_handle_io_status(st, bc, ip, ios, trace) != 0) {
-        return 1;
+        rc = 1;
+        goto done;
     }
     if (ios == FLAT_IO_OK && bind && bind[0] != '\0') {
         set_var_value(st, bind, &result);
     }
-    return 0;
+    rc = 0;
+done:
+    free(vals);
+    free(names);
+    return rc;
 }
 
 static int apply_io_legacy(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *payload,
@@ -421,7 +476,9 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     VmState st;
     uint32_t ip;
     size_t entry_index = 0;
-    char guard_names[FLAT_MAX_VARS][64];
+    char (*guard_names)[64] = NULL;
+    FlatValue *guard_vals = NULL;
+    size_t scratch_n;
     int trace = opts && opts->trace;
     int trace_vars = opts && opts->trace_vars;
 
@@ -431,11 +488,23 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     flat_native_runtime_reset();
     flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);
     memset(&st, 0, sizeof st);
+    st.var_slots_max = bc->var_slots;
+    scratch_n = st.var_slots_max > 0 ? st.var_slots_max : 1u;
+    st.vars = calloc(scratch_n, sizeof *st.vars);
     st.pool = flat_pool_create();
     st.coll = flat_coll_create();
-    if (!st.pool || !st.coll) {
-        flat_coll_destroy(st.coll);
-        flat_pool_destroy(st.pool);
+    flat_mem_stats_init(&st.live);
+    if (!st.vars || !st.pool || !st.coll) {
+        vm_teardown(&st, 1);
+        return 1;
+    }
+    flat_coll_set_live_stats(st.coll, &st.live);
+    guard_names = calloc(scratch_n, 64);
+    guard_vals = calloc(scratch_n, sizeof *guard_vals);
+    if (!guard_names || !guard_vals) {
+        free(guard_names);
+        free(guard_vals);
+        vm_teardown(&st, 1);
         return 1;
     }
 
@@ -460,10 +529,14 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         opcode = bc->data[ip];
         payload_size = bc->data[ip + 1];
         if ((size_t)ip + 2 + payload_size > bc->size) {
+            free(guard_names);
+            free(guard_vals);
             vm_teardown(&st, 1);
             return 1;
         }
         payload = &bc->data[ip + 2];
+        flat_pool_reap_idle(st.pool);
+        flat_coll_reap_idle(st.coll, st.pool);
 
         if (trace || trace_vars) {
             fprintf(stderr, "[trace] ip=%u op=%s(0x%02x) len=%u", ip, opcode_name(opcode), opcode,
@@ -494,9 +567,13 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
 
         switch (opcode) {
         case OP_OK:
+            free(guard_names);
+            free(guard_vals);
             vm_teardown(&st, 0);
             return 0;
         case OP_FAIL:
+            free(guard_names);
+            free(guard_vals);
             vm_teardown(&st, 2);
             return 2;
         case OP_RETURN:
@@ -520,6 +597,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 continue;
             }
             if (st.call_sp == 0) {
+                free(guard_names);
+                free(guard_vals);
                 vm_teardown(&st, 0);
                 return 0;
             }
@@ -528,6 +607,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_ASSIGN: {
             uint32_t ip_before = ip;
             if (apply_assign(&st, bc, &ip, (const char *)payload, trace) != 0) {
+                free(guard_names);
+                free(guard_vals);
                 vm_teardown(&st, 1);
                 return 1;
             }
@@ -544,6 +625,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_IO: {
             uint32_t ip_before = ip;
             if (apply_io_legacy(&st, bc, &ip, (const char *)payload, trace) != 0) {
+                free(guard_names);
+                free(guard_vals);
                 vm_teardown(&st, 1);
                 return 1;
             }
@@ -555,6 +638,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_NATIVE: {
             uint32_t ip_before = ip;
             if (apply_native(&st, bc, &ip, payload, payload_size, trace) != 0) {
+                free(guard_names);
+                free(guard_vals);
                 vm_teardown(&st, 1);
                 return 1;
             }
@@ -566,16 +651,17 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_GUARD: {
             uint32_t bt = 0;
             const char *expr;
+            int gi;
             var_names_table(&st, guard_names);
             memcpy(&bt, payload, 4);
             expr = (const char *)(payload + 4);
-            FlatValue gvals[FLAT_MAX_VARS];
-            int gi;
             for (gi = 0; gi < st.var_count; gi++) {
-                gvals[gi] = st.vars[gi].val;
+                guard_vals[gi] = st.vars[gi].val;
             }
-            if (!flat_value_eval_guard(expr, gvals, st.var_count, guard_names, st.pool)) {
+            if (!flat_value_eval_guard(expr, guard_vals, st.var_count, guard_names, st.pool)) {
                 if (bt == 0) {
+                    free(guard_names);
+                    free(guard_vals);
                     vm_teardown(&st, 2);
                     return 2;
                 }
@@ -589,6 +675,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             uint32_t target = 0;
             memcpy(&target, payload, 4);
             if (st.call_sp >= VM_MAX_CALL) {
+                free(guard_names);
+                free(guard_vals);
                 vm_teardown(&st, 1);
                 return 1;
             }
@@ -613,6 +701,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 memcpy(&target, payload, 4);
             }
             if (target == 0) {
+                free(guard_names);
+                free(guard_vals);
                 vm_teardown(&st, 1);
                 return 1;
             }
@@ -621,6 +711,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         }
         default:
             fprintf(stderr, "flvm: unsupported opcode 0x%02x at %u\n", opcode, ip);
+            free(guard_names);
+            free(guard_vals);
             vm_teardown(&st, 1);
             return 1;
         }

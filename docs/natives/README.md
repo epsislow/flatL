@@ -1,6 +1,6 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`) are always linked into `flvm`. Call them directly; no header declaration.
+**Core natives** (`io`, `json`, `str`, `mem`) are always linked into `flvm`. Call them directly; no header declaration.
 
 **Optional natives** extend the VM with extra C modules (for example trigonometry). They must be declared before any block, and every optional call must refer to a declared module.
 
@@ -34,6 +34,7 @@ Declarations in **any** linked source file apply to the **whole** program after 
 | `math.trig` | [math.trig.md](./math.trig.md) |
 | `math.stats` | [math.stats.md](./math.stats.md) |
 | `list` | [list.md](./list.md) |
+| `mem` | [mem.md](./mem.md) (core — no `use native` required) |
 
 ## Runtime (lazy plugins)
 

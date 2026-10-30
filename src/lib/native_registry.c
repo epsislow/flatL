@@ -76,13 +76,30 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META("list", "remove_at"),
     META("list", "slice"),
     META("list", "splice"),
+    META("mem", "vars_max"),
+    META("mem", "vars_used"),
+    META("mem", "vars_avail"),
+    META("mem", "list_max"),
+    META("mem", "list_used"),
+    META("mem", "list_avail"),
+    META("mem", "object_max"),
+    META("mem", "object_used"),
+    META("mem", "object_avail"),
+    META("mem", "strref_max"),
+    META("mem", "strref_used"),
+    META("mem", "strref_avail"),
+    META("mem", "str_used"),
+    META("mem", "bool_used"),
+    META("mem", "num_used"),
+    META("mem", "null_used"),
 };
 
 int flat_native_is_core_module(const char *mod) {
     if (!mod) {
         return 0;
     }
-    return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0;
+    return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0 ||
+           strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0;
 }
 
 int flat_native_lookup(const char *mod, const char *func, uint16_t *out_id) {

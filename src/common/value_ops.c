@@ -267,7 +267,7 @@ static int parse_list_literal(const char **p, FlatValue *out, FlatStringPool *po
         free(items);
         return -1;
     }
-    if (flat_list_build(coll, items, count, &id) != 0) {
+    if (flat_list_build(coll, pool, items, count, &id) != 0) {
         free(items);
         return -1;
     }
@@ -351,7 +351,7 @@ static int parse_object_literal(const char **p, FlatValue *out, FlatStringPool *
     if (!coll) {
         return -1;
     }
-    if (flat_obj_build(coll, keys, vals, count, &id) != 0) {
+    if (flat_obj_build(coll, pool, keys, vals, count, &id) != 0) {
         return -1;
     }
     return flat_value_set_object(out, id);
@@ -437,13 +437,13 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
     *close = '\0';
 
     if (strcmp(name, "__list__") == 0 && inner[0] == '\0') {
-        if (!coll || flat_list_empty(coll, &new_id) != 0) {
+        if (!coll || flat_list_empty(coll, pool, &new_id) != 0) {
             return -1;
         }
         return flat_value_set_list(out, new_id);
     }
     if (strcmp(name, "__obj__") == 0 && inner[0] == '\0') {
-        if (!coll || flat_obj_empty(coll, &new_id) != 0) {
+        if (!coll || flat_obj_empty(coll, pool, &new_id) != 0) {
             return -1;
         }
         return flat_value_set_object(out, new_id);
@@ -465,7 +465,7 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         if (flat_value_parse_at(&p, &item, pool, coll, vars, var_count, var_names) != 0) {
             return -1;
         }
-        if (flat_list_push_copy(coll, vars[vi].u.coll_id, &item, &new_id) != 0) {
+        if (flat_list_push_copy(coll, pool, vars[vi].u.coll_id, &item, &new_id) != 0) {
             return -1;
         }
         return flat_value_set_list(out, new_id);
@@ -496,7 +496,7 @@ static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *poo
         if (flat_value_parse_at(&p, &item, pool, coll, vars, var_count, var_names) != 0) {
             return -1;
         }
-        if (flat_obj_set_copy(coll, vars[vi].u.coll_id, key, &item, &new_id) != 0) {
+        if (flat_obj_set_copy(coll, pool, vars[vi].u.coll_id, key, &item, &new_id) != 0) {
             return -1;
         }
         return flat_value_set_object(out, new_id);

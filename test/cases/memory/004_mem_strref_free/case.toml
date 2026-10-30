@@ -1,0 +1,13 @@
+suite = "memory"
+id = 4
+desc = "mem.strref_used drops after free on STRING REF"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "0"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"

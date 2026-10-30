@@ -28,19 +28,21 @@ VM_EXTRA_LIBS = -ldl
 PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
                 $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so
 PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/value_parse.c src/common/value_ops.c \
-               src/common/value_pool.c src/common/value_collection.c src/common/flat_str.c
+               src/common/value_pool.c src/common/value_collection.c src/common/value_live.c \
+               src/common/flat_str.c
 PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c $(PLUGIN_COMMON_SRCS)
 endif
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
-                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c $(NATIVE_VM_MATH) \
-                $(NATIVE_VM_PLUGIN)
+                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_mem.c \
+                $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
 VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_collection.c \
-          src/common/value_ops.c src/common/value_parse.c src/common/value_format.c \
-          src/common/value_io.c src/common/value_json.c $(STR_SRC) $(NATIVE_VM_SRC)
+          src/common/value_live.c src/common/value_ops.c src/common/value_parse.c \
+          src/common/value_format.c src/common/value_io.c src/common/value_json.c $(STR_SRC) \
+          $(NATIVE_VM_SRC)
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/native_use.c \
            $(STR_SRC) $(NATIVE_FLC_SRC)
 FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \

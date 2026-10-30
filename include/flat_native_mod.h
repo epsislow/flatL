@@ -71,4 +71,21 @@ int flat_native_list_remove_at(FlatNativeCtx *ctx);
 int flat_native_list_slice(FlatNativeCtx *ctx);
 int flat_native_list_splice(FlatNativeCtx *ctx);
 
+int flat_native_mem_vars_max(FlatNativeCtx *ctx);
+int flat_native_mem_vars_used(FlatNativeCtx *ctx);
+int flat_native_mem_vars_avail(FlatNativeCtx *ctx);
+int flat_native_mem_list_max(FlatNativeCtx *ctx);
+int flat_native_mem_list_used(FlatNativeCtx *ctx);
+int flat_native_mem_list_avail(FlatNativeCtx *ctx);
+int flat_native_mem_object_max(FlatNativeCtx *ctx);
+int flat_native_mem_object_used(FlatNativeCtx *ctx);
+int flat_native_mem_object_avail(FlatNativeCtx *ctx);
+int flat_native_mem_strref_max(FlatNativeCtx *ctx);
+int flat_native_mem_strref_used(FlatNativeCtx *ctx);
+int flat_native_mem_strref_avail(FlatNativeCtx *ctx);
+int flat_native_mem_str_used(FlatNativeCtx *ctx);
+int flat_native_mem_bool_used(FlatNativeCtx *ctx);
+int flat_native_mem_num_used(FlatNativeCtx *ctx);
+int flat_native_mem_null_used(FlatNativeCtx *ctx);
+
 #endif

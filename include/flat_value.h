@@ -10,7 +10,7 @@
 /* Documented in docs/LANGUAGE_TYPES.md */
 #define FLAT_INLINE_STR_MAX 127
 #define FLAT_VAR_NAME_MAX 63
-#define FLAT_MAX_VARS 128
+#define FLAT_MAX_VARS 32768
 #define FLAT_POOL_MAX_SLOTS 1024
 #define FLAT_POOL_MAX_CHUNK (16u * 1024u * 1024u)
 #define FLAT_POOL_MAX_TOTAL (64u * 1024u * 1024u)
@@ -50,6 +50,7 @@ typedef struct {
 
 typedef struct FlatStringPool FlatStringPool;
 typedef struct FlatCollectionPool FlatCollectionPool;
+typedef struct FlatMemLiveStats FlatMemLiveStats;
 
 FlatStringPool *flat_pool_create(void);
 void flat_pool_destroy(FlatStringPool *pool);
@@ -58,6 +59,14 @@ int flat_pool_alloc_copy(FlatStringPool *pool, const void *data, size_t len, uin
 int flat_pool_slice(FlatStringPool *pool, uint32_t parent_id, size_t offset, size_t len,
                     uint32_t *out_id);
 const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *out_len);
+/* refcnt = number of binds (variables, list/object elements) + slice pins on the slot.
+ * alloc_copy/slice start at 0; the first bind is flat_value_retain. release to 0 frees the slot
+ * (owned bytes returned to the pool, slice views unpin their parent) and recycles the id. */
+void flat_pool_retain(FlatStringPool *pool, uint32_t id);
+void flat_pool_release(FlatStringPool *pool, uint32_t id);
+int flat_pool_live_slot_count(const FlatStringPool *pool); /* <= FLAT_POOL_MAX_SLOTS */
+size_t flat_pool_bytes_used(const FlatStringPool *pool);   /* owned bytes, <= FLAT_POOL_MAX_TOTAL */
+void flat_pool_reap_idle(FlatStringPool *pool); /* free never-bound temporaries (refcnt 0) */
 
 void flat_value_fprint_ex(FILE *out, const FlatValue *v, const FlatStringPool *pool,
                           const FlatCollectionPool *coll, int raw_strings);
@@ -83,36 +92,43 @@ void flat_value_release(FlatCollectionPool *coll, FlatStringPool *pool, const Fl
 
 FlatCollectionPool *flat_coll_create(void);
 void flat_coll_destroy(FlatCollectionPool *pool);
-int flat_list_empty(FlatCollectionPool *pool, uint32_t *out_id);
+void flat_coll_set_live_stats(FlatCollectionPool *pool, FlatMemLiveStats *stats);
+void flat_coll_reap_idle(FlatCollectionPool *pool, FlatStringPool *str_pool);
+int flat_coll_live_list_count(const FlatCollectionPool *pool);
+int flat_coll_live_object_count(const FlatCollectionPool *pool);
+
+int flat_list_empty(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t *out_id);
 int flat_list_len(const FlatCollectionPool *pool, uint32_t list_id, int *out_len);
 int flat_list_get(const FlatCollectionPool *pool, uint32_t list_id, int index, FlatValue *out);
-int flat_list_push_copy(FlatCollectionPool *pool, uint32_t list_id, const FlatValue *item,
-                        uint32_t *out_id);
-int flat_list_prepend_copy(FlatCollectionPool *pool, uint32_t list_id, const FlatValue *item,
-                           uint32_t *out_id);
-int flat_list_insert_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
-                          const FlatValue *item, uint32_t *out_id);
-int flat_list_set_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
-                       const FlatValue *val, uint32_t *out_id);
-int flat_list_remove_at_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
-                             uint32_t *out_id);
-int flat_list_slice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, int end,
-                         uint32_t *out_id);
-int flat_list_splice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, int count,
-                          uint32_t *out_id);
+int flat_list_push_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t list_id,
+                        const FlatValue *item, uint32_t *out_id);
+int flat_list_prepend_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t list_id,
+                           const FlatValue *item, uint32_t *out_id);
+int flat_list_insert_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t list_id,
+                          int index, const FlatValue *item, uint32_t *out_id);
+int flat_list_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t list_id,
+                       int index, const FlatValue *val, uint32_t *out_id);
+int flat_list_remove_at_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t list_id,
+                             int index, uint32_t *out_id);
+int flat_list_slice_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t list_id,
+                         int start, int end, uint32_t *out_id);
+int flat_list_splice_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t list_id,
+                          int start, int count, uint32_t *out_id);
 int flat_list_index_of(const FlatCollectionPool *pool, const FlatStringPool *str_pool,
                        uint32_t list_id, const FlatValue *needle, int *out_index);
-int flat_list_build(FlatCollectionPool *pool, const FlatValue *items, int count, uint32_t *out_id);
-int flat_obj_empty(FlatCollectionPool *pool, uint32_t *out_id);
+int flat_list_build(FlatCollectionPool *pool, FlatStringPool *str_pool, const FlatValue *items,
+                    int count, uint32_t *out_id);
+int flat_obj_empty(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t *out_id);
 int flat_obj_len(const FlatCollectionPool *pool, uint32_t obj_id, int *out_len);
 int flat_obj_entry_at(const FlatCollectionPool *pool, uint32_t obj_id, int index,
                       const char **out_key, FlatValue *out_val);
 int flat_obj_get(const FlatCollectionPool *pool, uint32_t obj_id, const char *key,
                  FlatValue *out);
-int flat_obj_set_copy(FlatCollectionPool *pool, uint32_t obj_id, const char *key,
-                      const FlatValue *val, uint32_t *out_id);
-int flat_obj_build(FlatCollectionPool *pool, const char (*keys)[FLAT_OBJ_KEY_MAX + 1],
-                   const FlatValue *vals, int count, uint32_t *out_id);
+int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
+                      const char *key, const FlatValue *val, uint32_t *out_id);
+int flat_obj_build(FlatCollectionPool *pool, FlatStringPool *str_pool,
+                   const char (*keys)[FLAT_OBJ_KEY_MAX + 1], const FlatValue *vals, int count,
+                   uint32_t *out_id);
 
 int flat_value_equals(const FlatValue *a, const FlatValue *b, const FlatStringPool *pool);
 int flat_value_compare_number(const FlatValue *v, double rhs, int op); /* op: 0== 1>= 2<= 3> 4< */

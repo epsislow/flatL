@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef char VarName[64];
+
 static int var_in_list(const char *name, char known[][64], int n) {
     int i;
     for (i = 0; i < n; i++) {
@@ -46,7 +48,7 @@ static int assign_record_lhs(const char *text, char known[][64], int *kn) {
     if (lhs[0] == '\0' || strlen(lhs) > FLAT_VAR_NAME_MAX) {
         return 0;
     }
-    if (*kn >= 128) {
+    if (*kn >= FLAT_MAX_VARS) {
         return -1;
     }
     if (!var_in_list(lhs, known, *kn)) {
@@ -58,21 +60,28 @@ static int assign_record_lhs(const char *text, char known[][64], int *kn) {
 
 static int validate_free_in_program(const FgirProgram *prog, char *err, size_t err_size) {
     int bi, ii;
+    VarName *known = malloc((size_t)FLAT_MAX_VARS * sizeof(VarName));
+
+    if (!known) {
+        snprintf(err, err_size, "out of memory");
+        return -1;
+    }
     for (bi = 0; bi < prog->block_count; bi++) {
         const FgirBlock *b = &prog->blocks[bi];
-        char known[128][64];
         int kn = 0;
         for (ii = 0; ii < b->instr_count; ii++) {
             const FgirInstr *ins = &b->instr[ii];
             if (ins->kind == FGIR_ASSIGN) {
                 if (assign_record_lhs(ins->text, known, &kn) != 0) {
                     snprintf(err, err_size, "too many variables in block %s", b->label);
+                    free(known);
                     return -1;
                 }
             } else if (ins->kind == FGIR_IO && ins->call_out[0]) {
                 if (!var_in_list(ins->call_out, known, kn)) {
-                    if (kn >= 128) {
+                    if (kn >= FLAT_MAX_VARS) {
                         snprintf(err, err_size, "too many variables in block %s", b->label);
+                        free(known);
                         return -1;
                     }
                     snprintf(known[kn], 64, "%s", ins->call_out);
@@ -82,16 +91,149 @@ static int validate_free_in_program(const FgirProgram *prog, char *err, size_t e
                 char var[64];
                 if (flat_parse_free_varname(ins->text, var, sizeof var) != 0) {
                     snprintf(err, err_size, "invalid free: %s", ins->text);
+                    free(known);
                     return -1;
                 }
                 if (!var_in_list(var, known, kn)) {
                     snprintf(err, err_size, "free of undeclared variable %s in %s", var, b->label);
+                    free(known);
                     return -1;
                 }
             }
         }
     }
+    free(known);
     return 0;
+}
+
+/* --- var_slots: distinct bind target names across the whole linked program --- */
+
+typedef struct {
+    char (*names)[FLAT_VAR_NAME_MAX + 1];
+    int *table; /* open addressing; value = index into names or -1 */
+    size_t table_size;
+    int count;
+} VarSet;
+
+static uint32_t varset_hash(const char *s) {
+    uint32_t h = 2166136261u;
+    while (*s) {
+        h ^= (unsigned char)*s++;
+        h *= 16777619u;
+    }
+    return h;
+}
+
+/* returns 0 ok (added or present), 1 if cap exceeded, -1 on OOM */
+static int varset_add(VarSet *vs, const char *raw) {
+    char name[FLAT_VAR_NAME_MAX + 1];
+    size_t pos;
+
+    snprintf(name, sizeof name, "%s", raw);
+    if (name[0] == '\0') {
+        return 0;
+    }
+    pos = varset_hash(name) & (vs->table_size - 1);
+    while (vs->table[pos] >= 0) {
+        if (strcmp(vs->names[vs->table[pos]], name) == 0) {
+            return 0;
+        }
+        pos = (pos + 1) & (vs->table_size - 1);
+    }
+    if (vs->count >= FLAT_MAX_VARS) {
+        return 1;
+    }
+    memcpy(vs->names[vs->count], name, sizeof name);
+    vs->table[pos] = vs->count++;
+    return 0;
+}
+
+static int bind_name_forbidden(const char *n) {
+    return strcmp(n, "null") == 0 || strcmp(n, "true") == 0 || strcmp(n, "false") == 0;
+}
+
+static int varset_add_assign_lhs(VarSet *vs, const char *text) {
+    char buf[FGIR_MAX_LINE];
+    char *eq;
+    char *lhs;
+    char *end;
+
+    snprintf(buf, sizeof buf, "%s", text);
+    eq = strchr(buf, '=');
+    if (!eq || eq == buf) {
+        return 0;
+    }
+    *eq = '\0';
+    lhs = buf;
+    while (*lhs && isspace((unsigned char)*lhs)) {
+        lhs++;
+    }
+    end = lhs + strlen(lhs);
+    while (end > lhs && isspace((unsigned char)end[-1])) {
+        end--;
+    }
+    *end = '\0';
+    if (lhs[0] == '\0' || bind_name_forbidden(lhs)) {
+        return 0;
+    }
+    return varset_add(vs, lhs);
+}
+
+/* Scans every instruction that can create a variable at runtime:
+ *   FGIR_ASSIGN lhs, FGIR_IO bind (-> var), FGIR_CALL out, FGIR_FOREACH item. */
+static int count_var_slots(const FgirProgram *prog, uint32_t *out_slots, char *err,
+                           size_t err_size) {
+    VarSet vs;
+    int bi, ii;
+    int rc = 0;
+
+    memset(&vs, 0, sizeof vs);
+    vs.table_size = 65536; /* power of two, > 2 * FLAT_MAX_VARS */
+    vs.names = malloc((size_t)FLAT_MAX_VARS * sizeof *vs.names);
+    vs.table = malloc(vs.table_size * sizeof *vs.table);
+    if (!vs.names || !vs.table) {
+        free(vs.names);
+        free(vs.table);
+        snprintf(err, err_size, "out of memory");
+        return -1;
+    }
+    memset(vs.table, 0xff, vs.table_size * sizeof *vs.table);
+
+    for (bi = 0; bi < prog->block_count && rc == 0; bi++) {
+        const FgirBlock *b = &prog->blocks[bi];
+        for (ii = 0; ii < b->instr_count && rc == 0; ii++) {
+            const FgirInstr *ins = &b->instr[ii];
+            switch (ins->kind) {
+            case FGIR_ASSIGN:
+                rc = varset_add_assign_lhs(&vs, ins->text);
+                break;
+            case FGIR_IO:
+            case FGIR_CALL:
+                if (ins->call_out[0] && !bind_name_forbidden(ins->call_out)) {
+                    rc = varset_add(&vs, ins->call_out);
+                }
+                break;
+            case FGIR_FOREACH:
+                if (ins->foreach_item[0] && !bind_name_forbidden(ins->foreach_item)) {
+                    rc = varset_add(&vs, ins->foreach_item);
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    if (rc == 1) {
+        snprintf(err, err_size,
+                 "too many distinct variables: program binds more than %d names (FLAT_MAX_VARS)",
+                 FLAT_MAX_VARS);
+        rc = -1;
+    } else if (rc == 0) {
+        *out_slots = (uint32_t)vs.count;
+    }
+    free(vs.names);
+    free(vs.table);
+    return rc == 0 ? 0 : -1;
 }
 
 typedef struct {
@@ -353,6 +495,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     BlockOff *offs = NULL;
     EmitBuf code = {0};
     uint32_t *block_ids = NULL;
+    uint32_t var_slots = 0;
     size_t stream_base;
     FILE *f;
     int i;
@@ -366,6 +509,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     if (flat_native_use_validate_program(prog, err, err_size) != 0) {
         return -1;
     }
+    if (count_var_slots(prog, &var_slots, err, err_size) != 0) {
+        return -1;
+    }
 
     offs = calloc((size_t)prog->block_count, sizeof(BlockOff));
     block_ids = calloc((size_t)prog->block_count, sizeof(uint32_t));
@@ -376,7 +522,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
 
-    stream_base = 12 + (size_t)prog->block_count * 8;
+    stream_base = FLAT_FB_HEADER_SIZE + (size_t)prog->block_count * 8;
     {
         size_t cursor = stream_base;
         for (i = 0; i < prog->block_count; i++) {
@@ -417,6 +563,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         fwrite(&version, 1, 1, f);
         fwrite(&count, 1, 2, f);
         fwrite(&native_off, 1, 4, f);
+        fwrite(&var_slots, 1, 4, f);
         for (i = 0; i < prog->block_count; i++) {
             uint32_t id = block_ids[i];
             uint32_t off = (uint32_t)offs[i].abs_offset;

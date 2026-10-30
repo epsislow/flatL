@@ -1,0 +1,13 @@
+suite = "memory"
+id = 5
+desc = "smoke: every mem.* native + max/used/avail consistency"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "mem-all-ok"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"

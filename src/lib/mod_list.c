@@ -121,7 +121,7 @@ int flat_native_list_empty(FlatNativeCtx *ctx) {
         return -1;
     }
     *ctx->io_status = FLAT_IO_OK;
-    if (flat_list_empty(ctx->coll, &id) != 0) {
+    if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -150,7 +150,7 @@ int flat_native_list_pack(FlatNativeCtx *ctx) {
         return -1;
     }
     if (count == 0) {
-        if (flat_list_empty(ctx->coll, &id) != 0) {
+        if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) {
             *ctx->io_status = FLAT_IO_ERR;
             return -1;
         }
@@ -162,7 +162,7 @@ int flat_native_list_pack(FlatNativeCtx *ctx) {
             return -1;
         }
     }
-    if (flat_list_build(ctx->coll, items, count, &id) != 0) {
+    if (flat_list_build(ctx->coll, ctx->pool, items, count, &id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -194,7 +194,7 @@ int flat_native_list_push(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_push_copy(ctx->coll, list_v.u.coll_id, &item, &new_id) != 0) {
+    if (flat_list_push_copy(ctx->coll, ctx->pool, list_v.u.coll_id, &item, &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -282,7 +282,7 @@ int flat_native_list_prepend(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_prepend_copy(ctx->coll, list_v.u.coll_id, &item, &new_id) != 0) {
+    if (flat_list_prepend_copy(ctx->coll, ctx->pool, list_v.u.coll_id, &item, &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -320,7 +320,7 @@ int flat_native_list_insert(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_insert_copy(ctx->coll, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) !=
+    if (flat_list_insert_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) !=
         0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
@@ -359,7 +359,7 @@ int flat_native_list_set(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_set_copy(ctx->coll, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) != 0) {
+    if (flat_list_set_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -455,7 +455,7 @@ int flat_native_list_remove_at(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_remove_at_copy(ctx->coll, list_v.u.coll_id, (int)idx_v.u.number, &new_id) != 0) {
+    if (flat_list_remove_at_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)idx_v.u.number, &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -493,7 +493,7 @@ int flat_native_list_slice(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_slice_copy(ctx->coll, list_v.u.coll_id, (int)start_v.u.number,
+    if (flat_list_slice_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)start_v.u.number,
                              (int)end_v.u.number, &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
@@ -532,7 +532,7 @@ int flat_native_list_splice(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_splice_copy(ctx->coll, list_v.u.coll_id, (int)start_v.u.number,
+    if (flat_list_splice_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)start_v.u.number,
                               (int)count_v.u.number, &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;

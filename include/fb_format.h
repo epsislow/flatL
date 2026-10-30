@@ -9,7 +9,8 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 1u
+#define FLAT_FB_FORMAT_VERSION 2u
+#define FLAT_FB_HEADER_SIZE 16 /* magic4 sentinel1 version1 count2 native_off4 var_slots4 */
 #define FLAT_FB_TAIL_MAGIC 0x54414e46u /* "FNAT" little-endian */
 
 typedef struct {
@@ -23,6 +24,7 @@ typedef struct {
     FlatBlockEntry *blocks;
     uint16_t block_count;
     int format_version;
+    uint32_t var_slots; /* static upper bound on distinct variable names (<= FLAT_MAX_VARS) */
     FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
     int optional_native_count;
 } FlatBytecode;

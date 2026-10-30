@@ -21,6 +21,25 @@ static int g_loaded_math_stats;
 static int g_loaded_math;
 static int g_loaded_list;
 
+static void register_embedded_mem(void) {
+    flat_native_plugin_register(FLAT_NATIVE_MEM_VARS_MAX, flat_native_mem_vars_max);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_VARS_USED, flat_native_mem_vars_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_VARS_AVAIL, flat_native_mem_vars_avail);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_LIST_MAX, flat_native_mem_list_max);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_LIST_USED, flat_native_mem_list_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_LIST_AVAIL, flat_native_mem_list_avail);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_OBJECT_MAX, flat_native_mem_object_max);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_OBJECT_USED, flat_native_mem_object_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_OBJECT_AVAIL, flat_native_mem_object_avail);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_STRREF_MAX, flat_native_mem_strref_max);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_STRREF_USED, flat_native_mem_strref_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_STRREF_AVAIL, flat_native_mem_strref_avail);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_STR_USED, flat_native_mem_str_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_BOOL_USED, flat_native_mem_bool_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_NUM_USED, flat_native_mem_num_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_NULL_USED, flat_native_mem_null_used);
+}
+
 static int manifest_has_module(const char *mod) {
     int i;
     for (i = 0; i < g_manifest_count; i++) {
@@ -235,6 +254,7 @@ void flat_native_runtime_reset(void) {
     g_loaded_math = 0;
     g_loaded_list = 0;
     g_search_dir[0] = '\0';
+    register_embedded_mem();
 }
 
 void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count) {

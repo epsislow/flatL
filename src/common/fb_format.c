@@ -1,5 +1,6 @@
 #include "fb_format.h"
 #include "flat.h"
+#include "flat_value.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -187,18 +188,36 @@ int flat_fb_load_file(const char *path, FlatBytecode *out) {
         return -1;
     }
 
-    if (buf[4] == FLAT_FB_SENTINEL && (size_t)fsize >= 12 && buf[5] == FLAT_FB_FORMAT_VERSION) {
-        out->format_version = (int)FLAT_FB_FORMAT_VERSION;
-        count = read_u16_le(buf + 6);
-        native_off = read_u32_le(buf + 8);
-        header_size = 12;
-        dir_offset = 12;
-    } else {
-        out->format_version = 0;
-        count = read_u16_le(buf + FLAT_FB_MAGIC_SIZE);
-        header_size = 6;
-        dir_offset = 6;
+    if (buf[4] != FLAT_FB_SENTINEL) {
+        free(buf);
+        fprintf(stderr, "flvm: unsupported .fb (legacy header without version); rebuild with "
+                        "flc (format v%u required)\n", (unsigned)FLAT_FB_FORMAT_VERSION);
+        return -1;
     }
+    if (buf[5] != FLAT_FB_FORMAT_VERSION) {
+        unsigned got = (unsigned)buf[5];
+        free(buf);
+        fprintf(stderr, "flvm: unsupported .fb format v%u (format v%u required); rebuild with "
+                        "flc\n", got, (unsigned)FLAT_FB_FORMAT_VERSION);
+        return -1;
+    }
+    if ((size_t)fsize < FLAT_FB_HEADER_SIZE) {
+        free(buf);
+        fprintf(stderr, "flvm: truncated .fb header (%s)\n", path);
+        return -1;
+    }
+    out->format_version = (int)FLAT_FB_FORMAT_VERSION;
+    count = read_u16_le(buf + 6);
+    native_off = read_u32_le(buf + 8);
+    out->var_slots = read_u32_le(buf + 12);
+    if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
+        free(buf);
+        fprintf(stderr, "flvm: var_slots %u exceeds FLAT_MAX_VARS (%d)\n",
+                (unsigned)out->var_slots, FLAT_MAX_VARS);
+        return -1;
+    }
+    header_size = FLAT_FB_HEADER_SIZE;
+    dir_offset = FLAT_FB_HEADER_SIZE;
 
     if (count == 0) {
         free(buf);
@@ -271,9 +290,10 @@ int flat_fb_write_min_ok(const char *path) {
     const uint8_t version[1] = { FLAT_FB_FORMAT_VERSION };
     const uint8_t count[2] = { 1, 0 };
     const uint8_t native_off[4] = { 0, 0, 0, 0 };
+    const uint8_t var_slots[4] = { 0, 0, 0, 0 };
     const uint8_t dir[8] = {
         0, 0, 0, 0, /* block_id main = 0 */
-        20, 0, 0, 0  /* offset = 12 + 8 */
+        24, 0, 0, 0  /* offset = 16 + 8 */
     };
     const uint8_t code[2] = { OP_OK, 0 };
 
@@ -284,7 +304,8 @@ int flat_fb_write_min_ok(const char *path) {
     }
     if (write_bytes(f, magic, 4) != 0 || write_bytes(f, sentinel, 1) != 0 ||
         write_bytes(f, version, 1) != 0 || write_bytes(f, count, 2) != 0 ||
-        write_bytes(f, native_off, 4) != 0 || write_bytes(f, dir, 8) != 0 ||
+        write_bytes(f, native_off, 4) != 0 || write_bytes(f, var_slots, 4) != 0 ||
+        write_bytes(f, dir, 8) != 0 ||
         write_bytes(f, code, 2) != 0) {
         fclose(f);
         return -1;

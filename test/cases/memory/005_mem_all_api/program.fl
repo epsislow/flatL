@@ -1,0 +1,73 @@
+use native list with L
+use native math with m
+
+#main
+  mem.list_max() -> lm
+  lm == 256
+  mem.list_used() -> lu0
+  lu0 == 0
+  mem.list_avail() -> la0
+  la0 == 256
+
+  mem.object_max() -> om
+  om == 256
+  mem.object_used() -> ou0
+  ou0 == 0
+  mem.object_avail() -> oa0
+  oa0 == 256
+
+  mem.strref_max() -> rm
+  rm == 1024
+  mem.strref_used() -> ru0
+  ru0 == 0
+  mem.strref_avail() -> ra0
+  ra0 == 1024
+
+  flag = true
+  mem.bool_used() -> bu1
+  bu1 == 1
+
+  tag = 'xy'
+  mem.str_used() -> su1
+  su1 == 1
+
+  tick = 7
+  mem.num_used() -> nu_mid
+  free(tick)
+  mem.null_used() -> nul1
+  nul1 == 1
+
+  body = __ref__('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+  mem.strref_used() -> ru1
+  ru1 == 1
+  mem.strref_avail() -> ra1
+  ra1 == 1023
+
+  L.pack(9) -> xs
+  mem.list_used() -> lu1
+  lu1 == 1
+  mem.list_avail() -> la1
+  la1 == 255
+
+  box = {p: 1}
+  mem.object_used() -> ou1
+  ou1 == 1
+  mem.object_avail() -> oa1
+  oa1 == 255
+
+  mem.vars_max() -> vm
+  mem.vars_used() -> vu
+  mem.vars_avail() -> va
+  m.sum2(vu, va) -> vchk
+  m.sum2(vchk, 1) -> vplus
+  vplus == vm
+
+  m.sum2(lu1, la1) -> lchk
+  lchk == lm
+  m.sum2(ou1, oa1) -> ochk
+  ochk == om
+  m.sum2(ru1, ra1) -> rchk
+  rchk == rm
+
+  io.outln('mem-all-ok')
+  OK

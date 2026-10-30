@@ -1,0 +1,16 @@
+use native list with L
+
+#main
+  L.pack(1) -> xs
+  mem.list_used() -> u0
+  ys = xs
+  mem.list_used() -> u1
+  L.push(xs, 2) -> ys
+  mem.list_used() -> u2
+  free(ys)
+  mem.list_used() -> u3
+  io.outln(u0)
+  io.outln(u1)
+  io.outln(u2)
+  io.outln(u3)
+  OK
