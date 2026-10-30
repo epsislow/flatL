@@ -1,6 +1,6 @@
 suite = "native"
 id = 4
-desc = "canonical math.trig.sqrt without alias"
+desc = "canonical math.sqrt without alias"
 kind = "pipeline"
 
 source = "program.fl"

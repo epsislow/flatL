@@ -1,0 +1,5 @@
+#main
+  xs = [1, 2]
+  math.sum(xs) -> s
+  io.outln(s)
+  OK

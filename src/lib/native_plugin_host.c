@@ -17,6 +17,9 @@ static FlatOptionalNativeDecl g_manifest[FGIR_MAX_OPTIONAL_NATIVES];
 static int g_manifest_count;
 static char g_search_dir[512];
 static int g_loaded_math_trig;
+static int g_loaded_math_stats;
+static int g_loaded_math;
+static int g_loaded_list;
 
 static int manifest_has_module(const char *mod) {
     int i;
@@ -85,6 +88,15 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
     if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_TRIG) == 0 && g_loaded_math_trig) {
         return 0;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_STATS) == 0 && g_loaded_math_stats) {
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH) == 0 && g_loaded_math) {
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_LIST) == 0 && g_loaded_list) {
+        return 0;
+    }
 
     module_to_so_basename(mod, base, sizeof base);
     if (!base[0]) {
@@ -134,8 +146,54 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_SIN, flat_native_math_trig_sin);
         flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_COS, flat_native_math_trig_cos);
         flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_TAN, flat_native_math_trig_tan);
-        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_SQRT, flat_native_math_trig_sqrt);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_NUM_PI, flat_native_math_trig_num_pi);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_NUM_TAU, flat_native_math_trig_num_tau);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_DEG_TO_RAD, flat_native_math_trig_deg_to_rad);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_RAD_TO_DEG, flat_native_math_trig_rad_to_deg);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_SIN_DEG, flat_native_math_trig_sin_deg);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_COS_DEG, flat_native_math_trig_cos_deg);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_TRIG_TAN_DEG, flat_native_math_trig_tan_deg);
         g_loaded_math_trig = 1;
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_STATS) == 0) {
+        flat_native_plugin_register(FLAT_NATIVE_MATH_STATS_MEAN, flat_native_math_stats_mean);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_STATS_MEDIAN, flat_native_math_stats_median);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_STATS_VAR, flat_native_math_stats_var);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_STATS_STDEV, flat_native_math_stats_stdev);
+        g_loaded_math_stats = 1;
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH) == 0) {
+        flat_native_plugin_register(FLAT_NATIVE_MATH_POW, flat_native_math_pow);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_SQRT, flat_native_math_sqrt);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_EXP, flat_native_math_exp);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_LOG, flat_native_math_log);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_LOG10, flat_native_math_log10);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_FLOOR, flat_native_math_floor);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_CEIL, flat_native_math_ceil);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_ROUND, flat_native_math_round);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MOD, flat_native_math_mod);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_FLOOR_MOD, flat_native_math_floor_mod);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_SUM, flat_native_math_sum);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MIN, flat_native_math_min);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MAX, flat_native_math_max);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_SUM2, flat_native_math_sum2);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MIN2, flat_native_math_min2);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MAX2, flat_native_math_max2);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_NUM_PI, flat_native_math_num_pi);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_NUM_TAU, flat_native_math_num_tau);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_NUM_E, flat_native_math_num_e);
+        g_loaded_math = 1;
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_LIST) == 0) {
+        flat_native_plugin_register(FLAT_NATIVE_LIST_EMPTY, flat_native_list_empty);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_PACK, flat_native_list_pack);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_PUSH, flat_native_list_push);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_GET, flat_native_list_get);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_LEN, flat_native_list_len);
+        g_loaded_list = 1;
         return 0;
     }
 #endif
@@ -149,6 +207,15 @@ ok:
     if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_TRIG) == 0) {
         g_loaded_math_trig = 1;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_STATS) == 0) {
+        g_loaded_math_stats = 1;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH) == 0) {
+        g_loaded_math = 1;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_LIST) == 0) {
+        g_loaded_list = 1;
+    }
     return 0;
 }
 
@@ -156,6 +223,9 @@ void flat_native_runtime_reset(void) {
     memset(g_handlers, 0, sizeof g_handlers);
     g_manifest_count = 0;
     g_loaded_math_trig = 0;
+    g_loaded_math_stats = 0;
+    g_loaded_math = 0;
+    g_loaded_list = 0;
     g_search_dir[0] = '\0';
 }
 

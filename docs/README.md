@@ -10,7 +10,10 @@
 | [PORTABILITY.md](./PORTABILITY.md) | **Normative:** `flat_str`, `flat_port`, MSVC/GCC/Clang rules |
 | [IO.md](./IO.md) | **`io.*` / `str.to_*`**, stdin/stdout, cancel, PANIC, tests |
 | [natives/README.md](./natives/README.md) | **Optional** `use native … with …`; core vs optional; index |
-| [natives/math.trig.md](./natives/math.trig.md) | Pilot module **`math.trig`** (`sin`, `cos`, `tan`, `sqrt`) |
+| [natives/math.md](./natives/math.md) | **`math`** — libm, aggregations, constants |
+| [natives/math.trig.md](./natives/math.trig.md) | **`math.trig`** — sin, cos, tan |
+| [natives/list.md](./natives/list.md) | **`list`** — pack, push, get, len |
+| [natives/math.stats.md](./natives/math.stats.md) | **`math.stats`** — sum, mean, min, max, median, var, stdev |
 | [IO_COLLECTIONS.md](./IO_COLLECTIONS.md) | Normative: `json.*`, collection stdin/stdout rules |
 | [LIST_OBJECT.md](./LIST_OBJECT.md) | **Guide:** LIST/OBJECT + JSON I/O for authors |
 

@@ -19,16 +19,21 @@ use native math.trig with trig
 
 Rules:
 
-- Module IDs are **full names** (`math.trig`, not `math`). `use native math` is an error.
+- Module IDs are **full names** (`math.trig`, `math`, `list`, …). Each optional module is separate; `use native math` does **not** load trig or stats.
 - `use native io` (or `json` / `str`) is an error — core modules need no declaration.
 - Duplicate `use native` for the same module in one file is an error; the same module with the same alias merged from several linked `.fl` files is allowed.
 - Conflicting aliases for the same module across files is a link error.
 
 Declarations in **any** linked source file apply to the **whole** program after `flc` / `flatl compile` linking.
 
-## Pilot module
+## Optional modules (documented)
 
-See [math.trig.md](./math.trig.md).
+| Module | Doc |
+|--------|-----|
+| `math` | [math.md](./math.md) |
+| `math.trig` | [math.trig.md](./math.trig.md) |
+| `math.stats` | [math.stats.md](./math.stats.md) |
+| `list` | [list.md](./list.md) |
 
 ## Runtime (lazy plugins)
 

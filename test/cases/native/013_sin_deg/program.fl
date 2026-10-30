@@ -1,0 +1,6 @@
+use native math.trig with trig
+
+#main
+  trig.sin_deg(90) -> s
+  io.outln(s)
+  OK

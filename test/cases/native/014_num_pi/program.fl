@@ -1,0 +1,8 @@
+use native math.trig with trig
+
+#main
+  trig.num_pi() -> p
+  trig.deg_to_rad(180) -> r
+  io.outln(p)
+  io.outln(r)
+  OK

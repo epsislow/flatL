@@ -1,0 +1,7 @@
+use native math.stats with stats
+
+#main
+  xs = [10, 10, 10]
+  stats.var(xs, 3) -> v
+  io.outln(v)
+  OK

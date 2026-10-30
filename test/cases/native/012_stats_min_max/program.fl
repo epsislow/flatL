@@ -1,0 +1,9 @@
+use native math with m
+
+#main
+  xs = [1, 9, 3]
+  m.min(xs) -> lo
+  m.max(xs) -> hi
+  io.outln(lo)
+  io.outln(hi)
+  OK

@@ -1,0 +1,10 @@
+use native math with m
+
+#main
+  m.sum2(10, 0.5) -> a
+  m.floor_mod(-7, 3) -> b
+  m.mod(-7, 3) -> c
+  io.outln(a)
+  io.outln(b)
+  io.outln(c)
+  OK

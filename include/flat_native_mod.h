@@ -24,6 +24,43 @@ int flat_native_json_stringify(FlatNativeCtx *ctx);
 int flat_native_math_trig_sin(FlatNativeCtx *ctx);
 int flat_native_math_trig_cos(FlatNativeCtx *ctx);
 int flat_native_math_trig_tan(FlatNativeCtx *ctx);
-int flat_native_math_trig_sqrt(FlatNativeCtx *ctx);
+int flat_native_math_trig_num_pi(FlatNativeCtx *ctx);
+int flat_native_math_trig_num_tau(FlatNativeCtx *ctx);
+int flat_native_math_trig_deg_to_rad(FlatNativeCtx *ctx);
+int flat_native_math_trig_rad_to_deg(FlatNativeCtx *ctx);
+int flat_native_math_trig_sin_deg(FlatNativeCtx *ctx);
+int flat_native_math_trig_cos_deg(FlatNativeCtx *ctx);
+int flat_native_math_trig_tan_deg(FlatNativeCtx *ctx);
+
+int flat_native_math_stats_mean(FlatNativeCtx *ctx);
+int flat_native_math_stats_median(FlatNativeCtx *ctx);
+int flat_native_math_stats_var(FlatNativeCtx *ctx);
+int flat_native_math_stats_stdev(FlatNativeCtx *ctx);
+
+int flat_native_math_pow(FlatNativeCtx *ctx);
+int flat_native_math_sqrt(FlatNativeCtx *ctx);
+int flat_native_math_exp(FlatNativeCtx *ctx);
+int flat_native_math_log(FlatNativeCtx *ctx);
+int flat_native_math_log10(FlatNativeCtx *ctx);
+int flat_native_math_floor(FlatNativeCtx *ctx);
+int flat_native_math_ceil(FlatNativeCtx *ctx);
+int flat_native_math_round(FlatNativeCtx *ctx);
+int flat_native_math_mod(FlatNativeCtx *ctx);
+int flat_native_math_floor_mod(FlatNativeCtx *ctx);
+int flat_native_math_sum(FlatNativeCtx *ctx);
+int flat_native_math_min(FlatNativeCtx *ctx);
+int flat_native_math_max(FlatNativeCtx *ctx);
+int flat_native_math_sum2(FlatNativeCtx *ctx);
+int flat_native_math_min2(FlatNativeCtx *ctx);
+int flat_native_math_max2(FlatNativeCtx *ctx);
+int flat_native_math_num_pi(FlatNativeCtx *ctx);
+int flat_native_math_num_tau(FlatNativeCtx *ctx);
+int flat_native_math_num_e(FlatNativeCtx *ctx);
+
+int flat_native_list_empty(FlatNativeCtx *ctx);
+int flat_native_list_pack(FlatNativeCtx *ctx);
+int flat_native_list_push(FlatNativeCtx *ctx);
+int flat_native_list_get(FlatNativeCtx *ctx);
+int flat_native_list_len(FlatNativeCtx *ctx);
 
 #endif

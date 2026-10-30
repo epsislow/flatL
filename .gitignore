@@ -1,6 +1,8 @@
 bin/
 .flatl_run_tmp/
-test/cases/flatl/**/artifact.fb
+# Compiled bytecode (flc / flatl); regenerate via make fixtures or flc -o
+*.fb
+!test/cases/flvm/002_bad_magic/not_flat.fb
 .cursor/
 .cursor
 .idea/

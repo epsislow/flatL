@@ -1,0 +1,7 @@
+use native math.stats with stats
+
+#main
+  xs = [1, 2, 3, 4, 5]
+  stats.median(xs) -> med
+  io.outln(med)
+  OK

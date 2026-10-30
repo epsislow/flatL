@@ -1,4 +1,6 @@
-use native math
+use native math with m
 
 #main
+  m.num_pi() -> p
+  io.outln(p)
   OK

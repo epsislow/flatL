@@ -1,0 +1,13 @@
+suite = "native"
+id = 15
+desc = "math sum2 floor_mod and fmod mod"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "10.5"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"

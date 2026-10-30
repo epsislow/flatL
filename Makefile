@@ -18,16 +18,21 @@ PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
 NATIVE_VM_PLUGIN = src/lib/native_plugin_host.c
 ifeq ($(OS),Windows_NT)
-NATIVE_VM_MATH = src/lib/mod_math_trig.c
+NATIVE_VM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math.c \
+                 src/lib/mod_list.c
 VM_EXTRA_LIBS =
 PLUGIN_TARGET =
 else
 NATIVE_VM_MATH =
 VM_EXTRA_LIBS = -ldl
-PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so
-PLUGIN_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c src/lib/native_util.c \
-               src/common/value_parse.c src/common/value_ops.c src/common/value_pool.c \
-               src/common/value_collection.c src/common/flat_str.c
+PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
+                $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so
+PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/value_parse.c src/common/value_ops.c \
+               src/common/value_pool.c src/common/value_collection.c src/common/flat_str.c
+PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PLUGIN_COMMON_SRCS)
+PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
+PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c $(PLUGIN_COMMON_SRCS)
+PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c $(PLUGIN_COMMON_SRCS)
 endif
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
                 src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c $(NATIVE_VM_MATH) \
@@ -115,8 +120,17 @@ fixtures: $(MIN_OK_FB)
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(LDFLAGS) $(VM_EXTRA_LIBS) -lm
 
-$(BINDIR)/libflat_math_trig.so: $(PLUGIN_SRCS) | $(BINDIR)
-	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_SRCS) $(LDFLAGS) -lm
+$(BINDIR)/libflat_math_trig.so: $(PLUGIN_TRIG_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_TRIG_SRCS) $(LDFLAGS) -lm
+
+$(BINDIR)/libflat_math_stats.so: $(PLUGIN_STATS_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_STATS_SRCS) $(LDFLAGS) -lm
+
+$(BINDIR)/libflat_math.so: $(PLUGIN_MATH_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_MATH_SRCS) $(LDFLAGS) -lm
+
+$(BINDIR)/libflat_list.so: $(PLUGIN_LIST_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_LIST_SRCS) $(LDFLAGS)
 
 $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS)

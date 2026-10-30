@@ -19,7 +19,7 @@ make clean        # remove bin/ and generated min_ok.fb copies
 
 | Target | Effect |
 |--------|--------|
-| `make` / `make all` | Build all `bin/*` + on Unix **`bin/libflat_math_trig.so`** (optional native plugin) + regenerate `min_ok.fb` fixtures |
+| `make` / `make all` | Build all `bin/*` + on Unix **`bin/libflat_math*.so`**, **`bin/libflat_list.so`** + regenerate `min_ok.fb` fixtures |
 | `make tools` | `flc`, `flvm`, `mkfb` only |
 | `make flvm` / `flc` / `mkfb` / `run_tests` | Single binary |
 | `make fixtures` | Run `mkfb` for test/example `.fb` |

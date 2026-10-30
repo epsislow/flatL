@@ -1,0 +1,11 @@
+use native list with L
+use native math with m
+
+#main
+  L.pack(1, 2) -> xs
+  L.push(xs, 3) -> ys
+  m.sum(ys) -> s
+  L.len(ys) -> n
+  io.outln(s)
+  io.outln(n)
+  OK

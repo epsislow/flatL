@@ -1,8 +1,13 @@
 suite = "native"
 id = 3
-desc = "use native math (parent name) is rejected"
-kind = "exec"
+desc = "use native math loads and runs"
+kind = "pipeline"
 
-cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
-expect_exit = 1
-stderr_contains = "unknown module"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "3.14159"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
