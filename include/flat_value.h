@@ -1,6 +1,8 @@
 #ifndef FLAT_VALUE_H
 #define FLAT_VALUE_H
 
+#include "fgir.h"
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -83,6 +85,20 @@ int flat_list_len(const FlatCollectionPool *pool, uint32_t list_id, int *out_len
 int flat_list_get(const FlatCollectionPool *pool, uint32_t list_id, int index, FlatValue *out);
 int flat_list_push_copy(FlatCollectionPool *pool, uint32_t list_id, const FlatValue *item,
                         uint32_t *out_id);
+int flat_list_prepend_copy(FlatCollectionPool *pool, uint32_t list_id, const FlatValue *item,
+                           uint32_t *out_id);
+int flat_list_insert_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
+                          const FlatValue *item, uint32_t *out_id);
+int flat_list_set_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
+                       const FlatValue *val, uint32_t *out_id);
+int flat_list_remove_at_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
+                             uint32_t *out_id);
+int flat_list_slice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, int end,
+                         uint32_t *out_id);
+int flat_list_splice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, int count,
+                          uint32_t *out_id);
+int flat_list_index_of(const FlatCollectionPool *pool, const FlatStringPool *str_pool,
+                       uint32_t list_id, const FlatValue *needle, int *out_index);
 int flat_list_build(FlatCollectionPool *pool, const FlatValue *items, int count, uint32_t *out_id);
 int flat_obj_empty(FlatCollectionPool *pool, uint32_t *out_id);
 int flat_obj_len(const FlatCollectionPool *pool, uint32_t obj_id, int *out_len);
@@ -124,6 +140,10 @@ int flat_parse_number_token(const char *token, double *out_num);
 int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                       FlatValue *vars, int var_count, const char (*var_names)[64],
                       FlatValue *out_result, FlatIoStatus *out_status);
+int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
+                               FlatValue *vars, int var_count, const char (*var_names)[64],
+                               FlatValue *out_result, FlatIoStatus *out_status,
+                               const FlatOptionalNativeDecl *decls, int decl_count);
 
 int flat_json_parse(const char *s, FlatValue *out, FlatStringPool *pool, FlatCollectionPool *coll);
 int flat_json_parse_list(const char *s, FlatValue *out, FlatStringPool *pool,

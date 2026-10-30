@@ -1,6 +1,7 @@
 #ifndef FLAT_NATIVE_H
 #define FLAT_NATIVE_H
 
+#include "fgir.h"
 #include "flat_value.h"
 
 #include <stdint.h>
@@ -61,6 +62,14 @@ typedef enum {
     FLAT_NATIVE_LIST_PUSH,
     FLAT_NATIVE_LIST_GET,
     FLAT_NATIVE_LIST_LEN,
+    FLAT_NATIVE_LIST_PREPEND,
+    FLAT_NATIVE_LIST_INSERT,
+    FLAT_NATIVE_LIST_SET,
+    FLAT_NATIVE_LIST_INDEX_OF,
+    FLAT_NATIVE_LIST_CONTAINS,
+    FLAT_NATIVE_LIST_REMOVE_AT,
+    FLAT_NATIVE_LIST_SLICE,
+    FLAT_NATIVE_LIST_SPLICE,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
@@ -86,6 +95,9 @@ int flat_native_is_call_line(const char *line);
 int flat_native_lookup(const char *mod, const char *func, uint16_t *out_id);
 int flat_native_lookup_optional(const char *mod, const char *func, uint16_t *out_id);
 int flat_native_split_call(const char *line, uint16_t *out_id, char *inner, size_t inner_max);
+int flat_native_split_call_manifest(const char *line, const FlatOptionalNativeDecl *decls,
+                                    int decl_count, uint16_t *out_id, char *inner,
+                                    size_t inner_max);
 const char *flat_native_name(uint16_t id);
 int flat_native_module_for_id(uint16_t id, char *mod_out, size_t mod_out_sz);
 int flat_native_is_optional_id(uint16_t id);

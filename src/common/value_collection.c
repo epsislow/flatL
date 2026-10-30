@@ -155,6 +155,182 @@ int flat_list_push_copy(FlatCollectionPool *pool, uint32_t list_id, const FlatVa
     return list_clone_append(pool, list_id, item, out_id);
 }
 
+int flat_list_insert_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
+                          const FlatValue *item, uint32_t *out_id) {
+    const ListBody *src;
+    ListBody *dst;
+    int i;
+
+    if (!pool || !item || !out_id || list_id >= (uint32_t)pool->list_count) {
+        return -1;
+    }
+    src = &pool->lists[list_id];
+    if (index < 0 || index > src->len) {
+        return -1;
+    }
+    if (flat_list_empty(pool, out_id) != 0) {
+        return -1;
+    }
+    dst = &pool->lists[*out_id];
+    if (list_grow(dst, src->len + 1) != 0) {
+        return -1;
+    }
+    for (i = 0; i < index; i++) {
+        dst->items[i] = src->items[i];
+    }
+    dst->items[index] = *item;
+    for (i = index; i < src->len; i++) {
+        dst->items[i + 1] = src->items[i];
+    }
+    dst->len = src->len + 1;
+    return 0;
+}
+
+int flat_list_prepend_copy(FlatCollectionPool *pool, uint32_t list_id, const FlatValue *item,
+                           uint32_t *out_id) {
+    return flat_list_insert_copy(pool, list_id, 0, item, out_id);
+}
+
+int flat_list_set_copy(FlatCollectionPool *pool, uint32_t list_id, int index, const FlatValue *val,
+                       uint32_t *out_id) {
+    const ListBody *src;
+    ListBody *dst;
+    int i;
+
+    if (!pool || !val || !out_id || list_id >= (uint32_t)pool->list_count) {
+        return -1;
+    }
+    src = &pool->lists[list_id];
+    if (index < 0 || index >= src->len) {
+        return -1;
+    }
+    if (flat_list_empty(pool, out_id) != 0) {
+        return -1;
+    }
+    dst = &pool->lists[*out_id];
+    if (list_grow(dst, src->len) != 0) {
+        return -1;
+    }
+    for (i = 0; i < src->len; i++) {
+        dst->items[i] = src->items[i];
+    }
+    dst->len = src->len;
+    dst->items[index] = *val;
+    return 0;
+}
+
+int flat_list_remove_at_copy(FlatCollectionPool *pool, uint32_t list_id, int index,
+                             uint32_t *out_id) {
+    const ListBody *src;
+    ListBody *dst;
+    int i;
+
+    if (!pool || !out_id || list_id >= (uint32_t)pool->list_count) {
+        return -1;
+    }
+    src = &pool->lists[list_id];
+    if (index < 0 || index >= src->len) {
+        return -1;
+    }
+    if (flat_list_empty(pool, out_id) != 0) {
+        return -1;
+    }
+    dst = &pool->lists[*out_id];
+    if (src->len - 1 > 0 && list_grow(dst, src->len - 1) != 0) {
+        return -1;
+    }
+    for (i = 0; i < index; i++) {
+        dst->items[i] = src->items[i];
+    }
+    for (i = index + 1; i < src->len; i++) {
+        dst->items[i - 1] = src->items[i];
+    }
+    dst->len = src->len - 1;
+    return 0;
+}
+
+int flat_list_slice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, int end,
+                         uint32_t *out_id) {
+    const ListBody *src;
+    ListBody *dst;
+    int n;
+    int i;
+
+    if (!pool || !out_id || list_id >= (uint32_t)pool->list_count) {
+        return -1;
+    }
+    src = &pool->lists[list_id];
+    if (start < 0 || end < start || end > src->len) {
+        return -1;
+    }
+    n = end - start;
+    if (flat_list_empty(pool, out_id) != 0) {
+        return -1;
+    }
+    dst = &pool->lists[*out_id];
+    if (n > 0 && list_grow(dst, n) != 0) {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        dst->items[i] = src->items[start + i];
+    }
+    dst->len = n;
+    return 0;
+}
+
+int flat_list_splice_copy(FlatCollectionPool *pool, uint32_t list_id, int start, int count,
+                          uint32_t *out_id) {
+    const ListBody *src;
+    ListBody *dst;
+    int new_len;
+    int i;
+    int j;
+
+    if (!pool || !out_id || list_id >= (uint32_t)pool->list_count) {
+        return -1;
+    }
+    src = &pool->lists[list_id];
+    if (start < 0 || count < 0 || start + count > src->len) {
+        return -1;
+    }
+    new_len = src->len - count;
+    if (flat_list_empty(pool, out_id) != 0) {
+        return -1;
+    }
+    dst = &pool->lists[*out_id];
+    if (new_len > 0 && list_grow(dst, new_len) != 0) {
+        return -1;
+    }
+    j = 0;
+    for (i = 0; i < src->len; i++) {
+        if (i >= start && i < start + count) {
+            continue;
+        }
+        dst->items[j++] = src->items[i];
+    }
+    dst->len = new_len;
+    return 0;
+}
+
+int flat_list_index_of(const FlatCollectionPool *pool, const FlatStringPool *str_pool,
+                       uint32_t list_id, const FlatValue *needle, int *out_index) {
+    const ListBody *lb;
+    int i;
+
+    if (!pool || !needle || !out_index || list_id >= (uint32_t)pool->list_count) {
+        return -1;
+    }
+    lb = &pool->lists[list_id];
+    for (i = 0; i < lb->len; i++) {
+        if (flat_value_equals(&lb->items[i], needle, str_pool)) {
+            *out_index = i;
+            return 0;
+        }
+    }
+    *out_index = -1;
+    return 0;
+}
+
 int flat_list_build(FlatCollectionPool *pool, const FlatValue *items, int count, uint32_t *out_id) {
     ListBody *lb;
     int i;

@@ -1,0 +1,21 @@
+use native list with L
+
+#main
+  L.pack(2, 3) -> xs
+  L.prepend(xs, 1) -> ys
+  zs = L.push(ys, 4)
+  L.set(zs, 1, 99) -> ws
+  L.index_of(ws, 99) -> ix
+  L.contains(ws, 3) -> has3
+  L.slice(ws, 1, 3) -> mid
+  L.remove_at(ws, 0) -> tail
+  L.splice(tail, 1, 1) -> trimmed
+  L.len(xs) -> orig_len
+  L.len(trimmed) -> fin_len
+  L.get(trimmed, 0) -> first
+  io.outln(ix)
+  io.outln(has3)
+  io.outln(orig_len)
+  io.outln(fin_len)
+  io.outln(first)
+  OK

@@ -193,6 +193,14 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         flat_native_plugin_register(FLAT_NATIVE_LIST_PUSH, flat_native_list_push);
         flat_native_plugin_register(FLAT_NATIVE_LIST_GET, flat_native_list_get);
         flat_native_plugin_register(FLAT_NATIVE_LIST_LEN, flat_native_list_len);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_PREPEND, flat_native_list_prepend);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_INSERT, flat_native_list_insert);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_SET, flat_native_list_set);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_INDEX_OF, flat_native_list_index_of);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_CONTAINS, flat_native_list_contains);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_REMOVE_AT, flat_native_list_remove_at);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_SLICE, flat_native_list_slice);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_SPLICE, flat_native_list_splice);
         g_loaded_list = 1;
         return 0;
     }

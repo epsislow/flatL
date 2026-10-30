@@ -182,7 +182,9 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
         vals[i] = st->vars[i].val;
     }
     if (rhs_is_native_call(rhs)) {
-        if (flat_io_exec_line(rhs, st->pool, st->coll, vals, st->var_count, names, &v, &ios) != 0) {
+        if (flat_io_exec_line_manifest(rhs, st->pool, st->coll, vals, st->var_count, names, &v,
+                                       &ios, bc->optional_natives, bc->optional_native_count) !=
+            0) {
             return 0;
         }
         if (vm_handle_io_status(st, bc, ip, ios, trace) != 0) {

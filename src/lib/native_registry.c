@@ -68,6 +68,14 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META("list", "push"),
     META("list", "get"),
     META("list", "len"),
+    META("list", "prepend"),
+    META("list", "insert"),
+    META("list", "set"),
+    META("list", "index_of"),
+    META("list", "contains"),
+    META("list", "remove_at"),
+    META("list", "slice"),
+    META("list", "splice"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -108,6 +116,58 @@ int flat_native_module_for_id(uint16_t id, char *mod_out, size_t mod_out_sz) {
 
 int flat_native_is_optional_id(uint16_t id) {
     return id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && id < (uint16_t)FLAT_NATIVE_COUNT;
+}
+
+static int resolve_module_from_decls(const char *mod_in, const FlatOptionalNativeDecl *decls,
+                                     int decl_count, char *mod_out, size_t mod_out_sz) {
+    int i;
+    if (!mod_in || !mod_out || mod_out_sz == 0) {
+        return -1;
+    }
+    for (i = 0; i < decl_count; i++) {
+        if (decls[i].alias[0] && strcmp(decls[i].alias, mod_in) == 0) {
+            snprintf(mod_out, mod_out_sz, "%s", decls[i].module);
+            return 0;
+        }
+    }
+    snprintf(mod_out, mod_out_sz, "%s", mod_in);
+    return 0;
+}
+
+int flat_native_split_call_manifest(const char *line, const FlatOptionalNativeDecl *decls,
+                                    int decl_count, uint16_t *out_id, char *inner,
+                                    size_t inner_max) {
+    char mod[64];
+    char func[32];
+    char resolved[FGIR_NATIVE_MODULE_LEN];
+
+    if (!line || !out_id || !inner) {
+        return -1;
+    }
+    if (flat_native_parse_dotted_call(line, mod, sizeof mod, func, sizeof func, inner, inner_max) !=
+        0) {
+        return -1;
+    }
+    if (resolve_module_from_decls(mod, decls, decl_count, resolved, sizeof resolved) != 0) {
+        return -1;
+    }
+    if (flat_native_lookup(resolved, func, out_id) != 0) {
+        return -1;
+    }
+    if (*out_id >= (uint16_t)FLAT_NATIVE_CORE_COUNT) {
+        int i;
+        int ok = 0;
+        for (i = 0; i < decl_count; i++) {
+            if (strcmp(decls[i].module, resolved) == 0) {
+                ok = 1;
+                break;
+            }
+        }
+        if (!ok) {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 int flat_native_split_call(const char *line, uint16_t *out_id, char *inner, size_t inner_max) {

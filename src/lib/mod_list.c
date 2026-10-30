@@ -17,6 +17,39 @@ static int parse_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
                                        ctx->var_count, ctx->var_names);
 }
 
+static int split_three_args(char *inner, char **first, char **second, char **third) {
+    int depth = 0;
+    char *p;
+    char *c1 = NULL;
+    char *c2 = NULL;
+
+    for (p = inner; *p; p++) {
+        if (*p == '[' || *p == '(') {
+            depth++;
+        } else if (*p == ']' || *p == ')') {
+            if (depth > 0) {
+                depth--;
+            }
+        } else if (*p == ',' && depth == 0) {
+            if (!c1) {
+                *p = '\0';
+                c1 = p;
+            } else if (!c2) {
+                *p = '\0';
+                c2 = p;
+                break;
+            }
+        }
+    }
+    if (!c1 || !c2) {
+        return -1;
+    }
+    *first = flat_native_trim(inner);
+    *second = flat_native_trim(c1 + 1);
+    *third = flat_native_trim(c2 + 1);
+    return 0;
+}
+
 static int split_two_args(char *inner, char **left, char **right) {
     int depth = 0;
     char *p;
@@ -218,4 +251,291 @@ int flat_native_list_len(FlatNativeCtx *ctx) {
         return -1;
     }
     return flat_value_set_number(ctx->out, (double)len);
+}
+
+static int parse_list_arg(FlatNativeCtx *ctx, const char *expr, FlatValue *list_v) {
+    return parse_expr(ctx, expr, list_v) == 0 && list_v->tag == VAL_LIST ? 0 : -1;
+}
+
+int flat_native_list_prepend(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *left;
+    char *right;
+    FlatValue list_v;
+    FlatValue item;
+    uint32_t new_id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, left, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, right, &item) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_prepend_copy(ctx->coll, list_v.u.coll_id, &item, &new_id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, new_id);
+}
+
+int flat_native_list_insert(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *list_s;
+    char *idx_s;
+    char *val_s;
+    FlatValue list_v;
+    FlatValue idx_v;
+    FlatValue item;
+    uint32_t new_id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_three_args(inner_buf, &list_s, &idx_s, &val_s) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, list_s, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, idx_s, &idx_v) != 0 || idx_v.tag != VAL_NUMBER) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, val_s, &item) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_insert_copy(ctx->coll, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) !=
+        0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, new_id);
+}
+
+int flat_native_list_set(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *list_s;
+    char *idx_s;
+    char *val_s;
+    FlatValue list_v;
+    FlatValue idx_v;
+    FlatValue item;
+    uint32_t new_id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_three_args(inner_buf, &list_s, &idx_s, &val_s) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, list_s, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, idx_s, &idx_v) != 0 || idx_v.tag != VAL_NUMBER) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, val_s, &item) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_set_copy(ctx->coll, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, new_id);
+}
+
+int flat_native_list_index_of(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *left;
+    char *right;
+    FlatValue list_v;
+    FlatValue needle;
+    int ix;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, left, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, right, &needle) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_index_of(ctx->coll, ctx->pool, list_v.u.coll_id, &needle, &ix) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_number(ctx->out, (double)ix);
+}
+
+int flat_native_list_contains(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *left;
+    char *right;
+    FlatValue list_v;
+    FlatValue needle;
+    int ix;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, left, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, right, &needle) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_index_of(ctx->coll, ctx->pool, list_v.u.coll_id, &needle, &ix) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_bool(ctx->out, ix >= 0);
+}
+
+int flat_native_list_remove_at(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *left;
+    char *right;
+    FlatValue list_v;
+    FlatValue idx_v;
+    uint32_t new_id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, left, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, right, &idx_v) != 0 || idx_v.tag != VAL_NUMBER) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_remove_at_copy(ctx->coll, list_v.u.coll_id, (int)idx_v.u.number, &new_id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, new_id);
+}
+
+int flat_native_list_slice(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *list_s;
+    char *start_s;
+    char *end_s;
+    FlatValue list_v;
+    FlatValue start_v;
+    FlatValue end_v;
+    uint32_t new_id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_three_args(inner_buf, &list_s, &start_s, &end_s) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, list_s, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, start_s, &start_v) != 0 || start_v.tag != VAL_NUMBER) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, end_s, &end_v) != 0 || end_v.tag != VAL_NUMBER) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_slice_copy(ctx->coll, list_v.u.coll_id, (int)start_v.u.number,
+                             (int)end_v.u.number, &new_id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, new_id);
+}
+
+int flat_native_list_splice(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *list_s;
+    char *start_s;
+    char *count_s;
+    FlatValue list_v;
+    FlatValue start_v;
+    FlatValue count_v;
+    uint32_t new_id;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_three_args(inner_buf, &list_s, &start_s, &count_s) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_list_arg(ctx, list_s, &list_v) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, start_s, &start_v) != 0 || start_v.tag != VAL_NUMBER) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (parse_expr(ctx, count_s, &count_v) != 0 || count_v.tag != VAL_NUMBER) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_list_splice_copy(ctx->coll, list_v.u.coll_id, (int)start_v.u.number,
+                              (int)count_v.u.number, &new_id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, new_id);
 }

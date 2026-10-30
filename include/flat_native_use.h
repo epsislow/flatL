@@ -13,5 +13,4 @@ int flat_native_resolve_module_name(const char *mod_in, const FgirProgram *prog,
                                     size_t mod_out_sz);
 int flat_native_split_call_prog(const char *line, const FgirProgram *prog, uint16_t *out_id,
                                 char *inner, size_t inner_max);
-
 #endif

@@ -11,5 +11,13 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_LIST_PUSH, flat_native_list_push);
     reg(FLAT_NATIVE_LIST_GET, flat_native_list_get);
     reg(FLAT_NATIVE_LIST_LEN, flat_native_list_len);
+    reg(FLAT_NATIVE_LIST_PREPEND, flat_native_list_prepend);
+    reg(FLAT_NATIVE_LIST_INSERT, flat_native_list_insert);
+    reg(FLAT_NATIVE_LIST_SET, flat_native_list_set);
+    reg(FLAT_NATIVE_LIST_INDEX_OF, flat_native_list_index_of);
+    reg(FLAT_NATIVE_LIST_CONTAINS, flat_native_list_contains);
+    reg(FLAT_NATIVE_LIST_REMOVE_AT, flat_native_list_remove_at);
+    reg(FLAT_NATIVE_LIST_SLICE, flat_native_list_slice);
+    reg(FLAT_NATIVE_LIST_SPLICE, flat_native_list_splice);
     return 0;
 }

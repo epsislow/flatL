@@ -238,21 +238,29 @@ int flat_native_use_scan_file(const char *path, FgirProgram *acc, char *err, siz
     return 0;
 }
 
-int flat_native_resolve_module_name(const char *mod_in, const FgirProgram *prog, char *mod_out,
-                                    size_t mod_out_sz) {
+static int resolve_module_from_decls(const char *mod_in, const FlatOptionalNativeDecl *decls,
+                                     int decl_count, char *mod_out, size_t mod_out_sz) {
     int i;
     if (!mod_in || !mod_out || mod_out_sz == 0) {
         return -1;
     }
-    for (i = 0; i < prog->optional_native_count; i++) {
-        if (prog->optional_natives[i].alias[0] &&
-            strcmp(prog->optional_natives[i].alias, mod_in) == 0) {
-            snprintf(mod_out, mod_out_sz, "%s", prog->optional_natives[i].module);
+    for (i = 0; i < decl_count; i++) {
+        if (decls[i].alias[0] && strcmp(decls[i].alias, mod_in) == 0) {
+            snprintf(mod_out, mod_out_sz, "%s", decls[i].module);
             return 0;
         }
     }
     snprintf(mod_out, mod_out_sz, "%s", mod_in);
     return 0;
+}
+
+int flat_native_resolve_module_name(const char *mod_in, const FgirProgram *prog, char *mod_out,
+                                    size_t mod_out_sz) {
+    if (!prog) {
+        return -1;
+    }
+    return resolve_module_from_decls(mod_in, prog->optional_natives, prog->optional_native_count,
+                                     mod_out, mod_out_sz);
 }
 
 static int optional_declared(const FgirProgram *prog, const char *mod) {
@@ -287,37 +295,60 @@ int flat_native_split_call_prog(const char *line, const FgirProgram *prog, uint1
     return 0;
 }
 
+static int validate_optional_native_call(const FgirProgram *prog, const char *call_line, char *err,
+                                         size_t err_size) {
+    char mod[64];
+    char func[32];
+    char inner[64];
+    char resolved[FGIR_NATIVE_MODULE_LEN];
+    uint16_t id;
+
+    if (flat_native_parse_dotted_call(call_line, mod, sizeof mod, func, sizeof func, inner,
+                                      sizeof inner) != 0) {
+        return 0;
+    }
+    flat_native_resolve_module_name(mod, prog, resolved, sizeof resolved);
+    if (flat_native_is_core_module(resolved)) {
+        return 0;
+    }
+    if (!optional_declared(prog, resolved)) {
+        snprintf(err, err_size, "undeclared optional native %s.%s (add use native %s)", resolved,
+                 func, resolved);
+        return -1;
+    }
+    if (flat_native_lookup(resolved, func, &id) != 0) {
+        snprintf(err, err_size, "unknown native %s.%s", resolved, func);
+        return -1;
+    }
+    return 0;
+}
+
 int flat_native_use_validate_program(const FgirProgram *prog, char *err, size_t err_size) {
     int bi, ii;
     for (bi = 0; bi < prog->block_count; bi++) {
         const FgirBlock *b = &prog->blocks[bi];
         for (ii = 0; ii < b->instr_count; ii++) {
             const FgirInstr *ins = &b->instr[ii];
-            if (ins->kind != FGIR_IO) {
-                continue;
-            }
-            {
-                char mod[64];
-                char func[32];
-                char inner[64];
-                char resolved[FGIR_NATIVE_MODULE_LEN];
-                uint16_t id;
-
-                if (flat_native_parse_dotted_call(ins->text, mod, sizeof mod, func, sizeof func,
-                                                  inner, sizeof inner) != 0) {
-                    continue;
-                }
-                flat_native_resolve_module_name(mod, prog, resolved, sizeof resolved);
-                if (flat_native_is_core_module(resolved)) {
-                    continue;
-                }
-                if (!optional_declared(prog, resolved)) {
-                    snprintf(err, err_size, "undeclared optional native %s.%s (add use native %s)",
-                             resolved, func, resolved);
+            if (ins->kind == FGIR_IO) {
+                if (validate_optional_native_call(prog, ins->text, err, err_size) != 0) {
                     return -1;
                 }
-                if (flat_native_lookup(resolved, func, &id) != 0) {
-                    snprintf(err, err_size, "unknown native %s.%s", resolved, func);
+            } else if (ins->kind == FGIR_ASSIGN) {
+                char buf[FGIR_MAX_LINE];
+                char *eq;
+                char *rhs;
+
+                snprintf(buf, sizeof buf, "%s", ins->text);
+                eq = strchr(buf, '=');
+                if (!eq) {
+                    continue;
+                }
+                *eq = '\0';
+                rhs = eq + 1;
+                while (*rhs && (*rhs == ' ' || *rhs == '\t')) {
+                    rhs++;
+                }
+                if (validate_optional_native_call(prog, rhs, err, err_size) != 0) {
                     return -1;
                 }
             }

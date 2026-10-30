@@ -62,5 +62,13 @@ int flat_native_list_pack(FlatNativeCtx *ctx);
 int flat_native_list_push(FlatNativeCtx *ctx);
 int flat_native_list_get(FlatNativeCtx *ctx);
 int flat_native_list_len(FlatNativeCtx *ctx);
+int flat_native_list_prepend(FlatNativeCtx *ctx);
+int flat_native_list_insert(FlatNativeCtx *ctx);
+int flat_native_list_set(FlatNativeCtx *ctx);
+int flat_native_list_index_of(FlatNativeCtx *ctx);
+int flat_native_list_contains(FlatNativeCtx *ctx);
+int flat_native_list_remove_at(FlatNativeCtx *ctx);
+int flat_native_list_slice(FlatNativeCtx *ctx);
+int flat_native_list_splice(FlatNativeCtx *ctx);
 
 #endif
