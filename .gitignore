@@ -1,5 +1,4 @@
 bin/
-doc_site/
 .flatl_run_tmp/
 # Compiled bytecode (flc / flatl); regenerate via make fixtures or flc -o
 *.fb
