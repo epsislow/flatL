@@ -35,6 +35,8 @@ int flat_fb_parse_native_section(const uint8_t *sec, size_t sec_len,
                                  FlatOptionalNativeDecl *out, int out_max, int *out_count);
 
 int flat_fb_load_file(const char *path, FlatBytecode *out);
+/* Takes ownership of a heap copy of data (same layout as flat_fb_load_file). */
+int flat_fb_load_buffer(const uint8_t *data, size_t len, FlatBytecode *out);
 void flat_fb_free(FlatBytecode *bc);
 
 int flat_fb_write_min_ok(const char *path);

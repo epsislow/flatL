@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>flatL fleditor</title>
+  <link rel="stylesheet" href="ext/codemirror.min.css">
+  <link rel="stylesheet" href="ext/xterm.css">
+  <link rel="stylesheet" href="css/fleditor.css">
+  <link rel="stylesheet" href="css/fleditor-cm.css">
+</head>
+<body>
+  <div class="fleditor-app">
+    <header class="fleditor-toolbar">
+      <h1>flatL fleditor</h1>
+      <button type="button" id="runBtn" class="btn-run">Run</button>
+      <button type="button" id="clearBtn">Clear terminal</button>
+      <span id="status" class="fleditor-status">idle</span>
+    </header>
+    <div id="wasmBanner" class="fleditor-banner" hidden></div>
+    <div class="fleditor-panels">
+      <section class="fleditor-editor-wrap">
+        <div class="fleditor-panel-label">Source (.fl)</div>
+        <textarea id="code" spellcheck="false"></textarea>
+      </section>
+      <section class="fleditor-right">
+        <div class="fleditor-panel-label">Terminal (I/O)</div>
+        <div id="terminalHost"></div>
+      </section>
+    </div>
+  </div>
+  <dialog id="ioModal" class="fleditor-io-modal" aria-labelledby="ioModalTitle">
+    <form id="ioModalForm" class="fleditor-io-form">
+      <h2 id="ioModalTitle" class="fleditor-io-title">Program input</h2>
+      <p id="ioModalHint" class="fleditor-io-hint"></p>
+      <input type="text" id="ioModalInput" class="fleditor-io-input" autocomplete="off" spellcheck="false">
+      <div class="fleditor-io-actions">
+        <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary" id="ioModalOk">OK</button>
+        <button type="button" class="fleditor-io-btn" id="ioModalCancel">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <script src="ext/codemirror.min.js"></script>
+  <script src="ext/xterm.js"></script>
+  <script src="js/mode-flatl.js"></script>
+  <script src="js/fleditor.js?v=16"></script>
+</body>
+</html>

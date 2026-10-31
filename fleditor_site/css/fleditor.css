@@ -1,0 +1,230 @@
+:root {
+  --fl-bg: #141418;
+  --fl-surface: #1c1c22;
+  --fl-border: #3a3844;
+  --fl-text: #e6dcc8;
+  --fl-text-muted: #6e6878;
+  --fl-string: #c6e548;
+  --fl-error: #f07178;
+  --fl-btn-run: #5a7a4a;
+  --fl-btn-run-hover: #6d9460;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--fl-bg);
+  color: var(--fl-text);
+  font-family: system-ui, Segoe UI, sans-serif;
+}
+
+.fleditor-app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100vh;
+}
+
+.fleditor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--fl-border);
+  background: var(--fl-surface);
+}
+
+.fleditor-toolbar h1 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0;
+  flex: 1 1 auto;
+}
+
+.fleditor-toolbar button {
+  background: var(--fl-surface);
+  color: var(--fl-text);
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.fleditor-toolbar button.btn-run {
+  border-color: var(--fl-btn-run);
+  background: rgba(90, 122, 74, 0.25);
+}
+
+.fleditor-toolbar button.btn-run:hover:not(:disabled) {
+  background: rgba(109, 148, 96, 0.35);
+}
+
+.fleditor-toolbar button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.fleditor-status {
+  font-size: 0.8rem;
+  color: var(--fl-text-muted);
+}
+
+.fleditor-status--error {
+  color: var(--fl-error);
+}
+
+.fleditor-panels {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 0;
+}
+
+.fleditor-editor-wrap,
+.fleditor-right {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-right: 1px solid var(--fl-border);
+}
+
+.fleditor-right {
+  border-right: none;
+}
+
+.fleditor-panel-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fl-text-muted);
+  padding: 0.35rem 0.75rem;
+  border-bottom: 1px solid var(--fl-border);
+  background: var(--fl-surface);
+}
+
+.fleditor-editor-wrap .CodeMirror {
+  flex: 1;
+  height: auto !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+}
+
+#terminalHost {
+  flex: 1;
+  min-height: 0;
+  padding: 0.25rem;
+  background: var(--fl-surface);
+}
+
+#terminalHost .xterm {
+  height: 100%;
+}
+
+.fleditor-banner {
+  margin: 0.5rem 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--fl-error);
+  color: var(--fl-error);
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.fleditor-banner[hidden] {
+  display: none;
+}
+
+.fleditor-io-modal {
+  border: 1px solid var(--fl-border);
+  border-radius: 8px;
+  padding: 0;
+  max-width: min(420px, calc(100vw - 2rem));
+  background: var(--fl-surface);
+  color: var(--fl-text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.fleditor-io-modal::backdrop {
+  background: rgba(10, 10, 14, 0.72);
+}
+
+.fleditor-io-form {
+  margin: 0;
+  padding: 1.1rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.fleditor-io-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.fleditor-io-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: var(--fl-text-muted);
+}
+
+.fleditor-io-input {
+  width: 100%;
+  font: inherit;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.95rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--fl-border);
+  background: var(--fl-bg);
+  color: var(--fl-text);
+}
+
+.fleditor-io-input:focus {
+  outline: 2px solid rgba(90, 122, 74, 0.55);
+  outline-offset: 1px;
+}
+
+.fleditor-io-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.fleditor-io-btn {
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+  background: var(--fl-bg);
+  color: var(--fl-text);
+}
+
+.fleditor-io-btn--primary {
+  border-color: var(--fl-btn-run);
+  background: rgba(90, 122, 74, 0.35);
+}
+
+.fleditor-io-btn--primary:hover {
+  background: rgba(109, 148, 96, 0.45);
+}
+
+.fleditor-io-btn:hover {
+  filter: brightness(1.06);
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .fleditor-panels {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}

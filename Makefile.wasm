@@ -1,0 +1,56 @@
+# Emscripten build for fleditor (browser). Requires `emcc` on PATH.
+# Output: fleditor_site/wasm/flatl.js + flatl.wasm
+
+EMCC       ?= emcc
+WASM_DIR   = fleditor_site/wasm
+WASM_JS    = $(WASM_DIR)/flatl.js
+
+WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2
+WASM_LDFLAGS = \
+  -s MODULARIZE=1 \
+  -s EXPORT_NAME=FlatLModule \
+  -s ENVIRONMENT=web,node \
+  -s FILESYSTEM=1 \
+  -s ALLOW_MEMORY_GROWTH=1 \
+  -s STACK_SIZE=8388608 \
+  -s ASYNCIFY=1 \
+  -s ASYNCIFY_STACK_SIZE=1048576 \
+  -s 'ASYNCIFY_IMPORTS=[emscripten_sleep]' \
+  -s 'EXPORTED_FUNCTIONS=[_flat_wasm_compile,_flat_wasm_run,_flat_wasm_run_source,_flat_wasm_free,_malloc,_free]' \
+  -s 'EXPORTED_RUNTIME_METHODS=[ccall,cwrap,UTF8ToString,getValue,setValue,HEAPU8,Asyncify]' \
+  -lm
+
+STR_SRC = src/common/flat_str.c
+PORT_SRC = src/port/flat_port_posix.c
+FB_SRC = src/common/fb_format.c
+
+WASM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math.c \
+            src/lib/mod_list.c src/lib/mod_obj.c
+
+NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
+                src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_mem.c \
+                $(WASM_MATH) src/lib/native_plugin_host.c
+
+VM_SRC = src/common/vm.c src/common/value_pool.c src/common/value_collection.c \
+         src/common/value_live.c src/common/value_ops.c src/common/value_parse.c \
+         src/common/value_format.c src/common/value_io.c src/common/value_json.c $(STR_SRC) \
+         $(NATIVE_VM_SRC)
+
+FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/native_use.c
+
+WASM_SRC = src/fleditor_wasm/flat_wasm.c src/fleditor_wasm/flat_wasm_io.c \
+           $(FGIR_SRC) $(FB_SRC) $(VM_SRC) $(PORT_SRC)
+
+.PHONY: fleditor-wasm fleditor-wasm-clean
+
+fleditor-wasm: $(WASM_JS)
+	@echo "OK: $(WASM_JS) $(WASM_DIR)/flatl.wasm"
+
+$(WASM_DIR):
+	mkdir -p $(WASM_DIR)
+
+$(WASM_JS): $(WASM_SRC) | $(WASM_DIR)
+	$(EMCC) $(WASM_CFLAGS) $(WASM_SRC) -o $(WASM_JS) $(WASM_LDFLAGS)
+
+fleditor-wasm-clean:
+	rm -f $(WASM_DIR)/flatl.js $(WASM_DIR)/flatl.wasm

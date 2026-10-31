@@ -129,10 +129,7 @@ int flat_fb_parse_native_section(const uint8_t *sec, size_t sec_len,
     return 0;
 }
 
-int flat_fb_load_file(const char *path, FlatBytecode *out) {
-    FILE *f;
-    long fsize;
-    uint8_t *buf = NULL;
+static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
     size_t dir_bytes;
     size_t header_size;
     size_t dir_offset;
@@ -140,6 +137,118 @@ int flat_fb_load_file(const char *path, FlatBytecode *out) {
     uint32_t native_off = 0;
     FlatBlockEntry *blocks = NULL;
     size_t i;
+
+    if (check_magic(buf, fsize) != 0) {
+        free(buf);
+        fprintf(stderr, "flvm: bad magic (expected FLAT)\n");
+        return -1;
+    }
+
+    if (buf[4] != FLAT_FB_SENTINEL) {
+        free(buf);
+        fprintf(stderr, "flvm: unsupported .fb (legacy header without version); rebuild with "
+                        "flc (format v%u required)\n", (unsigned)FLAT_FB_FORMAT_VERSION);
+        return -1;
+    }
+    if (buf[5] != FLAT_FB_FORMAT_VERSION) {
+        unsigned got = (unsigned)buf[5];
+        free(buf);
+        fprintf(stderr, "flvm: unsupported .fb format v%u (format v%u required); rebuild with "
+                        "flc\n", got, (unsigned)FLAT_FB_FORMAT_VERSION);
+        return -1;
+    }
+    if (fsize < FLAT_FB_HEADER_SIZE) {
+        free(buf);
+        fprintf(stderr, "flvm: truncated .fb header\n");
+        return -1;
+    }
+    out->format_version = (int)FLAT_FB_FORMAT_VERSION;
+    count = read_u16_le(buf + 6);
+    native_off = read_u32_le(buf + 8);
+    out->var_slots = read_u32_le(buf + 12);
+    if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
+        free(buf);
+        fprintf(stderr, "flvm: var_slots %u exceeds FLAT_MAX_VARS (%d)\n",
+                (unsigned)out->var_slots, FLAT_MAX_VARS);
+        return -1;
+    }
+    header_size = FLAT_FB_HEADER_SIZE;
+    dir_offset = FLAT_FB_HEADER_SIZE;
+
+    if (count == 0) {
+        free(buf);
+        fprintf(stderr, "flvm: block_count is zero\n");
+        return -1;
+    }
+
+    dir_bytes = (size_t)count * sizeof(FlatBlockEntry);
+    if (header_size + dir_bytes > fsize) {
+        free(buf);
+        fprintf(stderr, "flvm: truncated block directory\n");
+        return -1;
+    }
+
+    blocks = calloc(count, sizeof(FlatBlockEntry));
+    if (!blocks) {
+        free(buf);
+        return -1;
+    }
+
+    for (i = 0; i < count; i++) {
+        const uint8_t *ent = buf + dir_offset + i * 8;
+        blocks[i].block_id = read_u32_le(ent);
+        blocks[i].offset = read_u32_le(ent + 4);
+        if (blocks[i].offset >= fsize) {
+            free(blocks);
+            free(buf);
+            fprintf(stderr, "flvm: block offset out of range\n");
+            return -1;
+        }
+    }
+
+    if (native_off != 0) {
+        if (native_off >= fsize) {
+            free(blocks);
+            free(buf);
+            fprintf(stderr, "flvm: native section offset out of range\n");
+            return -1;
+        }
+        if (flat_fb_parse_native_section(buf + native_off, fsize - native_off,
+                                         out->optional_natives, FGIR_MAX_OPTIONAL_NATIVES,
+                                         &out->optional_native_count) != 0) {
+            free(blocks);
+            free(buf);
+            fprintf(stderr, "flvm: invalid optional native manifest\n");
+            return -1;
+        }
+    }
+
+    out->data = buf;
+    out->size = fsize;
+    out->blocks = blocks;
+    out->block_count = count;
+    return 0;
+}
+
+int flat_fb_load_buffer(const uint8_t *data, size_t len, FlatBytecode *out) {
+    uint8_t *buf;
+
+    if (!data || !out || len < FLAT_FB_MAGIC_SIZE + 2) {
+        return -1;
+    }
+    memset(out, 0, sizeof *out);
+    buf = malloc(len);
+    if (!buf) {
+        return -1;
+    }
+    memcpy(buf, data, len);
+    return flat_fb_parse_loaded(buf, len, out);
+}
+
+int flat_fb_load_file(const char *path, FlatBytecode *out) {
+    FILE *f;
+    long fsize;
+    uint8_t *buf = NULL;
 
     if (!path || !out) {
         return -1;
@@ -182,95 +291,10 @@ int flat_fb_load_file(const char *path, FlatBytecode *out) {
     }
     fclose(f);
 
-    if (check_magic(buf, (size_t)fsize) != 0) {
-        free(buf);
-        fprintf(stderr, "flvm: bad magic (expected FLAT) in %s\n", path);
+    if (flat_fb_parse_loaded(buf, (size_t)fsize, out) != 0) {
+        fprintf(stderr, "flvm: invalid bytecode (%s)\n", path);
         return -1;
     }
-
-    if (buf[4] != FLAT_FB_SENTINEL) {
-        free(buf);
-        fprintf(stderr, "flvm: unsupported .fb (legacy header without version); rebuild with "
-                        "flc (format v%u required)\n", (unsigned)FLAT_FB_FORMAT_VERSION);
-        return -1;
-    }
-    if (buf[5] != FLAT_FB_FORMAT_VERSION) {
-        unsigned got = (unsigned)buf[5];
-        free(buf);
-        fprintf(stderr, "flvm: unsupported .fb format v%u (format v%u required); rebuild with "
-                        "flc\n", got, (unsigned)FLAT_FB_FORMAT_VERSION);
-        return -1;
-    }
-    if ((size_t)fsize < FLAT_FB_HEADER_SIZE) {
-        free(buf);
-        fprintf(stderr, "flvm: truncated .fb header (%s)\n", path);
-        return -1;
-    }
-    out->format_version = (int)FLAT_FB_FORMAT_VERSION;
-    count = read_u16_le(buf + 6);
-    native_off = read_u32_le(buf + 8);
-    out->var_slots = read_u32_le(buf + 12);
-    if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
-        free(buf);
-        fprintf(stderr, "flvm: var_slots %u exceeds FLAT_MAX_VARS (%d)\n",
-                (unsigned)out->var_slots, FLAT_MAX_VARS);
-        return -1;
-    }
-    header_size = FLAT_FB_HEADER_SIZE;
-    dir_offset = FLAT_FB_HEADER_SIZE;
-
-    if (count == 0) {
-        free(buf);
-        fprintf(stderr, "flvm: block_count is zero\n");
-        return -1;
-    }
-
-    dir_bytes = (size_t)count * sizeof(FlatBlockEntry);
-    if (header_size + dir_bytes > (size_t)fsize) {
-        free(buf);
-        fprintf(stderr, "flvm: truncated block directory\n");
-        return -1;
-    }
-
-    blocks = calloc(count, sizeof(FlatBlockEntry));
-    if (!blocks) {
-        free(buf);
-        return -1;
-    }
-
-    for (i = 0; i < count; i++) {
-        const uint8_t *ent = buf + dir_offset + i * 8;
-        blocks[i].block_id = read_u32_le(ent);
-        blocks[i].offset = read_u32_le(ent + 4);
-        if (blocks[i].offset >= (size_t)fsize) {
-            free(blocks);
-            free(buf);
-            fprintf(stderr, "flvm: block offset out of range\n");
-            return -1;
-        }
-    }
-
-    if (native_off != 0) {
-        if (native_off >= (size_t)fsize) {
-            free(blocks);
-            free(buf);
-            fprintf(stderr, "flvm: native section offset out of range\n");
-            return -1;
-        }
-        if (flat_fb_parse_native_section(buf + native_off, (size_t)fsize - native_off,
-                                         out->optional_natives, FGIR_MAX_OPTIONAL_NATIVES,
-                                         &out->optional_native_count) != 0) {
-            free(blocks);
-            free(buf);
-            fprintf(stderr, "flvm: invalid optional native manifest\n");
-            return -1;
-        }
-    }
-
-    out->data = buf;
-    out->size = (size_t)fsize;
-    out->blocks = blocks;
-    out->block_count = count;
     return 0;
 }
 

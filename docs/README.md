@@ -4,6 +4,8 @@
 
 **Offline browser docs:** from the repo root, run **`make docs`** (or **`bin/gen_doc_site`**), then open **`doc_site/index.html`**. The table of contents is driven by **[index.json](./index.json)** — add a section there when you add a new normative doc page.
 
+**Browser playground (fleditor):** see **[FLEDITOR.md](./FLEDITOR.md)** — site in **`fleditor_site/`**, WASM via **`make -f Makefile.wasm fleditor-wasm`**.
+
 | Document | Contents |
 |----------|----------|
 | [SPECIFICATION.md](./SPECIFICATION.md) | Language model, keywords vs natives, `.fb` format, VM overview |

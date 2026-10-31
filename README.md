@@ -144,6 +144,8 @@ bin/run_tests -h
 
 **Docs:** [docs/README.md](docs/README.md) · [TOOLCHAIN.md](docs/TOOLCHAIN.md) · [SPECIFICATION.md](docs/SPECIFICATION.md) · [LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md) · [IO.md](docs/IO.md)
 
+**Browser playground:** [fleditor_site/](fleditor_site/) — WASM compile/run in the browser; see [docs/FLEDITOR.md](docs/FLEDITOR.md).
+
 ## Roadmap
 
 - [x] Toolchain skeleton + C test runner (`run_tests`)

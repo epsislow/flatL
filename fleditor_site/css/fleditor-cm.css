@@ -1,0 +1,45 @@
+.cm-s-flatl-dark.CodeMirror {
+  background: var(--fl-surface);
+  color: var(--fl-text);
+}
+
+.cm-s-flatl-dark .CodeMirror-gutters {
+  background: #18181e;
+  border-right: 1px solid var(--fl-border);
+}
+
+.cm-s-flatl-dark .CodeMirror-linenumber {
+  color: var(--fl-text-muted);
+}
+
+.cm-s-flatl-dark .CodeMirror-cursor {
+  border-left-color: var(--fl-text);
+}
+
+.cm-s-flatl-dark .CodeMirror-selected {
+  background: rgba(198, 229, 72, 0.18);
+}
+
+.cm-s-flatl-dark .cm-fl-string {
+  color: #c6e548;
+}
+
+.cm-s-flatl-dark .cm-fl-number {
+  color: #9bb8d4;
+}
+
+.cm-s-flatl-dark .cm-fl-keyword {
+  color: #d4a574;
+}
+
+.cm-s-flatl-dark .cm-fl-block {
+  color: #b8a0e8;
+}
+
+.cm-s-flatl-dark .cm-fl-native {
+  color: #7ec8e3;
+}
+
+.cm-s-flatl-dark .cm-fl-comment {
+  color: #8b8372;
+}

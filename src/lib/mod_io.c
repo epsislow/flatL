@@ -1,21 +1,39 @@
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 
+#ifdef FLAT_WASM_BUILD
+#include "flat_wasm_io.h"
+#endif
+
 #include <stdio.h>
 #include <string.h>
 
 static void emit_prompt(const char *prompt) {
     if (prompt && prompt[0] != '\0') {
+#ifdef FLAT_WASM_BUILD
+        flat_wasm_io_write_stdout(prompt, strlen(prompt));
+#else
         fputs(prompt, stdout);
         fflush(stdout);
+#endif
     }
 }
 
 static int read_line(char *buf, size_t buf_size, FlatIoStatus *st) {
+#ifdef FLAT_WASM_BUILD
+    if (flat_wasm_io_read_line(buf, buf_size, 0, st) != 0) {
+        *st = FLAT_IO_PANIC_EOF;
+        return 0;
+    }
+    if (*st != FLAT_IO_OK) {
+        return 0;
+    }
+#else
     if (!fgets(buf, (int)buf_size, stdin)) {
         *st = FLAT_IO_PANIC_EOF;
         return 0;
     }
+#endif
     {
         size_t n = strlen(buf);
         if (n > 0 && buf[n - 1] == '\n') {
@@ -32,10 +50,20 @@ static int read_line(char *buf, size_t buf_size, FlatIoStatus *st) {
 }
 
 static int read_line_allow_empty(char *buf, size_t buf_size, FlatIoStatus *st) {
+#ifdef FLAT_WASM_BUILD
+    if (flat_wasm_io_read_line(buf, buf_size, 1, st) != 0) {
+        *st = FLAT_IO_PANIC_EOF;
+        return 0;
+    }
+    if (*st != FLAT_IO_OK) {
+        return 0;
+    }
+#else
     if (!fgets(buf, (int)buf_size, stdin)) {
         *st = FLAT_IO_PANIC_EOF;
         return 0;
     }
+#endif
     {
         size_t n = strlen(buf);
         if (n > 0 && buf[n - 1] == '\n') {
@@ -48,8 +76,24 @@ static int read_line_allow_empty(char *buf, size_t buf_size, FlatIoStatus *st) {
 }
 
 static int read_one_char(FlatValue *out, FlatIoStatus *st) {
-    int c = fgetc(stdin);
     char ch[2];
+#ifdef FLAT_WASM_BUILD
+    char c = 0;
+
+    if (flat_wasm_io_read_char(&c, st) != 0) {
+        *st = FLAT_IO_PANIC_EOF;
+        return 0;
+    }
+    if (*st != FLAT_IO_OK) {
+        return 0;
+    }
+    if (c == 27 || c == '\n') {
+        *st = FLAT_IO_PANIC_CANCEL;
+        return 0;
+    }
+    ch[0] = c;
+#else
+    int c = fgetc(stdin);
 
     if (c == EOF) {
         *st = FLAT_IO_PANIC_EOF;
@@ -60,6 +104,7 @@ static int read_one_char(FlatValue *out, FlatIoStatus *st) {
         return 0;
     }
     ch[0] = (char)c;
+#endif
     ch[1] = '\0';
     *st = FLAT_IO_OK;
     return flat_value_set_str_inline(out, ch, 1);
@@ -165,8 +210,12 @@ int flat_native_io_outln(FlatNativeCtx *ctx) {
                                     ctx->vars, ctx->var_count, ctx->var_names) != 0) {
         return -1;
     }
+#ifdef FLAT_WASM_BUILD
+    flat_wasm_io_fprint_io_ln(&v, ctx->pool, ctx->coll);
+#else
     flat_value_fprint_io_ln(stdout, &v, ctx->pool, ctx->coll);
     fflush(stdout);
+#endif
     *ctx->io_status = FLAT_IO_OK;
     return 0;
 }
@@ -183,8 +232,12 @@ int flat_native_io_out(FlatNativeCtx *ctx) {
                                     ctx->vars, ctx->var_count, ctx->var_names) != 0) {
         return -1;
     }
+#ifdef FLAT_WASM_BUILD
+    flat_wasm_io_fprint_io(&v, ctx->pool, ctx->coll);
+#else
     flat_value_fprint_io(stdout, &v, ctx->pool, ctx->coll);
     fflush(stdout);
+#endif
     *ctx->io_status = FLAT_IO_OK;
     return 0;
 }
@@ -202,8 +255,12 @@ int flat_native_io_outvar(FlatNativeCtx *ctx) {
     if (vi < 0) {
         return -1;
     }
+#ifdef FLAT_WASM_BUILD
+    flat_wasm_io_fprint_io_ln(&ctx->vars[vi], ctx->pool, ctx->coll);
+#else
     flat_value_fprint_io_ln(stdout, &ctx->vars[vi], ctx->pool, ctx->coll);
     fflush(stdout);
+#endif
     *ctx->io_status = FLAT_IO_OK;
     return 0;
 }
