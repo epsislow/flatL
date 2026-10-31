@@ -21,7 +21,7 @@ static int usage(const char *prog) {
 
 int main(int argc, char **argv) {
     FlatBytecode bc;
-    FlatVmOptions opts = {0, 0};
+    FlatVmOptions opts = {0};
     const char *fb_path = NULL;
     int rc;
     int i;

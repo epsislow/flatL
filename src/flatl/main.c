@@ -80,8 +80,7 @@ static int parse_vm_flags(int *argc, char ***argv, FlatVmOptions *opts) {
     int w = 0;
     int i;
 
-    opts->trace = 0;
-    opts->trace_vars = 0;
+    memset(opts, 0, sizeof(*opts));
     for (i = 0; i < n; i++) {
         if (strcmp(a[i], "--trace") == 0) {
             opts->trace = 1;
