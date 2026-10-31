@@ -257,6 +257,34 @@
     term.write('\r\n\x1b[90m' + line + '\x1b[0m\r\n');
   }
 
+  const FLAT_TERM = {
+    UNKNOWN: 0,
+    OK: 1,
+    COMPLETE: 2,
+    FAIL: 3,
+    PANIC: 4,
+    ERROR: 5
+  };
+
+  function runFinishedEpilog(exitCode, termReason) {
+    if (termReason === FLAT_TERM.OK) {
+      return '-- finished: OK';
+    }
+    if (termReason === FLAT_TERM.FAIL || exitCode === 2) {
+      return '-- finished: FAIL';
+    }
+    if (termReason === FLAT_TERM.COMPLETE) {
+      return '-- finished: complete';
+    }
+    if (termReason === FLAT_TERM.PANIC) {
+      return '-- finished: panic';
+    }
+    if (exitCode !== 0) {
+      return '-- finished: error';
+    }
+    return '-- finished: complete';
+  }
+
   function setStatus(text, isError) {
     statusEl.textContent = text;
     statusEl.classList.toggle('fleditor-status--error', !!isError);
@@ -1176,8 +1204,14 @@
         term.write('\r\n[error] program failed (exit ' + runRc + ')\r\n');
       }
     }
+    let termination = FLAT_TERM.UNKNOWN;
+    try {
+      termination = Module.ccall('flat_wasm_get_last_termination', 'number', [], []);
+    } catch (_e) {
+      /* older wasm without export */
+    }
     Module._free(errBuf);
-    return { exitCode: runRc, compileFailed: compileFailed };
+    return { exitCode: runRc, compileFailed: compileFailed, termination: termination };
   }
 
   async function onRun() {
@@ -1198,20 +1232,22 @@
     setTerminalOpen(true);
     scheduleLayoutRefresh();
     term.clear();
-    let runOutcome = { exitCode: 1, compileFailed: false };
+    let runOutcome = { exitCode: 1, compileFailed: false, termination: FLAT_TERM.ERROR };
     try {
       implicitSaveForRun();
       P.syncToMemfs(wasmModule, project.files);
       runOutcome = await runProjectEntry(wasmModule, currentOpenPath());
     } catch (e) {
       term.write('\r\n[error] ' + e.message + '\r\n');
-      runOutcome = { exitCode: 1, compileFailed: false };
+      runOutcome = { exitCode: 1, compileFailed: false, termination: FLAT_TERM.ERROR };
       setStatus('failed', true);
     } finally {
       if (runOutcome.compileFailed) {
         writeTerminalEpilog('-- compile failed');
       } else {
-        writeTerminalEpilog('-- run complete (exit ' + runOutcome.exitCode + ')');
+        writeTerminalEpilog(
+          runFinishedEpilog(runOutcome.exitCode, runOutcome.termination)
+        );
       }
       running = false;
       updateRunSaveButtons();

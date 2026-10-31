@@ -11,6 +11,8 @@
 #define FLAT_WASM_SRC_PATH "/fleditor_src.fl"
 #define FLAT_WASM_FB_PATH "/fleditor_out.fb"
 
+static int g_last_termination;
+
 static int read_file_bytes(const char *path, uint8_t **out, size_t *out_len, char *err,
                            size_t err_sz) {
     FILE *f;
@@ -168,12 +170,20 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
         }
         return 1;
     }
-    rc = flat_vm_run(&bc);
+    FlatVmOptions opts = {0};
+    int term = (int)FLAT_TERM_UNKNOWN;
+    opts.out_termination = &term;
+    rc = flat_vm_run_opts(&bc, &opts);
+    g_last_termination = term;
     flat_fb_free(&bc);
     if (rc != 0 && err && err_sz) {
         snprintf(err, err_sz, "program exited with code %d", rc);
     }
     return rc;
+}
+
+int flat_wasm_get_last_termination(void) {
+    return g_last_termination;
 }
 
 void flat_wasm_free(void *p) {

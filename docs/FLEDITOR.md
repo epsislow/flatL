@@ -101,7 +101,7 @@ Project state is stored in **`localStorage`** key `flatl-fleditor-project` (JSON
 - **Default:** Project panel **on**, terminal **off**. **Run** opens the terminal automatically.
 - **Toolbar:** **Project** and **Terminal** chips toggle panels (use these if a panel was closed with **`[−]`** on its header).
 - **`[−]`** on the Project or Terminal header hides that panel; **`Reset layout`** restores defaults (Project on, terminal off) and only clears layout prefs (`flatl-fleditor-layout`), not your `.fl` files.
-- After each **Run**, the terminal prints a muted footer line: `-- run complete (exit N)` or, on compile/link failure (after the error text), `-- compile failed`.
+- After each **Run**, the terminal prints a muted footer: `-- finished: OK`, `-- finished: complete`, `-- finished: FAIL`, `-- finished: panic`, or `-- finished: error` (from VM termination reason + exit code). On compile/link failure (after the error text): `-- compile failed`.
 
 | Path | Role |
 |------|------|

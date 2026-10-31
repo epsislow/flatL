@@ -47,7 +47,33 @@ typedef struct {
     ForeachFrame loops[VM_MAX_FOREACH];
     int loop_sp;
     char panic_reason[64];
+    int unhandled_panic;
 } VmState;
+
+static void vm_teardown(VmState *st, int rc);
+
+static int vm_finish(VmState *st, char *guard_names, FlatValue *guard_vals, int exit_code,
+                     FlatTermination term, const FlatVmOptions *opts) {
+    if (opts && opts->out_termination) {
+        *opts->out_termination = (int)term;
+    }
+    free(guard_names);
+    free(guard_vals);
+    vm_teardown(st, exit_code);
+    return exit_code;
+}
+
+static FlatTermination vm_term_for_exit1(const VmState *st) {
+    return st->unhandled_panic ? FLAT_TERM_PANIC : FLAT_TERM_ERROR;
+}
+
+static int vm_fail_setup(VmState *st, const FlatVmOptions *opts) {
+    if (opts && opts->out_termination) {
+        *opts->out_termination = (int)FLAT_TERM_ERROR;
+    }
+    vm_teardown(st, 1);
+    return 1;
+}
 
 static uint32_t flat_label_hash(const char *label) {
     uint32_t h = 5381u;
@@ -58,7 +84,8 @@ static uint32_t flat_label_hash(const char *label) {
     return h;
 }
 
-static int vm_jump_panic_any(const FlatBytecode *bc, uint32_t *ip, const char *reason, int trace) {
+static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *reason,
+                             int trace) {
     size_t i;
     uint32_t want = flat_label_hash("#panic.any");
 
@@ -72,6 +99,9 @@ static int vm_jump_panic_any(const FlatBytecode *bc, uint32_t *ip, const char *r
         }
     }
     fprintf(stderr, "flvm: unhandled panic: %s\n", reason);
+    if (st) {
+        st->unhandled_panic = 1;
+    }
     return 1;
 }
 
@@ -97,7 +127,7 @@ static int vm_handle_io_status(VmState *st, const FlatBytecode *bc, uint32_t *ip
         return 0;
     }
     snprintf(st->panic_reason, sizeof st->panic_reason, "%s", io_status_reason(ios));
-    return vm_jump_panic_any(bc, ip, st->panic_reason, trace);
+    return vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
 }
 
 static int find_var(VmState *st, const char *name) {
@@ -483,6 +513,9 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     int trace_vars = opts && opts->trace_vars;
 
     if (!bc || !bc->data || bc->block_count == 0) {
+        if (opts && opts->out_termination) {
+            *opts->out_termination = (int)FLAT_TERM_ERROR;
+        }
         return 1;
     }
     flat_native_runtime_reset();
@@ -495,8 +528,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     st.coll = flat_coll_create();
     flat_mem_stats_init(&st.live);
     if (!st.vars || !st.pool || !st.coll) {
-        vm_teardown(&st, 1);
-        return 1;
+        return vm_fail_setup(&st, opts);
     }
     flat_coll_set_live_stats(st.coll, &st.live);
     guard_names = calloc(scratch_n, 64);
@@ -504,8 +536,10 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     if (!guard_names || !guard_vals) {
         free(guard_names);
         free(guard_vals);
-        vm_teardown(&st, 1);
-        return 1;
+        return vm_fail_setup(&st, opts);
+    }
+    if (opts && opts->out_termination) {
+        *opts->out_termination = (int)FLAT_TERM_ERROR;
     }
 
     for (entry_index = 0; entry_index < bc->block_count; entry_index++) {
@@ -524,15 +558,13 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         const uint8_t *payload;
 
         if ((size_t)ip + 2 > bc->size) {
-            return 1;
+            return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE, opts);
         }
         opcode = bc->data[ip];
         payload_size = bc->data[ip + 1];
         if ((size_t)ip + 2 + payload_size > bc->size) {
-            free(guard_names);
-            free(guard_vals);
-            vm_teardown(&st, 1);
-            return 1;
+            return vm_finish(&st, (char *)guard_names, guard_vals, 1, vm_term_for_exit1(&st),
+                             opts);
         }
         payload = &bc->data[ip + 2];
         flat_pool_reap_idle(st.pool);
@@ -567,15 +599,9 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
 
         switch (opcode) {
         case OP_OK:
-            free(guard_names);
-            free(guard_vals);
-            vm_teardown(&st, 0);
-            return 0;
+            return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_OK, opts);
         case OP_FAIL:
-            free(guard_names);
-            free(guard_vals);
-            vm_teardown(&st, 2);
-            return 2;
+            return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL, opts);
         case OP_RETURN:
             if (st.loop_sp > 0) {
                 ForeachFrame *fr = &st.loops[st.loop_sp - 1];
@@ -597,20 +623,16 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 continue;
             }
             if (st.call_sp == 0) {
-                free(guard_names);
-                free(guard_vals);
-                vm_teardown(&st, 0);
-                return 0;
+                return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE,
+                                 opts);
             }
             ip = st.calls[--st.call_sp].return_ip;
             continue;
         case OP_ASSIGN: {
             uint32_t ip_before = ip;
             if (apply_assign(&st, bc, &ip, (const char *)payload, trace) != 0) {
-                free(guard_names);
-                free(guard_vals);
-                vm_teardown(&st, 1);
-                return 1;
+                return vm_finish(&st, (char *)guard_names, guard_vals, 1, vm_term_for_exit1(&st),
+                                 opts);
             }
             if (ip == ip_before) {
                 ip += 2u + payload_size;
@@ -625,10 +647,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_IO: {
             uint32_t ip_before = ip;
             if (apply_io_legacy(&st, bc, &ip, (const char *)payload, trace) != 0) {
-                free(guard_names);
-                free(guard_vals);
-                vm_teardown(&st, 1);
-                return 1;
+                return vm_finish(&st, (char *)guard_names, guard_vals, 1, vm_term_for_exit1(&st),
+                                 opts);
             }
             if (ip == ip_before) {
                 ip += 2u + payload_size;
@@ -638,10 +658,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_NATIVE: {
             uint32_t ip_before = ip;
             if (apply_native(&st, bc, &ip, payload, payload_size, trace) != 0) {
-                free(guard_names);
-                free(guard_vals);
-                vm_teardown(&st, 1);
-                return 1;
+                return vm_finish(&st, (char *)guard_names, guard_vals, 1, vm_term_for_exit1(&st),
+                                 opts);
             }
             if (ip == ip_before) {
                 ip += 2u + payload_size;
@@ -660,10 +678,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             }
             if (!flat_value_eval_guard(expr, guard_vals, st.var_count, guard_names, st.pool)) {
                 if (bt == 0) {
-                    free(guard_names);
-                    free(guard_vals);
-                    vm_teardown(&st, 2);
-                    return 2;
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL,
+                                     opts);
                 }
                 ip = bt;
                 continue;
@@ -675,10 +691,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             uint32_t target = 0;
             memcpy(&target, payload, 4);
             if (st.call_sp >= VM_MAX_CALL) {
-                free(guard_names);
-                free(guard_vals);
-                vm_teardown(&st, 1);
-                return 1;
+                return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
             }
             st.calls[st.call_sp++].return_ip = ip + 2u + payload_size;
             ip = target;
@@ -701,20 +714,14 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 memcpy(&target, payload, 4);
             }
             if (target == 0) {
-                free(guard_names);
-                free(guard_vals);
-                vm_teardown(&st, 1);
-                return 1;
+                return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
             }
             ip = target;
             continue;
         }
         default:
             fprintf(stderr, "flvm: unsupported opcode 0x%02x at %u\n", opcode, ip);
-            free(guard_names);
-            free(guard_vals);
-            vm_teardown(&st, 1);
-            return 1;
+            return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
         }
     }
 }
