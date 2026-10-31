@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
  * Static server for fleditor_site/ (127.0.0.1 only).
+ * Also serves repo doc_site/ at /doc_site/ (sibling of fleditor_site/).
  * Usage: node fleditor_site/node/serve.js [port]
  * Default port: 8765
  */
@@ -11,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 
 const siteRoot = path.resolve(__dirname, '..');
+const docRoot = path.resolve(siteRoot, '..', 'doc_site');
 const port = parseInt(process.argv[2] || '8765', 10);
 
 const MIME = {
@@ -25,19 +27,34 @@ const MIME = {
   '.md': 'text/plain; charset=utf-8',
 };
 
-function safePath(urlPath) {
-  const decoded = decodeURIComponent(urlPath.split('?')[0]);
-  let rel = decoded.replace(/^\/+/, '');
-  if (rel === '') rel = 'index.html';
-  const abs = path.resolve(siteRoot, rel);
-  if (!abs.startsWith(siteRoot + path.sep) && abs !== siteRoot) {
+function safePathInRoot(root, relPath) {
+  let rel = String(relPath || '').replace(/^\/+/, '');
+  if (rel === '' || rel.endsWith('/')) {
+    rel = rel.replace(/\/+$/, '');
+    rel = rel ? rel + '/index.html' : 'index.html';
+  }
+  const abs = path.resolve(root, rel);
+  if (!abs.startsWith(root + path.sep) && abs !== root) {
     return null;
   }
   return abs;
 }
 
+function resolveFilePath(urlPath) {
+  const decoded = decodeURIComponent(urlPath.split('?')[0]);
+  if (decoded === '/doc_site' || decoded.startsWith('/doc_site/')) {
+    const sub = decoded.slice('/doc_site'.length).replace(/^\//, '') || 'index.html';
+    return safePathInRoot(docRoot, sub);
+  }
+  let rel = decoded.replace(/^\//, '');
+  if (rel === '') {
+    rel = 'index.html';
+  }
+  return safePathInRoot(siteRoot, rel);
+}
+
 const server = http.createServer((req, res) => {
-  const filePath = safePath(req.url || '/');
+  const filePath = resolveFilePath(req.url || '/');
   if (!filePath) {
     res.writeHead(403);
     res.end('Forbidden');
@@ -72,4 +89,7 @@ server.on('error', (err) => {
 
 server.listen(port, '127.0.0.1', () => {
   process.stdout.write(`fleditor: http://127.0.0.1:${port}/\n`);
+  if (fs.existsSync(docRoot)) {
+    process.stdout.write(`fleditor: http://127.0.0.1:${port}/doc_site/index.html\n`);
+  }
 });

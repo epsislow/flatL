@@ -1,0 +1,5 @@
+#main
+  io.inln('Name:') -> name
+  io.outln('Hello,')
+  io.outln(name)
+  OK

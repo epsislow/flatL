@@ -26,6 +26,7 @@
 
    ```bash
    make fleditor-serve
+   # Port already in use: make fleditor-serve-forced  (fuser -k 8765/tcp, then serve)
    # or: node fleditor_site/node/serve.js 8765
    ```
 
@@ -58,13 +59,15 @@ Windows without Emscripten: use prebuilt `fleditor_site/wasm/flatl.js` + `flatl.
 | `ext/` | Vendored CodeMirror 5 + xterm.js (see `ext/VENDOR.md`) |
 | `wasm/` | `flatl.js` + `flatl.wasm` (Emscripten output) |
 | `node/serve.js` | Static server, port = argv (default **8765**), bind **127.0.0.1** |
+| `examples/` | Curated sample `.fl` files + `manifest.json` (see `examples/README.md`) |
 
 Refresh vendored UI libs: `./scripts/vendor-fleditor-ext.sh`
 
 ## I/O model
 
 - **Stdout** (`io.out*`) → xterm.js terminal.
-- **Stdin** (`io.in*`) → in-page **modal** (`<dialog>`); the title uses the program prompt (e.g. `Name: (ln)` for `io.inln('Name:')`, truncated to 32 chars + `…` if needed). OK/Cancel resume WASM via `emscripten_sleep` polling. If `<dialog>` is unavailable, the UI falls back to `window.prompt`.
+- **Stdin** (`io.in*`) → in-page **modal** (`<dialog>`); the title uses the program prompt (e.g. `Name: (ln)` for `io.inln('Name:')`, truncated to 32 chars + `…` if needed). OK/Cancel resume WASM via `emscripten_sleep` polling.
+- Project actions (new path, delete, reset, unsaved warning, validation errors) use the same **`<dialog>`** pattern — no native `prompt` / `confirm` / `alert`.
 - Empty line on `io.inln` / `io.in_num` / `io.in_bool` → cancel (`#panic.any`), same as desktop [IO.md](IO.md).
 - Single-character `io.in`: ESC or Enter → cancel.
 
@@ -80,6 +83,29 @@ Refresh vendored UI libs: `./scripts/vendor-fleditor-ext.sh`
 - On **Run**, all project files are written to WASM **MEMFS** under `/fleditor/…`, then `flc` links from the open file’s path.
 
 Project state is stored in **`localStorage`** key `flatl-fleditor-project` (JSON: `files`, `dirs`, `openPath`). The old single-buffer key `flatl-fleditor-source` is migrated to `main.fl` on first load.
+
+### Delete and reset
+
+- **`+fl`** / **`+dir`** — new file or folder (tooltips on hover).
+- **`×`** on a file or folder row — delete (English confirm dialogs).
+- Deleting the **open** file with unsaved edits: unsaved-changes dialog first, then delete confirm; then opens **`main.fl`** or another file, or shows the empty-project message.
+- **Empty project:** message *“No files in project. Use +fl or Reset project.”* — **Run** is disabled.
+- Dirty open file: editor title shows **`(not saved) path.fl`**.
+- **Reset project** (toolbar) restores **`main.fl`** plus all curated files under **`examples/`** (from `fleditor_site/examples/` on disk); does **not** change panel layout (**Reset layout** is separate).
+- First visit (empty `localStorage`) loads the same **`main.fl` + `examples/`** set.
+- Toolbar **Docs** → `/doc_site/index.html` on the same host when using **`make fleditor-serve`** (server also mounts repo `doc_site/`). From **Open fleditor** in docs, link is `/index.html`.
+
+## Panels and layout
+
+- **Editor** uses most of the window; the **terminal** sits **below** the editor when open (not side-by-side).
+- **Default:** Project panel **on**, terminal **off**. **Run** opens the terminal automatically.
+- **Toolbar:** **Project** and **Terminal** chips toggle panels (use these if a panel was closed with **`[−]`** on its header).
+- **`[−]`** on the Project or Terminal header hides that panel; **`Reset layout`** restores defaults (Project on, terminal off) and only clears layout prefs (`flatl-fleditor-layout`), not your `.fl` files.
+- After each **Run**, the terminal prints a muted footer line: `-- run complete (exit N)` or, on compile/link failure (after the error text), `-- compile failed`.
+
+| Path | Role |
+|------|------|
+| `js/fleditor-layout.js` | Layout prefs in `localStorage` |
 
 ## Limits
 

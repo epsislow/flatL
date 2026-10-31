@@ -1,0 +1,6 @@
+use "lib/helper.fl" as #H_
+
+#main
+  call #H_greet
+  io.outln('from main')
+  OK

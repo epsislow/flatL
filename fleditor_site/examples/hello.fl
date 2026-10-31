@@ -1,0 +1,3 @@
+#main
+  io.outln('hello from flatL')
+  OK

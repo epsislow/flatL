@@ -13,33 +13,49 @@
   <div class="fleditor-app">
     <header class="fleditor-toolbar">
       <h1>flatL fleditor</h1>
+      <div class="fleditor-view-chips" role="group" aria-label="Panels">
+        <button type="button" id="chipProject" class="fleditor-chip fleditor-chip--on" aria-pressed="true">Project</button>
+        <button type="button" id="chipTerminal" class="fleditor-chip" aria-pressed="false">Terminal</button>
+      </div>
       <button type="button" id="undoBtn" title="Undo">Undo</button>
       <button type="button" id="redoBtn" title="Redo">Redo</button>
       <button type="button" id="saveBtn">Save</button>
       <button type="button" id="runBtn" class="btn-run">Run</button>
       <button type="button" id="clearBtn">Clear terminal</button>
+      <button type="button" id="resetLayoutBtn" class="fleditor-btn-muted">Reset layout</button>
+      <button type="button" id="resetProjectBtn" class="fleditor-btn-muted">Reset project</button>
+      <a class="fleditor-toolbar-link" href="/doc_site/index.html">Docs</a>
       <span id="status" class="fleditor-status">idle</span>
     </header>
     <div id="wasmBanner" class="fleditor-banner" hidden></div>
     <div class="fleditor-main">
-      <aside class="fleditor-sidebar">
+      <aside id="projectPanel" class="fleditor-sidebar">
+        <div class="fleditor-panel-label">
+          <span class="fleditor-panel-label-text">Project</span>
+          <button type="button" id="projectPanelToggle" class="fleditor-panel-toggle" title="Hide project">[−]</button>
+        </div>
         <div class="fleditor-sidebar-head">
-          <span class="fleditor-sidebar-title">Project</span>
-          <button type="button" id="newFileBtn" class="fleditor-sidebar-btn">New file</button>
-          <button type="button" id="newFolderBtn" class="fleditor-sidebar-btn">New folder</button>
+          <button type="button" id="newFileBtn" class="fleditor-sidebar-btn" title="New file">+fl</button>
+          <button type="button" id="newFolderBtn" class="fleditor-sidebar-btn" title="New folder">+dir</button>
         </div>
         <div id="fileTree" class="fleditor-tree" role="tree"></div>
       </aside>
-      <div class="fleditor-panels">
+      <div id="workPanel" class="fleditor-work fleditor-work--no-terminal">
         <section class="fleditor-editor-wrap">
-          <div class="fleditor-panel-label">
+          <div class="fleditor-panel-label fleditor-panel-label--editor">
             <span id="editorPathLabel">Source (.fl)</span>
             <span id="dirtyBadge" class="fleditor-dirty" hidden title="Unsaved changes">●</span>
           </div>
+          <div id="editorEmptyOverlay" class="fleditor-editor-empty" hidden>
+            <p>No files in project. Use <strong>+fl</strong> or <strong>Reset project</strong>.</p>
+          </div>
           <textarea id="code" spellcheck="false"></textarea>
         </section>
-        <section class="fleditor-right">
-          <div class="fleditor-panel-label">Terminal (I/O)</div>
+        <section id="terminalPanel" class="fleditor-terminal-wrap" hidden>
+          <div class="fleditor-panel-label">
+            <span class="fleditor-panel-label-text">Terminal (I/O)</span>
+            <button type="button" id="terminalPanelToggle" class="fleditor-panel-toggle" title="Hide terminal">[−]</button>
+          </div>
           <div id="terminalHost"></div>
         </section>
       </div>
@@ -56,6 +72,46 @@
       </div>
     </form>
   </dialog>
+  <dialog id="deleteModal" class="fleditor-io-modal" aria-labelledby="deleteModalTitle">
+    <div class="fleditor-io-form">
+      <h2 id="deleteModalTitle" class="fleditor-io-title">Delete</h2>
+      <p id="deleteModalMessage" class="fleditor-io-hint"></p>
+      <div class="fleditor-io-actions">
+        <button type="button" id="deleteConfirmBtn" class="fleditor-io-btn fleditor-io-btn--danger">Delete</button>
+        <button type="button" id="deleteCancelBtn" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="resetProjectModal" class="fleditor-io-modal" aria-labelledby="resetProjectModalTitle">
+    <div class="fleditor-io-form">
+      <h2 id="resetProjectModalTitle" class="fleditor-io-title">Reset project</h2>
+      <p class="fleditor-io-hint">Reset project? All files will be replaced with the default main.fl and the examples/ samples. This cannot be undone.</p>
+      <div class="fleditor-io-actions">
+        <button type="button" id="resetProjectConfirmBtn" class="fleditor-io-btn fleditor-io-btn--primary">Reset</button>
+        <button type="button" id="resetProjectCancelBtn" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="promptModal" class="fleditor-io-modal" aria-labelledby="promptModalTitle">
+    <form id="promptModalForm" class="fleditor-io-form">
+      <h2 id="promptModalTitle" class="fleditor-io-title">Input</h2>
+      <p id="promptModalHint" class="fleditor-io-hint"></p>
+      <input type="text" id="promptModalInput" class="fleditor-io-input" autocomplete="off" spellcheck="false">
+      <div class="fleditor-io-actions">
+        <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
+        <button type="button" id="promptModalCancel" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="alertModal" class="fleditor-io-modal" aria-labelledby="alertModalTitle">
+    <div class="fleditor-io-form">
+      <h2 id="alertModalTitle" class="fleditor-io-title">Notice</h2>
+      <p id="alertModalMessage" class="fleditor-io-hint"></p>
+      <div class="fleditor-io-actions">
+        <button type="button" id="alertModalOk" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
+      </div>
+    </div>
+  </dialog>
   <dialog id="unsavedModal" class="fleditor-io-modal" aria-labelledby="unsavedModalTitle">
     <div class="fleditor-io-form">
       <h2 id="unsavedModalTitle" class="fleditor-io-title">Unsaved changes</h2>
@@ -70,6 +126,7 @@
   <script src="ext/xterm.js"></script>
   <script src="js/mode-flatl.js"></script>
   <script src="js/fleditor-project.js"></script>
-  <script src="js/fleditor.js?v=18"></script>
+  <script src="js/fleditor-layout.js"></script>
+  <script src="js/fleditor.js?v=24"></script>
 </body>
 </html>

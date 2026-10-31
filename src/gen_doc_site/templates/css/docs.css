@@ -44,6 +44,14 @@ body {
   font-size: 1.35rem;
 }
 
+.docs-external-link {
+  color: inherit;
+}
+
+.docs-external-link:hover {
+  text-decoration: underline;
+}
+
 .docs-tagline {
   margin: 0.35rem 0 0;
   color: var(--muted);

@@ -1,6 +1,6 @@
 # fleditor static server
 
-Serves the parent folder `fleditor_site/` on localhost.
+Serves `fleditor_site/` on localhost and repo `doc_site/` at `/doc_site/`.
 
 ```bash
 # from repo root

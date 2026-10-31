@@ -54,7 +54,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild fleditor-wasm fleditor-serve fleditor-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-project-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -74,6 +74,7 @@ help:
 	@echo "  make docs         bin/gen_doc_site → doc_site/ (offline HTML docs)"
 	@echo "  make fleditor-wasm   Emscripten → fleditor_site/wasm/ (needs emcc)"
 	@echo "  make fleditor-serve  node fleditor_site/node/serve.js 8765"
+	@echo "  make fleditor-serve-forced  kill port 8765 then serve (fuser)"
 	@echo "  make fleditor-smoke  HTTP smoke test for fleditor static server"
 	@echo "  make fleditor-wasm-smoke / fleditor-wasm-multifile-smoke  headless WASM tests"
 	@echo "  make rebuild      make clean && make all (force full recompile)"
@@ -203,6 +204,7 @@ test-flatl: all
 # WSL: make uses /bin/sh — Windows node.exe on PATH often fails (Permission denied).
 # Override: make fleditor-serve NODE=/usr/bin/node
 NODE ?= $(shell if [ -x /usr/bin/node ]; then echo /usr/bin/node; elif command -v node >/dev/null 2>&1; then command -v node; else echo node; fi)
+FLEDITOR_PORT ?= 8765
 
 fleditor-wasm:
 	$(MAKE) -f Makefile.wasm fleditor-wasm
@@ -211,10 +213,23 @@ fleditor-rebuild: fleditor-wasm
 	@echo "OK: WASM rebuilt — restart serve if needed, then hard-refresh the browser (Ctrl+Shift+R)."
 
 fleditor-serve:
-	$(NODE) fleditor_site/node/serve.js 8765
+	$(NODE) fleditor_site/node/serve.js $(FLEDITOR_PORT)
+
+fleditor-serve-forced:
+	fuser -k $(FLEDITOR_PORT)/tcp 2>/dev/null || true
+	$(NODE) fleditor_site/node/serve.js $(FLEDITOR_PORT)
 
 fleditor-smoke:
 	$(NODE) test/fleditor/serve_smoke.js
+
+fleditor-layout-smoke:
+	$(NODE) test/fleditor/layout_smoke.mjs
+
+fleditor-project-smoke:
+	$(NODE) test/fleditor/project_smoke.mjs
+
+fleditor-examples-smoke:
+	$(NODE) test/fleditor/examples_smoke.mjs
 
 fleditor-wasm-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_smoke.mjs

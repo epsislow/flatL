@@ -7,6 +7,8 @@
   const DEFAULT_MAIN = 'main.fl';
   const DEFAULT_SOURCE = "#main\n  io.outln('hello from fleditor')\n  OK\n";
   const MEMFS_ROOT = '/fleditor';
+  const EXAMPLES_MANIFEST = 'examples/manifest.json';
+  const EXAMPLES_PREFIX = 'examples/';
 
   function normalizePath(raw) {
     if (!raw || typeof raw !== 'string') {
@@ -69,7 +71,6 @@
       return proj;
     }
     const proj = defaultProject();
-    saveProject(proj);
     return proj;
   }
 
@@ -173,6 +174,130 @@
     return toArray(root);
   }
 
+  function listFilePaths(project) {
+    return Object.keys(project.files)
+      .map(normalizePath)
+      .filter(Boolean)
+      .sort();
+  }
+
+  /** Files exactly under folder prefix (path/to/file.fl), not the folder path itself. */
+  function filesUnderFolder(project, dirPath) {
+    const norm = normalizePath(dirPath);
+    if (!norm) {
+      return [];
+    }
+    const pre = norm + '/';
+    return listFilePaths(project).filter(function (f) {
+      return f.startsWith(pre);
+    });
+  }
+
+  function removeFile(project, path) {
+    const norm = normalizePath(path);
+    if (norm) {
+      delete project.files[norm];
+    }
+  }
+
+  /** Removes folder marker and all files under prefix. Returns number of files removed. */
+  function removeFolder(project, dirPath) {
+    const norm = normalizePath(dirPath);
+    if (!norm) {
+      return 0;
+    }
+    const pre = norm + '/';
+    let n = 0;
+    for (const k of listFilePaths(project)) {
+      if (k.startsWith(pre)) {
+        delete project.files[k];
+        n++;
+      }
+    }
+    project.dirs = (project.dirs || []).filter(function (d) {
+      const dn = normalizePath(d);
+      return dn !== norm && !dn.startsWith(pre);
+    });
+    return n;
+  }
+
+  function removeEmptyFolder(project, dirPath) {
+    const norm = normalizePath(dirPath);
+    if (!norm) {
+      return false;
+    }
+    if (filesUnderFolder(project, norm).length > 0) {
+      return false;
+    }
+    project.dirs = (project.dirs || []).filter(function (d) {
+      return normalizePath(d) !== norm;
+    });
+    return true;
+  }
+
+  function exampleProjectPath(relativeToExamplesDir) {
+    const norm = normalizePath(relativeToExamplesDir);
+    if (!norm) {
+      return '';
+    }
+    if (norm.startsWith(EXAMPLES_PREFIX)) {
+      return norm;
+    }
+    return EXAMPLES_PREFIX + norm;
+  }
+
+  function mergeExampleFilesIntoProject(project, filesByProjectPath) {
+    for (const path of Object.keys(filesByProjectPath)) {
+      const norm = exampleProjectPath(path);
+      if (!norm) {
+        continue;
+      }
+      project.files[norm] = filesByProjectPath[path];
+      ensureParentDirs(project, norm);
+    }
+  }
+
+  async function fetchExampleFilesByProjectPath() {
+    const fetchFn = global.fetch;
+    if (typeof fetchFn !== 'function') {
+      return {};
+    }
+    const manifestRes = await fetchFn(EXAMPLES_MANIFEST);
+    if (!manifestRes.ok) {
+      return {};
+    }
+    const manifest = await manifestRes.json();
+    const list = manifest && Array.isArray(manifest.files) ? manifest.files : [];
+    const out = {};
+    for (const rel of list) {
+      const entry = normalizePath(String(rel));
+      if (!entry) {
+        continue;
+      }
+      const url = EXAMPLES_PREFIX + entry;
+      const projectPath = exampleProjectPath(entry);
+      const fileRes = await fetchFn(url);
+      if (!fileRes.ok) {
+        continue;
+      }
+      out[projectPath] = await fileRes.text();
+    }
+    return out;
+  }
+
+  async function hydrateProjectExamples(project) {
+    const files = await fetchExampleFilesByProjectPath();
+    mergeExampleFilesIntoProject(project, files);
+    return project;
+  }
+
+  async function resetProjectWithExamples() {
+    const proj = defaultProject();
+    await hydrateProjectExamples(proj);
+    saveProject(proj);
+    return proj;
+  }
+
   function ensureParentDirs(project, filePath) {
     const norm = normalizePath(filePath);
     const parts = norm.split('/');
@@ -200,5 +325,17 @@
     syncToMemfs,
     buildTree,
     ensureParentDirs,
+    listFilePaths,
+    filesUnderFolder,
+    removeFile,
+    removeFolder,
+    removeEmptyFolder,
+    EXAMPLES_MANIFEST,
+    EXAMPLES_PREFIX,
+    exampleProjectPath,
+    fetchExampleFilesByProjectPath,
+    mergeExampleFilesIntoProject,
+    hydrateProjectExamples,
+    resetProjectWithExamples,
   };
-})(window);
+})(typeof window !== 'undefined' ? window : globalThis);

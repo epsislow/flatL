@@ -1,0 +1,8 @@
+use native list with L
+
+#main
+  L.pack(1, 2) -> xs
+  L.push(xs, 3) -> ys
+  L.len(ys) -> n
+  io.outln(n)
+  OK
