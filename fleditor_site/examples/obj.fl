@@ -1,0 +1,20 @@
+use native obj with O
+use native list with L
+#main
+  o = { x: 1 }
+  o2 = { z: 2}
+  O.set(o, 'x', 2) -> o
+  O.set(o, 'y', 2.5) -> o
+  O.set(o, 'info', ['a', 'b', 'c'] ) -> o 
+  O.get(o, 'info') -> oinfo
+  L.push(oinfo, 'd') -> oinfo
+  io.outln(oinfo)
+  io.outln(o)
+  O.set(o, 'info', oinfo) -> o
+  io.outln(o)
+  O.set(o, 'o2', o2) -> o
+  io.outln(o2)
+  io.outln(o)
+
+  OK
+

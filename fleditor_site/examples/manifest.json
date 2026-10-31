@@ -4,6 +4,7 @@
     "io_inln.fl",
     "use/main.fl",
     "use/lib/helper.fl",
-    "native_list.fl"
+    "native_list.fl",
+    "obj.fl"
   ]
 }
