@@ -31,7 +31,19 @@
 
    **WSL:** if `make fleditor-serve` says `node: Permission denied`, your PATH may pick Windows `node.exe` under `/bin/sh`. Use Linux Node: `make fleditor-serve NODE=/usr/bin/node`, or put `/usr/bin` before `/mnt/...` in PATH.
 
-3. Open `http://127.0.0.1:8765/` and click **Run**.
+3. Open `http://127.0.0.1:8765/` and click **Run** (runs the open file).
+
+**Two-file example:** create `lib/greet.fl` with a block (no `#main` in imports), then in `main.fl`:
+
+```text
+use "lib/greet.fl" as #Greet_
+
+#main
+  call #Greet_hello
+  OK
+```
+
+Paths in `use "…"` must match the project tree. Rebuild WASM after compiler changes: `make fleditor-rebuild`.
 
 Windows without Emscripten: use prebuilt `fleditor_site/wasm/flatl.js` + `flatl.wasm` from the repo (after someone builds them), then run the same `node` command.
 
@@ -41,7 +53,8 @@ Windows without Emscripten: use prebuilt `fleditor_site/wasm/flatl.js` + `flatl.
 |------|------|
 | `index.html` | Shell UI |
 | `css/` | Theme (dark + warm beige text) |
-| `js/fleditor.js` | Run button, WASM glue, Xterm I/O |
+| `js/fleditor.js` | Run/Save, project UI, WASM glue, Xterm I/O |
+| `js/fleditor-project.js` | Virtual project model, localStorage, MEMFS sync |
 | `ext/` | Vendored CodeMirror 5 + xterm.js (see `ext/VENDOR.md`) |
 | `wasm/` | `flatl.js` + `flatl.wasm` (Emscripten output) |
 | `node/serve.js` | Static server, port = argv (default **8765**), bind **127.0.0.1** |
@@ -55,11 +68,24 @@ Refresh vendored UI libs: `./scripts/vendor-fleditor-ext.sh`
 - Empty line on `io.inln` / `io.in_num` / `io.in_bool` → cancel (`#panic.any`), same as desktop [IO.md](IO.md).
 - Single-character `io.in`: ESC or Enter → cancel.
 
-## Limits (MVP)
+## Multi-file project
 
-- Single `.fl` buffer only (no `use "other.fl"`).
+- **Project panel** (left): file tree, **New file** / **New folder**.
+- **Run** compiles and runs the **file currently open** in the editor (no separate “entry” flag).
+- **Run** implicitly **saves** the open file to the project and `localStorage` before compile.
+- **Save** persists the open file; a **●** marker shows unsaved edits (toolbar + tree).
+- Switching files with unsaved edits opens a dialog: *“You have unsaved changes…”* — **Continue** / **Cancel** (English UI).
+- **Undo** / **Redo** in the toolbar (CodeMirror history); **Ctrl+S** / **Cmd+S** saves.
+- Paths are **POSIX-style** (`lib/util.fl`). A `use "lib/util.fl"` line must match a file at that path in the project.
+- On **Run**, all project files are written to WASM **MEMFS** under `/fleditor/…`, then `flc` links from the open file’s path.
+
+Project state is stored in **`localStorage`** key `flatl-fleditor-project` (JSON: `files`, `dirs`, `openPath`). The old single-buffer key `flatl-fleditor-source` is migrated to `main.fl` on first load.
+
+## Limits
+
 - Optional natives (`list`, `obj`, `math*`) are **static-linked** in WASM when declared with `use native`.
 - No `SharedArrayBuffer` / cross-origin isolation headers in v1.
+- No Git, cloud sync, or drag-in folder import (browser-only virtual project).
 
 ## Spck Editor (phone)
 

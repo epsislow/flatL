@@ -1,9 +1,8 @@
-/* global FlatLModule, CodeMirror, Terminal */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject */
 (function () {
   'use strict';
 
-  const STORAGE_KEY = 'flatl-fleditor-source';
-  const DEFAULT_SOURCE = "#main\n  io.outln('hello from fleditor')\n  OK\n";
+  const P = FleditorProject;
 
   const IO_OK = 0;
   const IO_PANIC_EOF = 2;
@@ -23,11 +22,27 @@
   const bannerEl = document.getElementById('wasmBanner');
   const runBtn = document.getElementById('runBtn');
   const clearBtn = document.getElementById('clearBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const undoBtn = document.getElementById('undoBtn');
+  const redoBtn = document.getElementById('redoBtn');
+  const fileTreeEl = document.getElementById('fileTree');
+  const editorPathLabel = document.getElementById('editorPathLabel');
+  const dirtyBadge = document.getElementById('dirtyBadge');
+  const newFileBtn = document.getElementById('newFileBtn');
+  const newFolderBtn = document.getElementById('newFolderBtn');
 
   let wasmModule = null;
   let wasmLoadPromise = null;
   let running = false;
   let term = null;
+  let cm = null;
+
+  /** @type {ReturnType<typeof P.loadProject>} */
+  let project = null;
+  let dirty = false;
+  let suppressChange = false;
+  /** @type {null | (() => void)} */
+  let unsavedContinue = null;
 
   let ioDialog = null;
   let ioForm = null;
@@ -40,6 +55,10 @@
   let ioAllowEmpty = false;
   let ioCharMode = false;
 
+  let unsavedDialog = null;
+  let unsavedContinueBtn = null;
+  let unsavedCancelBtn = null;
+
   function setStatus(text, isError) {
     statusEl.textContent = text;
     statusEl.classList.toggle('fleditor-status--error', !!isError);
@@ -48,6 +67,218 @@
   function showBanner(msg) {
     bannerEl.hidden = !msg;
     bannerEl.textContent = msg || '';
+  }
+
+  function setDirty(value) {
+    dirty = value;
+    dirtyBadge.hidden = !dirty;
+    saveBtn.disabled = !dirty;
+    renderFileTree();
+  }
+
+  function currentOpenPath() {
+    return P.normalizePath(project.openPath) || P.DEFAULT_MAIN;
+  }
+
+  function flushEditorToProject() {
+    const path = currentOpenPath();
+    project.files[path] = cm.getValue();
+    project.openPath = path;
+  }
+
+  function persistProject() {
+    P.saveProject(project);
+  }
+
+  function saveCurrentFile() {
+    flushEditorToProject();
+    persistProject();
+    setDirty(false);
+    setStatus('saved');
+    window.setTimeout(function () {
+      if (!running && statusEl.textContent === 'saved') {
+        setStatus('idle');
+      }
+    }, 1200);
+  }
+
+  function implicitSaveForRun() {
+    flushEditorToProject();
+    persistProject();
+    setDirty(false);
+  }
+
+  function loadFileIntoEditor(path) {
+    const norm = P.normalizePath(path);
+    suppressChange = true;
+    cm.setValue(project.files[norm] != null ? project.files[norm] : '');
+    cm.clearHistory();
+    suppressChange = false;
+    project.openPath = norm;
+    editorPathLabel.textContent = norm;
+    setDirty(false);
+    renderFileTree();
+  }
+
+  function initUnsavedModal() {
+    unsavedDialog = document.getElementById('unsavedModal');
+    unsavedContinueBtn = document.getElementById('unsavedContinueBtn');
+    unsavedCancelBtn = document.getElementById('unsavedCancelBtn');
+    if (!unsavedDialog) {
+      return;
+    }
+    unsavedContinueBtn.addEventListener('click', function () {
+      unsavedDialog.close();
+      const cont = unsavedContinue;
+      unsavedContinue = null;
+      if (cont) {
+        cont();
+      }
+    });
+    unsavedCancelBtn.addEventListener('click', function () {
+      unsavedDialog.close();
+      unsavedContinue = null;
+    });
+    unsavedDialog.addEventListener('cancel', function (e) {
+      e.preventDefault();
+      unsavedDialog.close();
+      unsavedContinue = null;
+    });
+  }
+
+  function confirmDiscardIfDirty(onContinue) {
+    if (!dirty) {
+      onContinue();
+      return;
+    }
+    if (!unsavedDialog) {
+      if (window.confirm('You have unsaved changes. Continue and lose them?')) {
+        onContinue();
+      }
+      return;
+    }
+    unsavedContinue = onContinue;
+    unsavedDialog.showModal();
+  }
+
+  function openFile(path) {
+    const norm = P.normalizePath(path);
+    if (!project.files[norm]) {
+      return;
+    }
+    if (norm === currentOpenPath()) {
+      return;
+    }
+    confirmDiscardIfDirty(function () {
+      loadFileIntoEditor(norm);
+    });
+  }
+
+  function renderFileTree() {
+    if (!fileTreeEl) {
+      return;
+    }
+    fileTreeEl.innerHTML = '';
+    const open = currentOpenPath();
+
+    function renderNodes(nodes, depth) {
+      for (const node of nodes) {
+        const row = document.createElement('div');
+        row.className = 'fleditor-tree-row';
+        row.style.paddingLeft = 0.5 + depth * 0.75 + 'rem';
+        row.setAttribute('role', 'treeitem');
+        if (node.kind === 'dir') {
+          row.classList.add('fleditor-tree-row--dir');
+          row.textContent = node.name + '/';
+        } else {
+          row.classList.add('fleditor-tree-row--file');
+          if (node.path === open) {
+            row.classList.add('fleditor-tree-row--active');
+          }
+          if (node.path === open && dirty) {
+            row.classList.add('fleditor-tree-row--dirty');
+          }
+          row.textContent = node.name;
+          row.tabIndex = 0;
+          row.addEventListener('click', function () {
+            openFile(node.path);
+          });
+          row.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              openFile(node.path);
+            }
+          });
+        }
+        fileTreeEl.appendChild(row);
+        if (node.children && node.children.length) {
+          renderNodes(node.children, depth + 1);
+        }
+      }
+    }
+
+    renderNodes(P.buildTree(project), 0);
+  }
+
+  function promptNewPath(label, defaultValue) {
+    const raw = window.prompt(label, defaultValue || 'main.fl');
+    if (raw == null) {
+      return null;
+    }
+    const norm = P.normalizePath(raw);
+    if (!norm) {
+      window.alert('Invalid path.');
+      return null;
+    }
+    if (!norm.endsWith('.fl')) {
+      window.alert('File path must end with .fl');
+      return null;
+    }
+    return norm;
+  }
+
+  function onNewFile() {
+    const path = promptNewPath('New file path (e.g. lib/util.fl):', 'main.fl');
+    if (!path) {
+      return;
+    }
+    if (project.files[path]) {
+      window.alert('File already exists.');
+      return;
+    }
+    confirmDiscardIfDirty(function () {
+      P.ensureParentDirs(project, path);
+      project.files[path] = '#main\n  OK\n';
+      persistProject();
+      loadFileIntoEditor(path);
+    });
+  }
+
+  function onNewFolder() {
+    const raw = window.prompt('New folder path (e.g. lib):', 'lib');
+    if (raw == null) {
+      return;
+    }
+    const norm = P.normalizePath(raw);
+    if (!norm) {
+      window.alert('Invalid folder path.');
+      return;
+    }
+    project.dirs = project.dirs || [];
+    if (!project.dirs.includes(norm)) {
+      project.dirs.push(norm);
+      persistProject();
+      renderFileTree();
+    }
+  }
+
+  function updateUndoRedoButtons() {
+    if (!cm || !undoBtn || !redoBtn) {
+      return;
+    }
+    const hist = cm.historySize ? cm.historySize() : { undo: 0, redo: 0 };
+    undoBtn.disabled = !hist.undo;
+    redoBtn.disabled = !hist.redo;
   }
 
   function initIoModal() {
@@ -190,17 +421,33 @@
   }
 
   function initEditor() {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    document.getElementById('code').value = saved || DEFAULT_SOURCE;
-    const cm = CodeMirror.fromTextArea(document.getElementById('code'), {
+    project = P.loadProject();
+    const open = currentOpenPath();
+    document.getElementById('code').value = project.files[open] || P.DEFAULT_SOURCE;
+    cm = CodeMirror.fromTextArea(document.getElementById('code'), {
       lineNumbers: true,
       theme: 'flatl-dark',
       mode: 'flatl',
       indentUnit: 2,
       tabSize: 2,
     });
-    cm.on('change', () => localStorage.setItem(STORAGE_KEY, cm.getValue()));
-    return cm;
+    editorPathLabel.textContent = open;
+    cm.on('change', function () {
+      if (suppressChange) {
+        return;
+      }
+      setDirty(true);
+      updateUndoRedoButtons();
+    });
+    cm.on('keydown', function (_cm, e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveCurrentFile();
+      }
+    });
+    updateUndoRedoButtons();
+    renderFileTree();
+    saveBtn.disabled = true;
   }
 
   function initTerminal() {
@@ -222,7 +469,6 @@
     });
   }
 
-  /** Hooks must live on the object passed to FlatLModule (Asyncify reads Module[...]). */
   function wasmModuleConfig() {
     return {
       locateFile: (p) => (p.endsWith('.wasm') ? 'wasm/' + p : p),
@@ -303,17 +549,32 @@
     return wasmLoadPromise;
   }
 
-  async function compileAndRun(Module, source) {
+  function isCompileErrorMessage(msg) {
+    if (!msg) {
+      return false;
+    }
+    return (
+      msg.startsWith('flc:') ||
+      msg.includes('use:') ||
+      msg.includes('parse') ||
+      msg.includes('link') ||
+      msg.includes('compile') ||
+      msg.includes('cannot open') ||
+      msg.includes('cannot read')
+    );
+  }
+
+  async function runProjectEntry(Module, entryPath) {
     const errBuf = Module._malloc(4096);
     Module.setValue(errBuf, 0, 'i8');
-
     attachWasmHooks(Module);
     setStatus('running');
+    const memPath = P.memfsEntryPath(entryPath);
     let runRc = Module.ccall(
-      'flat_wasm_run_source',
+      'flat_wasm_run_entry',
       'number',
       ['string', 'number', 'number'],
-      [source, errBuf, 4096],
+      [memPath, errBuf, 4096],
       { async: true }
     );
     if (runRc != null && typeof runRc.then === 'function') {
@@ -322,8 +583,8 @@
 
     if (runRc !== 0) {
       const msg = Module.UTF8ToString(errBuf);
-      if (msg.startsWith('flc:') || msg.includes('compile') || msg.includes('parse')) {
-        term.write('\r\n[compile error] ' + msg + '\r\n');
+      if (isCompileErrorMessage(msg)) {
+        term.write('\r\n[compile/link error] ' + msg + '\r\n');
       } else if (msg) {
         term.write('\r\n[run] ' + msg + '\r\n');
       } else {
@@ -333,7 +594,7 @@
     Module._free(errBuf);
   }
 
-  async function onRun(cm) {
+  async function onRun() {
     if (running) return;
     if (ioDialog && ioDialog.open) {
       return;
@@ -347,7 +608,9 @@
     setStatus('compiling');
     term.clear();
     try {
-      await compileAndRun(wasmModule, cm.getValue());
+      implicitSaveForRun();
+      P.syncToMemfs(wasmModule, project.files);
+      await runProjectEntry(wasmModule, currentOpenPath());
     } catch (e) {
       term.write('\r\n[error] ' + e.message + '\r\n');
       setStatus('failed', true);
@@ -363,10 +626,22 @@
 
   function boot() {
     initIoModal();
-    const cm = initEditor();
+    initUnsavedModal();
+    initEditor();
     initTerminal();
     clearBtn.addEventListener('click', () => term.clear());
-    runBtn.addEventListener('click', () => onRun(cm));
+    runBtn.addEventListener('click', () => onRun());
+    saveBtn.addEventListener('click', () => saveCurrentFile());
+    undoBtn.addEventListener('click', () => {
+      cm.undo();
+      updateUndoRedoButtons();
+    });
+    redoBtn.addEventListener('click', () => {
+      cm.redo();
+      updateUndoRedoButtons();
+    });
+    newFileBtn.addEventListener('click', onNewFile);
+    newFolderBtn.addEventListener('click', onNewFolder);
     loadWasm().then((m) => {
       wasmModule = m;
       if (m) showBanner('');

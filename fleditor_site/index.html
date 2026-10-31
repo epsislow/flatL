@@ -13,20 +13,36 @@
   <div class="fleditor-app">
     <header class="fleditor-toolbar">
       <h1>flatL fleditor</h1>
+      <button type="button" id="undoBtn" title="Undo">Undo</button>
+      <button type="button" id="redoBtn" title="Redo">Redo</button>
+      <button type="button" id="saveBtn">Save</button>
       <button type="button" id="runBtn" class="btn-run">Run</button>
       <button type="button" id="clearBtn">Clear terminal</button>
       <span id="status" class="fleditor-status">idle</span>
     </header>
     <div id="wasmBanner" class="fleditor-banner" hidden></div>
-    <div class="fleditor-panels">
-      <section class="fleditor-editor-wrap">
-        <div class="fleditor-panel-label">Source (.fl)</div>
-        <textarea id="code" spellcheck="false"></textarea>
-      </section>
-      <section class="fleditor-right">
-        <div class="fleditor-panel-label">Terminal (I/O)</div>
-        <div id="terminalHost"></div>
-      </section>
+    <div class="fleditor-main">
+      <aside class="fleditor-sidebar">
+        <div class="fleditor-sidebar-head">
+          <span class="fleditor-sidebar-title">Project</span>
+          <button type="button" id="newFileBtn" class="fleditor-sidebar-btn">New file</button>
+          <button type="button" id="newFolderBtn" class="fleditor-sidebar-btn">New folder</button>
+        </div>
+        <div id="fileTree" class="fleditor-tree" role="tree"></div>
+      </aside>
+      <div class="fleditor-panels">
+        <section class="fleditor-editor-wrap">
+          <div class="fleditor-panel-label">
+            <span id="editorPathLabel">Source (.fl)</span>
+            <span id="dirtyBadge" class="fleditor-dirty" hidden title="Unsaved changes">●</span>
+          </div>
+          <textarea id="code" spellcheck="false"></textarea>
+        </section>
+        <section class="fleditor-right">
+          <div class="fleditor-panel-label">Terminal (I/O)</div>
+          <div id="terminalHost"></div>
+        </section>
+      </div>
     </div>
   </div>
   <dialog id="ioModal" class="fleditor-io-modal" aria-labelledby="ioModalTitle">
@@ -40,9 +56,20 @@
       </div>
     </form>
   </dialog>
+  <dialog id="unsavedModal" class="fleditor-io-modal" aria-labelledby="unsavedModalTitle">
+    <div class="fleditor-io-form">
+      <h2 id="unsavedModalTitle" class="fleditor-io-title">Unsaved changes</h2>
+      <p class="fleditor-io-hint">You have unsaved changes. They will be lost if you continue.</p>
+      <div class="fleditor-io-actions">
+        <button type="button" id="unsavedContinueBtn" class="fleditor-io-btn fleditor-io-btn--primary">Continue</button>
+        <button type="button" id="unsavedCancelBtn" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </div>
+  </dialog>
   <script src="ext/codemirror.min.js"></script>
   <script src="ext/xterm.js"></script>
   <script src="js/mode-flatl.js"></script>
-  <script src="js/fleditor.js?v=17"></script>
+  <script src="js/fleditor-project.js"></script>
+  <script src="js/fleditor.js?v=18"></script>
 </body>
 </html>

@@ -54,7 +54,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild fleditor-wasm fleditor-serve fleditor-smoke fleditor-wasm-smoke
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild fleditor-wasm fleditor-serve fleditor-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -75,6 +75,7 @@ help:
 	@echo "  make fleditor-wasm   Emscripten → fleditor_site/wasm/ (needs emcc)"
 	@echo "  make fleditor-serve  node fleditor_site/node/serve.js 8765"
 	@echo "  make fleditor-smoke  HTTP smoke test for fleditor static server"
+	@echo "  make fleditor-wasm-smoke / fleditor-wasm-multifile-smoke  headless WASM tests"
 	@echo "  make rebuild      make clean && make all (force full recompile)"
 	@echo ""
 	@echo "Note: if sources unchanged, make skips compile (up to date)."
@@ -217,6 +218,9 @@ fleditor-smoke:
 
 fleditor-wasm-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_smoke.mjs
+
+fleditor-wasm-multifile-smoke: fleditor-wasm
+	$(NODE) test/fleditor/wasm_multifile_smoke.mjs
 
 clean:
 	rm -rf $(BINDIR)
