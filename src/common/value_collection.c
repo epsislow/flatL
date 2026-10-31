@@ -56,6 +56,22 @@ static void elem_unbind(FlatCollectionPool *pool, FlatStringPool *str_pool, cons
     flat_value_release(pool, str_pool, v);
 }
 
+/* COW helpers allocate a new slot via *_empty, which reaps bindCount==0 collections.
+   Literals parsed as call args ({}, []) are not bound yet — pin them until elem_bind. */
+static void cow_pin_ephemeral(const FlatValue *v, FlatCollectionPool *coll,
+                              FlatStringPool *str_pool) {
+    if (v && (v->tag == VAL_LIST || v->tag == VAL_OBJECT)) {
+        flat_value_retain(coll, str_pool, v);
+    }
+}
+
+static void cow_unpin_ephemeral(const FlatValue *v, FlatCollectionPool *coll,
+                                FlatStringPool *str_pool) {
+    if (v && (v->tag == VAL_LIST || v->tag == VAL_OBJECT)) {
+        flat_value_release(coll, str_pool, v);
+    }
+}
+
 void flat_coll_set_live_stats(FlatCollectionPool *pool, FlatMemLiveStats *stats) {
     if (pool) {
         pool->live = stats;
@@ -380,11 +396,20 @@ static int list_clone_append(FlatCollectionPool *pool, FlatStringPool *str_pool,
         return -1;
     }
     src = &pool->lists[src_id];
+    if (extra) {
+        cow_pin_ephemeral(extra, pool, str_pool);
+    }
     if (flat_list_empty(pool, str_pool, out_id) != 0) {
+        if (extra) {
+            cow_unpin_ephemeral(extra, pool, str_pool);
+        }
         return -1;
     }
     dst = &pool->lists[*out_id];
     if (list_grow(dst, src->len + (extra ? 1 : 0)) != 0) {
+        if (extra) {
+            cow_unpin_ephemeral(extra, pool, str_pool);
+        }
         return -1;
     }
     for (i = 0; i < src->len; i++) {
@@ -395,6 +420,7 @@ static int list_clone_append(FlatCollectionPool *pool, FlatStringPool *str_pool,
     if (extra) {
         dst->items[dst->len++] = *extra;
         elem_bind(pool, str_pool, extra);
+        cow_unpin_ephemeral(extra, pool, str_pool);
     }
     return 0;
 }
@@ -417,11 +443,14 @@ int flat_list_insert_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, ui
     if (index < 0 || index > src->len) {
         return -1;
     }
+    cow_pin_ephemeral(item, pool, str_pool);
     if (flat_list_empty(pool, str_pool, out_id) != 0) {
+        cow_unpin_ephemeral(item, pool, str_pool);
         return -1;
     }
     dst = &pool->lists[*out_id];
     if (list_grow(dst, src->len + 1) != 0) {
+        cow_unpin_ephemeral(item, pool, str_pool);
         return -1;
     }
     for (i = 0; i < index; i++) {
@@ -435,6 +464,7 @@ int flat_list_insert_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, ui
         elem_bind(pool, str_pool, &dst->items[i + 1]);
     }
     dst->len = src->len + 1;
+    cow_unpin_ephemeral(item, pool, str_pool);
     return 0;
 }
 
@@ -456,11 +486,14 @@ int flat_list_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint3
     if (index < 0 || index >= src->len) {
         return -1;
     }
+    cow_pin_ephemeral(val, pool, str_pool);
     if (flat_list_empty(pool, str_pool, out_id) != 0) {
+        cow_unpin_ephemeral(val, pool, str_pool);
         return -1;
     }
     dst = &pool->lists[*out_id];
     if (list_grow(dst, src->len) != 0) {
+        cow_unpin_ephemeral(val, pool, str_pool);
         return -1;
     }
     for (i = 0; i < src->len; i++) {
@@ -471,6 +504,7 @@ int flat_list_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint3
     elem_unbind(pool, str_pool, &dst->items[index]); /* drop the copy made above */
     dst->items[index] = *val;
     elem_bind(pool, str_pool, val);
+    cow_unpin_ephemeral(val, pool, str_pool);
     return 0;
 }
 
@@ -599,7 +633,13 @@ int flat_list_build(FlatCollectionPool *pool, FlatStringPool *str_pool, const Fl
     if (!pool || !out_id || count < 0 || count > FLAT_LIST_MAX_ELEMS) {
         return -1;
     }
+    for (i = 0; i < count; i++) {
+        cow_pin_ephemeral(&items[i], pool, str_pool);
+    }
     if (flat_list_empty(pool, str_pool, out_id) != 0) {
+        for (i = 0; i < count; i++) {
+            cow_unpin_ephemeral(&items[i], pool, str_pool);
+        }
         return -1;
     }
     lb = &pool->lists[*out_id];
@@ -607,11 +647,15 @@ int flat_list_build(FlatCollectionPool *pool, FlatStringPool *str_pool, const Fl
         return 0;
     }
     if (list_grow(lb, count) != 0) {
+        for (i = 0; i < count; i++) {
+            cow_unpin_ephemeral(&items[i], pool, str_pool);
+        }
         return -1;
     }
     for (i = 0; i < count; i++) {
         lb->items[i] = items[i];
         elem_bind(pool, str_pool, &lb->items[i]);
+        cow_unpin_ephemeral(&items[i], pool, str_pool);
     }
     lb->len = count;
     return 0;
@@ -689,11 +733,14 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
         return -1;
     }
     src = &pool->objects[obj_id];
+    cow_pin_ephemeral(val, pool, str_pool);
     if (flat_obj_empty(pool, str_pool, out_id) != 0) {
+        cow_unpin_ephemeral(val, pool, str_pool);
         return -1;
     }
     dst = &pool->objects[*out_id];
     if (obj_grow(dst, src->len + 1) != 0) {
+        cow_unpin_ephemeral(val, pool, str_pool);
         return -1;
     }
     for (i = 0; i < src->len; i++) {
@@ -708,6 +755,7 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
         elem_bind(pool, str_pool, val);
     } else {
         if (dst->len >= FLAT_OBJ_MAX_KEYS) {
+            cow_unpin_ephemeral(val, pool, str_pool);
             return -1;
         }
         snprintf(dst->entries[dst->len].key, sizeof dst->entries[dst->len].key, "%s", key);
@@ -715,6 +763,7 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
         elem_bind(pool, str_pool, val);
         dst->len++;
     }
+    cow_unpin_ephemeral(val, pool, str_pool);
     return 0;
 }
 
@@ -791,7 +840,13 @@ int flat_obj_build(FlatCollectionPool *pool, FlatStringPool *str_pool,
     if (!pool || !keys || !vals || !out_id || count < 0 || count > FLAT_OBJ_MAX_KEYS) {
         return -1;
     }
+    for (i = 0; i < count; i++) {
+        cow_pin_ephemeral(&vals[i], pool, str_pool);
+    }
     if (flat_obj_empty(pool, str_pool, out_id) != 0) {
+        for (i = 0; i < count; i++) {
+            cow_unpin_ephemeral(&vals[i], pool, str_pool);
+        }
         return -1;
     }
     ob = &pool->objects[*out_id];
@@ -799,12 +854,16 @@ int flat_obj_build(FlatCollectionPool *pool, FlatStringPool *str_pool,
         return 0;
     }
     if (obj_grow(ob, count) != 0) {
+        for (i = 0; i < count; i++) {
+            cow_unpin_ephemeral(&vals[i], pool, str_pool);
+        }
         return -1;
     }
     for (i = 0; i < count; i++) {
         snprintf(ob->entries[i].key, sizeof ob->entries[i].key, "%s", keys[i]);
         ob->entries[i].val = vals[i];
         elem_bind(pool, str_pool, &vals[i]);
+        cow_unpin_ephemeral(&vals[i], pool, str_pool);
     }
     ob->len = count;
     return 0;

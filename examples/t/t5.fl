@@ -5,6 +5,7 @@ use native obj with O
   O.set(o, 'x', 2) -> o
   O.set(o, 'y', 2.5) -> o
   O.set(o, 'info', ['a', 'b', 'c'] ) -> o 
-  io.outln(o.info)
+  O.get(o, 'info') -> info
+  io.outln(info)
   OK
 

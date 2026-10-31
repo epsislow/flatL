@@ -1,7 +1,7 @@
 use native obj with O
 
 #main
-  o = { x: 1, out: { set: true }
+  o = { x: 1, out: { set: true } }
   O.set(o, 'x', 2) -> o
   O.set(o, 'y', 2.5) -> o
   O.set(o, 'info', ['a', 'b', 'c'] ) -> o 

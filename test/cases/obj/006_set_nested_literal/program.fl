@@ -1,0 +1,16 @@
+use native obj with O
+
+#main
+  o = { x: 1 }
+  O.set(o, 'x', 2) -> o
+  O.set(o, 'y', 2.5) -> o
+  O.set(o, 'info', ['a', 'b', 'c']) -> o
+  O.set(o, 'in', {}) -> o
+  O.set(o, 'in2', { q: 0.4 }) -> o
+  O.get(o, 'in') -> inn
+  O.len(inn) -> li
+  O.get(o, 'in2') -> in2
+  O.get(in2, 'q') -> qv
+  io.outln(li)
+  io.outln(qv)
+  OK
