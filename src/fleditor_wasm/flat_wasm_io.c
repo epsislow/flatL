@@ -46,7 +46,8 @@ EM_JS(void, flat_wasm_js_stdout, (const char *ptr, int len), {
   Module['flatWasmOnStdout'](heap.subarray(start, end));
 });
 
-EM_JS(void, flat_wasm_js_start_read_line, (char *buf, int buf_size, int allow_empty), {
+EM_JS(void, flat_wasm_js_start_read_line,
+      (char *buf, int buf_size, int allow_empty, const char *prompt, int input_kind), {
   Module._flatWasmIoPending = { done: false, status: 0 };
   var cb = (typeof Module !== 'undefined' && Module['flatWasmOnNeedLine'])
     ? Module['flatWasmOnNeedLine']
@@ -57,7 +58,8 @@ EM_JS(void, flat_wasm_js_start_read_line, (char *buf, int buf_size, int allow_em
     Module._flatWasmIoPending.status = 2;
     return;
   }
-  cb(allow_empty, function(line, status) {
+  var promptStr = prompt ? UTF8ToString(prompt) : "";
+  cb(allow_empty, promptStr, input_kind | 0, function(line, status) {
     stringToUTF8(line || "", buf, buf_size);
     Module._flatWasmIoPending.status = status | 0;
     Module._flatWasmIoPending.done = true;
@@ -72,7 +74,7 @@ EM_JS(int, flat_wasm_js_io_status, (), {
   return Module._flatWasmIoPending ? (Module._flatWasmIoPending.status | 0) : 2;
 });
 
-EM_JS(void, flat_wasm_js_start_read_char, (char *ch_out), {
+EM_JS(void, flat_wasm_js_start_read_char, (char *ch_out, const char *prompt), {
   Module._flatWasmIoPending = { done: false, status: 0 };
   var cb = (typeof Module !== 'undefined' && Module['flatWasmOnNeedChar'])
     ? Module['flatWasmOnNeedChar']
@@ -83,7 +85,8 @@ EM_JS(void, flat_wasm_js_start_read_char, (char *ch_out), {
     Module._flatWasmIoPending.status = 2;
     return;
   }
-  cb(function(ch, status) {
+  var promptStr = prompt ? UTF8ToString(prompt) : "";
+  cb(promptStr, function(ch, status) {
     setValue(ch_out, ch | 0, 'i8');
     Module._flatWasmIoPending.status = status | 0;
     Module._flatWasmIoPending.done = true;
@@ -97,13 +100,14 @@ void flat_wasm_io_write_stdout(const char *s, size_t n) {
     flat_wasm_js_stdout(s, (int)n);
 }
 
-int flat_wasm_io_read_line(char *buf, size_t buf_size, int allow_empty, FlatIoStatus *st) {
+int flat_wasm_io_read_line(char *buf, size_t buf_size, int allow_empty, const char *prompt,
+                           int input_kind, FlatIoStatus *st) {
     int status;
 
     if (!buf || buf_size == 0 || !st) {
         return -1;
     }
-    flat_wasm_js_start_read_line(buf, (int)buf_size, allow_empty);
+    flat_wasm_js_start_read_line(buf, (int)buf_size, allow_empty, prompt, input_kind);
     while (!flat_wasm_js_io_poll_done()) {
         emscripten_sleep(1);
     }
@@ -112,13 +116,13 @@ int flat_wasm_io_read_line(char *buf, size_t buf_size, int allow_empty, FlatIoSt
     return 0;
 }
 
-int flat_wasm_io_read_char(char *ch_out, FlatIoStatus *st) {
+int flat_wasm_io_read_char(char *ch_out, const char *prompt, FlatIoStatus *st) {
     int status;
 
     if (!ch_out || !st) {
         return -1;
     }
-    flat_wasm_js_start_read_char(ch_out);
+    flat_wasm_js_start_read_char(ch_out, prompt);
     while (!flat_wasm_js_io_poll_done()) {
         emscripten_sleep(1);
     }

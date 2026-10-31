@@ -45,7 +45,17 @@ if (r1.rc !== 0 || !r1.out.includes('hello from fleditor')) {
 }
 
 const inln = "#main\n  io.inln('Name:') -> name\n  io.outln(name)\n  OK\n";
-const r2 = await runSource(null, inln, (_ae, wake) => wake('Ada', 0));
+const r2 = await runSource(null, inln, (_ae, prompt, kind, wake) => {
+  if (typeof prompt === 'function') {
+    prompt('Ada', 0);
+    return;
+  }
+  if (prompt !== 'Name:') {
+    console.error('wasm_smoke: unexpected prompt', JSON.stringify(prompt), 'kind', kind);
+    process.exit(1);
+  }
+  wake('Ada', 0);
+});
 if (r2.rc !== 0 || !r2.out.includes('Ada')) {
   console.error('wasm_smoke: inln failed', r2);
   process.exit(1);

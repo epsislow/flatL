@@ -51,7 +51,7 @@ Refresh vendored UI libs: `./scripts/vendor-fleditor-ext.sh`
 ## I/O model
 
 - **Stdout** (`io.out*`) → xterm.js terminal.
-- **Stdin** (`io.in*`) → in-page **modal** (`<dialog>`); OK/Cancel call back into WASM via Asyncify. Your line is echoed in the terminal after OK. Prompts from the program (e.g. `Name:`) still appear in xterm first. If `<dialog>` is unavailable, the UI falls back to `window.prompt`.
+- **Stdin** (`io.in*`) → in-page **modal** (`<dialog>`); the title uses the program prompt (e.g. `Name: (ln)` for `io.inln('Name:')`, truncated to 32 chars + `…` if needed). OK/Cancel resume WASM via `emscripten_sleep` polling. If `<dialog>` is unavailable, the UI falls back to `window.prompt`.
 - Empty line on `io.inln` / `io.in_num` / `io.in_bool` → cancel (`#panic.any`), same as desktop [IO.md](IO.md).
 - Single-character `io.in`: ESC or Enter → cancel.
 

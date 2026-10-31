@@ -1,9 +1,7 @@
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 
-#ifdef FLAT_WASM_BUILD
 #include "flat_wasm_io.h"
-#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -19,9 +17,10 @@ static void emit_prompt(const char *prompt) {
     }
 }
 
-static int read_line(char *buf, size_t buf_size, FlatIoStatus *st) {
+static int read_line_with_prompt(char *buf, size_t buf_size, int allow_empty, const char *prompt,
+                                 int input_kind, FlatIoStatus *st) {
 #ifdef FLAT_WASM_BUILD
-    if (flat_wasm_io_read_line(buf, buf_size, 0, st) != 0) {
+    if (flat_wasm_io_read_line(buf, buf_size, allow_empty, prompt, input_kind, st) != 0) {
         *st = FLAT_IO_PANIC_EOF;
         return 0;
     }
@@ -29,6 +28,9 @@ static int read_line(char *buf, size_t buf_size, FlatIoStatus *st) {
         return 0;
     }
 #else
+    (void)prompt;
+    (void)input_kind;
+    (void)allow_empty;
     if (!fgets(buf, (int)buf_size, stdin)) {
         *st = FLAT_IO_PANIC_EOF;
         return 0;
@@ -41,7 +43,7 @@ static int read_line(char *buf, size_t buf_size, FlatIoStatus *st) {
         }
     }
     flat_native_trim(buf);
-    if (buf[0] == '\0') {
+    if (!allow_empty && buf[0] == '\0') {
         *st = FLAT_IO_PANIC_CANCEL;
         return 0;
     }
@@ -49,38 +51,12 @@ static int read_line(char *buf, size_t buf_size, FlatIoStatus *st) {
     return 0;
 }
 
-static int read_line_allow_empty(char *buf, size_t buf_size, FlatIoStatus *st) {
-#ifdef FLAT_WASM_BUILD
-    if (flat_wasm_io_read_line(buf, buf_size, 1, st) != 0) {
-        *st = FLAT_IO_PANIC_EOF;
-        return 0;
-    }
-    if (*st != FLAT_IO_OK) {
-        return 0;
-    }
-#else
-    if (!fgets(buf, (int)buf_size, stdin)) {
-        *st = FLAT_IO_PANIC_EOF;
-        return 0;
-    }
-#endif
-    {
-        size_t n = strlen(buf);
-        if (n > 0 && buf[n - 1] == '\n') {
-            buf[n - 1] = '\0';
-        }
-    }
-    flat_native_trim(buf);
-    *st = FLAT_IO_OK;
-    return 0;
-}
-
-static int read_one_char(FlatValue *out, FlatIoStatus *st) {
+static int read_one_char_with_prompt(FlatValue *out, FlatIoStatus *st, const char *prompt) {
     char ch[2];
 #ifdef FLAT_WASM_BUILD
     char c = 0;
 
-    if (flat_wasm_io_read_char(&c, st) != 0) {
+    if (flat_wasm_io_read_char(&c, prompt ? prompt : "", st) != 0) {
         *st = FLAT_IO_PANIC_EOF;
         return 0;
     }
@@ -95,6 +71,7 @@ static int read_one_char(FlatValue *out, FlatIoStatus *st) {
 #else
     int c = fgetc(stdin);
 
+    (void)prompt;
     if (c == EOF) {
         *st = FLAT_IO_PANIC_EOF;
         return 0;
@@ -275,23 +252,19 @@ int flat_native_io_in(FlatNativeCtx *ctx) {
         return -1;
     }
     emit_prompt(prompt);
-    read_one_char(ctx->out, ctx->io_status);
+    read_one_char_with_prompt(ctx->out, ctx->io_status, prompt);
     return 0;
 }
 
 static int io_read_stdin_line(FlatNativeCtx *ctx, char *linebuf, size_t linebuf_size,
-                              int allow_empty) {
+                              int allow_empty, int input_kind) {
     char prompt[256];
 
     if (eval_prompt(ctx, prompt, sizeof prompt) != 0) {
         return -1;
     }
     emit_prompt(prompt);
-    if (allow_empty) {
-        read_line_allow_empty(linebuf, linebuf_size, ctx->io_status);
-    } else {
-        read_line(linebuf, linebuf_size, ctx->io_status);
-    }
+    read_line_with_prompt(linebuf, linebuf_size, allow_empty, prompt, input_kind, ctx->io_status);
     return 0;
 }
 
@@ -301,7 +274,7 @@ int flat_native_io_inln(FlatNativeCtx *ctx) {
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
-    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 0) != 0) {
+    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 0, FLAT_WASM_IO_KIND_LN) != 0) {
         return -1;
     }
     if (*ctx->io_status != FLAT_IO_OK) {
@@ -316,7 +289,7 @@ int flat_native_io_in_num(FlatNativeCtx *ctx) {
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
-    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 0) != 0) {
+    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 0, FLAT_WASM_IO_KIND_NUM) != 0) {
         return -1;
     }
     if (*ctx->io_status != FLAT_IO_OK) {
@@ -331,7 +304,7 @@ int flat_native_io_in_bool(FlatNativeCtx *ctx) {
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
-    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 0) != 0) {
+    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 0, FLAT_WASM_IO_KIND_BOOL) != 0) {
         return -1;
     }
     if (*ctx->io_status != FLAT_IO_OK) {
@@ -346,7 +319,7 @@ int flat_native_io_in_list(FlatNativeCtx *ctx) {
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
-    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 1) != 0) {
+    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 1, FLAT_WASM_IO_KIND_LIST) != 0) {
         return -1;
     }
     if (*ctx->io_status != FLAT_IO_OK) {
@@ -361,7 +334,7 @@ int flat_native_io_in_object(FlatNativeCtx *ctx) {
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
-    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 1) != 0) {
+    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 1, FLAT_WASM_IO_KIND_OBJECT) != 0) {
         return -1;
     }
     if (*ctx->io_status != FLAT_IO_OK) {
@@ -376,7 +349,7 @@ int flat_native_io_in_bools(FlatNativeCtx *ctx) {
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
-    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 1) != 0) {
+    if (io_read_stdin_line(ctx, linebuf, sizeof linebuf, 1, FLAT_WASM_IO_KIND_BOOLS) != 0) {
         return -1;
     }
     if (*ctx->io_status != FLAT_IO_OK) {

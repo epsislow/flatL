@@ -9,6 +9,16 @@
   const IO_PANIC_EOF = 2;
   const IO_PANIC_CANCEL = 3;
 
+  const IO_PROMPT_MAX = 32;
+  const IO_KIND_SUFFIX = {
+    0: ' (ln)',
+    1: ' (num)',
+    2: ' (bool)',
+    3: ' (list)',
+    4: ' (obj)',
+    5: ' (bools)',
+  };
+
   const statusEl = document.getElementById('status');
   const bannerEl = document.getElementById('wasmBanner');
   const runBtn = document.getElementById('runBtn');
@@ -100,6 +110,45 @@
     finishIoWake(value, IO_OK);
   }
 
+  function truncateIoPrompt(text) {
+    const s = (text || '').trim();
+    if (s.length <= IO_PROMPT_MAX) {
+      return s;
+    }
+    return s.slice(0, IO_PROMPT_MAX) + '…';
+  }
+
+  function formatLineModalTitle(prompt, kind) {
+    const suffix = IO_KIND_SUFFIX[kind] || ' (ln)';
+    const p = truncateIoPrompt(prompt);
+    if (!p) {
+      return 'Input:' + suffix;
+    }
+    return p + suffix;
+  }
+
+  function formatCharModalTitle(prompt) {
+    const p = truncateIoPrompt(prompt);
+    if (!p) {
+      return 'Input:';
+    }
+    return p;
+  }
+
+  function parseNeedLineHook(allowEmpty, a, b, c) {
+    if (typeof a === 'function') {
+      return { allowEmpty: allowEmpty, prompt: '', kind: 0, wake: a };
+    }
+    return { allowEmpty: allowEmpty, prompt: a || '', kind: b | 0, wake: c };
+  }
+
+  function parseNeedCharHook(a, b) {
+    if (typeof a === 'function') {
+      return { prompt: '', wake: a };
+    }
+    return { prompt: a || '', wake: b };
+  }
+
   function finishIoWake(line, status) {
     const wake = ioPendingWake;
     ioPendingWake = null;
@@ -111,7 +160,7 @@
 
   function openIoModal(options) {
     if (!ioDialog) {
-      const line = window.prompt(options.title + '\n' + options.hint, '');
+      const line = window.prompt(options.title, '');
       if (line === null) {
         options.wake('', IO_PANIC_EOF);
       } else if (!options.allowEmpty && line.trim() === '') {
@@ -129,7 +178,10 @@
     ioAllowEmpty = !!options.allowEmpty;
     ioCharMode = !!options.charMode;
     ioTitle.textContent = options.title;
-    ioHint.textContent = options.hint;
+    if (ioHint) {
+      ioHint.hidden = true;
+      ioHint.textContent = '';
+    }
     ioInput.value = '';
     ioInput.maxLength = options.charMode ? 8 : 8000;
     ioDialog.showModal();
@@ -178,26 +230,24 @@
         const text = new TextDecoder().decode(u8);
         if (term) term.write(text);
       },
-      flatWasmOnNeedLine: function (allowEmpty, wake) {
-        setStatus(allowEmpty ? 'waiting input (line, empty ok)' : 'waiting input (line)');
+      flatWasmOnNeedLine: function (allowEmpty, prompt, kind, wake) {
+        const io = parseNeedLineHook(allowEmpty, prompt, kind, wake);
+        setStatus(io.allowEmpty ? 'waiting input (line, empty ok)' : 'waiting input (line)');
         openIoModal({
-          title: 'Input line',
-          hint: allowEmpty
-            ? 'Text for io.in* (empty line is allowed). Cancel or Esc = end of input (EOF).'
-            : 'Text for io.in* (io.inln, io.in_num, …). Empty line cancels the run. Cancel or Esc = EOF.',
-          allowEmpty: allowEmpty,
+          title: formatLineModalTitle(io.prompt, io.kind),
+          allowEmpty: io.allowEmpty,
           charMode: false,
-          wake: wake,
+          wake: io.wake,
         });
       },
-      flatWasmOnNeedChar: function (wake) {
+      flatWasmOnNeedChar: function (prompt, wake) {
+        const io = parseNeedCharHook(prompt, wake);
         setStatus('waiting input (char)');
         openIoModal({
-          title: 'Input character',
-          hint: 'One character for io.in. Cancel or Esc = EOF.',
+          title: formatCharModalTitle(io.prompt),
           allowEmpty: false,
           charMode: true,
-          wake: wake,
+          wake: io.wake,
         });
       },
     };
