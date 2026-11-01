@@ -56,13 +56,19 @@ Windows without Emscripten: use prebuilt `docs/fleditor_site/wasm/flatl.js` + `f
 
 ## GitHub Pages
 
-Publish from branch **`main`**, folder **`/docs`**. The repo layout matches local serve:
+Publish from branch **`main`**, folder **`/docs`** (Settings → Pages → **Deploy from a branch** → `/docs`).
 
-- `docs/index.html` → redirect to `fleditor_site/`
-- `docs/fleditor_site/` — editor (+ committed WASM)
-- `docs/doc_site/` — run **`make docs`** before push
+When `/docs` is active, the **site root** is the contents of `docs/` — URLs do **not** include `/docs/` in the path:
 
-Enable Pages in repo settings after the bundle is on `main`.
+| Path on site | Example (project `flatL`) |
+|--------------|---------------------------|
+| Editor | `https://<user>.github.io/flatL/fleditor_site/` |
+| Docs viewer | `https://<user>.github.io/flatL/doc_site/` |
+| Landing | `https://<user>.github.io/flatL/` → redirect to editor |
+
+If you still see the **README (Jekyll)** at `/flatL/` or need `/flatL/docs/fleditor_site/` to open the editor, Pages is publishing the **repo root** instead of `/docs`. Fix the folder to **`/docs`**, wait a few minutes, or use repo-root **`index.html`** + **`.nojekyll`** (redirect to `docs/fleditor_site/`) until the setting applies.
+
+Run **`make docs`** before push so `docs/doc_site/` is up to date. **`docs/.nojekyll`** disables Jekyll inside the published folder.
 
 ## Layout (under `docs/fleditor_site/`)
 
