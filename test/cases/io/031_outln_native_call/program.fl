@@ -1,0 +1,4 @@
+#main
+  io.outln('hello from fleditor')
+  io.outln(mem.vars_max())
+  OK

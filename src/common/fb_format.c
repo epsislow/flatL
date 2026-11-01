@@ -43,6 +43,70 @@ size_t flat_fb_native_section_size(int decl_count, const FlatOptionalNativeDecl 
     return n;
 }
 
+size_t flat_fb_label_section_size(uint16_t count) {
+    return 4u + 2u + (size_t)count * 2u; /* magic + count; per label u16 len + bytes added separately */
+}
+
+int flat_fb_write_label_section(FILE *f, uint16_t count, const char labels[][FGIR_MAX_LABEL]) {
+    uint32_t magic = FLAT_FB_LABEL_MAGIC;
+    uint16_t i;
+
+    if (!f || count == 0) {
+        return -1;
+    }
+    if (write_bytes(f, &magic, 4) != 0 || write_bytes(f, &count, 2) != 0) {
+        return -1;
+    }
+    for (i = 0; i < count; i++) {
+        size_t len = strlen(labels[i]);
+        uint16_t ulen;
+        if (len == 0 || len >= FGIR_MAX_LABEL) {
+            return -1;
+        }
+        ulen = (uint16_t)len;
+        if (write_bytes(f, &ulen, 2) != 0 || write_bytes(f, labels[i], len) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int parse_label_section(const uint8_t *sec, size_t sec_len, uint16_t expect_count,
+                               char (*out_labels)[FGIR_MAX_LABEL]) {
+    uint32_t magic;
+    uint16_t count;
+    size_t pos = 0;
+    int i;
+
+    if (!sec || sec_len < 6 || !out_labels) {
+        return -1;
+    }
+    magic = read_u32_le(sec);
+    if (magic != FLAT_FB_LABEL_MAGIC) {
+        return -1;
+    }
+    count = read_u16_le(sec + 4);
+    if (count != expect_count) {
+        return -1;
+    }
+    pos = 6;
+    for (i = 0; i < (int)count; i++) {
+        uint16_t ulen;
+        if (pos + 2 > sec_len) {
+            return -1;
+        }
+        ulen = read_u16_le(sec + pos);
+        pos += 2;
+        if (ulen == 0 || ulen >= FGIR_MAX_LABEL || pos + ulen > sec_len) {
+            return -1;
+        }
+        memcpy(out_labels[i], sec + pos, ulen);
+        out_labels[i][ulen] = '\0';
+        pos += ulen;
+    }
+    return pos == sec_len ? 0 : -1;
+}
+
 int flat_fb_write_native_section(FILE *f, int decl_count, const FlatOptionalNativeDecl *decls) {
     uint16_t count;
     uint32_t tail_magic = FLAT_FB_TAIL_MAGIC;
@@ -166,6 +230,39 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
     count = read_u16_le(buf + 6);
     native_off = read_u32_le(buf + 8);
     out->var_slots = read_u32_le(buf + 12);
+    {
+        uint32_t labels_off = read_u32_le(buf + 16);
+
+        if (labels_off != 0 && labels_off <= fsize) {
+            out->code_size = labels_off;
+        } else if (native_off != 0 && native_off <= fsize) {
+            out->code_size = native_off;
+        } else {
+            out->code_size = fsize;
+        }
+        if (labels_off != 0) {
+            size_t label_len;
+            if (labels_off >= fsize) {
+                free(buf);
+                fprintf(stderr, "flvm: block label offset out of range\n");
+                return -1;
+            }
+            label_len = native_off != 0 ? (size_t)(native_off - labels_off)
+                                        : (size_t)(fsize - labels_off);
+            out->block_labels = calloc(count, FGIR_MAX_LABEL);
+            if (!out->block_labels) {
+                free(buf);
+                return -1;
+            }
+            if (parse_label_section(buf + labels_off, label_len, count, out->block_labels) != 0) {
+                free(out->block_labels);
+                out->block_labels = NULL;
+                free(buf);
+                fprintf(stderr, "flvm: invalid block label section\n");
+                return -1;
+            }
+        }
+    }
     if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
         free(buf);
         fprintf(stderr, "flvm: var_slots %u exceeds FLAT_MAX_VARS (%d)\n",
@@ -304,6 +401,7 @@ void flat_fb_free(FlatBytecode *bc) {
     }
     free(bc->data);
     free(bc->blocks);
+    free(bc->block_labels);
     memset(bc, 0, sizeof *bc);
 }
 
@@ -315,11 +413,16 @@ int flat_fb_write_min_ok(const char *path) {
     const uint8_t count[2] = { 1, 0 };
     const uint8_t native_off[4] = { 0, 0, 0, 0 };
     const uint8_t var_slots[4] = { 0, 0, 0, 0 };
+    const uint8_t labels_off_bytes[4] = { 30, 0, 0, 0 }; /* FLAT_FB_HEADER_SIZE + dir + code */
     const uint8_t dir[8] = {
         0, 0, 0, 0, /* block_id main = 0 */
-        24, 0, 0, 0  /* offset = 16 + 8 */
+        28, 0, 0, 0  /* code offset */
     };
     const uint8_t code[2] = { OP_OK, 0 };
+    const uint32_t blbl_magic = FLAT_FB_LABEL_MAGIC;
+    const uint16_t blbl_count = 1;
+    const uint16_t main_len = 5;
+    const char main_label[] = "#main";
 
     f = fopen(path, "wb");
     if (!f) {
@@ -329,8 +432,10 @@ int flat_fb_write_min_ok(const char *path) {
     if (write_bytes(f, magic, 4) != 0 || write_bytes(f, sentinel, 1) != 0 ||
         write_bytes(f, version, 1) != 0 || write_bytes(f, count, 2) != 0 ||
         write_bytes(f, native_off, 4) != 0 || write_bytes(f, var_slots, 4) != 0 ||
-        write_bytes(f, dir, 8) != 0 ||
-        write_bytes(f, code, 2) != 0) {
+        write_bytes(f, labels_off_bytes, 4) != 0 || write_bytes(f, dir, 8) != 0 ||
+        write_bytes(f, code, 2) != 0 || write_bytes(f, &blbl_magic, 4) != 0 ||
+        write_bytes(f, &blbl_count, 2) != 0 || write_bytes(f, &main_len, 2) != 0 ||
+        write_bytes(f, main_label, main_len) != 0) {
         fclose(f);
         return -1;
     }

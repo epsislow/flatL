@@ -164,7 +164,8 @@ int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool
 int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                                FlatValue *vars, int var_count, const char (*var_names)[64],
                                FlatValue *out_result, FlatIoStatus *out_status,
-                               const FlatOptionalNativeDecl *decls, int decl_count);
+                               const FlatOptionalNativeDecl *decls, int decl_count,
+                               FlatMemLiveStats *mem_live, uint32_t vars_max);
 
 int flat_json_parse(const char *s, FlatValue *out, FlatStringPool *pool, FlatCollectionPool *coll);
 int flat_json_parse_list(const char *s, FlatValue *out, FlatStringPool *pool,

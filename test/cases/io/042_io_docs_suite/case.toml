@@ -1,0 +1,13 @@
+suite = "io"
+id = 42
+desc = "io.docs suite script checks"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "sh {case}/run_checks.sh {root} {tmp}/out.fb"
+expect_exit = 0
+
+[flatl]
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "sh {case}/run_checks.sh {root} {tmp}/out.fb"

@@ -1,0 +1,5 @@
+#main
+  io.docs('mem.vars_max')
+  io.docs('str.slice')
+  io.docs('io.outln')
+  OK

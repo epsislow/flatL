@@ -40,10 +40,10 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_d
                 src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_mem.c \
                 $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
-VM_SRC  = src/common/vm.c src/common/value_pool.c src/common/value_collection.c \
-          src/common/value_live.c src/common/value_ops.c src/common/value_parse.c \
-          src/common/value_format.c src/common/value_io.c src/common/value_json.c $(STR_SRC) \
-          $(NATIVE_VM_SRC)
+VM_SRC  = src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
+          src/common/value_collection.c src/common/value_live.c src/common/value_ops.c \
+          src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
+          src/common/value_json.c $(STR_SRC) $(NATIVE_VM_SRC)
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/native_use.c \
            $(STR_SRC) $(NATIVE_FLC_SRC)
 FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \

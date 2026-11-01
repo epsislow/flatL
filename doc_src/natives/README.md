@@ -26,6 +26,8 @@ Rules:
 
 Declarations in **any** linked source file apply to the **whole** program after `flc` / `flatl compile` linking.
 
+Runtime discovery: **`io.docs('module')`**, **`io.docs('alias')`**, or **`io.docs('#Prefix')`** for linked blocks — see [IO.md §2.1](../IO.md#21-introspection-iodocs). Signature text comes from the native registry in `src/lib/native_registry.c` (same names as here).
+
 ## Optional modules (documented)
 
 | Module | Doc |

@@ -1,0 +1,7 @@
+use native math
+use native math.trig
+use native math.stats
+
+#main
+  io.docs('math.')
+  OK

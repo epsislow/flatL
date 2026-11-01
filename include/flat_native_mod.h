@@ -13,6 +13,7 @@ int flat_native_io_in_bool(FlatNativeCtx *ctx);
 int flat_native_io_in_list(FlatNativeCtx *ctx);
 int flat_native_io_in_object(FlatNativeCtx *ctx);
 int flat_native_io_in_bools(FlatNativeCtx *ctx);
+int flat_native_io_docs(FlatNativeCtx *ctx);
 int flat_native_str_to_num(FlatNativeCtx *ctx);
 int flat_native_str_to_bool(FlatNativeCtx *ctx);
 int flat_native_str_len(FlatNativeCtx *ctx);

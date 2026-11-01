@@ -36,6 +36,7 @@ typedef struct {
 } ForeachFrame;
 
 typedef struct {
+    const FlatBytecode *bc;
     FlatStringPool *pool;
     FlatCollectionPool *coll;
     NamedVar *vars;
@@ -246,8 +247,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
     }
     if (rhs_is_native_call(rhs)) {
         if (flat_io_exec_line_manifest(rhs, st->pool, st->coll, vals, st->var_count, names, &v,
-                                       &ios, bc->optional_natives, bc->optional_native_count) !=
-            0) {
+                                       &ios, bc->optional_natives, bc->optional_native_count,
+                                       &st->live, st->var_slots_max) != 0) {
             rc = 0;
             goto done;
         }
@@ -448,6 +449,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.io_status = &ios;
     ctx.mem_live = &st->live;
     ctx.vars_max = st->var_slots_max;
+    ctx.bc = st->bc;
     ios = FLAT_IO_ERR;
     if (flat_native_invoke(native_id, &ctx) != 0) {
         rc = 0;
@@ -521,6 +523,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     flat_native_runtime_reset();
     flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);
     memset(&st, 0, sizeof st);
+    st.bc = bc;
     st.var_slots_max = bc->var_slots;
     scratch_n = st.var_slots_max > 0 ? st.var_slots_max : 1u;
     st.vars = calloc(scratch_n, sizeof *st.vars);
@@ -557,12 +560,12 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         uint8_t payload_size;
         const uint8_t *payload;
 
-        if ((size_t)ip + 2 > bc->size) {
+        if ((size_t)ip + 2 > bc->code_size) {
             return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE, opts);
         }
         opcode = bc->data[ip];
         payload_size = bc->data[ip + 1];
-        if ((size_t)ip + 2 + payload_size > bc->size) {
+        if ((size_t)ip + 2 + payload_size > bc->code_size) {
             return vm_finish(&st, (char *)guard_names, guard_vals, 1, vm_term_for_exit1(&st),
                              opts);
         }

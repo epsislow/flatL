@@ -1,5 +1,7 @@
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
+#include "flat_value.h"
+#include "doc_lookup.h"
 
 #include "flat_wasm_io.h"
 
@@ -137,17 +139,29 @@ static int parse_in_collection_line(const char *linebuf, int mode, FlatValue *ou
     return 0;
 }
 
+static int eval_io_arg(FlatNativeCtx *ctx, FlatValue *out) {
+    char inner_buf[4096];
+
+    if (!ctx->inner) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    flat_native_trim(inner_buf);
+    if (flat_native_eval_call(ctx, inner_buf, out) == 0) {
+        return 0;
+    }
+    return flat_value_parse_assign_rhs(inner_buf, out, ctx->pool, ctx->coll, ctx->vars,
+                                       ctx->var_count, ctx->var_names);
+}
+
 static int eval_prompt(FlatNativeCtx *ctx, char *prompt, size_t prompt_size) {
     FlatValue v;
-    char inner_buf[4096];
 
     if (!ctx->inner || ctx->inner[0] == '\0') {
         prompt[0] = '\0';
         return 0;
     }
-    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
-    if (flat_value_parse_assign_rhs(flat_native_trim(inner_buf), &v, ctx->pool, ctx->coll,
-                                    ctx->vars, ctx->var_count, ctx->var_names) != 0) {
+    if (eval_io_arg(ctx, &v) != 0) {
         return -1;
     }
     if (v.tag == VAL_STR_INLINE) {
@@ -175,16 +189,85 @@ static int eval_prompt(FlatNativeCtx *ctx, char *prompt, size_t prompt_size) {
     return -1;
 }
 
-int flat_native_io_outln(FlatNativeCtx *ctx) {
+#ifdef FLAT_WASM_BUILD
+static void docs_line_wasm(void *userdata, const char *line) {
+    (void)userdata;
+    flat_wasm_io_write_stdout(line, strlen(line));
+    flat_wasm_io_write_stdout("\n", 1);
+}
+#endif
+
+static int parse_docs_query(FlatNativeCtx *ctx, char *query, size_t query_sz) {
     FlatValue v;
     char inner_buf[4096];
+
+    if (!ctx->inner) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    flat_native_trim(inner_buf);
+    if (inner_buf[0] == '\'' || inner_buf[0] == '"') {
+        if (flat_value_parse_assign_rhs(inner_buf, &v, ctx->pool, ctx->coll, ctx->vars,
+                                        ctx->var_count, ctx->var_names) != 0) {
+            return -1;
+        }
+        if (v.tag != VAL_STR_INLINE && v.tag != VAL_STR_REF) {
+            return -1;
+        }
+        if (v.tag == VAL_STR_INLINE) {
+            size_t n = v.u.ins.len;
+            if (n >= query_sz) {
+                n = query_sz - 1;
+            }
+            memcpy(query, v.u.ins.bytes, n);
+            query[n] = '\0';
+            return 0;
+        }
+        {
+            size_t len = 0;
+            const uint8_t *p = flat_pool_read(ctx->pool, v.u.ref_id, &len);
+            if (!p || len >= query_sz) {
+                return -1;
+            }
+            memcpy(query, p, len);
+            query[len] = '\0';
+            return 0;
+        }
+    }
+    snprintf(query, query_sz, "%s", inner_buf);
+    return 0;
+}
+
+int flat_native_io_docs(FlatNativeCtx *ctx) {
+    char query[256];
 
     if (!ctx->io_status) {
         return -1;
     }
-    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
-    if (flat_value_parse_assign_rhs(flat_native_trim(inner_buf), &v, ctx->pool, ctx->coll,
-                                    ctx->vars, ctx->var_count, ctx->var_names) != 0) {
+    if (parse_docs_query(ctx, query, sizeof query) != 0) {
+        return -1;
+    }
+#ifdef FLAT_WASM_BUILD
+    if (flat_doc_emit_cb(NULL, docs_line_wasm, ctx->bc, query) != 0) {
+        return -1;
+    }
+#else
+    if (flat_doc_emit(stdout, ctx->bc, query) != 0) {
+        return -1;
+    }
+    fflush(stdout);
+#endif
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_io_outln(FlatNativeCtx *ctx) {
+    FlatValue v;
+
+    if (!ctx->io_status) {
+        return -1;
+    }
+    if (eval_io_arg(ctx, &v) != 0) {
         return -1;
     }
 #ifdef FLAT_WASM_BUILD
@@ -199,14 +282,11 @@ int flat_native_io_outln(FlatNativeCtx *ctx) {
 
 int flat_native_io_out(FlatNativeCtx *ctx) {
     FlatValue v;
-    char inner_buf[4096];
 
     if (!ctx->io_status) {
         return -1;
     }
-    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
-    if (flat_value_parse_assign_rhs(flat_native_trim(inner_buf), &v, ctx->pool, ctx->coll,
-                                    ctx->vars, ctx->var_count, ctx->var_names) != 0) {
+    if (eval_io_arg(ctx, &v) != 0) {
         return -1;
     }
 #ifdef FLAT_WASM_BUILD

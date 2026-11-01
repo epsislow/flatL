@@ -44,16 +44,49 @@ io.outln(42)
 io.outvar(x)
 ```
 
+### 2.1 Introspection (`io.docs`)
+
+`io.docs(query)` prints API hints to **stdout** (same stream as `io.outln`). Signatures are **documentation only** — the VM does not type-check calls.
+
+| Query shape | Result |
+|-------------|--------|
+| Starts with `#` | Block labels in the **linked** program whose full name starts with the prefix (e.g. `io.docs('#H')` after `use "lib/x.fl" as #H_`) |
+| Module or alias token (`mem`, `O`, …) | All native functions for that module, one per line (`mem.vars_max`, … or `O.get` when `use native obj with O`) |
+| Qualified prefix (`mem.var`, `str.l`) | Functions whose qualified name starts with the prefix |
+| Exact qualified name (`mem.vars_max`, `O.get`) | One signature line (e.g. `mem.vars_max()`) |
+
+**Listing rules:**
+
+- Sorted lexicographically.
+- At most **25** lines; if more match, line `....` then a footer **`(N blocks)`** or **`(N functions)`** with the **total** count (footer is always printed, even when `N ≤ 25`).
+- No matches: `no blocks` or `no functions`; undeclared optional module: `unknown module`.
+
+**Core** modules (`io`, `str`, `json`, `mem`) are always listable. **Optional** modules (`list`, `obj`, `math`, …) appear only after `use native …` in the program header (same rules as calls).
+
+Examples:
+
+```text
+io.docs('#main')
+io.docs('#backtrack')
+io.docs('mem')
+io.docs('mem.vars_max')
+use native obj with O
+io.docs('O')
+io.docs('obj')
+```
+
+Pass the query as a **string literal** (recommended): `io.docs('#H')`, `io.docs('mem')`.
+
 ---
 
 ## 3. Input (`io.in*`)
 
 | Call | Reads | Returns |
 |------|--------|---------|
-| `io.in()` | One character | STRING (len 1) |
-| `io.inln()` | One line (no `\n` in value) | STRING |
-| `io.in_num()` | One line + parse | NUMBER |
-| `io.in_bool()` | One line + parse | BOOL |
+| `io.in(prompt?)` | One character | STRING (len 1) |
+| `io.inln(prompt?)` | One line (no `\n` in value) | STRING |
+| `io.in_num(prompt?)` | One line + parse | NUMBER |
+| `io.in_bool(prompt?)` | One line + parse | BOOL |
 
 **Optional prompt:** one STRING argument — written to **stdout** before read; omitted = no prompt.
 

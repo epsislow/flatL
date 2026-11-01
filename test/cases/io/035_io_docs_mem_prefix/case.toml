@@ -1,0 +1,14 @@
+suite = "io"
+id = 35
+desc = "io.docs mem.var prefix"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "mem.vars_max"
+
+[flatl]
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"

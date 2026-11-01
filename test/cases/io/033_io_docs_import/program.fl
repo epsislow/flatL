@@ -1,0 +1,5 @@
+use "lib/helper.fl" as #H_
+
+#main
+  io.docs('#H')
+  OK

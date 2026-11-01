@@ -554,9 +554,16 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         const uint8_t sentinel = FLAT_FB_SENTINEL;
         const uint8_t version = FLAT_FB_FORMAT_VERSION;
         uint16_t count = (uint16_t)prog->block_count;
+        uint32_t labels_off = (uint32_t)(stream_base + code.len);
         uint32_t native_off = 0;
+        size_t label_sec = 6;
+        int li;
+
+        for (li = 0; li < prog->block_count; li++) {
+            label_sec += 2 + strlen(prog->blocks[li].label);
+        }
         if (prog->optional_native_count > 0) {
-            native_off = (uint32_t)(stream_base + code.len);
+            native_off = (uint32_t)(labels_off + label_sec);
         }
         fwrite(magic, 1, 4, f);
         fwrite(&sentinel, 1, 1, f);
@@ -564,6 +571,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         fwrite(&count, 1, 2, f);
         fwrite(&native_off, 1, 4, f);
         fwrite(&var_slots, 1, 4, f);
+        fwrite(&labels_off, 1, 4, f);
         for (i = 0; i < prog->block_count; i++) {
             uint32_t id = block_ids[i];
             uint32_t off = (uint32_t)offs[i].abs_offset;
@@ -571,6 +579,31 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
             fwrite(&off, 1, 4, f);
         }
         fwrite(code.buf, 1, code.len, f);
+        {
+            char (*labels)[FGIR_MAX_LABEL] = NULL;
+            labels = calloc((size_t)prog->block_count, FGIR_MAX_LABEL);
+            if (!labels) {
+                fclose(f);
+                snprintf(err, err_size, "out of memory");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            for (li = 0; li < prog->block_count; li++) {
+                snprintf(labels[li], FGIR_MAX_LABEL, "%s", prog->blocks[li].label);
+            }
+            if (flat_fb_write_label_section(f, count, labels) != 0) {
+                free(labels);
+                fclose(f);
+                snprintf(err, err_size, "failed to write block labels");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            free(labels);
+        }
         if (native_off != 0) {
             if (flat_fb_write_native_section(f, prog->optional_native_count,
                                              prog->optional_natives) != 0) {

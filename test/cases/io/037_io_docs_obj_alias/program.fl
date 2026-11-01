@@ -1,0 +1,6 @@
+use native obj with O
+
+#main
+  io.docs('obj')
+  io.docs('O')
+  OK

@@ -1,6 +1,7 @@
 #ifndef FLAT_NATIVE_H
 #define FLAT_NATIVE_H
 
+#include "fb_format.h"
 #include "fgir.h"
 #include "flat_value.h"
 
@@ -111,6 +112,7 @@ typedef enum {
     FLAT_NATIVE_MEM_BOOL_USED,
     FLAT_NATIVE_MEM_NUM_USED,
     FLAT_NATIVE_MEM_NULL_USED,
+    FLAT_NATIVE_IO_DOCS,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
@@ -122,8 +124,6 @@ typedef enum {
 #define FLAT_NATIVE_MODULE_OBJ "obj"
 #define FLAT_NATIVE_MODULE_MEM "mem"
 
-struct FlatMemLiveStats;
-
 typedef struct {
     FlatStringPool *pool;
     FlatCollectionPool *coll;
@@ -133,8 +133,9 @@ typedef struct {
     const char *inner;
     FlatValue *out;
     FlatIoStatus *io_status;
-    struct FlatMemLiveStats *mem_live;
+    FlatMemLiveStats *mem_live;
     uint32_t vars_max;
+    const FlatBytecode *bc;
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);
@@ -149,5 +150,8 @@ const char *flat_native_name(uint16_t id);
 int flat_native_module_for_id(uint16_t id, char *mod_out, size_t mod_out_sz);
 int flat_native_is_optional_id(uint16_t id);
 int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx);
+/* Evaluate a dotted native call (e.g. mem.vars_max()) using pool/vars from ctx. */
+int flat_native_eval_call(FlatNativeCtx *ctx, const char *line, FlatValue *out);
+const char *flat_native_doc_sig(uint16_t id);
 
 #endif
