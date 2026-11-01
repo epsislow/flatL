@@ -9,10 +9,17 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 3u
-#define FLAT_FB_HEADER_SIZE 20 /* magic4 sentinel1 version1 count2 native_off4 var_slots4 labels_off4 */
+#define FLAT_FB_FORMAT_VERSION 4u
+#define FLAT_FB_HEADER_SIZE 24 /* v4: + fnun_off4 at 20 */
+#define FLAT_FB_HEADER_SIZE_V3 20
 #define FLAT_FB_LABEL_MAGIC 0x424c424cu /* 'BLBL' LE */
+#define FLAT_FB_FNUN_MAGIC 0x4e554e46u /* 'FNUN' LE */
 #define FLAT_FB_TAIL_MAGIC 0x54414e46u /* "FNAT" little-endian */
+
+typedef struct {
+    FlatOptionalNativeDecl decls[FGIR_MAX_OPTIONAL_NATIVES];
+    int decl_count;
+} FlatFbNativeUnit;
 
 typedef struct {
     uint32_t block_id;
@@ -30,12 +37,19 @@ typedef struct {
     FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
     int optional_native_count;
     char (*block_labels)[FGIR_MAX_LABEL]; /* heap; length block_count; from BLBL section */
+    FlatFbNativeUnit *native_units;
+    int native_unit_count;
+    uint8_t *block_native_unit; /* heap; length block_count; FNUN section */
 } FlatBytecode;
 
 size_t flat_fb_native_section_size(int decl_count, const FlatOptionalNativeDecl *decls);
 int flat_fb_write_label_section(FILE *f, uint16_t count, const char labels[][FGIR_MAX_LABEL]);
 size_t flat_fb_label_section_size(uint16_t count);
 int flat_fb_write_native_section(FILE *f, int decl_count, const FlatOptionalNativeDecl *decls);
+size_t flat_fb_fnun_section_size(int unit_count, const FlatFbNativeUnit *units,
+                               uint16_t block_count);
+int flat_fb_write_fnun_section(FILE *f, int unit_count, const FlatFbNativeUnit *units,
+                               uint16_t block_count, const uint8_t *block_unit);
 int flat_fb_parse_native_section(const uint8_t *sec, size_t sec_len,
                                  FlatOptionalNativeDecl *out, int out_max, int *out_count);
 

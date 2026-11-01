@@ -9,8 +9,10 @@
 
 typedef void (*flat_doc_line_cb)(void *userdata, const char *line);
 
-int flat_doc_emit_cb(void *userdata, flat_doc_line_cb cb, const FlatBytecode *bc,
-                     const char *query);
-int flat_doc_emit(FILE *out, const FlatBytecode *bc, const char *query);
+int flat_doc_emit_cb(void *userdata, flat_doc_line_cb cb,
+                     const FlatOptionalNativeDecl *decls, int decl_count,
+                     const FlatBytecode *bc, const char *query);
+int flat_doc_emit(FILE *out, const FlatOptionalNativeDecl *decls, int decl_count,
+                  const FlatBytecode *bc, const char *query);
 
 #endif

@@ -1,0 +1,6 @@
+use native obj with m
+
+#run
+  m.len({}) -> n
+  io.outln(n)
+  return

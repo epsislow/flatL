@@ -118,6 +118,27 @@ static int query_is_module_dot_shorthand(const char *q) {
     return 1;
 }
 
+static int module_matches_list_token(const char *mod, const char *list_tok,
+                                     const FlatOptionalNativeDecl *decls, int decl_count) {
+    int i;
+
+    if (strcmp(mod, list_tok) == 0) {
+        return 1;
+    }
+    for (i = 0; i < decl_count; i++) {
+        if (strcmp(decls[i].module, mod) != 0) {
+            continue;
+        }
+        if (decls[i].alias[0] && strcmp(decls[i].alias, list_tok) == 0) {
+            return 1;
+        }
+        if (!decls[i].alias[0] && strcmp(decls[i].module, list_tok) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int alias_for_module(const char *mod, const FlatOptionalNativeDecl *decls, int decl_count,
                             char *alias_out, size_t alias_sz) {
     int i;
@@ -268,6 +289,27 @@ static int emit_natives_cb(DocSink *sink, const FlatOptionalNativeDecl *decls, i
         list_tok[0] = '\0';
     }
 
+    if (!list_module && !strchr(query, '.')) {
+        int alias_hit = 0;
+        int di;
+
+        for (di = 0; di < decl_count; di++) {
+            if (decls[di].alias[0] && strcmp(decls[di].alias, query) == 0) {
+                alias_hit = 1;
+                break;
+            }
+        }
+        if (!alias_hit && !flat_native_is_module_id(query)) {
+            sink->cb(sink->userdata, "unknown module");
+            return 0;
+        }
+        if (!alias_hit && flat_native_is_module_id(query) && !module_is_visible(query, decls,
+                                                                                    decl_count)) {
+            sink->cb(sink->userdata, "unknown module");
+            return 0;
+        }
+    }
+
     for (i = 0; i < (size_t)FLAT_NATIVE_COUNT; i++) {
         char canon[128];
         char line[128];
@@ -282,8 +324,7 @@ static int emit_natives_cb(DocSink *sink, const FlatOptionalNativeDecl *decls, i
             continue;
         }
         if (list_module) {
-            if (resolve_query_module(list_tok, decls, decl_count, mod, sizeof mod) != 0 ||
-                strcmp(m, mod) != 0) {
+            if (!module_matches_list_token(m, list_tok, decls, decl_count)) {
                 continue;
             }
             format_line((uint16_t)i, list_tok, line, sizeof line);
@@ -335,10 +376,13 @@ static int emit_natives_cb(DocSink *sink, const FlatOptionalNativeDecl *decls, i
     return 0;
 }
 
-int flat_doc_emit_cb(void *userdata, flat_doc_line_cb cb, const FlatBytecode *bc,
-                     const char *query_in) {
+int flat_doc_emit_cb(void *userdata, flat_doc_line_cb cb,
+                     const FlatOptionalNativeDecl *decls, int decl_count,
+                     const FlatBytecode *bc, const char *query_in) {
     char query[256];
     DocSink sink;
+    const FlatOptionalNativeDecl *use_decls = decls;
+    int use_count = decl_count;
 
     if (!cb) {
         return -1;
@@ -350,13 +394,13 @@ int flat_doc_emit_cb(void *userdata, flat_doc_line_cb cb, const FlatBytecode *bc
     if (query[0] == '#') {
         return emit_blocks_cb(&sink, bc, query);
     }
-    return emit_natives_cb(&sink, bc ? bc->optional_natives : NULL,
-                           bc ? bc->optional_native_count : 0, query);
+    return emit_natives_cb(&sink, use_decls, use_count, query);
 }
 
-int flat_doc_emit(FILE *out, const FlatBytecode *bc, const char *query_in) {
+int flat_doc_emit(FILE *out, const FlatOptionalNativeDecl *decls, int decl_count,
+                  const FlatBytecode *bc, const char *query_in) {
     if (!out) {
         return -1;
     }
-    return flat_doc_emit_cb(out, file_line_cb, bc, query_in);
+    return flat_doc_emit_cb(out, file_line_cb, decls, decl_count, bc, query_in);
 }

@@ -1,6 +1,6 @@
 suite = "native"
 id = 5
-desc = "use native in linked module applies to whole program"
+desc = "use native alias in import applies only in that file's blocks"
 kind = "pipeline"
 
 source = "program.fl"

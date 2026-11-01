@@ -1,0 +1,7 @@
+use "lib/a.fl" as #A_
+use "lib/b.fl" as #B_
+
+#main
+  call #A_run
+  call #B_run
+  OK

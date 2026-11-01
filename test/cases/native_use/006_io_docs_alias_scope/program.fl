@@ -1,0 +1,5 @@
+use "lib/has_m.fl" as #H_
+
+#main
+  io.docs('m')
+  OK

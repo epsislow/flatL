@@ -15,6 +15,10 @@
 #define VM_MAX_FOREACH 8
 #define VM_MAX_LIST 16
 
+static int vm_block_index(const FlatBytecode *bc, uint32_t ip);
+static void vm_native_decls_at_ip(const FlatBytecode *bc, uint32_t ip,
+                                    const FlatOptionalNativeDecl **decls_out, int *count_out);
+
 typedef struct {
     char name[FLAT_VAR_NAME_MAX + 1];
     FlatValue val;
@@ -246,9 +250,13 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
         vals[i] = st->vars[i].val;
     }
     if (rhs_is_native_call(rhs)) {
+        const FlatOptionalNativeDecl *ndecl = NULL;
+        int ndecl_count = 0;
+
+        vm_native_decls_at_ip(bc, *ip, &ndecl, &ndecl_count);
         if (flat_io_exec_line_manifest(rhs, st->pool, st->coll, vals, st->var_count, names, &v,
-                                       &ios, bc->optional_natives, bc->optional_native_count,
-                                       &st->live, st->var_slots_max) != 0) {
+                                       &ios, ndecl, ndecl_count, &st->live, st->var_slots_max) !=
+            0) {
             rc = 0;
             goto done;
         }
@@ -415,6 +423,39 @@ static void trace_vars_dump(const VmState *st) {
     }
 }
 
+static void vm_native_decls_at_ip(const FlatBytecode *bc, uint32_t ip,
+                                  const FlatOptionalNativeDecl **decls_out, int *count_out) {
+    int bi;
+
+    *decls_out = bc->optional_natives;
+    *count_out = bc->optional_native_count;
+    bi = vm_block_index(bc, ip);
+    if (bi >= 0 && bc->native_units && bc->block_native_unit &&
+        (size_t)bi < bc->block_count) {
+        int ui = (int)bc->block_native_unit[bi];
+        if (ui >= 0 && ui < bc->native_unit_count) {
+            *decls_out = bc->native_units[ui].decls;
+            *count_out = bc->native_units[ui].decl_count;
+        }
+    }
+}
+
+static int vm_block_index(const FlatBytecode *bc, uint32_t ip) {
+    size_t i;
+
+    if (!bc || !bc->blocks) {
+        return -1;
+    }
+    for (i = 0; i < bc->block_count; i++) {
+        uint32_t start = bc->blocks[i].offset;
+        uint32_t end = (i + 1 < bc->block_count) ? bc->blocks[i + 1].offset : (uint32_t)bc->size;
+        if (ip >= start && ip < end) {
+            return (int)i;
+        }
+    }
+    return -1;
+}
+
 static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, uint16_t native_id,
                            const char *inner, const char *bind, int trace) {
     FlatValue result;
@@ -450,6 +491,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.mem_live = &st->live;
     ctx.vars_max = st->var_slots_max;
     ctx.bc = st->bc;
+    vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
     ios = FLAT_IO_ERR;
     if (flat_native_invoke(native_id, &ctx) != 0) {
         rc = 0;

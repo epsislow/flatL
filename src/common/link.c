@@ -575,6 +575,7 @@ static int merge_module(FgirProgram *out, const FgirProgram *mod, const char *as
             maybe_rewrite_ref(b.instr[j].foreach_block, sizeof b.instr[j].foreach_block, prefix_body,
                               prim, n_prim);
         }
+        b.native_unit_index = mod->blocks[i].native_unit_index;
         if (append_block(out, &b, err, err_size) != 0) {
             rc = -1;
             break;
@@ -587,11 +588,44 @@ static int merge_module(FgirProgram *out, const FgirProgram *mod, const char *as
 static int merge_entry(FgirProgram *out, const FgirProgram *entry, char *err, size_t err_size) {
     int i;
     for (i = 0; i < entry->block_count; i++) {
-        if (append_block(out, &entry->blocks[i], err, err_size) != 0) {
+        FgirBlock b = entry->blocks[i];
+        if (append_block(out, &b, err, err_size) != 0) {
             return -1;
         }
     }
     return 0;
+}
+
+static int prepare_unit_decls(FgirProgram *mod, const char *path, int *unit_index_out, char *err,
+                              size_t err_size) {
+    FlatOptionalNativeDecl decls[FGIR_MAX_OPTIONAL_NATIVES];
+    int decl_count = 0;
+    int i;
+
+    if (flat_native_use_scan_file(path, decls, FGIR_MAX_OPTIONAL_NATIVES, &decl_count, err,
+                                  err_size) != 0) {
+        return -1;
+    }
+    mod->native_unit_count = 1;
+    mod->native_units[0].decl_count = decl_count;
+    if (decl_count > 0) {
+        memcpy(mod->native_units[0].decls, decls,
+               (size_t)decl_count * sizeof(FlatOptionalNativeDecl));
+    }
+    for (i = 0; i < mod->block_count; i++) {
+        mod->blocks[i].native_unit_index = 0;
+    }
+    if (flat_native_use_validate_program(mod, err, err_size) != 0) {
+        return -1;
+    }
+    *unit_index_out = 0;
+    return 0;
+}
+
+static int attach_unit_to_out(FgirProgram *out, const FgirProgram *mod, int *out_ui, char *err,
+                              size_t err_size) {
+    const FgirNativeUnit *u = &mod->native_units[0];
+    return flat_native_use_add_unit(out, u->decls, u->decl_count, out_ui, err, err_size);
 }
 
 int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirProgram *out,
@@ -619,10 +653,25 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     }
 
     for (i = 0; i < mod_count; i++) {
+        int local_ui;
+        int out_ui;
+
         memset(mod, 0, sizeof *mod);
+        mod->main_index = -1;
         if (flat_parse_unit(mods[i].canonical, 0, mod, err, err_size) != 0) {
             free(mod);
             return -1;
+        }
+        if (prepare_unit_decls(mod, mods[i].canonical, &local_ui, err, err_size) != 0) {
+            free(mod);
+            return -1;
+        }
+        if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) {
+            free(mod);
+            return -1;
+        }
+        for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
+            mod->blocks[local_ui].native_unit_index = out_ui;
         }
         if (merge_module(out, mod, mods[i].prefix, err, err_size) != 0) {
             free(mod);
@@ -636,9 +685,26 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         snprintf(err, err_size, "out of memory");
         return -1;
     }
+    entry_prog->main_index = -1;
     if (flat_parse_unit(entry_path, 1, entry_prog, err, err_size) != 0) {
         free(entry_prog);
         return -1;
+    }
+    {
+        int local_ui;
+        int out_ui;
+
+        if (prepare_unit_decls(entry_prog, entry_path, &local_ui, err, err_size) != 0) {
+            free(entry_prog);
+            return -1;
+        }
+        if (attach_unit_to_out(out, entry_prog, &out_ui, err, err_size) != 0) {
+            free(entry_prog);
+            return -1;
+        }
+        for (local_ui = 0; local_ui < entry_prog->block_count; local_ui++) {
+            entry_prog->blocks[local_ui].native_unit_index = out_ui;
+        }
     }
     if (merge_entry(out, entry_prog, err, err_size) != 0) {
         free(entry_prog);
@@ -646,13 +712,9 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     }
     free(entry_prog);
 
-    if (flat_native_use_scan_file(entry_path, out, err, err_size) != 0) {
+    if (flat_native_use_build_fnat_union(out) != 0) {
+        snprintf(err, err_size, "too many optional native modules in program");
         return -1;
-    }
-    for (i = 0; i < mod_count; i++) {
-        if (flat_native_use_scan_file(mods[i].canonical, out, err, err_size) != 0) {
-            return -1;
-        }
     }
     if (flat_native_use_validate_program(out, err, err_size) != 0) {
         return -1;

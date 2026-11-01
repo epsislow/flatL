@@ -1,0 +1,6 @@
+use native list with m
+
+#run
+  m.len([]) -> n
+  io.outln(n)
+  return

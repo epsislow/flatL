@@ -1,0 +1,10 @@
+suite = "native_use"
+id = 6
+desc = "io.docs alias only in source file of call"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "unknown module"

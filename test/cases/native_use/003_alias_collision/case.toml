@@ -1,0 +1,8 @@
+suite = "native_use"
+id = 3
+desc = "shared alias kit: duplicate func name is compile error"
+kind = "exec"
+
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "already exists"

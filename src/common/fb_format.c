@@ -193,6 +193,166 @@ int flat_fb_parse_native_section(const uint8_t *sec, size_t sec_len,
     return 0;
 }
 
+size_t flat_fb_fnun_section_size(int unit_count, const FlatFbNativeUnit *units,
+                                 uint16_t block_count) {
+    size_t n = 4 + 2;
+    int ui;
+
+    if (unit_count <= 0 || !units || block_count == 0) {
+        return 0;
+    }
+    for (ui = 0; ui < unit_count; ui++) {
+        int di;
+        n += 1;
+        for (di = 0; di < units[ui].decl_count; di++) {
+            n += 2 + strlen(units[ui].decls[di].module) + strlen(units[ui].decls[di].alias);
+        }
+    }
+    n += 2 + (size_t)block_count;
+    return n;
+}
+
+int flat_fb_write_fnun_section(FILE *f, int unit_count, const FlatFbNativeUnit *units,
+                               uint16_t block_count, const uint8_t *block_unit) {
+    uint32_t magic = FLAT_FB_FNUN_MAGIC;
+    uint16_t uc = (uint16_t)unit_count;
+    int ui;
+
+    if (!f || unit_count <= 0 || !units || block_count == 0 || !block_unit) {
+        return -1;
+    }
+    if (write_bytes(f, &magic, 4) != 0 || write_bytes(f, &uc, 2) != 0) {
+        return -1;
+    }
+    for (ui = 0; ui < unit_count; ui++) {
+        uint8_t dc = (uint8_t)units[ui].decl_count;
+        int di;
+        if (write_bytes(f, &dc, 1) != 0) {
+            return -1;
+        }
+        for (di = 0; di < units[ui].decl_count; di++) {
+            uint8_t ml = (uint8_t)strlen(units[ui].decls[di].module);
+            uint8_t al = (uint8_t)strlen(units[ui].decls[di].alias);
+            if (ml == 0 || write_bytes(f, &ml, 1) != 0 ||
+                write_bytes(f, units[ui].decls[di].module, ml) != 0 ||
+                write_bytes(f, &al, 1) != 0 ||
+                (al > 0 && write_bytes(f, units[ui].decls[di].alias, al) != 0)) {
+                return -1;
+            }
+        }
+    }
+    if (write_bytes(f, &block_count, 2) != 0) {
+        return -1;
+    }
+    {
+        size_t i;
+        for (i = 0; i < (size_t)block_count; i++) {
+            if (write_bytes(f, &block_unit[i], 1) != 0) {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int parse_fnun_section(const uint8_t *sec, size_t sec_len, uint16_t expect_blocks,
+                              FlatFbNativeUnit **out_units, int *out_unit_count,
+                              uint8_t **out_block_unit) {
+    size_t pos = 0;
+    uint32_t magic;
+    uint16_t unit_count;
+    int ui;
+
+    if (!sec || !out_units || !out_unit_count || !out_block_unit) {
+        return -1;
+    }
+    *out_units = NULL;
+    *out_unit_count = 0;
+    *out_block_unit = NULL;
+    if (sec_len < 6) {
+        return -1;
+    }
+    magic = read_u32_le(sec);
+    if (magic != FLAT_FB_FNUN_MAGIC) {
+        return -1;
+    }
+    unit_count = read_u16_le(sec + 4);
+    pos = 6;
+    if (unit_count == 0 || unit_count > FGIR_MAX_NATIVE_UNITS) {
+        return -1;
+    }
+    *out_units = calloc(unit_count, sizeof(FlatFbNativeUnit));
+    if (!*out_units) {
+        return -1;
+    }
+    *out_unit_count = (int)unit_count;
+    for (ui = 0; ui < (int)unit_count; ui++) {
+        uint8_t dc;
+        int di;
+        if (pos + 1 > sec_len) {
+            return -1;
+        }
+        dc = sec[pos++];
+        if (dc > FGIR_MAX_OPTIONAL_NATIVES) {
+            return -1;
+        }
+        (*out_units)[ui].decl_count = dc;
+        for (di = 0; di < dc; di++) {
+            uint8_t ml;
+            uint8_t al;
+            if (pos + 2 > sec_len) {
+                return -1;
+            }
+            ml = sec[pos++];
+            if (pos + ml + 1 > sec_len) {
+                return -1;
+            }
+            if (ml >= FGIR_NATIVE_MODULE_LEN) {
+                return -1;
+            }
+            memcpy((*out_units)[ui].decls[di].module, sec + pos, ml);
+            (*out_units)[ui].decls[di].module[ml] = '\0';
+            pos += ml;
+            al = sec[pos++];
+            if (pos + al > sec_len) {
+                return -1;
+            }
+            if (al >= FGIR_NATIVE_ALIAS_LEN) {
+                return -1;
+            }
+            if (al > 0) {
+                memcpy((*out_units)[ui].decls[di].alias, sec + pos, al);
+                (*out_units)[ui].decls[di].alias[al] = '\0';
+                pos += al;
+            } else {
+                (*out_units)[ui].decls[di].alias[0] = '\0';
+            }
+        }
+    }
+    if (pos + 2 > sec_len) {
+        return -1;
+    }
+    {
+        uint16_t bc = read_u16_le(sec + pos);
+        size_t i;
+        pos += 2;
+        if (bc != expect_blocks) {
+            return -1;
+        }
+        if (pos + bc > sec_len) {
+            return -1;
+        }
+        *out_block_unit = malloc(bc);
+        if (!*out_block_unit) {
+            return -1;
+        }
+        for (i = 0; i < (size_t)bc; i++) {
+            (*out_block_unit)[i] = sec[pos++];
+        }
+    }
+    return pos == sec_len ? 0 : -1;
+}
+
 static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
     size_t dir_bytes;
     size_t header_size;
@@ -214,27 +374,39 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                         "flc (format v%u required)\n", (unsigned)FLAT_FB_FORMAT_VERSION);
         return -1;
     }
-    if (buf[5] != FLAT_FB_FORMAT_VERSION) {
+    if (buf[5] != 3 && buf[5] != FLAT_FB_FORMAT_VERSION) {
         unsigned got = (unsigned)buf[5];
         free(buf);
-        fprintf(stderr, "flvm: unsupported .fb format v%u (format v%u required); rebuild with "
+        fprintf(stderr, "flvm: unsupported .fb format v%u (format v3/v%u required); rebuild with "
                         "flc\n", got, (unsigned)FLAT_FB_FORMAT_VERSION);
         return -1;
     }
-    if (fsize < FLAT_FB_HEADER_SIZE) {
+    out->format_version = (int)buf[5];
+    if (out->format_version == 4 && fsize < FLAT_FB_HEADER_SIZE) {
         free(buf);
         fprintf(stderr, "flvm: truncated .fb header\n");
         return -1;
     }
-    out->format_version = (int)FLAT_FB_FORMAT_VERSION;
+    if (out->format_version == 3 && fsize < FLAT_FB_HEADER_SIZE_V3) {
+        free(buf);
+        fprintf(stderr, "flvm: truncated .fb header\n");
+        return -1;
+    }
     count = read_u16_le(buf + 6);
     native_off = read_u32_le(buf + 8);
     out->var_slots = read_u32_le(buf + 12);
     {
         uint32_t labels_off = read_u32_le(buf + 16);
+        uint32_t fnun_off = 0;
+
+        if (out->format_version >= 4) {
+            fnun_off = read_u32_le(buf + 20);
+        }
 
         if (labels_off != 0 && labels_off <= fsize) {
             out->code_size = labels_off;
+        } else if (fnun_off != 0 && fnun_off <= fsize) {
+            out->code_size = fnun_off;
         } else if (native_off != 0 && native_off <= fsize) {
             out->code_size = native_off;
         } else {
@@ -247,8 +419,13 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 fprintf(stderr, "flvm: block label offset out of range\n");
                 return -1;
             }
-            label_len = native_off != 0 ? (size_t)(native_off - labels_off)
-                                        : (size_t)(fsize - labels_off);
+            if (fnun_off != 0 && fnun_off > labels_off) {
+                label_len = (size_t)(fnun_off - labels_off);
+            } else if (native_off != 0 && native_off > labels_off) {
+                label_len = (size_t)(native_off - labels_off);
+            } else {
+                label_len = (size_t)(fsize - labels_off);
+            }
             out->block_labels = calloc(count, FGIR_MAX_LABEL);
             if (!out->block_labels) {
                 free(buf);
@@ -262,6 +439,20 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 return -1;
             }
         }
+        if (fnun_off != 0 && fnun_off < fsize) {
+            size_t fnun_len;
+            if (native_off != 0 && native_off > fnun_off) {
+                fnun_len = (size_t)(native_off - fnun_off);
+            } else {
+                fnun_len = (size_t)(fsize - fnun_off);
+            }
+            if (parse_fnun_section(buf + fnun_off, fnun_len, count, &out->native_units,
+                                   &out->native_unit_count, &out->block_native_unit) != 0) {
+                free(buf);
+                fprintf(stderr, "flvm: invalid native unit section\n");
+                return -1;
+            }
+        }
     }
     if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
         free(buf);
@@ -269,8 +460,8 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 (unsigned)out->var_slots, FLAT_MAX_VARS);
         return -1;
     }
-    header_size = FLAT_FB_HEADER_SIZE;
-    dir_offset = FLAT_FB_HEADER_SIZE;
+    header_size = out->format_version >= 4 ? FLAT_FB_HEADER_SIZE : FLAT_FB_HEADER_SIZE_V3;
+    dir_offset = header_size;
 
     if (count == 0) {
         free(buf);
@@ -402,6 +593,8 @@ void flat_fb_free(FlatBytecode *bc) {
     free(bc->data);
     free(bc->blocks);
     free(bc->block_labels);
+    free(bc->native_units);
+    free(bc->block_native_unit);
     memset(bc, 0, sizeof *bc);
 }
 
@@ -413,10 +606,11 @@ int flat_fb_write_min_ok(const char *path) {
     const uint8_t count[2] = { 1, 0 };
     const uint8_t native_off[4] = { 0, 0, 0, 0 };
     const uint8_t var_slots[4] = { 0, 0, 0, 0 };
-    const uint8_t labels_off_bytes[4] = { 30, 0, 0, 0 }; /* FLAT_FB_HEADER_SIZE + dir + code */
+    const uint8_t labels_off_bytes[4] = { 34, 0, 0, 0 }; /* header24 + dir8 + code2 */
+    const uint8_t fnun_off_bytes[4] = { 47, 0, 0, 0 };
     const uint8_t dir[8] = {
         0, 0, 0, 0, /* block_id main = 0 */
-        28, 0, 0, 0  /* code offset */
+        32, 0, 0, 0  /* code offset after 24-byte header */
     };
     const uint8_t code[2] = { OP_OK, 0 };
     const uint32_t blbl_magic = FLAT_FB_LABEL_MAGIC;
@@ -429,15 +623,26 @@ int flat_fb_write_min_ok(const char *path) {
         fprintf(stderr, "mkfb: cannot write %s\n", path);
         return -1;
     }
-    if (write_bytes(f, magic, 4) != 0 || write_bytes(f, sentinel, 1) != 0 ||
-        write_bytes(f, version, 1) != 0 || write_bytes(f, count, 2) != 0 ||
-        write_bytes(f, native_off, 4) != 0 || write_bytes(f, var_slots, 4) != 0 ||
-        write_bytes(f, labels_off_bytes, 4) != 0 || write_bytes(f, dir, 8) != 0 ||
-        write_bytes(f, code, 2) != 0 || write_bytes(f, &blbl_magic, 4) != 0 ||
-        write_bytes(f, &blbl_count, 2) != 0 || write_bytes(f, &main_len, 2) != 0 ||
-        write_bytes(f, main_label, main_len) != 0) {
-        fclose(f);
-        return -1;
+    {
+        const uint32_t fnun_magic = FLAT_FB_FNUN_MAGIC;
+        const uint16_t unit_count = 1;
+        const uint8_t zero_decl = 0;
+        const uint16_t block_count = 1;
+        const uint8_t block_unit = 0;
+
+        if (write_bytes(f, magic, 4) != 0 || write_bytes(f, sentinel, 1) != 0 ||
+            write_bytes(f, version, 1) != 0 || write_bytes(f, count, 2) != 0 ||
+            write_bytes(f, native_off, 4) != 0 || write_bytes(f, var_slots, 4) != 0 ||
+            write_bytes(f, labels_off_bytes, 4) != 0 || write_bytes(f, fnun_off_bytes, 4) != 0 ||
+            write_bytes(f, dir, 8) != 0 || write_bytes(f, code, 2) != 0 ||
+            write_bytes(f, &blbl_magic, 4) != 0 || write_bytes(f, &blbl_count, 2) != 0 ||
+            write_bytes(f, &main_len, 2) != 0 || write_bytes(f, main_label, main_len) != 0 ||
+            write_bytes(f, &fnun_magic, 4) != 0 || write_bytes(f, &unit_count, 2) != 0 ||
+            write_bytes(f, &zero_decl, 1) != 0 || write_bytes(f, &block_count, 2) != 0 ||
+            write_bytes(f, &block_unit, 1) != 0) {
+            fclose(f);
+            return -1;
+        }
     }
     fclose(f);
     return 0;

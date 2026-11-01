@@ -4,7 +4,6 @@
 #include "fb_format.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
-#include "fb_format.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -425,9 +424,19 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             size_t total;
             uint8_t plen;
 
-            if (flat_native_split_call_prog(ins->text, prog, &native_id, inner, sizeof inner) != 0) {
-                snprintf(err, err_size, "unknown native call: %s", ins->text);
-                return -1;
+            {
+                char nerr[256];
+                nerr[0] = '\0';
+                if (flat_native_split_call_prog(ins->text, prog, prog->blocks[bi].native_unit_index,
+                                                &native_id, inner, sizeof inner, nerr,
+                                                sizeof nerr) != 0) {
+                    if (nerr[0]) {
+                        snprintf(err, err_size, "%s", nerr);
+                    } else {
+                        snprintf(err, err_size, "unknown native call: %s", ins->text);
+                    }
+                    return -1;
+                }
             }
             il = strlen(inner) + 1;
             bl = strlen(ins->call_out) + 1;
@@ -555,6 +564,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         const uint8_t version = FLAT_FB_FORMAT_VERSION;
         uint16_t count = (uint16_t)prog->block_count;
         uint32_t labels_off = (uint32_t)(stream_base + code.len);
+        uint32_t fnun_off = 0;
         uint32_t native_off = 0;
         size_t label_sec = 6;
         int li;
@@ -562,7 +572,28 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         for (li = 0; li < prog->block_count; li++) {
             label_sec += 2 + strlen(prog->blocks[li].label);
         }
-        if (prog->optional_native_count > 0) {
+        if (prog->native_unit_count > 0) {
+            fnun_off = (uint32_t)(labels_off + label_sec);
+        }
+        if (fnun_off != 0) {
+            FlatFbNativeUnit *units_tmp = NULL;
+            size_t fnun_sz;
+
+            units_tmp = calloc((size_t)prog->native_unit_count, sizeof(FlatFbNativeUnit));
+            if (units_tmp) {
+                int ui;
+                for (ui = 0; ui < prog->native_unit_count; ui++) {
+                    units_tmp[ui].decl_count = prog->native_units[ui].decl_count;
+                    memcpy(units_tmp[ui].decls, prog->native_units[ui].decls,
+                           sizeof(units_tmp[ui].decls));
+                }
+                fnun_sz = flat_fb_fnun_section_size(prog->native_unit_count, units_tmp, count);
+                free(units_tmp);
+                if (prog->optional_native_count > 0) {
+                    native_off = (uint32_t)(fnun_off + fnun_sz);
+                }
+            }
+        } else if (prog->optional_native_count > 0) {
             native_off = (uint32_t)(labels_off + label_sec);
         }
         fwrite(magic, 1, 4, f);
@@ -572,6 +603,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         fwrite(&native_off, 1, 4, f);
         fwrite(&var_slots, 1, 4, f);
         fwrite(&labels_off, 1, 4, f);
+        fwrite(&fnun_off, 1, 4, f);
         for (i = 0; i < prog->block_count; i++) {
             uint32_t id = block_ids[i];
             uint32_t off = (uint32_t)offs[i].abs_offset;
@@ -604,7 +636,50 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
             }
             free(labels);
         }
-        if (native_off != 0) {
+        if (fnun_off != 0) {
+            FlatFbNativeUnit *units = NULL;
+            uint8_t *block_unit = NULL;
+            int ui;
+
+            units = calloc((size_t)prog->native_unit_count, sizeof(FlatFbNativeUnit));
+            block_unit = malloc((size_t)prog->block_count);
+            if (!units || !block_unit) {
+                free(units);
+                free(block_unit);
+                fclose(f);
+                snprintf(err, err_size, "out of memory");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            for (ui = 0; ui < prog->native_unit_count; ui++) {
+                units[ui].decl_count = prog->native_units[ui].decl_count;
+                memcpy(units[ui].decls, prog->native_units[ui].decls,
+                       sizeof(units[ui].decls));
+            }
+            for (li = 0; li < prog->block_count; li++) {
+                int ui2 = prog->blocks[li].native_unit_index;
+                if (ui2 < 0 || ui2 >= prog->native_unit_count) {
+                    ui2 = 0;
+                }
+                block_unit[li] = (uint8_t)ui2;
+            }
+            if (flat_fb_write_fnun_section(f, prog->native_unit_count, units, count,
+                                           block_unit) != 0) {
+                free(units);
+                free(block_unit);
+                fclose(f);
+                snprintf(err, err_size, "failed to write native unit section");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            free(units);
+            free(block_unit);
+        }
+        if (native_off != 0 && prog->optional_native_count > 0) {
             if (flat_fb_write_native_section(f, prog->optional_native_count,
                                              prog->optional_natives) != 0) {
                 fclose(f);

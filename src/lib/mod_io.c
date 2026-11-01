@@ -248,11 +248,12 @@ int flat_native_io_docs(FlatNativeCtx *ctx) {
         return -1;
     }
 #ifdef FLAT_WASM_BUILD
-    if (flat_doc_emit_cb(NULL, docs_line_wasm, ctx->bc, query) != 0) {
+    if (flat_doc_emit_cb(NULL, docs_line_wasm, ctx->doc_decls, ctx->doc_decl_count, ctx->bc,
+                         query) != 0) {
         return -1;
     }
 #else
-    if (flat_doc_emit(stdout, ctx->bc, query) != 0) {
+    if (flat_doc_emit(stdout, ctx->doc_decls, ctx->doc_decl_count, ctx->bc, query) != 0) {
         return -1;
     }
     fflush(stdout);

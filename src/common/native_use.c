@@ -47,8 +47,13 @@ static int starts_with_use_native(const char *s) {
 
 static int validate_alias(const char *alias, char *err, size_t err_size) {
     size_t i;
+
     if (!alias || !alias[0]) {
         return 0;
+    }
+    if (flat_native_is_module_id(alias)) {
+        snprintf(err, err_size, "native alias \"%s\" is a reserved module name", alias);
+        return -1;
     }
     if (!isalpha((unsigned char)alias[0])) {
         snprintf(err, err_size, "native alias must start with a letter");
@@ -71,6 +76,7 @@ static int parse_use_native_line(const char *line, FlatOptionalNativeDecl *out, 
     char *p;
     char *with_tok;
     char mod[FGIR_NATIVE_MODULE_LEN];
+    int is_core;
 
     snprintf(buf, sizeof buf, "%s", line);
     p = trim(buf);
@@ -99,11 +105,16 @@ static int parse_use_native_line(const char *line, FlatOptionalNativeDecl *out, 
         }
         snprintf(mod, sizeof mod, "%.*s", (int)(p - mod_start), mod_start);
     }
-    if (flat_native_is_core_module(mod)) {
-        snprintf(err, err_size, "use native: %s is a core module (no declaration needed)", mod);
-        return -1;
-    }
-    if (!known_optional_module(mod)) {
+    is_core = flat_native_is_core_module(mod);
+    if (is_core) {
+        while (*p && isspace((unsigned char)*p)) {
+            p++;
+        }
+        if (*p == '\0') {
+            snprintf(err, err_size, "use native: %s is a core module (no declaration needed)", mod);
+            return -1;
+        }
+    } else if (!known_optional_module(mod)) {
         snprintf(err, err_size, "use native: unknown module \"%s\"", mod);
         return -1;
     }
@@ -139,38 +150,93 @@ static int parse_use_native_line(const char *line, FlatOptionalNativeDecl *out, 
     return 0;
 }
 
-int flat_native_use_merge(FgirProgram *acc, const FlatOptionalNativeDecl *one, char *err,
-                          size_t err_size) {
-    int i;
-    for (i = 0; i < acc->optional_native_count; i++) {
-        if (strcmp(acc->optional_natives[i].module, one->module) == 0) {
-            if (strcmp(acc->optional_natives[i].alias, one->alias) != 0) {
-                snprintf(err, err_size, "module already imported as alias \"%s\"",
-                         acc->optional_natives[i].alias[0] ? acc->optional_natives[i].alias
-                                                           : "(canonical)");
-                return -1;
+static const char *func_name_for_id(uint16_t id) {
+    const char *name = flat_native_name(id);
+    const char *dot = strrchr(name, '.');
+    return dot ? dot + 1 : name;
+}
+
+static int check_alias_func_collisions(const FlatOptionalNativeDecl *decls, int decl_count,
+                                       char *err, size_t err_size) {
+    int a, b;
+    size_t i, j;
+
+    for (a = 0; a < decl_count; a++) {
+        if (!decls[a].alias[0]) {
+            continue;
+        }
+        for (b = a + 1; b < decl_count; b++) {
+            if (strcmp(decls[a].alias, decls[b].alias) != 0) {
+                continue;
             }
-            return 0;
+            for (i = 0; i < (size_t)FLAT_NATIVE_COUNT; i++) {
+                char ma[FGIR_NATIVE_MODULE_LEN];
+                const char *fa;
+
+                if (flat_native_module_for_id((uint16_t)i, ma, sizeof ma) != 0) {
+                    continue;
+                }
+                if (strcmp(ma, decls[a].module) != 0) {
+                    continue;
+                }
+                fa = func_name_for_id((uint16_t)i);
+                for (j = 0; j < (size_t)FLAT_NATIVE_COUNT; j++) {
+                    char mb2[FGIR_NATIVE_MODULE_LEN];
+                    if (flat_native_module_for_id((uint16_t)j, mb2, sizeof mb2) != 0) {
+                        continue;
+                    }
+                    if (strcmp(mb2, decls[b].module) != 0) {
+                        continue;
+                    }
+                    if (strcmp(func_name_for_id((uint16_t)j), fa) == 0) {
+                        snprintf(err, err_size, "%s.%s already exists (%s, %s)", decls[a].alias, fa,
+                                 decls[a].module, decls[b].module);
+                        return -1;
+                    }
+                }
+            }
         }
     }
-    if (acc->optional_native_count >= FGIR_MAX_OPTIONAL_NATIVES) {
-        snprintf(err, err_size, "too many optional native modules");
-        return -1;
-    }
-    acc->optional_natives[acc->optional_native_count] = *one;
-    acc->optional_native_count++;
     return 0;
 }
 
-int flat_native_use_scan_file(const char *path, FgirProgram *acc, char *err, size_t err_size) {
+static int alias_for_module(const FlatOptionalNativeDecl *decls, int decl_count, const char *mod,
+                            char *alias_out, size_t alias_sz) {
+    int i;
+
+    alias_out[0] = '\0';
+    for (i = 0; i < decl_count; i++) {
+        if (strcmp(decls[i].module, mod) == 0 && decls[i].alias[0]) {
+            snprintf(alias_out, alias_sz, "%s", decls[i].alias);
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int optional_declared(const FlatOptionalNativeDecl *decls, int decl_count, const char *mod) {
+    int i;
+    for (i = 0; i < decl_count; i++) {
+        if (strcmp(decls[i].module, mod) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int flat_native_use_scan_file(const char *path, FlatOptionalNativeDecl *decls, int decl_max,
+                              int *decl_count_out, char *err, size_t err_size) {
     FILE *f;
     char line[FGIR_MAX_LINE + 8];
     int line_no = 0;
     int in_block = 0;
     int in_header = 1;
-    FlatOptionalNativeDecl seen[FGIR_MAX_OPTIONAL_NATIVES];
     int seen_count = 0;
 
+    if (!decl_count_out) {
+        return -1;
+    }
+    *decl_count_out = 0;
     f = fopen(path, "r");
     if (!f) {
         snprintf(err, err_size, "cannot open %s", path);
@@ -196,6 +262,7 @@ int flat_native_use_scan_file(const char *path, FgirProgram *acc, char *err, siz
         if (in_header && starts_with_use_native(p) && strstr(p, "native") != NULL) {
             FlatOptionalNativeDecl decl;
             int j;
+
             memset(&decl, 0, sizeof decl);
             if (parse_use_native_line(p, &decl, err, err_size) != 0) {
                 char sub[256];
@@ -205,26 +272,19 @@ int flat_native_use_scan_file(const char *path, FgirProgram *acc, char *err, siz
                 return -1;
             }
             for (j = 0; j < seen_count; j++) {
-                if (strcmp(seen[j].module, decl.module) == 0) {
+                if (strcmp(decls[j].module, decl.module) == 0) {
                     snprintf(err, err_size, "%s:%d: duplicate use native for \"%s\"", path,
                              line_no, decl.module);
                     fclose(f);
                     return -1;
                 }
             }
-            if (seen_count >= FGIR_MAX_OPTIONAL_NATIVES) {
+            if (seen_count >= decl_max) {
                 snprintf(err, err_size, "%s:%d: too many use native directives", path, line_no);
                 fclose(f);
                 return -1;
             }
-            seen[seen_count++] = decl;
-            if (flat_native_use_merge(acc, &decl, err, err_size) != 0) {
-                char sub[256];
-                snprintf(sub, sizeof sub, "%s", err);
-                snprintf(err, err_size, "%s:%d: %s", path, line_no, sub);
-                fclose(f);
-                return -1;
-            }
+            decls[seen_count++] = decl;
             continue;
         }
         if (*p == '#') {
@@ -236,12 +296,81 @@ int flat_native_use_scan_file(const char *path, FgirProgram *acc, char *err, siz
         }
     }
     fclose(f);
+    if (check_alias_func_collisions(decls, seen_count, err, err_size) != 0) {
+        char sub[256];
+        snprintf(sub, sizeof sub, "%s", err);
+        snprintf(err, err_size, "%s: %s", path, sub);
+        return -1;
+    }
+    *decl_count_out = seen_count;
+    return 0;
+}
+
+int flat_native_use_add_unit(FgirProgram *prog, const FlatOptionalNativeDecl *decls, int decl_count,
+                             int *unit_index_out, char *err, size_t err_size) {
+    FgirNativeUnit *u;
+    int ui;
+
+    if (!prog || !unit_index_out) {
+        return -1;
+    }
+    if (prog->native_unit_count >= FGIR_MAX_NATIVE_UNITS) {
+        snprintf(err, err_size, "too many linked native units");
+        return -1;
+    }
+    if (decl_count > FGIR_MAX_OPTIONAL_NATIVES) {
+        snprintf(err, err_size, "too many use native directives in one file");
+        return -1;
+    }
+    ui = prog->native_unit_count++;
+    u = &prog->native_units[ui];
+    u->decl_count = decl_count;
+    if (decl_count > 0 && decls) {
+        memcpy(u->decls, decls, (size_t)decl_count * sizeof(FlatOptionalNativeDecl));
+    }
+    *unit_index_out = ui;
+    return 0;
+}
+
+int flat_native_use_build_fnat_union(FgirProgram *prog) {
+    int ui, di, j;
+    int n = 0;
+
+    if (!prog) {
+        return -1;
+    }
+    prog->optional_native_count = 0;
+    for (ui = 0; ui < prog->native_unit_count; ui++) {
+        for (di = 0; di < prog->native_units[ui].decl_count; di++) {
+            const char *mod = prog->native_units[ui].decls[di].module;
+            if (flat_native_is_core_module(mod)) {
+                continue;
+            }
+            for (j = 0; j < n; j++) {
+                if (strcmp(prog->optional_natives[j].module, mod) == 0) {
+                    break;
+                }
+            }
+            if (j < n) {
+                continue;
+            }
+            if (n >= FGIR_MAX_OPTIONAL_NATIVES) {
+                return -1;
+            }
+            snprintf(prog->optional_natives[n].module, sizeof prog->optional_natives[n].module,
+                     "%s", mod);
+            prog->optional_natives[n].alias[0] = '\0';
+            n++;
+        }
+    }
+    prog->optional_native_count = n;
     return 0;
 }
 
 static int resolve_module_from_decls(const char *mod_in, const FlatOptionalNativeDecl *decls,
                                      int decl_count, char *mod_out, size_t mod_out_sz) {
     int i;
+
     if (!mod_in || !mod_out || mod_out_sz == 0) {
         return -1;
     }
@@ -255,27 +384,37 @@ static int resolve_module_from_decls(const char *mod_in, const FlatOptionalNativ
     return 0;
 }
 
-int flat_native_resolve_module_name(const char *mod_in, const FgirProgram *prog, char *mod_out,
-                                    size_t mod_out_sz) {
-    if (!prog) {
-        return -1;
-    }
-    return resolve_module_from_decls(mod_in, prog->optional_natives, prog->optional_native_count,
-                                     mod_out, mod_out_sz);
+int flat_native_resolve_module_name(const char *mod_in, const FlatOptionalNativeDecl *decls,
+                                    int decl_count, char *mod_out, size_t mod_out_sz) {
+    return resolve_module_from_decls(mod_in, decls, decl_count, mod_out, mod_out_sz);
 }
 
-static int optional_declared(const FgirProgram *prog, const char *mod) {
-    int i;
-    for (i = 0; i < prog->optional_native_count; i++) {
-        if (strcmp(prog->optional_natives[i].module, mod) == 0) {
-            return 1;
-        }
+static int canonical_forbidden(const char *prefix, const FlatOptionalNativeDecl *decls,
+                               int decl_count, char *err, size_t err_size) {
+    char alias[FGIR_NATIVE_ALIAS_LEN];
+    char resolved[FGIR_NATIVE_MODULE_LEN];
+
+    if (flat_native_is_core_module(prefix)) {
+        return 0;
     }
+    if (!known_optional_module(prefix)) {
+        return 0;
+    }
+    if (!optional_declared(decls, decl_count, prefix)) {
+        return 0;
+    }
+    if (alias_for_module(decls, decl_count, prefix, alias, sizeof alias)) {
+        snprintf(err, err_size, "use alias %s instead of %s", alias, prefix);
+        return -1;
+    }
+    resolve_module_from_decls(prefix, decls, decl_count, resolved, sizeof resolved);
+    (void)resolved;
     return 0;
 }
 
-int flat_native_split_call_prog(const char *line, const FgirProgram *prog, uint16_t *out_id,
-                                char *inner, size_t inner_max) {
+int flat_native_split_call_decls(const char *line, const FlatOptionalNativeDecl *decls,
+                                 int decl_count, uint16_t *out_id, char *inner, size_t inner_max,
+                                 char *err, size_t err_size) {
     char mod[64];
     char func[32];
     char resolved[FGIR_NATIVE_MODULE_LEN];
@@ -284,21 +423,45 @@ int flat_native_split_call_prog(const char *line, const FgirProgram *prog, uint1
         0) {
         return -1;
     }
-    if (flat_native_resolve_module_name(mod, prog, resolved, sizeof resolved) != 0) {
+    if (canonical_forbidden(mod, decls, decl_count, err, err_size) != 0) {
+        return -1;
+    }
+    if (flat_native_resolve_module_name(mod, decls, decl_count, resolved, sizeof resolved) != 0) {
         return -1;
     }
     if (flat_native_lookup(resolved, func, out_id) != 0) {
         return -1;
     }
     if (*out_id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && !flat_native_is_core_module(resolved) &&
-        !optional_declared(prog, resolved)) {
+        !optional_declared(decls, decl_count, resolved)) {
+        if (err && err_size > 0) {
+            snprintf(err, err_size, "undeclared optional native %s.%s (add use native %s)",
+                     resolved, func, resolved);
+        }
         return -1;
     }
     return 0;
 }
 
-static int validate_optional_native_call(const FgirProgram *prog, const char *call_line, char *err,
-                                         size_t err_size) {
+int flat_native_split_call_prog(const char *line, const FgirProgram *prog, int native_unit_index,
+                                uint16_t *out_id, char *inner, size_t inner_max, char *err,
+                                size_t err_size) {
+    const FlatOptionalNativeDecl *decls = NULL;
+    int decl_count = 0;
+
+    if (!prog) {
+        return -1;
+    }
+    if (native_unit_index >= 0 && native_unit_index < prog->native_unit_count) {
+        decls = prog->native_units[native_unit_index].decls;
+        decl_count = prog->native_units[native_unit_index].decl_count;
+    }
+    return flat_native_split_call_decls(line, decls, decl_count, out_id, inner, inner_max, err,
+                                        err_size);
+}
+
+static int validate_optional_native_call(const FlatOptionalNativeDecl *decls, int decl_count,
+                                         const char *call_line, char *err, size_t err_size) {
     char mod[64];
     char func[32];
     char inner[64];
@@ -309,11 +472,14 @@ static int validate_optional_native_call(const FgirProgram *prog, const char *ca
                                       sizeof inner) != 0) {
         return 0;
     }
-    flat_native_resolve_module_name(mod, prog, resolved, sizeof resolved);
+    if (canonical_forbidden(mod, decls, decl_count, err, err_size) != 0) {
+        return -1;
+    }
+    flat_native_resolve_module_name(mod, decls, decl_count, resolved, sizeof resolved);
     if (flat_native_is_core_module(resolved)) {
         return 0;
     }
-    if (!optional_declared(prog, resolved)) {
+    if (!optional_declared(decls, decl_count, resolved)) {
         snprintf(err, err_size, "undeclared optional native %s.%s (add use native %s)", resolved,
                  func, resolved);
         return -1;
@@ -327,12 +493,22 @@ static int validate_optional_native_call(const FgirProgram *prog, const char *ca
 
 int flat_native_use_validate_program(const FgirProgram *prog, char *err, size_t err_size) {
     int bi, ii;
+
     for (bi = 0; bi < prog->block_count; bi++) {
         const FgirBlock *b = &prog->blocks[bi];
+        const FlatOptionalNativeDecl *decls = NULL;
+        int decl_count = 0;
+        int ui = b->native_unit_index;
+
+        if (ui >= 0 && ui < prog->native_unit_count) {
+            decls = prog->native_units[ui].decls;
+            decl_count = prog->native_units[ui].decl_count;
+        }
         for (ii = 0; ii < b->instr_count; ii++) {
             const FgirInstr *ins = &b->instr[ii];
             if (ins->kind == FGIR_IO) {
-                if (validate_optional_native_call(prog, ins->text, err, err_size) != 0) {
+                if (validate_optional_native_call(decls, decl_count, ins->text, err, err_size) !=
+                    0) {
                     return -1;
                 }
             } else if (ins->kind == FGIR_ASSIGN) {
@@ -350,7 +526,7 @@ int flat_native_use_validate_program(const FgirProgram *prog, char *err, size_t 
                 while (*rhs && (*rhs == ' ' || *rhs == '\t')) {
                     rhs++;
                 }
-                if (validate_optional_native_call(prog, rhs, err, err_size) != 0) {
+                if (validate_optional_native_call(decls, decl_count, rhs, err, err_size) != 0) {
                     return -1;
                 }
             }

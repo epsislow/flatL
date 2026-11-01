@@ -1,32 +1,52 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`, `mem`) are always linked into `flvm`. Call them directly; no header declaration. String API reference: [str.md](./str.md).
+**Core natives** (`io`, `json`, `str`, `mem`) are always linked into `flvm`. Call them directly; no header declaration required. Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**. String API: [str.md](./str.md).
 
-**Optional natives** extend the VM with extra C modules (for example trigonometry). They must be declared before any block, and every optional call must refer to a declared module.
+**Optional natives** extend the VM (for example trigonometry). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
 ## Syntax
 
-One module per line, in the header (before the first `#block`), same region as `use "file.fl" as #Prefix`:
-
 ```text
 use native math.trig with trig
+use native math.trig
+use native mem with M
 ```
 
-| Form | Calls allowed |
-|------|----------------|
-| `use native math.trig` | `math.trig.sin(...)`, `math.trig.cos(...)`, … |
-| `use native math.trig with trig` | **`trig.sin(...)`** and **`math.trig.sin(...)`** |
+| Form | In that `.fl` file |
+|------|---------------------|
+| `use native math.trig` | Only **`math.trig.*`** |
+| `use native math.trig with trig` | Only **`trig.*`** (not `math.trig.*`) |
+| `use native mem with M` | **`mem.*` and `M.*`** (core keeps canonical) |
 
-Rules:
+## Scope (per file)
 
-- Module IDs are **full names** (`math.trig`, `math`, `list`, …). Each optional module is separate; `use native math` does **not** load trig or stats.
-- `use native io` (or `json` / `str`) is an error — core modules need no declaration.
-- Duplicate `use native` for the same module in one file is an error; the same module with the same alias merged from several linked `.fl` files is allowed.
-- Conflicting aliases for the same module across files is a link error.
+- **`use native … with …` applies only in the source file** where it appears. Blocks defined in that file use its declarations; other linked files do **not** see your alias.
+- Two libraries may both use **`with m`** for **different** modules — no conflict (`lib/a.fl`: `list with m`, `lib/b.fl`: `obj with m`).
+- **FNAT** in `.fb` is still the union of optional modules used anywhere (for plugin load). Aliases are resolved at compile time per file.
 
-Declarations in **any** linked source file apply to the **whole** program after `flc` / `flatl compile` linking.
+## Shared alias in one file
 
-Runtime discovery: **`io.docs('module')`**, **`io.docs('alias')`**, or **`io.docs('#Prefix')`** for linked blocks — see [IO.md §2.1](../IO.md#21-introspection-iodocs). Signature text comes from the native registry in `src/lib/native_registry.c` (same names as here).
+You may attach several optional modules to the **same** alias in **one** file:
+
+```text
+use native list with kit
+use native obj with kit
+```
+
+Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same function name under **`kit`** (e.g. **`kit.len`** from `list` and `obj`), compilation fails: **`kit.len already exists (list, obj)`**.
+
+## Reserved alias names
+
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `mem`, `math`, `math.trig`, `math.stats`, `list`, `obj`. Example: `use native list with math` → error.
+
+## Core vs optional
+
+- **`use native io`** (or `json` / `str` / `mem` without `with`) is an error — use **`use native mem with Alias`** only when you want a short prefix; canonical names always work.
+- Duplicate **`use native`** for the **same module** in one file is an error.
+
+## `io.docs`
+
+Uses the **`use native` table of the file where the call appears** (not program-wide). **`io.docs('mem')`**, **`io.docs('list')`**, or a **local alias** (`io.docs('trig')`) when declared in that file. Same-file union for shared **`kit`**. Alias unknown in that file → **`unknown module`**. See [IO.md §2.1](../IO.md#21-introspection-iodocs).
 
 ## Optional modules (documented)
 
@@ -37,25 +57,3 @@ Runtime discovery: **`io.docs('module')`**, **`io.docs('alias')`**, or **`io.doc
 | `math.stats` | [math.stats.md](./math.stats.md) |
 | `list` | [list.md](./list.md) |
 | `obj` | [obj.md](./obj.md) |
-| `str` | [str.md](./str.md) (core — no `use native` required) |
-| `mem` | [mem.md](./mem.md) (core — no `use native` required) |
-
-## Runtime (lazy plugins)
-
-When bytecode includes an optional native manifest (see [SPECIFICATION.md](../SPECIFICATION.md) §3.1), `flvm` / `flatl run`:
-
-1. Reads declared modules from the `.fb` file.
-2. On the first `OP_NATIVE` for an optional ID, **`dlopen`** the plugin (Unix) if not already loaded.
-3. Rejects calls to optional IDs that are not listed in the manifest.
-
-**Plugin file name:** module `math.trig` → `libflat_math_trig.so` (`.` → `_`).
-
-**Search order:**
-
-1. Directories in `FLAT_NATIVE_PATH` (`:`-separated on Unix)
-2. Directory containing the `flvm` / `flatl` binary
-3. `{repo}/bin/` (development default)
-
-Build: `make all` produces `bin/libflat_math_trig.so` on Linux/macOS/BSD. Windows currently falls back to static optional handlers inside `flvm`.
-
-**Entry symbol:** `flat_native_plugin_init` — registers handlers via a host callback (see `include/flat_native_plugin.h`).

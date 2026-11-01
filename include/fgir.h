@@ -10,6 +10,7 @@
 #define FGIR_MAX_INSTR 128
 #define FGIR_MAX_PARAMS 8
 #define FGIR_MAX_OPTIONAL_NATIVES 32
+#define FGIR_MAX_NATIVE_UNITS 32
 #define FGIR_NATIVE_MODULE_LEN 64
 #define FGIR_NATIVE_ALIAS_LEN 64
 
@@ -42,17 +43,25 @@ typedef struct {
 } FgirInstr;
 
 typedef struct {
+    FlatOptionalNativeDecl decls[FGIR_MAX_OPTIONAL_NATIVES];
+    int decl_count;
+} FgirNativeUnit;
+
+typedef struct {
     char label[FGIR_MAX_LABEL];
     char params[FGIR_MAX_PARAMS][64];
     int param_count;
     FgirInstr instr[FGIR_MAX_INSTR];
     int instr_count;
+    int native_unit_index;
 } FgirBlock;
 
 typedef struct {
     FgirBlock blocks[FGIR_MAX_BLOCKS];
     int block_count;
     int main_index;
+    FgirNativeUnit native_units[FGIR_MAX_NATIVE_UNITS];
+    int native_unit_count;
     FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
     int optional_native_count;
 } FgirProgram;

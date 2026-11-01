@@ -1,0 +1,8 @@
+use native mem with M
+
+#main
+  M.vars_max() -> a
+  mem.vars_max() -> b
+  io.outln(a)
+  io.outln(b)
+  OK

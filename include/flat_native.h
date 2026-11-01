@@ -136,9 +136,12 @@ typedef struct {
     FlatMemLiveStats *mem_live;
     uint32_t vars_max;
     const FlatBytecode *bc;
+    const FlatOptionalNativeDecl *doc_decls;
+    int doc_decl_count;
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);
+int flat_native_is_module_id(const char *mod);
 int flat_native_is_call_line(const char *line);
 int flat_native_lookup(const char *mod, const char *func, uint16_t *out_id);
 int flat_native_lookup_optional(const char *mod, const char *func, uint16_t *out_id);

@@ -1,4 +1,9 @@
 use native math.trig with trig
 
+#helper
+  trig.cos(0) -> c
+  io.outln(c)
+  return
+
 #stub
   return

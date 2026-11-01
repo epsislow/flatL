@@ -51,7 +51,7 @@ io.outvar(x)
 | Query shape | Result |
 |-------------|--------|
 | Starts with `#` | Block labels in the **linked** program whose full name starts with the prefix (e.g. `io.docs('#H')` after `use "lib/x.fl" as #H_`) |
-| Module or alias token (`mem`, `O`, …) | All native functions for that module, one per line (`mem.vars_max`, … or `O.get` when `use native obj with O`) |
+| Module or alias token (`mem`, `O`, …) | In the **same `.fl` file** as the `io.docs` call: list/signatures for that module or **local alias** (shared alias `kit` on several modules → union **in that file only**) |
 | Qualified prefix (`mem.var`, `str.l`) | Functions whose qualified name starts with the prefix |
 | Exact qualified name (`mem.vars_max`, `O.get`) | One signature line (e.g. `mem.vars_max()`) |
 
@@ -61,7 +61,7 @@ io.outvar(x)
 - At most **25** lines; if more match, line `....` then a footer **`(N blocks)`** or **`(N functions)`** with the **total** count (footer is always printed, even when `N ≤ 25`).
 - No matches: `no blocks` or `no functions`; undeclared optional module: `unknown module`.
 
-**Core** modules (`io`, `str`, `json`, `mem`) are always listable. **Optional** modules (`list`, `obj`, `math`, …) appear only after `use native …` in the program header (same rules as calls).
+**Core** modules are always listable by canonical name. **Optional** modules appear when declared in **that file's** header. An alias in another linked file is **`unknown module`** here. See [natives/README.md](./natives/README.md).
 
 Examples:
 

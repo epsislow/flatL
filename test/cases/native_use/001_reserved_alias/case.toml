@@ -1,0 +1,8 @@
+suite = "native_use"
+id = 1
+desc = "alias cannot be a module id (io)"
+kind = "exec"
+
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "reserved module name"

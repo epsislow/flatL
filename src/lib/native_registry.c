@@ -132,6 +132,32 @@ int flat_native_is_core_module(const char *mod) {
            strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0;
 }
 
+int flat_native_is_module_id(const char *mod) {
+    static const char *const MODULE_IDS[] = {
+        "io",
+        "json",
+        "str",
+        FLAT_NATIVE_MODULE_MEM,
+        FLAT_NATIVE_MODULE_MATH_TRIG,
+        FLAT_NATIVE_MODULE_MATH_STATS,
+        FLAT_NATIVE_MODULE_MATH,
+        FLAT_NATIVE_MODULE_LIST,
+        FLAT_NATIVE_MODULE_OBJ,
+        NULL,
+    };
+    int i;
+
+    if (!mod || !mod[0]) {
+        return 0;
+    }
+    for (i = 0; MODULE_IDS[i]; i++) {
+        if (strcmp(MODULE_IDS[i], mod) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int flat_native_lookup(const char *mod, const char *func, uint16_t *out_id) {
     size_t i;
     if (!mod || !func || !out_id) {
