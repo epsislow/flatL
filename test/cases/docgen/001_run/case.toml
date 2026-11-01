@@ -1,8 +1,8 @@
 suite = "docgen"
 id = 1
-desc = "gen_doc_site builds doc_site from docs/index.json"
+desc = "gen_doc_site builds docs/doc_site from doc_src/index.json"
 kind = "exec"
 
 cmd = "{root}/bin/gen_doc_site --root {root}"
 expect_exit = 0
-stdout_contains = "Wrote doc_site"
+stdout_contains = "Wrote docs/doc_site"

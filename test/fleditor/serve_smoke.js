@@ -6,7 +6,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 
 const repo = path.resolve(__dirname, '../..');
-const serve = path.join(repo, 'fleditor_site/node/serve.js');
+const serve = path.join(repo, 'docs/fleditor_site/node/serve.js');
 const port = 18765;
 
 const child = spawn(process.execPath, [serve, String(port)], {
@@ -23,7 +23,7 @@ function fail(msg) {
 child.on('error', (e) => fail(e.message));
 
 setTimeout(() => {
-  http.get(`http://127.0.0.1:${port}/index.html`, (res) => {
+  http.get(`http://127.0.0.1:${port}/fleditor_site/index.html`, (res) => {
     let body = '';
     res.on('data', (c) => (body += c));
     res.on('end', () => {
@@ -34,7 +34,7 @@ setTimeout(() => {
       if (!body.includes('fleditor-layout.js')) fail('missing layout script');
       if (!body.includes('>+fl<')) fail('missing +fl button');
       if (!body.includes('Reset project')) fail('missing Reset project');
-      if (!body.includes('href="/doc_site/index.html"')) fail('missing Docs link');
+      if (!body.includes('href="../doc_site/index.html"')) fail('missing Docs link');
       http.get(`http://127.0.0.1:${port}/doc_site/index.html`, (rDoc) => {
         let docBody = '';
         rDoc.on('data', (c) => (docBody += c));
@@ -42,7 +42,7 @@ setTimeout(() => {
           if (rDoc.statusCode !== 200 || !docBody.includes('flatL documentation')) {
             fail('doc_site not served at /doc_site/');
           }
-          http.get(`http://127.0.0.1:${port}/examples/manifest.json`, (r2) => {
+          http.get(`http://127.0.0.1:${port}/fleditor_site/examples/manifest.json`, (r2) => {
         let b2 = '';
         r2.on('data', (c) => (b2 += c));
         r2.on('end', () => {

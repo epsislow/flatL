@@ -7,7 +7,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-/* Documented in docs/LANGUAGE_TYPES.md */
+/* Documented in doc_src/LANGUAGE_TYPES.md */
 #define FLAT_INLINE_STR_MAX 127
 #define FLAT_VAR_NAME_MAX 63
 #define FLAT_MAX_VARS 32768

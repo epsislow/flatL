@@ -1,8 +1,8 @@
 # Emscripten build for fleditor (browser). Requires `emcc` on PATH.
-# Output: fleditor_site/wasm/flatl.js + flatl.wasm
+# Output: docs/fleditor_site/wasm/flatl.js + flatl.wasm
 
 EMCC       ?= emcc
-WASM_DIR   = fleditor_site/wasm
+WASM_DIR   = docs/fleditor_site/wasm
 WASM_JS    = $(WASM_DIR)/flatl.js
 
 WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2

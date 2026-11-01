@@ -8,7 +8,7 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(__dirname, '../..');
-const wasmJs = path.join(repo, 'fleditor_site/wasm/flatl.js');
+const wasmJs = path.join(repo, 'docs/fleditor_site/wasm/flatl.js');
 
 const require = createRequire(import.meta.url);
 const FlatLModule = require(wasmJs);
@@ -37,7 +37,7 @@ function writeProject(M, files) {
 async function runEntry(files, entryRel) {
   let out = '';
   const cfg = {
-    locateFile: (p) => path.join(repo, 'fleditor_site/wasm', p),
+    locateFile: (p) => path.join(repo, 'docs/fleditor_site/wasm', p),
     flatWasmOnStdout: (u8) => {
       out += Buffer.from(u8).toString('utf8');
     },

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Vendor CodeMirror 5 + xterm.js into fleditor_site/ext/ (no CDN at runtime).
+# Vendor CodeMirror 5 + xterm.js into docs/fleditor_site/ext/ (no CDN at runtime).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-EXT="$ROOT/fleditor_site/ext"
+EXT="$ROOT/docs/fleditor_site/ext"
 LOGT="$HOME/logTscript/res"
 
 mkdir -p "$EXT"

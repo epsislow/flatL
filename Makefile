@@ -71,9 +71,9 @@ help:
 	@echo "  make io_generate_tests   rebuild bin/io_generate_tests and regenerate test/cases/io/*"
 	@echo "  make json_generate_tests rebuild bin/json_generate_tests and regenerate test/cases/json/*"
 	@echo "  make fixtures     regenerate min_ok.fb examples"
-	@echo "  make docs         bin/gen_doc_site → doc_site/ (offline HTML docs)"
-	@echo "  make fleditor-wasm   Emscripten → fleditor_site/wasm/ (needs emcc)"
-	@echo "  make fleditor-serve  node fleditor_site/node/serve.js 8765"
+	@echo "  make docs         bin/gen_doc_site → docs/doc_site/ (offline HTML docs)"
+	@echo "  make fleditor-wasm   Emscripten → docs/fleditor_site/wasm/ (needs emcc)"
+	@echo "  make fleditor-serve  serve docs/ (GitHub Pages layout) on port 8765"
 	@echo "  make fleditor-serve-forced  kill port 8765 then serve (fuser)"
 	@echo "  make fleditor-smoke  HTTP smoke test for fleditor static server"
 	@echo "  make fleditor-wasm-smoke / fleditor-wasm-multifile-smoke  headless WASM tests"
@@ -85,12 +85,12 @@ help:
 	@echo "Test:"
 	@echo "  make test         make all, then ./bin/run_tests (flc + flvm pipelines)"
 	@echo "  make test-flatl   make all, then ./bin/run_tests --flatl"
-	@echo "  bin/run_tests -h  filters, -v, -e, -w, --flatl (see docs/TOOLCHAIN.md)"
+	@echo "  bin/run_tests -h  filters, -v, -e, -w, --flatl (see doc_src/TOOLCHAIN.md)"
 	@echo ""
 	@echo "Clean:"
 	@echo "  make clean        remove bin/ and generated min_ok.fb"
 	@echo ""
-	@echo "Docs: docs/TOOLCHAIN.md  docs/LANGUAGE_TYPES.md"
+	@echo "Docs: doc_src/TOOLCHAIN.md  doc_src/LANGUAGE_TYPES.md  |  Pages: docs/"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
 all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/gen_doc_site$(EXEEXT) $(PLUGIN_TARGET) fixtures
@@ -158,7 +158,7 @@ $(BINDIR)/gen_doc_site$(EXEEXT): $(GEN_DOC_SITE_SRCS) | $(BINDIR)
 
 docs gen_doc_site: $(BINDIR)/gen_doc_site$(EXEEXT)
 	$(BINDIR)/gen_doc_site$(EXEEXT)
-	@echo "OK: doc_site/"
+	@echo "OK: docs/doc_site/"
 
 RUN_TESTS_SRCS = \
 	src/run_tests/main.c \
@@ -213,11 +213,11 @@ fleditor-rebuild: fleditor-wasm
 	@echo "OK: WASM rebuilt — restart serve if needed, then hard-refresh the browser (Ctrl+Shift+R)."
 
 fleditor-serve:
-	$(NODE) fleditor_site/node/serve.js $(FLEDITOR_PORT)
+	$(NODE) docs/fleditor_site/node/serve.js $(FLEDITOR_PORT)
 
 fleditor-serve-forced:
 	fuser -k $(FLEDITOR_PORT)/tcp 2>/dev/null || true
-	$(NODE) fleditor_site/node/serve.js $(FLEDITOR_PORT)
+	$(NODE) docs/fleditor_site/node/serve.js $(FLEDITOR_PORT)
 
 fleditor-smoke:
 	$(NODE) test/fleditor/serve_smoke.js

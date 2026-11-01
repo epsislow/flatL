@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /**
- * Static server for fleditor_site/ (127.0.0.1 only).
- * Also serves repo doc_site/ at /doc_site/ (sibling of fleditor_site/).
- * Usage: node fleditor_site/node/serve.js [port]
+ * Static server for GitHub Pages layout under docs/ (127.0.0.1 only).
+ *   /              → docs/index.html (redirect to fleditor)
+ *   /fleditor_site → editor
+ *   /doc_site      → offline HTML docs
+ * Usage: node docs/fleditor_site/node/serve.js [port]
  * Default port: 8765
  */
 'use strict';
@@ -11,8 +13,9 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
-const siteRoot = path.resolve(__dirname, '..');
-const docRoot = path.resolve(siteRoot, '..', 'doc_site');
+const pagesRoot = path.resolve(__dirname, '..', '..');
+const fleditorRoot = path.join(pagesRoot, 'fleditor_site');
+const docRoot = path.join(pagesRoot, 'doc_site');
 const port = parseInt(process.argv[2] || '8765', 10);
 
 const MIME = {
@@ -42,6 +45,13 @@ function safePathInRoot(root, relPath) {
 
 function resolveFilePath(urlPath) {
   const decoded = decodeURIComponent(urlPath.split('?')[0]);
+  if (decoded === '/' || decoded === '') {
+    return safePathInRoot(pagesRoot, 'index.html');
+  }
+  if (decoded === '/fleditor_site' || decoded.startsWith('/fleditor_site/')) {
+    const sub = decoded.slice('/fleditor_site'.length).replace(/^\//, '') || 'index.html';
+    return safePathInRoot(fleditorRoot, sub);
+  }
   if (decoded === '/doc_site' || decoded.startsWith('/doc_site/')) {
     const sub = decoded.slice('/doc_site'.length).replace(/^\//, '') || 'index.html';
     return safePathInRoot(docRoot, sub);
@@ -50,7 +60,7 @@ function resolveFilePath(urlPath) {
   if (rel === '') {
     rel = 'index.html';
   }
-  return safePathInRoot(siteRoot, rel);
+  return safePathInRoot(pagesRoot, rel);
 }
 
 const server = http.createServer((req, res) => {
@@ -89,6 +99,7 @@ server.on('error', (err) => {
 
 server.listen(port, '127.0.0.1', () => {
   process.stdout.write(`fleditor: http://127.0.0.1:${port}/\n`);
+  process.stdout.write(`fleditor: http://127.0.0.1:${port}/fleditor_site/\n`);
   if (fs.existsSync(docRoot)) {
     process.stdout.write(`fleditor: http://127.0.0.1:${port}/doc_site/index.html\n`);
   }

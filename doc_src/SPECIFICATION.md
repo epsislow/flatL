@@ -334,7 +334,8 @@ flatL/
     <suite>/<id>_<name>/
       case.toml
       … fixtures …
-  docs/
+  doc_src/          # normative Markdown (sources)
+  docs/             # GitHub Pages: fleditor_site + doc_site
   bin/              # build output
 ```
 

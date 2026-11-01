@@ -8,7 +8,7 @@ import path from 'path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(__dirname, '../..');
-const layoutJs = path.join(repo, 'fleditor_site/js/fleditor-layout.js');
+const layoutJs = path.join(repo, 'docs/fleditor_site/js/fleditor-layout.js');
 
 const require = createRequire(import.meta.url);
 require(layoutJs);

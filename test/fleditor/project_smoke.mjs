@@ -6,7 +6,7 @@ import path from 'path';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(__dirname, '../..');
 const require = createRequire(import.meta.url);
-require(path.join(repo, 'fleditor_site/js/fleditor-project.js'));
+require(path.join(repo, 'docs/fleditor_site/js/fleditor-project.js'));
 
 const P = globalThis.FleditorProject;
 

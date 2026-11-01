@@ -9,10 +9,10 @@ static int usage(const char *prog) {
     fprintf(stderr,
             "Usage: %s [--root DIR] [--index PATH] [--out DIR]\n"
             "\n"
-            "  Builds doc_site/ from docs/index.json and Markdown sources.\n"
+            "  Builds docs/doc_site/ from doc_src/index.json and Markdown sources.\n"
             "  Default --root: repository root (search upward from cwd).\n"
-            "  Default --index: docs/index.json under root.\n"
-            "  Default --out: doc_site under root.\n",
+            "  Default --index: doc_src/index.json under root.\n"
+            "  Default --out: docs/doc_site under root.\n",
             prog);
     return 2;
 }
@@ -40,10 +40,10 @@ static int join_path(char *out, size_t out_sz, const char *a, const char *b) {
 
 int main(int argc, char **argv) {
     char root[512];
-    char index_rel[512] = "docs/index.json";
-    char out_rel[512] = "doc_site";
+    char index_rel[512] = "doc_src/index.json";
+    char out_rel[512] = "docs/doc_site";
     char index_path[640];
-    char docs_dir[640];
+    char doc_src_dir[640];
     char out_dir[640];
     char templates_dir[640];
     char data_js[640];
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (join_path(docs_dir, sizeof docs_dir, root, "docs") != 0 ||
+    if (join_path(doc_src_dir, sizeof doc_src_dir, root, "doc_src") != 0 ||
         join_path(index_path, sizeof index_path, root, index_rel) != 0 ||
         join_path(out_dir, sizeof out_dir, root, out_rel) != 0 ||
         join_path(templates_dir, sizeof templates_dir, root, "src/gen_doc_site/templates") != 0 ||
@@ -98,7 +98,7 @@ int main(int argc, char **argv) {
     }
 
     memset(&idx, 0, sizeof idx);
-    if (gen_doc_index_load(docs_dir, index_path, &idx, err, sizeof err) != 0) {
+    if (gen_doc_index_load(doc_src_dir, index_path, &idx, err, sizeof err) != 0) {
         fprintf(stderr, "gen_doc_site: %s\n", err);
         return 1;
     }

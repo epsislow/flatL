@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(__dirname, '../..');
-const examplesDir = path.join(repo, 'fleditor_site/examples');
+const examplesDir = path.join(repo, 'docs/fleditor_site/examples');
 const manifest = JSON.parse(fs.readFileSync(path.join(examplesDir, 'manifest.json'), 'utf8'));
 
 if (!Array.isArray(manifest.files) || manifest.files.length < 3) {

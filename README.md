@@ -3,7 +3,7 @@
 **flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards, structural backtracking, `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
 
 > FGIR (Flat Graph Intermediate Representation) spec v1.0 · Binary & VM spec v1.1  
-> **Documentation is in English** — index: [docs/README.md](docs/README.md) · offline site: **`make docs`** → open [doc_site/index.html](doc_site/index.html)
+> **Documentation is in English** — index: [doc_src/README.md](doc_src/README.md) · offline site: **`make docs`** + **`make fleditor-serve`** → [docs/doc_site/](docs/doc_site/index.html)
 
 ## Why flatL?
 
@@ -37,7 +37,7 @@ Parses, compiles, and runs with current `flc` / `flvm` (see `make test`):
 ```
 
 Types: `true` / `false`, numbers, quoted strings; `call #block`; guards with `==` (and `>=`, etc. on numbers).  
-**I/O:** `io.out` / `io.outln` / `io.inln` / `io.in_num` / `io.in_bool`, binding `->` — see [docs/IO.md](docs/IO.md). **Strings:** core **`str.*`** (`len`, `slice`, `concat`, `split`, …) — [docs/natives/str.md](docs/natives/str.md); parsing **`str.to_num`** / **`str.to_bool`** in [IO.md](docs/IO.md). Test helper **`__ref__`**; LIST/OBJECT literals ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md)).
+**I/O:** `io.out` / `io.outln` / `io.inln` / `io.in_num` / `io.in_bool`, binding `->` — see [doc_src/IO.md](doc_src/IO.md). **Strings:** core **`str.*`** (`len`, `slice`, `concat`, `split`, …) — [doc_src/natives/str.md](doc_src/natives/str.md); parsing **`str.to_num`** / **`str.to_bool`** in [IO.md](doc_src/IO.md). Test helper **`__ref__`**; LIST/OBJECT literals ([LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md)).
 
 Minimal sample: [examples/hello.fl](examples/hello.fl).
 
@@ -107,7 +107,7 @@ Lexical rules (summary):
 ./flatl crun program.fl
 ```
 
-See [docs/TOOLCHAIN.md — flatl](docs/TOOLCHAIN.md#flatl-driver-optional-ux).
+See [doc_src/TOOLCHAIN.md — flatl](doc_src/TOOLCHAIN.md#flatl-driver-optional-ux).
 
 ## `.fb` binary layout (v1.1)
 
@@ -140,11 +140,11 @@ make test-flatl   # same cases via [flatl] in case.toml
 bin/run_tests -h
 ```
 
-**Cross-platform:** `flc` and `flvm` are portable C; **`make test`** uses `run_tests`, which runs pipeline commands through a **POSIX shell** (e.g. `printf … | flvm`). On Windows, use **WSL** for the full suite, or compile/run bytecode manually. I/O test files under `test/cases/io/` are committed — regenerate only when changing the catalog: `make io_generate_tests` (`bin/io_generate_tests`, no Bash). Details: [docs/TOOLCHAIN.md — Portability](docs/TOOLCHAIN.md#portability-windows-shell-and-io-tests) · [test/README.md](test/README.md).
+**Cross-platform:** `flc` and `flvm` are portable C; **`make test`** uses `run_tests`, which runs pipeline commands through a **POSIX shell** (e.g. `printf … | flvm`). On Windows, use **WSL** for the full suite, or compile/run bytecode manually. I/O test files under `test/cases/io/` are committed — regenerate only when changing the catalog: `make io_generate_tests` (`bin/io_generate_tests`, no Bash). Details: [doc_src/TOOLCHAIN.md — Portability](doc_src/TOOLCHAIN.md#portability-windows-shell-and-io-tests) · [test/README.md](test/README.md).
 
-**Docs:** [docs/README.md](docs/README.md) · [TOOLCHAIN.md](docs/TOOLCHAIN.md) · [SPECIFICATION.md](docs/SPECIFICATION.md) · [LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md) · [IO.md](docs/IO.md)
+**Docs:** [doc_src/README.md](doc_src/README.md) · [TOOLCHAIN.md](doc_src/TOOLCHAIN.md) · [SPECIFICATION.md](doc_src/SPECIFICATION.md) · [LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md) · [IO.md](doc_src/IO.md)
 
-**Browser playground:** [fleditor_site/](fleditor_site/) — WASM compile/run in the browser; see [docs/FLEDITOR.md](docs/FLEDITOR.md).
+**Browser playground:** [docs/fleditor_site/](docs/fleditor_site/) — WASM compile/run in the browser; see [doc_src/FLEDITOR.md](doc_src/FLEDITOR.md).
 
 ## Roadmap
 
@@ -152,7 +152,7 @@ bin/run_tests -h
 - [x] `flvm` — opcodes v0.1 (OK/FAIL/GUARD/ASSIGN/CALL/RETURN/FOREACH/PANIC)
 - [x] `flc` — parse `.fl` → FGIR, `--dump-ir`, emit `.fb`
 - [x] E2E tests (`make test`)
-- [x] Runtime values v0.2 — STRING REF pool, NUMBER, BOOL ([LANGUAGE_TYPES.md](docs/LANGUAGE_TYPES.md))
+- [x] Runtime values v0.2 — STRING REF pool, NUMBER, BOOL ([LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md))
 - [ ] Native std libraries (`str`, `kv`, …) — no VM built-in functions
 - [ ] Full expression language + infrastructure panic from natives
 - [ ] Optional dynamic modules (`.so`)

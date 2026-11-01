@@ -192,21 +192,21 @@ Parse/compile errors print to stderr and exit **1**.
 
 ## `gen_doc_site` / `make docs`
 
-Builds **`doc_site/`** at the repository root: static HTML + JS viewer over Markdown from **`docs/`**. No Node.js — the generator is **`bin/gen_doc_site`** (C).
+Builds **`docs/doc_site/`** (GitHub Pages bundle): static HTML + JS viewer over Markdown from **`doc_src/`**. No Node.js — the generator is **`bin/gen_doc_site`** (C).
 
 | Input | Role |
 |-------|------|
-| `docs/index.json` | Table of contents (`id`, `label`, `file` relative to `docs/`) |
-| `docs/**/*.md` | Section bodies |
+| `doc_src/index.json` | Table of contents (`id`, `label`, `file` relative to `doc_src/`) |
+| `doc_src/**/*.md` | Section bodies |
 | `src/gen_doc_site/templates/` | Copied shell (`index.html`, CSS, `doc-viewer.js`) |
 
-Output (regenerated each run; **`doc_site/`** is in `.gitignore` by default):
+Output (regenerated each run; committed for offline/GitHub Pages):
 
 ```text
-doc_site/index.html
-doc_site/css/docs.css
-doc_site/js/doc-viewer.js
-doc_site/js/doc-data.js    # bundled Markdown (generated)
+docs/doc_site/index.html
+docs/doc_site/css/docs.css
+docs/doc_site/js/doc-viewer.js
+docs/doc_site/js/doc-data.js    # bundled Markdown (generated)
 ```
 
 ```bash
@@ -215,7 +215,7 @@ make docs
 bin/gen_doc_site --root .
 ```
 
-Open **`doc_site/index.html`** in a browser (`file://` is fine). Internal links to other `.md` files in the index navigate between sections.
+Open via **`make fleditor-serve`** → `http://127.0.0.1:8765/doc_site/` (or `…/fleditor_site/` for the editor). Internal links to other `.md` files in the index navigate between sections.
 
 Tests: **`bin/run_tests docgen -v`**.
 

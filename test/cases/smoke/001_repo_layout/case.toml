@@ -4,5 +4,5 @@ desc = "core repo paths exist"
 kind = "files"
 
 check = "include/flat.h"
-check = "docs/SPECIFICATION.md"
+check = "doc_src/SPECIFICATION.md"
 check = "Makefile"
