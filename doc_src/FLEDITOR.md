@@ -94,19 +94,27 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 
 ## Multi-file project
 
-- **Project panel**, **Run** = open file, implicit save before compile, **Save**, dirty markers, Undo/Redo.
+- **Project panel**; **Run** / **Save** / Undo/Redo on the **editor action bar** (under the file path). Run uses the open file; Run implicitly saves before compile.
 - **MEMFS** under `/fleditor/…` on Run.
 - **`localStorage`** key `flatl-fleditor-project`.
 
 ### Delete and reset
 
-- **`+fl`** / **`+dir`**, **`×`** delete, **Reset project** loads `main.fl` + `examples/` from disk manifest.
+- **`+fl`** / **`+dir`**, **`×`** delete.
+- **Reset project** (**⟲** on the Project panel header) loads `main.fl` + `examples/` from disk manifest.
 - Toolbar **Docs** → relative **`../doc_site/index.html`**. In docs, **Open fleditor** → **`../fleditor_site/index.html`**.
 
 ## Panels and layout
 
-- Terminal below editor; chips **Project** / **Terminal**; **Reset layout**.
+- **Project** (left) and **Terminal (I/O)** (below editor) use **`[−]`** on the panel header to **minimize** (not destroy state).
+- Minimized panels appear on the **bottom dock** as **`[+]` Project** / **`[+]` Terminal** — click to restore.
+- **↺** on the bottom dock (after the restore buttons) **Reset layout** — default: Project open, terminal minimized; does not change your `.fl` files.
+- **Run** still opens the terminal if it was minimized.
+- **Undo** / **Redo** / **Save** / **Run** on the editor action bar; top toolbar is title, **Docs**, and status only.
+- **Clear** on the terminal panel tool row (below the Terminal title).
 - Run footer: `-- finished: OK` / `complete` / `FAIL` / `panic` / `error`; compile errors: `-- compile failed`.
+
+Layout prefs: `localStorage` key `flatl-fleditor-layout`.
 
 ## Limits
 

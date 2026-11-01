@@ -29,11 +29,24 @@ setTimeout(() => {
     res.on('end', () => {
       if (res.statusCode !== 200) fail('status ' + res.statusCode);
       if (!body.includes('flatL fleditor')) fail('unexpected body');
-      if (!body.includes('id="chipProject"')) fail('missing Project chip');
-      if (!body.includes('Reset layout')) fail('missing Reset layout');
+      if (!body.includes('id="panelDock"')) fail('missing panel dock');
+      if (!body.includes('id="dockResetLayoutBtn"')) fail('missing dock reset layout');
       if (!body.includes('fleditor-layout.js')) fail('missing layout script');
       if (!body.includes('>+fl<')) fail('missing +fl button');
-      if (!body.includes('Reset project')) fail('missing Reset project');
+      if (!body.includes('id="resetProjectBtn"')) fail('missing reset project control');
+      if (!body.includes('fleditor-editor-actions')) fail('missing editor actions bar');
+      if (!body.includes('id="undoBtn"')) fail('missing undo in editor bar');
+      if (!body.includes('fleditor-editor-actions') || !body.includes('id="runBtn"')) {
+        fail('missing Run on editor bar');
+      }
+      if (!body.includes('fleditor-terminal-head') || !body.includes('id="clearBtn"')) {
+        fail('missing terminal Clear control');
+      }
+      const editorBar = body.match(/fleditor-editor-actions[\s\S]*?<\/div>/);
+      if (!editorBar || !editorBar[0].includes('id="saveBtn"')) {
+        fail('missing Save on editor bar');
+      }
+      if (body.includes('id="chipProject"')) fail('legacy Project chip should be removed');
       if (!body.includes('href="../doc_site/index.html"')) fail('missing Docs link');
       http.get(`http://127.0.0.1:${port}/doc_site/index.html`, (rDoc) => {
         let docBody = '';

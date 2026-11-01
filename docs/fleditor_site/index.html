@@ -13,17 +13,6 @@
   <div class="fleditor-app">
     <header class="fleditor-toolbar">
       <h1>flatL fleditor</h1>
-      <div class="fleditor-view-chips" role="group" aria-label="Panels">
-        <button type="button" id="chipProject" class="fleditor-chip fleditor-chip--on" aria-pressed="true">Project</button>
-        <button type="button" id="chipTerminal" class="fleditor-chip" aria-pressed="false">Terminal</button>
-      </div>
-      <button type="button" id="undoBtn" title="Undo">Undo</button>
-      <button type="button" id="redoBtn" title="Redo">Redo</button>
-      <button type="button" id="saveBtn">Save</button>
-      <button type="button" id="runBtn" class="btn-run">Run</button>
-      <button type="button" id="clearBtn">Clear terminal</button>
-      <button type="button" id="resetLayoutBtn" class="fleditor-btn-muted">Reset layout</button>
-      <button type="button" id="resetProjectBtn" class="fleditor-btn-muted">Reset project</button>
       <a class="fleditor-toolbar-link" href="../doc_site/index.html">Docs</a>
       <span id="status" class="fleditor-status">idle</span>
     </header>
@@ -32,7 +21,10 @@
       <aside id="projectPanel" class="fleditor-sidebar">
         <div class="fleditor-panel-label">
           <span class="fleditor-panel-label-text">Project</span>
-          <button type="button" id="projectPanelToggle" class="fleditor-panel-toggle" title="Hide project">[−]</button>
+          <div class="fleditor-panel-label-actions">
+            <button type="button" id="resetProjectBtn" class="fleditor-panel-icon" title="Reset project" aria-label="Reset project">⟲</button>
+            <button type="button" id="projectPanelToggle" class="fleditor-panel-toggle" title="Minimize project" aria-label="Minimize project">[−]</button>
+          </div>
         </div>
         <div class="fleditor-sidebar-head">
           <button type="button" id="newFileBtn" class="fleditor-sidebar-btn" title="New file">+fl</button>
@@ -42,24 +34,47 @@
       </aside>
       <div id="workPanel" class="fleditor-work fleditor-work--no-terminal">
         <section class="fleditor-editor-wrap">
-          <div class="fleditor-panel-label fleditor-panel-label--editor">
-            <span id="editorPathLabel">Source (.fl)</span>
-            <span id="dirtyBadge" class="fleditor-dirty" hidden title="Unsaved changes">●</span>
+          <div class="fleditor-editor-head">
+            <div class="fleditor-panel-label fleditor-panel-label--editor">
+              <span id="editorPathLabel">Source (.fl)</span>
+              <span id="dirtyBadge" class="fleditor-dirty" hidden title="Unsaved changes">●</span>
+            </div>
+            <div class="fleditor-editor-actions" role="toolbar" aria-label="Editor">
+              <button type="button" id="undoBtn" title="Undo">Undo</button>
+              <button type="button" id="redoBtn" title="Redo">Redo</button>
+              <button type="button" id="saveBtn" title="Save">Save</button>
+              <button type="button" id="runBtn" class="btn-run" title="Run">Run</button>
+            </div>
           </div>
           <div id="editorEmptyOverlay" class="fleditor-editor-empty" hidden>
-            <p>No files in project. Use <strong>+fl</strong> or <strong>Reset project</strong>.</p>
+            <p>No files in project. Use <strong>+fl</strong> or the <strong>⟲</strong> reset control on the Project panel.</p>
           </div>
           <textarea id="code" spellcheck="false"></textarea>
         </section>
         <section id="terminalPanel" class="fleditor-terminal-wrap" hidden>
           <div class="fleditor-panel-label">
             <span class="fleditor-panel-label-text">Terminal (I/O)</span>
-            <button type="button" id="terminalPanelToggle" class="fleditor-panel-toggle" title="Hide terminal">[−]</button>
+            <div class="fleditor-panel-label-actions">
+              <button type="button" id="terminalPanelToggle" class="fleditor-panel-toggle" title="Minimize terminal" aria-label="Minimize terminal">[−]</button>
+            </div>
+          </div>
+          <div class="fleditor-terminal-head">
+            <button type="button" id="clearBtn" class="fleditor-sidebar-btn" title="Clear terminal output">Clear</button>
           </div>
           <div id="terminalHost"></div>
         </section>
       </div>
     </div>
+    <footer class="fleditor-dock" id="panelDock" aria-label="Panel dock">
+      <button type="button" id="dockRestoreProject" class="fleditor-dock-restore" hidden aria-label="Restore project panel">
+        <span class="fleditor-dock-restore-mark" aria-hidden="true">[+]</span> Project
+      </button>
+      <button type="button" id="dockRestoreTerminal" class="fleditor-dock-restore" hidden aria-label="Restore terminal panel">
+        <span class="fleditor-dock-restore-mark" aria-hidden="true">[+]</span> Terminal
+      </button>
+      <span class="fleditor-dock-spacer" aria-hidden="true"></span>
+      <button type="button" id="dockResetLayoutBtn" class="fleditor-dock-icon" title="Reset layout" aria-label="Reset layout">↺</button>
+    </footer>
   </div>
   <dialog id="ioModal" class="fleditor-io-modal" aria-labelledby="ioModalTitle">
     <form id="ioModalForm" class="fleditor-io-form">
@@ -127,6 +142,6 @@
   <script src="js/mode-flatl.js"></script>
   <script src="js/fleditor-project.js"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=25"></script>
+  <script src="js/fleditor.js?v=27"></script>
 </body>
 </html>

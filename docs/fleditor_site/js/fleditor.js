@@ -34,11 +34,11 @@
   const projectPanel = document.getElementById('projectPanel');
   const terminalPanel = document.getElementById('terminalPanel');
   const workPanel = document.getElementById('workPanel');
-  const chipProject = document.getElementById('chipProject');
-  const chipTerminal = document.getElementById('chipTerminal');
   const projectPanelToggle = document.getElementById('projectPanelToggle');
   const terminalPanelToggle = document.getElementById('terminalPanelToggle');
-  const resetLayoutBtn = document.getElementById('resetLayoutBtn');
+  const dockRestoreProject = document.getElementById('dockRestoreProject');
+  const dockRestoreTerminal = document.getElementById('dockRestoreTerminal');
+  const dockResetLayoutBtn = document.getElementById('dockResetLayoutBtn');
   const resetProjectBtn = document.getElementById('resetProjectBtn');
   const editorEmptyOverlay = document.getElementById('editorEmptyOverlay');
 
@@ -169,13 +169,18 @@
     layoutState = L.saveLayout(null, layoutState);
   }
 
+  function syncDock() {
+    if (dockRestoreProject) {
+      dockRestoreProject.hidden = layoutState.projectOpen;
+    }
+    if (dockRestoreTerminal) {
+      dockRestoreTerminal.hidden = layoutState.terminalOpen;
+    }
+  }
+
   function applyLayout() {
     if (projectPanel) {
       projectPanel.hidden = !layoutState.projectOpen;
-    }
-    if (chipProject) {
-      chipProject.classList.toggle('fleditor-chip--on', layoutState.projectOpen);
-      chipProject.setAttribute('aria-pressed', layoutState.projectOpen ? 'true' : 'false');
     }
     if (terminalPanel && workPanel) {
       terminalPanel.hidden = !layoutState.terminalOpen;
@@ -187,10 +192,7 @@
         terminalPanel.style.flexBasis = '';
       }
     }
-    if (chipTerminal) {
-      chipTerminal.classList.toggle('fleditor-chip--on', layoutState.terminalOpen);
-      chipTerminal.setAttribute('aria-pressed', layoutState.terminalOpen ? 'true' : 'false');
-    }
+    syncDock();
     scheduleLayoutRefresh();
   }
 
@@ -235,14 +237,6 @@
     layoutState.terminalOpen = !!open;
     persistLayout();
     applyLayout();
-  }
-
-  function toggleProjectPanel() {
-    setProjectOpen(!layoutState.projectOpen);
-  }
-
-  function toggleTerminalPanel() {
-    setTerminalOpen(!layoutState.terminalOpen);
   }
 
   function resetLayout() {
@@ -1260,20 +1254,20 @@
 
   function initLayoutControls() {
     applyLayout();
-    if (chipProject) {
-      chipProject.addEventListener('click', toggleProjectPanel);
-    }
-    if (chipTerminal) {
-      chipTerminal.addEventListener('click', toggleTerminalPanel);
-    }
     if (projectPanelToggle) {
       projectPanelToggle.addEventListener('click', () => setProjectOpen(false));
     }
     if (terminalPanelToggle) {
       terminalPanelToggle.addEventListener('click', () => setTerminalOpen(false));
     }
-    if (resetLayoutBtn) {
-      resetLayoutBtn.addEventListener('click', resetLayout);
+    if (dockRestoreProject) {
+      dockRestoreProject.addEventListener('click', () => setProjectOpen(true));
+    }
+    if (dockRestoreTerminal) {
+      dockRestoreTerminal.addEventListener('click', () => setTerminalOpen(true));
+    }
+    if (dockResetLayoutBtn) {
+      dockResetLayoutBtn.addEventListener('click', resetLayout);
     }
   }
 

@@ -94,27 +94,6 @@ body {
   overflow: hidden;
 }
 
-.fleditor-view-chips {
-  display: flex;
-  gap: 0.35rem;
-}
-
-.fleditor-chip {
-  background: var(--fl-bg);
-  color: var(--fl-text-muted);
-  border: 1px solid var(--fl-border);
-  border-radius: 4px;
-  padding: 0.28rem 0.55rem;
-  font-size: 0.78rem;
-  cursor: pointer;
-}
-
-.fleditor-chip--on {
-  color: var(--fl-text);
-  border-color: var(--fl-btn-run);
-  background: rgba(90, 122, 74, 0.2);
-}
-
 .fleditor-btn-muted {
   font-size: 0.78rem !important;
   color: var(--fl-text-muted) !important;
@@ -326,6 +305,145 @@ body {
 
 .fleditor-panel-label--editor {
   text-transform: none;
+  border-bottom: none;
+}
+
+.fleditor-panel-label-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.fleditor-panel-icon {
+  background: transparent;
+  border: 1px solid var(--fl-border);
+  border-radius: 3px;
+  color: var(--fl-text-muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  padding: 0.12rem 0.4rem;
+  cursor: pointer;
+}
+
+.fleditor-panel-icon:hover {
+  color: var(--fl-text);
+  border-color: var(--fl-text-muted);
+}
+
+.fleditor-editor-head {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--fl-border);
+  background: var(--fl-surface);
+}
+
+.fleditor-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.75rem 0.4rem;
+}
+
+.fleditor-editor-actions button {
+  background: var(--fl-bg);
+  color: var(--fl-text);
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  padding: 0.22rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.fleditor-editor-actions button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.fleditor-editor-actions button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.fleditor-editor-actions button.btn-run {
+  border-color: var(--fl-btn-run);
+  background: rgba(90, 122, 74, 0.25);
+}
+
+.fleditor-editor-actions button.btn-run:hover:not(:disabled) {
+  background: rgba(109, 148, 96, 0.35);
+}
+
+.fleditor-terminal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid var(--fl-border);
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  background: var(--fl-surface);
+}
+
+.fleditor-dock {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-top: 1px solid var(--fl-border);
+  background: var(--fl-surface);
+  min-height: 2.25rem;
+}
+
+.fleditor-dock-restore {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--fl-bg);
+  color: var(--fl-text);
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.fleditor-dock-restore-mark {
+  font-family: ui-monospace, monospace;
+  color: var(--fl-string);
+  font-size: 0.72rem;
+}
+
+.fleditor-dock-restore:hover {
+  border-color: var(--fl-btn-run);
+  background: rgba(90, 122, 74, 0.15);
+}
+
+.fleditor-dock-restore[hidden] {
+  display: none !important;
+}
+
+.fleditor-dock-spacer {
+  flex: 1 1 auto;
+  min-width: 0.5rem;
+}
+
+.fleditor-dock-icon {
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  color: var(--fl-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+}
+
+.fleditor-dock-icon:hover {
+  color: var(--fl-text);
+  border-color: var(--fl-text-muted);
 }
 
 .fleditor-panel-toggle {
