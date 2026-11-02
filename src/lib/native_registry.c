@@ -137,6 +137,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("file", "readln", "file.readln(fp)"),
     META_SIG("file", "read", "file.read(fp, n?)"),
     META_SIG("file", "write", "file.write(fp, data)"),
+    META_SIG("file", "writeln", "file.writeln(fp, data)"),
     META_SIG("file", "writeBytes", "file.writeBytes(fp, data)"),
     META_SIG("file", "flush", "file.flush(fp)"),
     META_SIG("file", "pos", "file.pos(fp)"),

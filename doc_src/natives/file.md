@@ -21,9 +21,10 @@ Returns a **FILE** handle bound to a variable or `->` target.
 | Call | Result |
 |------|--------|
 | `file.readln(fp)` | One line (strip `\n`); EOF → PANIC `io.eof` |
+| `file.writeln(fp, data)` | Write formatted **data** plus `\n` (like **`io.outln`**, but to the file) |
 | `file.read(fp)` | Rest of file as STRING REF |
 | `file.read(fp, n)` | Up to **n** bytes as STRING REF |
-| `file.write(fp, data)` | Write formatted value at current position |
+| `file.write(fp, data)` | Write formatted value at current position (no trailing newline) |
 | `file.writeBytes(fp, data)` | Write raw STRING bytes (inline or REF); no formatting |
 | `file.flush(fp)` | Flush stdio buffer |
 | `file.pos(fp)` | Current byte offset (NUMBER) |

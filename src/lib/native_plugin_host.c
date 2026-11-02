@@ -52,6 +52,7 @@ static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_READLN, flat_native_file_readln);
     flat_native_plugin_register(FLAT_NATIVE_FILE_READ, flat_native_file_read);
     flat_native_plugin_register(FLAT_NATIVE_FILE_WRITE, flat_native_file_write);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_WRITELN, flat_native_file_writeln);
     flat_native_plugin_register(FLAT_NATIVE_FILE_WRITE_BYTES, flat_native_file_write_bytes);
     flat_native_plugin_register(FLAT_NATIVE_FILE_FLUSH, flat_native_file_flush);
     flat_native_plugin_register(FLAT_NATIVE_FILE_POS, flat_native_file_pos);

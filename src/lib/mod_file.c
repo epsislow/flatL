@@ -265,6 +265,49 @@ int flat_native_file_write(FlatNativeCtx *ctx) {
     return 0;
 }
 
+int flat_native_file_writeln(FlatNativeCtx *ctx) {
+    char inner_buf[4096];
+    char *left;
+    char *right;
+    uint32_t fid;
+    FILE *fp;
+    FlatValue data;
+    char *bytes = NULL;
+    size_t blen = 0;
+    FILE *mem;
+
+    if (!ctx->io_status || !ctx->inner) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        return -1;
+    }
+    if (require_fp(ctx, left, &fid) != 0) {
+        return -1;
+    }
+    if (parse_expr(ctx, right, &data) != 0) {
+        return -1;
+    }
+    fp = flat_file_fp(ctx->file_tbl, fid);
+    if (!fp) {
+        return -1;
+    }
+    mem = open_memstream(&bytes, &blen);
+    if (!mem) {
+        return -1;
+    }
+    flat_value_fprint_io_ln(mem, &data, ctx->pool, ctx->coll);
+    fclose(mem);
+    if (fwrite(bytes, 1, blen, fp) != blen) {
+        free(bytes);
+        return -1;
+    }
+    free(bytes);
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
 int flat_native_file_write_bytes(FlatNativeCtx *ctx) {
     char inner_buf[4096];
     char *left;
