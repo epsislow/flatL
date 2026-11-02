@@ -168,6 +168,19 @@
     return map;
   }
 
+  function bytesToProjectValueBinary(u8) {
+    let bin = '';
+    for (let i = 0; i < u8.length; i++) {
+      bin += String.fromCharCode(u8[i]);
+    }
+    return BINARY_STORE_PREFIX + btoa(bin);
+  }
+
+  /** Binary when stored with the project wrapper (e.g. created with +file → Binary). */
+  function isBinaryProjectFile(_path, content) {
+    return isBinaryProjectValue(content);
+  }
+
   function bytesToProjectValue(u8) {
     try {
       const text = new TextDecoder('utf-8', { fatal: true }).decode(u8);
@@ -240,33 +253,18 @@
     return payload instanceof Uint8Array ? payload : new Uint8Array(0);
   }
 
-  /** Read-only hex dump for the editor (offset, hex, ASCII). */
+  /** Hex dump (full file); prefer paginated view in editor via FleditorHex.hexDumpPageFromBytes. */
   function binaryProjectValueToHexView(content) {
     const u8 = binaryProjectValueToBytes(content);
-    if (u8.length === 0) {
-      return '; empty binary file (0 bytes)\n; Edited by flatL programs — view only in fleditor.\n';
+    const H = global.FleditorHex;
+    if (H) {
+      return H.hexDumpAllFromBytes(u8);
     }
-    const lineWidth = 16;
-    const lines = [
-      '; binary file — hex view (read-only in fleditor)',
-      '; length: ' + u8.length + ' bytes',
-      '',
-    ];
-    for (let off = 0; off < u8.length; off += lineWidth) {
-      const end = Math.min(off + lineWidth, u8.length);
-      let hex = '';
-      let ascii = '';
-      for (let i = off; i < end; i++) {
-        const b = u8[i];
-        hex += b.toString(16).padStart(2, '0') + ' ';
-        ascii += b >= 32 && b < 127 ? String.fromCharCode(b) : '.';
-      }
-      while (hex.length < lineWidth * 3) {
-        hex += '   ';
-      }
-      lines.push(off.toString(16).padStart(8, '0') + '  ' + hex + ' |' + ascii + '|');
-    }
-    return lines.join('\n') + '\n';
+    return '';
+  }
+
+  function binaryProjectValueToBytesExport(content) {
+    return binaryProjectValueToBytes(content);
   }
 
   function syncToMemfs(Module, files) {
@@ -508,6 +506,10 @@
     formatMemfsImportReport,
     isBinaryProjectValue,
     binaryProjectValueToHexView,
+    binaryProjectValueToBytes: binaryProjectValueToBytesExport,
+    bytesToProjectValue,
+    bytesToProjectValueBinary,
+    isBinaryProjectFile,
     buildTree,
     ensureParentDirs,
     listFilePaths,

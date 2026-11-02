@@ -306,6 +306,102 @@ body {
 .fleditor-panel-label--editor {
   text-transform: none;
   border-bottom: none;
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  min-width: 0;
+}
+
+.fleditor-editor-kind {
+  font-weight: 600;
+  color: var(--fl-accent, #c4b896);
+  flex-shrink: 0;
+}
+
+.fleditor-editor-path {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.fleditor-binary-bar {
+  padding: 0.35rem 0.5rem;
+  background: var(--fl-surface-2, #25252c);
+  border-bottom: 1px solid var(--fl-border);
+  font-size: 0.82rem;
+  color: var(--fl-text-muted);
+}
+
+.fleditor-binary-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.fleditor-binary-row:last-child {
+  margin-bottom: 0;
+}
+
+.fleditor-binary-meta {
+  margin-right: 0.25rem;
+}
+
+.fleditor-binary-parse--err {
+  color: #e88;
+}
+
+.fleditor-binary-nav button,
+.fleditor-binary-row button {
+  font-size: 0.82rem;
+  padding: 0.15rem 0.45rem;
+  background: var(--fl-surface);
+  border: 1px solid var(--fl-border);
+  color: var(--fl-text);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.fleditor-binary-nav button:hover,
+.fleditor-binary-row button:hover {
+  background: var(--fl-surface-2, #35353f);
+}
+
+.fleditor-binary-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.fleditor-binary-field input {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  padding: 0.12rem 0.35rem;
+  background: var(--fl-bg);
+  border: 1px solid var(--fl-border);
+  color: var(--fl-text);
+  border-radius: 3px;
+}
+
+.fleditor-newfile-binary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 0.25rem;
+  font-size: 0.9rem;
+  color: var(--fl-text-muted);
+  cursor: pointer;
+}
+
+.fleditor-newfile-binary input {
+  width: 1rem;
+  height: 1rem;
 }
 
 .fleditor-panel-label-actions {

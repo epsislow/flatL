@@ -98,13 +98,65 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 - **Project panel**; **Run** / **Save** / Undo/Redo on the **editor action bar** (under the file path). Run uses the open file; Run implicitly saves before compile.
 - **MEMFS** under `/fleditor/…` on Run.
 - Before VM execution, the runtime **`chdir`s to `/fleditor`**, so `file.readCtx('data.txt')` in source matches project file **`data.txt`** (no `/fleditor/` prefix required in `.fl`).
-- After **Run**, any file under `/fleditor/` that is **new** or **changed** (byte content vs snapshot right before execution) is **synced into the Project panel** and `localStorage`. Text is stored as UTF-8 strings; other bytes use an internal base64 wrapper (binary-safe round-trip via MEMFS). Opening a binary file shows a **read-only hex dump** in the editor (not the raw base64).
+- After **Run**, any file under `/fleditor/` that is **new** or **changed** (byte content vs snapshot right before execution) is **synced into the Project panel** and `localStorage`. Text is stored as UTF-8 strings; other bytes use an internal base64 wrapper (binary-safe round-trip via MEMFS). The wrapper is never shown in the UI.
+- **`+file`** opens a dialog: enter the **path with extension**, check **Binary (Hex editor)** for a binary file (empty, wrapper storage), or leave unchecked for **text** (Fl editor). New `.fl` files get a minimal `#main` … `OK` template; other text paths start empty. Binary entries in the tree are marked with **⬡** (wrapper only, not by extension alone).
+
+## Hex editor (binary files)
+
+When a binary file is open, the panel title shows **Hex editor** and the path; FlatL sources use **Fl editor**.
+
+### View layout
+
+- **16 bytes per line**, **40 lines per page** → **640 bytes per page** in CodeMirror.
+- Each line: `offset  XX XX …  |ASCII|`. Offsets are informational; **Save** rebuilds lines from bytes.
+- **Paginate always:** `|<` `<` `>` `>|`, page indicator, byte range for the current page.
+- **Parse OK / Parse error** reflects the current page (must match the expected byte count for that page).
+
+### Editing
+
+- Change **hex pairs** on the current page; switching page **commits** the page into the in-memory buffer (invalid hex blocks navigation and Save).
+- **Save** writes the full buffer to the project (base64 wrapper) and `localStorage`, then refreshes the page view.
+- **Run** saves first; invalid hex blocks Run. After Run, if the open file was synced from MEMFS and you have no unsaved edits, the editor reloads from the project.
+
+### Go to byte
+
+- **Pos** accepts decimal or `0x` hex (byte index **0 … N−1**). **Go** opens the right page.
+
+### Search
+
+- **Search** accepts **hex** (`48 65`), **base64**, or **literal text** (UTF-8 bytes).
+- **Prev** / **Next** find in the **whole file** and jump to the match.
+
+### Size and payload tools
+
+| Control | Action |
+|---------|--------|
+| **Insert…** | Offset + hex or base64 payload inserted into the file |
+| **Delete…** | Offset + byte count removed |
+| **Size…** | New file length (pad with `0x00` or truncate) |
+| **Revert** | Restore last saved bytes |
+| **Import…** | Replace entire file from disk |
+| **Download** | Save raw bytes locally |
+
+Empty files (`0` bytes): use **Insert…** or **Size…** before you can edit hex on a page.
+
+### FlatL programs
+
+Use [`file.read`](./natives/file.md), [`file.writeBytes`](./natives/file.md), etc. in `.fl` to read/write the same project files. The hex editor is for inspection and manual tweaks; MEMFS sync after Run matches program output.
+
+### Tests (Node)
+
+```bash
+make fleditor-hex-smoke
+```
+
+Runs `test/fleditor/hex_roundtrip.mjs` and `hex_project_smoke.mjs` (parse/format + project wrapper).
 - **`io.out*`** → terminal (normal). **`io.err*`** on default **`terr`** → same terminal, **gray** text (`flatWasmOnStderr`).
 - **`localStorage`** key `flatl-fleditor-project`.
 
 ### Delete and reset
 
-- **`+fl`** / **`+dir`**, **`×`** delete.
+- **`+file`** / **`+dir`**, **`×`** delete.
 - **Reset project** (**⟲** on the Project panel header) loads `main.fl` + `examples/` from disk manifest.
 - Toolbar **Docs** → relative **`../doc_site/index.html`**. In docs, **Open fleditor** → **`../fleditor_site/index.html`**.
 

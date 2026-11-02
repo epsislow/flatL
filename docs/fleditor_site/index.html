@@ -27,7 +27,7 @@
           </div>
         </div>
         <div class="fleditor-sidebar-head">
-          <button type="button" id="newFileBtn" class="fleditor-sidebar-btn" title="New file">+fl</button>
+          <button type="button" id="newFileBtn" class="fleditor-sidebar-btn" title="New file">+file</button>
           <button type="button" id="newFolderBtn" class="fleditor-sidebar-btn" title="New folder">+dir</button>
         </div>
         <div id="fileTree" class="fleditor-tree" role="tree"></div>
@@ -36,7 +36,8 @@
         <section class="fleditor-editor-wrap">
           <div class="fleditor-editor-head">
             <div class="fleditor-panel-label fleditor-panel-label--editor">
-              <span id="editorPathLabel">Source (.fl)</span>
+              <span id="editorKindLabel" class="fleditor-editor-kind">Fl editor</span>
+              <span id="editorPathLabel" class="fleditor-editor-path">No file open</span>
               <span id="dirtyBadge" class="fleditor-dirty" hidden title="Unsaved changes">●</span>
             </div>
             <div class="fleditor-editor-actions" role="toolbar" aria-label="Editor">
@@ -46,8 +47,39 @@
               <button type="button" id="runBtn" class="btn-run" title="Run">Run</button>
             </div>
           </div>
+          <div id="binaryHexBar" class="fleditor-binary-bar" hidden>
+            <div class="fleditor-binary-row">
+              <span id="binarySizeLabel" class="fleditor-binary-meta"></span>
+              <span id="binaryPageLabel" class="fleditor-binary-meta"></span>
+              <span id="binaryParseLabel" class="fleditor-binary-meta"></span>
+              <span class="fleditor-binary-nav" role="group" aria-label="Page">
+                <button type="button" id="binaryPageStart" title="First page">|&lt;</button>
+                <button type="button" id="binaryPagePrev" title="Previous page">&lt;</button>
+                <button type="button" id="binaryPageNext" title="Next page">&gt;</button>
+                <button type="button" id="binaryPageEnd" title="Last page">&gt;|</button>
+              </span>
+              <label class="fleditor-binary-field">Pos
+                <input type="text" id="binaryGoOffset" size="8" spellcheck="false" autocomplete="off" />
+              </label>
+              <button type="button" id="binaryGoBtn" title="Go to byte">Go</button>
+              <label class="fleditor-binary-field">Search
+                <input type="text" id="binarySearchInput" size="14" spellcheck="false" autocomplete="off" />
+              </label>
+              <button type="button" id="binarySearchPrev" title="Previous match">Prev</button>
+              <button type="button" id="binarySearchNext" title="Next match">Next</button>
+            </div>
+            <div class="fleditor-binary-row">
+              <button type="button" id="binaryInsertBtn" title="Insert bytes at offset">Insert…</button>
+              <button type="button" id="binaryDeleteBtn" title="Delete bytes">Delete…</button>
+              <button type="button" id="binarySizeBtn" title="Set file size">Size…</button>
+              <button type="button" id="binaryRevertBtn" title="Revert to saved">Revert</button>
+              <button type="button" id="binaryImportBtn" title="Replace from file">Import…</button>
+              <button type="button" id="binaryDownloadBtn" title="Download bytes">Download</button>
+              <input type="file" id="binaryImportFile" hidden accept="*/*" />
+            </div>
+          </div>
           <div id="editorEmptyOverlay" class="fleditor-editor-empty" hidden>
-            <p>No files in project. Use <strong>+fl</strong> or the <strong>⟲</strong> reset control on the Project panel.</p>
+            <p>No files in project. Use <strong>+file</strong> or the <strong>⟲</strong> reset control on the Project panel.</p>
           </div>
           <textarea id="code" spellcheck="false"></textarea>
         </section>
@@ -107,6 +139,22 @@
       </div>
     </div>
   </dialog>
+  <dialog id="newFileModal" class="fleditor-io-modal" aria-labelledby="newFileModalTitle">
+    <form id="newFileModalForm" class="fleditor-io-form">
+      <h2 id="newFileModalTitle" class="fleditor-io-title">New file</h2>
+      <p class="fleditor-io-hint">Path with extension (e.g. main.fl, data.bin, notes.txt).</p>
+      <input type="text" id="newFileModalPath" class="fleditor-io-input" autocomplete="off" spellcheck="false"
+        placeholder="path/name.ext" />
+      <label class="fleditor-newfile-binary">
+        <input type="checkbox" id="newFileModalBinary" />
+        Binary (Hex editor)
+      </label>
+      <div class="fleditor-io-actions">
+        <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
+        <button type="button" id="newFileModalCancel" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="promptModal" class="fleditor-io-modal" aria-labelledby="promptModalTitle">
     <form id="promptModalForm" class="fleditor-io-form">
       <h2 id="promptModalTitle" class="fleditor-io-title">Input</h2>
@@ -140,8 +188,9 @@
   <script src="ext/codemirror.min.js"></script>
   <script src="ext/xterm.js"></script>
   <script src="js/mode-flatl.js"></script>
+  <script src="js/fleditor-hex.js"></script>
   <script src="js/fleditor-project.js"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=27"></script>
+  <script src="js/fleditor.js?v=28"></script>
 </body>
 </html>

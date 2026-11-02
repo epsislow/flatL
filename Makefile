@@ -58,7 +58,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild rebuild-native fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-project-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild rebuild-native fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -237,6 +237,10 @@ fleditor-layout-smoke:
 
 fleditor-project-smoke:
 	$(NODE) test/fleditor/project_smoke.mjs
+
+fleditor-hex-smoke:
+	$(NODE) test/fleditor/hex_roundtrip.mjs
+	$(NODE) test/fleditor/hex_project_smoke.mjs
 
 fleditor-examples-smoke:
 	$(NODE) test/fleditor/examples_smoke.mjs

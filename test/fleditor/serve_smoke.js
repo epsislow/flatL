@@ -32,7 +32,7 @@ setTimeout(() => {
       if (!body.includes('id="panelDock"')) fail('missing panel dock');
       if (!body.includes('id="dockResetLayoutBtn"')) fail('missing dock reset layout');
       if (!body.includes('fleditor-layout.js')) fail('missing layout script');
-      if (!body.includes('>+fl<')) fail('missing +fl button');
+      if (!body.includes('>+file<')) fail('missing +file button');
       if (!body.includes('id="resetProjectBtn"')) fail('missing reset project control');
       if (!body.includes('fleditor-editor-actions')) fail('missing editor actions bar');
       if (!body.includes('id="undoBtn"')) fail('missing undo in editor bar');
