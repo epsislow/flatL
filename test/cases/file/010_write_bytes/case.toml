@@ -1,0 +1,10 @@
+suite = "file"
+id = 10
+desc = "file.writeBytes raw bytes vs file.write formatting"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "AB"

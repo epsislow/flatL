@@ -205,6 +205,23 @@ int flat_native_file_read(FlatNativeCtx *ctx) {
     }
 }
 
+static int string_payload(const FlatValue *v, const FlatStringPool *pool, const uint8_t **out_p,
+                          size_t *out_len) {
+    if (!v || !out_p || !out_len) {
+        return -1;
+    }
+    if (v->tag == VAL_STR_INLINE) {
+        *out_p = (const uint8_t *)v->u.ins.bytes;
+        *out_len = v->u.ins.len;
+        return 0;
+    }
+    if (v->tag == VAL_STR_REF && pool) {
+        *out_p = flat_pool_read(pool, v->u.ref_id, out_len);
+        return *out_p ? 0 : -1;
+    }
+    return -1;
+}
+
 int flat_native_file_write(FlatNativeCtx *ctx) {
     char inner_buf[4096];
     char *left;
@@ -244,6 +261,43 @@ int flat_native_file_write(FlatNativeCtx *ctx) {
         return -1;
     }
     free(bytes);
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_file_write_bytes(FlatNativeCtx *ctx) {
+    char inner_buf[4096];
+    char *left;
+    char *right;
+    uint32_t fid;
+    FILE *fp;
+    FlatValue data;
+    const uint8_t *payload;
+    size_t plen;
+
+    if (!ctx->io_status || !ctx->inner) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        return -1;
+    }
+    if (require_fp(ctx, left, &fid) != 0) {
+        return -1;
+    }
+    if (parse_expr(ctx, right, &data) != 0) {
+        return -1;
+    }
+    if (string_payload(&data, ctx->pool, &payload, &plen) != 0) {
+        return -1;
+    }
+    fp = flat_file_fp(ctx->file_tbl, fid);
+    if (!fp) {
+        return -1;
+    }
+    if (plen > 0 && fwrite(payload, 1, plen, fp) != plen) {
+        return -1;
+    }
     *ctx->io_status = FLAT_IO_OK;
     return 0;
 }

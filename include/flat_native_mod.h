@@ -130,6 +130,7 @@ int flat_native_file_read_write_ctx(FlatNativeCtx *ctx);
 int flat_native_file_readln(FlatNativeCtx *ctx);
 int flat_native_file_read(FlatNativeCtx *ctx);
 int flat_native_file_write(FlatNativeCtx *ctx);
+int flat_native_file_write_bytes(FlatNativeCtx *ctx);
 int flat_native_file_flush(FlatNativeCtx *ctx);
 int flat_native_file_pos(FlatNativeCtx *ctx);
 int flat_native_file_size(FlatNativeCtx *ctx);

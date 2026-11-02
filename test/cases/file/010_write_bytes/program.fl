@@ -1,0 +1,17 @@
+#main
+  fp = file.createCtx('raw.bin')
+  file.writeBytes(fp, 'AB')
+  file.close(fp)
+  fp = file.readCtx('raw.bin')
+  file.read(fp) -> body
+  file.close(fp)
+  io.outln(body)
+  fp = file.createCtx('fmt.txt')
+  n = 42
+  file.write(fp, n)
+  file.close(fp)
+  fp = file.readCtx('fmt.txt')
+  file.read(fp) -> fmt
+  file.close(fp)
+  io.outln(fmt)
+  OK

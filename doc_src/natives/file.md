@@ -24,6 +24,7 @@ Returns a **FILE** handle bound to a variable or `->` target.
 | `file.read(fp)` | Rest of file as STRING REF |
 | `file.read(fp, n)` | Up to **n** bytes as STRING REF |
 | `file.write(fp, data)` | Write formatted value at current position |
+| `file.writeBytes(fp, data)` | Write raw STRING bytes (inline or REF); no formatting |
 | `file.flush(fp)` | Flush stdio buffer |
 | `file.pos(fp)` | Current byte offset (NUMBER) |
 | `file.size(fp)` | File size in bytes (NUMBER) |
