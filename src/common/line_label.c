@@ -1,4 +1,5 @@
 #include "flat_line_label.h"
+#include "flat_guard.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -158,14 +159,13 @@ int flat_line_label_resolve_handler(const FgirProgram *prog, const char *handler
     if (!prog || !handler_label || !handler_label[0]) {
         return 0;
     }
-    if (strncmp(handler_label, "#backtrack.", 11) != 0 &&
-        strncmp(handler_label, "#panic.", 7) != 0) {
-        return 0;
-    }
-    if (strncmp(handler_label, "#backtrack.", 11) == 0) {
-        rest = handler_label + 11;
-    } else {
+    rest = flat_or_handler_body(handler_label);
+    if (rest) {
+        /* or handler */
+    } else if (strncmp(handler_label, "#panic.", 7) == 0) {
         rest = handler_label + 7;
+    } else {
+        return 0;
     }
     dot = strrchr(rest, '.');
     if (!dot || dot == rest) {
@@ -181,8 +181,9 @@ int flat_line_label_resolve_handler(const FgirProgram *prog, const char *handler
         snprintf(err, err_size, "unknown line label %s in %s", suffix, target);
         return -1;
     }
-    if (strncmp(handler_label, "#backtrack.", 11) == 0) {
-        snprintf(canonical_out, canonical_sz, "#backtrack.%.*s.%d", (int)(dot - rest), rest, idx);
+    if (flat_or_handler_body(handler_label) != NULL) {
+        snprintf(canonical_out, canonical_sz, FLAT_OR_HANDLER_PREFIX "%.*s.%d", (int)(dot - rest),
+                 rest, idx);
     } else {
         snprintf(canonical_out, canonical_sz, "#panic.%.*s.%d", (int)(dot - rest), rest, idx);
     }

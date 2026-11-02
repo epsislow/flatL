@@ -1,6 +1,6 @@
 suite = "line_label"
 id = 3
-desc = "guard backtrack via #backtrack.#main.lineLabel"
+desc = "guard or-handler via #or.#main.lineLabel"
 kind = "pipeline"
 
 source = "program.fl"

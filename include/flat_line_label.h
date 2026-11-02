@@ -20,7 +20,7 @@ int flat_line_label_instr_index(const FgirProgram *prog, const char *block_label
 /* True if suffix is a 1-based decimal instruction index (e.g. "23"). */
 int flat_line_label_suffix_is_index(const char *suffix);
 
-/* Resolve handler label `#backtrack.#B.suffix` or `#panic.#B.suffix` (suffix index or ident). */
+/* Resolve handler label `#or.#B.suffix` or `#panic.#B.suffix`. */
 int flat_line_label_resolve_handler(const FgirProgram *prog, const char *handler_label,
                                     char *canonical_out, size_t canonical_sz, char *err,
                                     size_t err_size);

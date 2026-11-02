@@ -1,6 +1,6 @@
 suite = "line_label"
 id = 5
-desc = "numeric #backtrack still works when line has #.label"
+desc = "numeric #or handler still works when line has #.label"
 kind = "pipeline"
 
 source = "program.fl"

@@ -1,6 +1,6 @@
 suite = "line_label"
 id = 6
-desc = "named backtrack handler in imported module"
+desc = "named #or handler in imported module"
 kind = "pipeline"
 
 source = "program.fl"

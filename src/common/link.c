@@ -2,6 +2,7 @@
 #define _POSIX_C_SOURCE 200809L
 #endif
 
+#include "flat_guard.h"
 #include "flat_link.h"
 #include "flat_native_use.h"
 #include "flat_port.h"
@@ -408,7 +409,7 @@ static int discover_modules(const char *entry_path, const FlatLinkOptions *opts,
 }
 
 static int is_handler_label(const char *lab) {
-    return strncmp(lab, "#backtrack.", 11) == 0 || strncmp(lab, "#panic.", 7) == 0;
+    return flat_label_is_or_handler(lab) || strncmp(lab, "#panic.", 7) == 0;
 }
 
 static int is_primary_block_label(const char *lab) {
@@ -448,9 +449,9 @@ static int globalize_block_label(const char *local, const char *prefix_body,
         globalize_primary(local, prefix_body, out, out_sz);
         return 0;
     }
-    if (strncmp(local, "#backtrack.", 11) == 0) {
+    if (flat_or_handler_body(local) != NULL) {
         char target[FGIR_MAX_LABEL];
-        const char *rest = local + 11;
+        const char *rest = flat_or_handler_body(local);
         const char *dot = strrchr(rest, '.');
         if (!dot || dot == rest) {
             snprintf(out, out_sz, "%s", local);
@@ -461,7 +462,7 @@ static int globalize_block_label(const char *local, const char *prefix_body,
             char gtarget[FGIR_MAX_LABEL];
             const char *suffix = dot + 1;
             globalize_primary(target, prefix_body, gtarget, sizeof gtarget);
-            snprintf(out, out_sz, "#backtrack.%s.%s", gtarget, suffix);
+            snprintf(out, out_sz, FLAT_OR_HANDLER_PREFIX "%s.%s", gtarget, suffix);
             return 0;
         }
     } else if (strncmp(local, "#panic.", 7) == 0) {

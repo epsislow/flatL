@@ -1,6 +1,6 @@
 # flatL (Flat Language)
 
-**flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards, structural backtracking, `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
+**flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards (`#or` handlers), `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
 
 > FGIR (Flat Graph Intermediate Representation) spec v1.0 · Binary & VM spec v1.1  
 > **Documentation is in English** — index: [doc_src/README.md](doc_src/README.md) · offline site: **`make docs`** + **`make fleditor-serve`** → [docs/doc_site/](docs/doc_site/index.html)
@@ -9,7 +9,7 @@
 
 Traditional block nesting (`if`, `try/catch`, deep indentation) hides where success, failure, and recovery actually go. flatL makes both ends of every branch visible:
 
-- **Guards** — a failed condition jumps to a named backtrack block (`#backtrack.#block.index` or `#backtrack.#block.lineLabel`), not implicit fall-through. Source lines may end with `#.lineLabel` after the instruction.
+- **Guards** — a failed condition jumps to an **`#or`** handler block (`#or.#block.index` or `#or.#block.lineLabel`), not implicit fall-through. Source lines may end with `#.lineLabel` after the instruction.
 - **Panics** — infrastructure faults route to `#panic.#block.index` or `#panic.any`, separate from logical `FAIL`.
 - **No programmer `goto`** — targets are derived at compile time from block name and instruction index.
 
@@ -29,7 +29,7 @@ Parses, compiles, and runs with current `flc` / `flvm` (see `make test`):
   payment_status == 'SUCCESS'
   OK
 
-#backtrack.#main.2
+#or.#main.2
   FAIL
 
 #check_balance
@@ -56,7 +56,7 @@ Shows the **intended** shape once native libraries and full expressions land (`f
   end.msg('Order completed')
   OK
 
-#backtrack.#main.4
+#or.#main.4
   end.err('Insufficient funds')
   FAIL
 
@@ -69,7 +69,7 @@ Shows the **intended** shape once native libraries and full expressions land (`f
 
 | Feature in example | v0.2 status |
 |--------------------|-------------|
-| `#main`, `#backtrack…`, `OK` / `FAIL` | Yes |
+| `#main`, `#or…`, `OK` / `FAIL` | Yes |
 | Guards `==`, `>=` on vars | Yes |
 | `call #block` (no args) | Yes |
 | `call #block(a, b) -> out` | Parsed; **args / return binding not executed** |
@@ -84,7 +84,7 @@ Lexical rules (summary):
 | `#name` | Block declaration |
 | Sequential lines | Implicit AND — run top to bottom |
 | `call #block(args) -> var` | Sub-graph invocation with output binding |
-| `condition == value` | Guard; failure → `#backtrack.#current.index` |
+| `condition == value` | Guard; failure → `#or.#current.index` |
 | `OK` / `FAIL` | Terminal success / logical failure |
 | `foreach(coll, item, '#loop')` | Iteration via sub-block, no nested loop syntax |
 
@@ -113,7 +113,7 @@ See [doc_src/TOOLCHAIN.md — flatl](doc_src/TOOLCHAIN.md#flatl-driver-optional-
 
 1. **Magic** — `0x46 0x4C 0x41 0x54` (`FLAT`)
 2. **Block directory** — count + entries (block id/hash, byte offset)
-3. **Bytecode stream** — opcode + payload (e.g. guard backtrack index)
+3. **Bytecode stream** — opcode + payload (e.g. guard `#or` handler IP)
 
 ## Opcodes
 

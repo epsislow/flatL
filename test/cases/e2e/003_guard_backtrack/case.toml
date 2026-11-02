@@ -1,6 +1,6 @@
 suite = "e2e"
 id = 3
-desc = "guard backtrack to FAIL"
+desc = "guard #or handler to FAIL"
 kind = "pipeline"
 
 source = "program.fl"

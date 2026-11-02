@@ -13,7 +13,7 @@ Consolidated from project design notes. Normative details will be refined as `fl
 Programs are **not** abstract syntax trees. They are a **flat graph** of **basic blocks**:
 
 - Each block is a contiguous, linear sequence of instructions (e.g. `#main`, `#check_balance`).
-- Control flow is **explicit**: guards, backtrack labels, panic labels, and `call` targets are resolved at **compile time**.
+- Control flow is **explicit**: guards, `#or` handler labels, panic labels, and `call` targets are resolved at **compile time**.
 - **Logical failure** (`FAIL`, failed guards) is separate from **infrastructure panic** (I/O errors, OOM, timeouts, network faults).
 
 ### 1.1 Lexical and structural rules
@@ -24,7 +24,7 @@ Programs are **not** abstract syntax trees. They are a **flat graph** of **basic
 | `#name(arg1, arg2)` | Block with parameter list |
 | Indented lines under a block | Sequential execution (implicit AND), top to bottom |
 | `call #block(args) -> var` | Invoke another block; bind result to `var` |
-| `expr == value` | Guard; on false, branch to backtrack address |
+| `expr == value` | Guard; on false, branch to `#or` handler |
 | `OK` / `FAIL` | Terminal success / logical failure |
 | `return expr` | Return from block to caller |
 | `foreach(coll, item, '#loop')` | Iterate collection via sub-block |
@@ -66,18 +66,18 @@ Then call `trig.sin(...)` and/or `math.trig.sin(...)`. Undeclared optional calls
 
 `use "path.fl" as #Prefix` (source modules) and `use native …` are independent; both may appear in the header.
 
-### 1.2 Backtrack addressing
+### 1.2 Or-handler addressing (`#or`)
 
 When the guard at instruction index *n* in block `#target` evaluates to false, the runtime transfers control to:
 
 ```text
-#backtrack.#target.n
+#or.#target.n
 ```
 
-Alternatively, if that instruction carries a **line label** (see §1.1.1), control may transfer to:
+Alternatively, if that instruction carries a **line label** (see §1.2.1), control may transfer to:
 
 ```text
-#backtrack.#target.<lineLabel>
+#or.#target.<lineLabel>
 ```
 
 If no such block exists, the enclosing flow aborts with logical **FAIL**.
@@ -96,8 +96,8 @@ has_funds == true   #.checkFunds
 | Position | **EOL only** — whitespace, then `#.` + identifier; not inside expressions |
 | Identifier | Letter first; then letters, digits, `_`; no `.` |
 | Uniqueness | At most one `#.ident` per line; `(block, ident)` unique **per `.fl` file** |
-| Handlers | Define `#backtrack.#block.ident` or keep `#backtrack.#block.n`; numeric and named forms may coexist for the same instruction |
-| References | Use `#backtrack.#block.ident` (no `#.` in the path); last segment is either a **1-based index** or a **line label** |
+| Handlers | Define `#or.#block.ident` or `#or.#block.n`; numeric and named forms may coexist for the same instruction |
+| References | Use `#or.#block.ident` (no `#.` in the path); last segment is either a **1-based index** or a **line label** |
 
 Example:
 
@@ -112,11 +112,11 @@ Example:
   end.msg('Order completed')
   OK
 
-#backtrack.#main.4
+#or.#main.4
   end.err('Insufficient funds')
   FAIL
 
-#backtrack.#main.6
+#or.#main.6
   end.err('Payment declined')
   FAIL
 ```
@@ -155,7 +155,7 @@ Example:
 2. For each element, jump to `#loop_body` with `key_var` set.
 3. When the loop block finishes, resume the foreach cursor; when the collection is exhausted, execution continues on the line below `foreach`.
 
-An **empty** backtrack block for a guard inside the loop body means **continue** to the next collection item.
+An **empty** `#or` handler block for a guard inside the loop body means **continue** to the next collection item.
 
 ### 1.2 Source units (`use`)
 
@@ -179,7 +179,7 @@ use "lib/math.fl" as #math_
 | One module instance | Same file linked once program-wide; one prefix. Same file with a different `as` in another file → error. Same `as` elsewhere → silent dedupe. |
 | Block names | Local `#add` with `as #math_` becomes global `#math_add` (literal concat after `#`). |
 | In-module calls | `call #add` rewritten to `call #math_add`. Calls to other linked modules use the **already prefixed** name (`call #math_add`). |
-| `#backtrack` / `#panic` | In a module, write `#backtrack.#add.N`; after link, `#backtrack.#math_add.N`. In entry, you may define `#backtrack.#math_add.N` for an imported block if the module did not (duplicate label → error). |
+| `#or` / `#panic` | In a module, write `#or.#add.N`; after link, `#or.#math_add.N`. In entry, you may define `#or.#math_add.N` for an imported block if the module did not (duplicate label → error). |
 | Rewrite scope | Structural only (`call`, `foreach`, block labels) — not string payloads. |
 
 **Errors:** short message without absolute path, e.g. `lib/utils.fl:3: use: cannot resolve "lib/math.fl" relative to this file`. With `flc --verbose` / `flatl compile --verbose`, an extra line may print the absolute path tried.
@@ -255,7 +255,7 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 |------|-----|----------------|
 | `OP_ASSIGN` | `0x01` | Source line as UTF-8 **NUL-terminated** string (VM: simple `name = value` store) |
 | `OP_FREE` | `0x0B` | Variable name **NUL-terminated** — unbind pool value; **`var = null`** |
-| `OP_GUARD` | `0x02` | `uint32` absolute IP of `#backtrack.<block>.<index>` + guard expr **NUL-terminated** |
+| `OP_GUARD` | `0x02` | `uint32` absolute IP of `#or.<block>.<index>` handler + guard expr **NUL-terminated** |
 | `OP_CALL` | `0x03` | `uint32` target block IP + output var name **NUL-terminated** (may be empty) |
 | `OP_RETURN` | `0x04` | Empty — pops call or advances `foreach` |
 | `OP_FOREACH` | `0x05` | `uint32` loop block IP + original `foreach(...)` line **NUL-terminated** |
@@ -265,7 +265,7 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 
 Block directory **block id**: `0` for `#main`; other blocks use a stable hash of the label string.
 
-If a guard fails and the backtrack offset is **0**, the VM exits with code **2** (unmapped logical failure).
+If a guard fails and the `#or` handler offset is **0**, the VM exits with code **2** (unmapped logical failure).
 
 ### 3.4 Compilation sketch
 
@@ -280,7 +280,7 @@ Source:
 
 Conceptual bytecode for `#main`:
 
-1. `OP_GUARD` — payload includes backtrack jump address  
+1. `OP_GUARD` — payload includes `#or` handler jump address  
 2. `OP_ASSIGN` — payload encodes `end.msg('Success')`  
 3. `OP_OK`
 
@@ -304,7 +304,7 @@ Conceptual bytecode for `#main`:
 
 **Compile-time linking:**
 
-- Guard at index *n* in `#B` → `#backtrack.#B.n` (must exist or backtrack offset 0).
+- Guard at index *n* in `#B` → `#or.#B.n` (must exist or handler offset 0).
 - `PANIC` at index *n* → `#panic.#B.n`, else fallback `#panic.any`.
 
 ---
@@ -316,7 +316,7 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 | Mechanism | Behavior |
 |-----------|----------|
 | **Variables** | v0.2: tagged **BOOL**, **NUMBER**, **STRING** (INLINE ≤127 B or REF pool + slice views). Details: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md). |
-| **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to backtrack IP or exit 2 if unmapped. |
+| **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to `#or` handler IP or exit 2 if unmapped. |
 | **Call** | Push return IP, jump to target block. |
 | **Return** | If inside `foreach` body: next item or resume after `foreach`; else pop call frame; if no frame, exit 0. |
 | **Foreach** | Reads collection variable as comma-separated list; binds item var; enters loop block; `return` advances iterator. |
@@ -328,7 +328,7 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 |------|--------|
 | 0 | `OP_OK` or end of top-level execution |
 | 1 | Bad file, truncated bytecode, unknown opcode |
-| 2 | `OP_FAIL` or failed guard with no backtrack block |
+| 2 | `OP_FAIL` or failed guard with no `#or` handler block |
 
 Reference implementation: **C11**, WSL/Linux.
 

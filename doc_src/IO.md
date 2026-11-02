@@ -67,7 +67,7 @@ Examples:
 
 ```text
 io.docs('#main')
-io.docs('#backtrack')
+io.docs('#or')
 io.docs('mem')
 io.docs('mem.vars_max')
 use native obj with O

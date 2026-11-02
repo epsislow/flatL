@@ -2,6 +2,6 @@
   bad = 1 == 2   #.failGuard
   OK
 
-#backtrack.#work.failGuard
+#or.#work.failGuard
   io.outln('lib handler')
   FAIL

@@ -2,6 +2,6 @@
   false == true   #.needFail
   OK
 
-#backtrack.#main.needFail
+#or.#main.needFail
   io.outln('handled')
   FAIL

@@ -4,6 +4,6 @@
   a == 3
   OK
 
-#backtrack.#main.3
+#or.#main.3
   io.outln('via index')
   FAIL

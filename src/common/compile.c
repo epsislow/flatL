@@ -2,6 +2,7 @@
 #include "flat.h"
 #include "flat_value.h"
 #include "fb_format.h"
+#include "flat_guard.h"
 #include "flat_line_label.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
@@ -303,20 +304,20 @@ static int find_block_idx(const FgirProgram *p, const char *label) {
     return -1;
 }
 
-/* Room for "#backtrack." / "#panic." + block label + suffix (GCC -Wformat-truncation). */
+/* Room for "#or." / "#panic." + block label + suffix (GCC -Wformat-truncation). */
 enum { FLAT_HANDLER_LABEL_BUF = 12 + FGIR_MAX_LABEL + 64 };
 
 static int find_guard_handler(const FgirProgram *prog, const FgirBlock *b, const FgirInstr *ins) {
     char lab[FLAT_HANDLER_LABEL_BUF];
     int idx;
 
-    snprintf(lab, sizeof lab, "#backtrack.%s.%d", b->label, ins->index);
+    snprintf(lab, sizeof lab, FLAT_OR_HANDLER_PREFIX "%s.%d", b->label, ins->index);
     idx = find_block_idx(prog, lab);
     if (idx >= 0) {
         return idx;
     }
     if (ins->line_label[0]) {
-        snprintf(lab, sizeof lab, "#backtrack.%s.%s", b->label, ins->line_label);
+        snprintf(lab, sizeof lab, FLAT_OR_HANDLER_PREFIX "%s.%s", b->label, ins->line_label);
         return find_block_idx(prog, lab);
     }
     return -1;
@@ -345,7 +346,7 @@ static int validate_line_label_handlers(const FgirProgram *prog, char *err, size
         const char *lab = prog->blocks[i].label;
         char canonical[FGIR_MAX_LABEL];
 
-        if (strncmp(lab, "#backtrack.", 11) != 0 && strncmp(lab, "#panic.", 7) != 0) {
+        if (!flat_label_is_or_handler(lab) && strncmp(lab, "#panic.", 7) != 0) {
             continue;
         }
         if (flat_line_label_resolve_handler(prog, lab, canonical, sizeof canonical, err,

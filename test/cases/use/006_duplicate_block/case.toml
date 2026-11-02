@@ -1,6 +1,6 @@
 suite = "use"
 id = 6
-desc = "duplicate backtrack block after link is error"
+desc = "duplicate #or handler block after link is error"
 kind = "exec"
 
 cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"

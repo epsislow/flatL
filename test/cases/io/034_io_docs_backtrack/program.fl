@@ -1,6 +1,6 @@
 #main
-  io.docs('#backtrack')
+  io.docs('#or')
   OK
 
-#backtrack.#main.1
+#or.#main.1
   return
