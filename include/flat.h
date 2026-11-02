@@ -15,7 +15,8 @@ typedef enum {
     OP_PANIC   = 0x08,
     OP_IO      = 0x09, /* legacy: full call text + bind */
     OP_NATIVE  = 0x0A, /* uint16 id + inner\\0 + bind\\0 */
-    OP_FREE    = 0x0B  /* var name\\0 */
+    OP_FREE    = 0x0B, /* var name\\0 */
+    OP_FOR     = 0x0C  /* uint32 loop block IP + original for(...) line NUL-terminated */
 } OpCode;
 
 #endif

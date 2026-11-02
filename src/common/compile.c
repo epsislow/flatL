@@ -215,6 +215,7 @@ static int count_var_slots(const FgirProgram *prog, uint32_t *out_slots, char *e
                 }
                 break;
             case FGIR_FOREACH:
+            case FGIR_FOR:
                 if (ins->foreach_item[0] && !bind_name_forbidden(ins->foreach_item)) {
                     rc = varset_add(&vs, ins->foreach_item);
                 }
@@ -456,6 +457,28 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             memcpy(payload, &off32, 4);
             memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
             if (emit_instr(code, OP_FOREACH, payload, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case FGIR_FOR: {
+            uint8_t payload[4 + FGIR_MAX_LINE];
+            int tgt = find_block_idx(prog, ins->foreach_block);
+            uint32_t off32 = 0;
+            uint8_t plen = (uint8_t)(4 + strlen(ins->text) + 1);
+            if (tgt < 0) {
+                snprintf(err, err_size, "unknown for block %s", ins->foreach_block);
+                return -1;
+            }
+            if (ins->for_limit[0] == '\0' || ins->foreach_item[0] == '\0' ||
+                ins->foreach_block[0] == '\0') {
+                snprintf(err, err_size, "invalid for: %s", ins->text);
+                return -1;
+            }
+            off32 = (uint32_t)offs[tgt].abs_offset;
+            memcpy(payload, &off32, 4);
+            memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
+            if (emit_instr(code, OP_FOR, payload, plen) != 0) {
                 return -1;
             }
             break;

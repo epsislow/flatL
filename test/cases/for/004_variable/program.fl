@@ -1,0 +1,9 @@
+#main
+  count = 2
+  for(count, j, '#step')
+  io.outln('end')
+  OK
+
+#step
+  io.outln(j)
+  return

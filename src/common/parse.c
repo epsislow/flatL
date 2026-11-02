@@ -113,6 +113,9 @@ static FgirInstrKind classify(const char *line) {
     if (starts_with_kw(line, "foreach")) {
         return FGIR_FOREACH;
     }
+    if (starts_with_kw(line, "for")) {
+        return FGIR_FOR;
+    }
     if (starts_with_kw(line, "call")) {
         return FGIR_CALL;
     }
@@ -190,6 +193,39 @@ static void parse_io_bind(FgirInstr *ins) {
         *arrow = '\0';
         trim(ins->text);
         snprintf(ins->call_out, sizeof ins->call_out, "%s", bind);
+    }
+}
+
+static void parse_for_extras(FgirInstr *ins) {
+    /* for(ntimes, i, '#block') */
+    const char *s = ins->text;
+    const char *lp = strchr(s, '(');
+    const char *rp = strrchr(s, ')');
+    if (!lp || !rp || rp <= lp) {
+        return;
+    }
+    {
+        char inner[FGIR_MAX_LINE];
+        char *ip;
+        char *tok;
+        int part = 0;
+        snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
+        ip = inner;
+        while ((tok = flat_str_next(&ip, ',')) != NULL) {
+            char *t = trim(tok);
+            if (part == 0) {
+                snprintf(ins->for_limit, sizeof ins->for_limit, "%s", t);
+            } else if (part == 1) {
+                snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", t);
+            } else if (part == 2) {
+                if (t[0] == '\'' || t[0] == '"') {
+                    t[strlen(t) - 1] = '\0';
+                    t++;
+                }
+                snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", t);
+            }
+            part++;
+        }
     }
 }
 
@@ -344,6 +380,9 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             }
             if (ins->kind == FGIR_FOREACH) {
                 parse_foreach_extras(ins);
+            }
+            if (ins->kind == FGIR_FOR) {
+                parse_for_extras(ins);
             }
             if (ins->kind == FGIR_IO) {
                 parse_io_bind(ins);

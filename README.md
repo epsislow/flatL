@@ -124,6 +124,7 @@ See [doc_src/TOOLCHAIN.md — flatl](doc_src/TOOLCHAIN.md#flatl-driver-optional-
 | `OP_CALL` | `0x03` | Call block; push return address |
 | `OP_RETURN` | `0x04` | Pop call stack |
 | `OP_FOREACH` | `0x05` | Collection iteration |
+| `OP_FOR` | `0x0C` | Numeric `for(ntimes, i, '#block')` |
 | `OP_OK` | `0x06` | Success exit |
 | `OP_FAIL` | `0x07` | Logical failure exit |
 | `OP_PANIC` | `0x08` | Route to panic handler |

@@ -7,6 +7,8 @@
 #include "flat_value.h"
 
 #include <ctype.h>
+#include <limits.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +39,7 @@ typedef struct {
     char item_var[FLAT_VAR_NAME_MAX + 1];
     int use_list;
     uint32_t list_id;
+    int is_for;
 } ForeachFrame;
 
 typedef struct {
@@ -310,6 +313,105 @@ static void set_var_from_cstr(VmState *st, const char *name, const char *val) {
     }
 }
 
+static void set_var_from_number(VmState *st, const char *name, double n) {
+    FlatValue v;
+    if (flat_value_set_number(&v, n) == 0) {
+        set_var_value(st, name, &v);
+    }
+}
+
+static int for_limit_from_double(double d, int *out_iters) {
+    if (isnan(d) || isinf(d) || d <= 0.0) {
+        *out_iters = 0;
+        return 0;
+    }
+    if (d >= (double)INT_MAX) {
+        return -1;
+    }
+    *out_iters = (int)floor(d);
+    return 0;
+}
+
+static int eval_for_ntimes(VmState *st, const char *token, int *out_iters) {
+    char buf[64];
+    char *end = NULL;
+    double d;
+    int vi;
+
+    snprintf(buf, sizeof buf, "%s", token);
+    trim(buf);
+    d = strtod(buf, &end);
+    if (end != buf && *end == '\0') {
+        if (for_limit_from_double(d, out_iters) != 0) {
+            return -2;
+        }
+        return 0;
+    }
+    vi = find_var(st, buf);
+    if (vi < 0) {
+        return -2;
+    }
+    if (st->vars[vi].val.tag != VAL_NUMBER) {
+        return -2;
+    }
+    if (for_limit_from_double(st->vars[vi].val.u.number, out_iters) != 0) {
+        return -2;
+    }
+    return 0;
+}
+
+/* Returns: 1 = loop pushed; 2 = routed to #panic.any (ip updated); 0 = unhandled panic. */
+static int setup_for(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *line,
+                     uint32_t resume_ip, uint32_t block_off, int trace) {
+    char limit_tok[64] = "";
+    char item[64] = "";
+    const char *lp = strchr(line, '(');
+    const char *rp = strrchr(line, ')');
+    ForeachFrame *fr;
+    int iters = 0;
+    int ev;
+
+    if (lp && rp && rp > lp) {
+        char inner[256];
+        char *ipp;
+        char *tok;
+        int part = 0;
+        snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
+        ipp = inner;
+        while ((tok = flat_str_next(&ipp, ',')) != NULL) {
+            if (part == 0) {
+                snprintf(limit_tok, sizeof limit_tok, "%s", trim(tok));
+            } else if (part == 1) {
+                snprintf(item, sizeof item, "%s", trim(tok));
+            }
+            part++;
+        }
+    }
+    ev = eval_for_ntimes(st, limit_tok, &iters);
+    if (ev != 0) {
+        if (vm_jump_panic_any(st, bc, ip, "for.ntimes_type", trace) == 0) {
+            return 2;
+        }
+        return 0;
+    }
+    if (st->loop_sp >= VM_MAX_FOREACH) {
+        return 0;
+    }
+    fr = &st->loops[st->loop_sp++];
+    fr->resume_ip = resume_ip;
+    fr->loop_block_ip = block_off;
+    snprintf(fr->item_var, sizeof fr->item_var, "%s", item);
+    fr->is_for = 1;
+    fr->use_list = 0;
+    fr->list_id = 0;
+    fr->item_count = iters;
+    fr->index = 0;
+    if (fr->item_count > 0) {
+        set_var_from_number(st, fr->item_var, 0.0);
+    }
+    return 1;
+}
+
 static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uint32_t block_off) {
     char coll[64] = "";
     char item[64] = "";
@@ -340,6 +442,7 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
     fr->resume_ip = resume_ip;
     fr->loop_block_ip = block_off;
     snprintf(fr->item_var, sizeof fr->item_var, "%s", item);
+    fr->is_for = 0;
     fr->use_list = 0;
     fr->list_id = 0;
     {
@@ -396,6 +499,8 @@ static const char *opcode_name(uint8_t opcode) {
         return "RETURN";
     case OP_FOREACH:
         return "FOREACH";
+    case OP_FOR:
+        return "FOR";
     case OP_OK:
         return "OK";
     case OP_FAIL:
@@ -652,7 +757,9 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 ForeachFrame *fr = &st.loops[st.loop_sp - 1];
                 fr->index++;
                 if (fr->index < fr->item_count) {
-                    if (fr->use_list) {
+                    if (fr->is_for) {
+                        set_var_from_number(&st, fr->item_var, (double)fr->index);
+                    } else if (fr->use_list) {
                         FlatValue el;
                         if (flat_list_get(st.coll, fr->list_id, fr->index, &el) == 0) {
                             set_var_value(&st, fr->item_var, &el);
@@ -746,6 +853,25 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             uint32_t target = 0;
             memcpy(&target, payload, 4);
             setup_foreach(&st, (const char *)(payload + 4), ip + 2u + payload_size, target);
+            if (st.loop_sp > 0 && st.loops[st.loop_sp - 1].item_count > 0) {
+                ip = target;
+            } else {
+                ip += 2u + payload_size;
+            }
+            continue;
+        }
+        case OP_FOR: {
+            uint32_t target = 0;
+            int sr;
+            memcpy(&target, payload, 4);
+            sr = setup_for(&st, bc, &ip, (const char *)(payload + 4), ip + 2u + payload_size,
+                           target, trace);
+            if (sr == 0) {
+                return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+            }
+            if (sr == 2) {
+                continue;
+            }
             if (st.loop_sp > 0 && st.loops[st.loop_sp - 1].item_count > 0) {
                 ip = target;
             } else {

@@ -1,0 +1,8 @@
+#main
+  for(0, i, '#step')
+  io.outln('skipped')
+  OK
+
+#step
+  io.outln('body')
+  return

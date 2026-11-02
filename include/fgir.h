@@ -27,6 +27,7 @@ typedef enum {
     FGIR_GUARD,
     FGIR_CALL,
     FGIR_FOREACH,
+    FGIR_FOR,
     FGIR_RAISE_PANIC,
     FGIR_IO,
     FGIR_FREE
@@ -40,6 +41,7 @@ typedef struct {
     char call_out[64];
     char foreach_item[64];
     char foreach_block[FGIR_MAX_LABEL];
+    char for_limit[64];
     char line_label[64];
 } FgirInstr;
 

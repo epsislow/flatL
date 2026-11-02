@@ -28,6 +28,7 @@ Programs are **not** abstract syntax trees. They are a **flat graph** of **basic
 | `OK` / `FAIL` | Terminal success / logical failure |
 | `return expr` | Return from block to caller |
 | `foreach(coll, item, '#loop')` | Iterate collection via sub-block |
+| `for(ntimes, i, '#loop')` | Fixed-count loop: `i` = `0 … floor(ntimes)-1` (see §1.4) |
 | `-- …` | Full-line comment (from `--` to end of line) |
 | `--<` … `-->` | Block comment (multiple lines; see below) |
 
@@ -44,7 +45,7 @@ There is **no programmer-visible `goto`**. Jump targets are derived from block n
 
 **Keywords** (compile to VM opcodes — not optional “built-in functions”):
 
-- `#block`, `call`, `return`, `foreach`, `OK`, `FAIL`, `->` (call result binding)
+- `#block`, `call`, `return`, `foreach`, `for`, `OK`, `FAIL`, `->` (call result binding)
 - **`free(var)`** — release pool-backed value held by **`var`**; **`var`** becomes **`null`** (see [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) §5)
 - Guards and assignment lines (`=`, `==`) map to `OP_ASSIGN` / `OP_GUARD`
 
@@ -149,6 +150,8 @@ Example:
 
 ### 1.4 Iteration
 
+#### 1.4.1 `foreach`
+
 `foreach(collection, key_var, '#loop_body')`:
 
 1. Bind an iterator over `collection`.
@@ -156,6 +159,36 @@ Example:
 3. When the loop block finishes, resume the foreach cursor; when the collection is exhausted, execution continues on the line below `foreach`.
 
 An **empty** `#or` handler block for a guard inside the loop body means **continue** to the next collection item.
+
+#### 1.4.2 `for` (numeric)
+
+`for(ntimes, i, '#loop_body')` — same **block + `return`** model as `foreach`; third argument is a **block label** (quoted `'#name'`), rewritten on `use` link like `foreach`.
+
+| Rule | Detail |
+|------|--------|
+| Semantics | Equivalent to `for (i = 0; i < ntimes; i++)` with `i` only inside the loop body binding |
+| `ntimes` | Must evaluate to **NUMBER** at loop entry; may be a **variable** or a **numeric literal** |
+| Non-number | Any other type → **PANIC** (infrastructure), not silent skip |
+| `ntimes ≤ 0` | **0 iterations**; execution continues on the line below `for` |
+| Fractional `ntimes` | **Not an error** — effective bound is **`floor(ntimes)`** (same as comparing `i < ntimes` with integer `i`) |
+| `i` | Loop index variable; bound to `0`, `1`, …, `floor(ntimes) - 1` on each entry to `#loop_body` |
+| Body exit | **`return`** from `#loop_body` (no outer `call` frame) advances to the next `i`; when done, resume after `for` |
+| Guards in body | Same `#or` / empty-handler **continue** convention as `foreach` (when implemented in VM) |
+
+Example:
+
+```text
+#main
+  count = 3
+  for(count, k, '#step')
+  OK
+
+#step
+  io.outln(k)
+  return
+```
+
+With `count = 0`, the body never runs.
 
 ### 1.2 Source units (`use`)
 
@@ -180,7 +213,7 @@ use "lib/math.fl" as #math_
 | Block names | Local `#add` with `as #math_` becomes global `#math_add` (literal concat after `#`). |
 | In-module calls | `call #add` rewritten to `call #math_add`. Calls to other linked modules use the **already prefixed** name (`call #math_add`). |
 | `#or` / `#panic` | In a module, write `#or.#add.N`; after link, `#or.#math_add.N`. In entry, you may define `#or.#math_add.N` for an imported block if the module did not (duplicate label → error). |
-| Rewrite scope | Structural only (`call`, `foreach`, block labels) — not string payloads. |
+| Rewrite scope | Structural only (`call`, `foreach`, `for`, block labels) — not string payloads. |
 
 **Errors:** short message without absolute path, e.g. `lib/utils.fl:3: use: cannot resolve "lib/math.fl" relative to this file`. With `flc --verbose` / `flatl compile --verbose`, an extra line may print the absolute path tried.
 
@@ -259,6 +292,7 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 | `OP_CALL` | `0x03` | `uint32` target block IP + output var name **NUL-terminated** (may be empty) |
 | `OP_RETURN` | `0x04` | Empty — pops call or advances `foreach` |
 | `OP_FOREACH` | `0x05` | `uint32` loop block IP + original `foreach(...)` line **NUL-terminated** |
+| `OP_FOR` | `0x0C` | `uint32` loop block IP + original `for(...)` line **NUL-terminated** |
 | `OP_OK` | `0x06` | Empty — process exit **0** |
 | `OP_FAIL` | `0x07` | Empty — process exit **2** |
 | `OP_PANIC` | `0x08` | `uint32` handler IP (`#panic.<block>.<index>` or `#panic.any`) |
@@ -300,7 +334,7 @@ Conceptual bytecode for `#main`:
 
 - Block headers: `#name` or `#name(a, b)`; exactly one `#main`.
 - Lines under a block are instructions; full-line `--` comments and `--<` … `-->` blocks skipped.
-- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `call #…`, lines with `==` (guard), else `assign`.
+- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `for(...)`, `call #…`, lines with `==` (guard), else `assign`.
 
 **Compile-time linking:**
 
@@ -318,7 +352,7 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 | **Variables** | v0.2: tagged **BOOL**, **NUMBER**, **STRING** (INLINE ≤127 B or REF pool + slice views). Details: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md). |
 | **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to `#or` handler IP or exit 2 if unmapped. |
 | **Call** | Push return IP, jump to target block. |
-| **Return** | If inside `foreach` body: next item or resume after `foreach`; else pop call frame; if no frame, exit 0. |
+| **Return** | If inside `foreach` / `for` body: next iteration or resume after the loop; else pop call frame; if no frame, exit 0. |
 | **Foreach** | Reads collection variable as comma-separated list; binds item var; enters loop block; `return` advances iterator. |
 | **PANIC** | Keyword in source emits `OP_PANIC`; jumps to handler block (handler may end with `OK`). |
 
