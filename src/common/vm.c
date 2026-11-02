@@ -40,6 +40,7 @@ typedef struct {
     int use_list;
     uint32_t list_id;
     int is_for;
+    int list_retained;
 } ForeachFrame;
 
 typedef struct {
@@ -159,12 +160,31 @@ static void var_names_table(VmState *st, char (*names)[64]) {
     }
 }
 
+static int flat_value_same_storage(const FlatValue *a, const FlatValue *b) {
+    if (!a || !b || a->tag != b->tag) {
+        return 0;
+    }
+    switch (a->tag) {
+    case VAL_STR_REF:
+        return a->u.ref_id == b->u.ref_id;
+    case VAL_LIST:
+        return a->u.coll_id == b->u.coll_id;
+    case VAL_OBJECT:
+        return a->u.coll_id == b->u.coll_id;
+    default:
+        return 0;
+    }
+}
+
 static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
     int i = find_var(st, name);
     if (i >= 0) {
-        flat_value_release(st->coll, st->pool, &st->vars[i].val);
-        flat_value_live_replace(&st->live, &st->vars[i].val, val);
+        if (flat_value_same_storage(&st->vars[i].val, val)) {
+            return 0;
+        }
         flat_value_retain(st->coll, st->pool, val);
+        flat_value_live_replace(&st->live, &st->vars[i].val, val);
+        flat_value_release(st->coll, st->pool, &st->vars[i].val);
         st->vars[i].val = *val;
         return 0;
     }
@@ -233,7 +253,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
     if (!vals || !names) {
         free(vals);
         free(names);
-        return 0;
+        return -1;
     }
 
     snprintf(buf, sizeof buf, "%s", line);
@@ -406,10 +426,22 @@ static int setup_for(VmState *st, const FlatBytecode *bc, uint32_t *ip, const ch
     fr->list_id = 0;
     fr->item_count = iters;
     fr->index = 0;
+    fr->list_retained = 0;
     if (fr->item_count > 0) {
         set_var_from_number(st, fr->item_var, 0.0);
+    } else {
+        st->loop_sp--;
     }
     return 1;
+}
+
+static void foreach_frame_end(VmState *st, ForeachFrame *fr) {
+    if (fr->list_retained) {
+        FlatValue lv;
+        flat_value_set_list(&lv, fr->list_id);
+        flat_value_release(st->coll, st->pool, &lv);
+        fr->list_retained = 0;
+    }
 }
 
 static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uint32_t block_off) {
@@ -445,6 +477,7 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
     fr->is_for = 0;
     fr->use_list = 0;
     fr->list_id = 0;
+    fr->list_retained = 0;
     {
         int vi = find_var(st, coll);
         if (vi >= 0 && st->vars[vi].val.tag == VAL_LIST) {
@@ -460,6 +493,12 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
             fr->item_count = split_csv_from_var(st, coll, fr->items, VM_MAX_LIST);
         }
     }
+    if (fr->use_list && fr->item_count > 0) {
+        FlatValue lv;
+        flat_value_set_list(&lv, fr->list_id);
+        flat_value_retain(st->coll, st->pool, &lv);
+        fr->list_retained = 1;
+    }
     fr->index = 0;
     if (fr->item_count > 0) {
         if (fr->use_list) {
@@ -470,6 +509,9 @@ static void setup_foreach(VmState *st, const char *line, uint32_t resume_ip, uin
         } else {
             set_var_from_cstr(st, fr->item_var, fr->items[0]);
         }
+    } else {
+        foreach_frame_end(st, fr);
+        st->loop_sp--;
     }
 }
 
@@ -753,6 +795,10 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_FAIL:
             return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL, opts);
         case OP_RETURN:
+            if (st.call_sp > 0) {
+                ip = st.calls[--st.call_sp].return_ip;
+                continue;
+            }
             if (st.loop_sp > 0) {
                 ForeachFrame *fr = &st.loops[st.loop_sp - 1];
                 fr->index++;
@@ -770,16 +816,12 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                     ip = fr->loop_block_ip;
                     continue;
                 }
+                foreach_frame_end(&st, fr);
                 st.loop_sp--;
                 ip = fr->resume_ip;
                 continue;
             }
-            if (st.call_sp == 0) {
-                return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE,
-                                 opts);
-            }
-            ip = st.calls[--st.call_sp].return_ip;
-            continue;
+            return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE, opts);
         case OP_ASSIGN: {
             uint32_t ip_before = ip;
             if (apply_assign(&st, bc, &ip, (const char *)payload, trace) != 0) {

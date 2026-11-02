@@ -352,7 +352,7 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 | **Variables** | v0.2: tagged **BOOL**, **NUMBER**, **STRING** (INLINE ≤127 B or REF pool + slice views). Details: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md). |
 | **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to `#or` handler IP or exit 2 if unmapped. |
 | **Call** | Push return IP, jump to target block. |
-| **Return** | If inside `foreach` / `for` body: next iteration or resume after the loop; else pop call frame; if no frame, exit 0. |
+| **Return** | Pop **call** frame first if any; else if inside `foreach` / `for` body: next iteration or resume after the loop; else exit 0 (complete). |
 | **Foreach** | Reads collection variable as comma-separated list; binds item var; enters loop block; `return` advances iterator. |
 | **PANIC** | Keyword in source emits `OP_PANIC`; jumps to handler block (handler may end with `OK`). |
 

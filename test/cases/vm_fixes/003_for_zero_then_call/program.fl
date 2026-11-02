@@ -1,0 +1,11 @@
+#main
+  for(0, i, '#loop')
+  call #sub
+  io.outln('ok')
+  OK
+
+#loop
+  return
+
+#sub
+  return

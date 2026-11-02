@@ -390,16 +390,20 @@ static int list_clone_append(FlatCollectionPool *pool, FlatStringPool *str_pool,
                              const FlatValue *extra, uint32_t *out_id) {
     const ListBody *src;
     ListBody *dst;
+    FlatValue src_pin;
     int i;
 
     if (!pool || !out_id || !list_slot_valid(pool, src_id)) {
         return -1;
     }
     src = &pool->lists[src_id];
+    flat_value_set_list(&src_pin, src_id);
+    cow_pin_ephemeral(&src_pin, pool, str_pool);
     if (extra) {
         cow_pin_ephemeral(extra, pool, str_pool);
     }
     if (flat_list_empty(pool, str_pool, out_id) != 0) {
+        cow_unpin_ephemeral(&src_pin, pool, str_pool);
         if (extra) {
             cow_unpin_ephemeral(extra, pool, str_pool);
         }
@@ -407,6 +411,7 @@ static int list_clone_append(FlatCollectionPool *pool, FlatStringPool *str_pool,
     }
     dst = &pool->lists[*out_id];
     if (list_grow(dst, src->len + (extra ? 1 : 0)) != 0) {
+        cow_unpin_ephemeral(&src_pin, pool, str_pool);
         if (extra) {
             cow_unpin_ephemeral(extra, pool, str_pool);
         }
@@ -422,6 +427,7 @@ static int list_clone_append(FlatCollectionPool *pool, FlatStringPool *str_pool,
         elem_bind(pool, str_pool, extra);
         cow_unpin_ephemeral(extra, pool, str_pool);
     }
+    cow_unpin_ephemeral(&src_pin, pool, str_pool);
     return 0;
 }
 
@@ -723,6 +729,7 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
                       const char *key, const FlatValue *val, uint32_t *out_id) {
     const ObjBody *src;
     ObjBody *dst;
+    FlatValue src_pin;
     int i;
     int ix;
 
@@ -733,13 +740,17 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
         return -1;
     }
     src = &pool->objects[obj_id];
+    flat_value_set_object(&src_pin, obj_id);
+    cow_pin_ephemeral(&src_pin, pool, str_pool);
     cow_pin_ephemeral(val, pool, str_pool);
     if (flat_obj_empty(pool, str_pool, out_id) != 0) {
+        cow_unpin_ephemeral(&src_pin, pool, str_pool);
         cow_unpin_ephemeral(val, pool, str_pool);
         return -1;
     }
     dst = &pool->objects[*out_id];
     if (obj_grow(dst, src->len + 1) != 0) {
+        cow_unpin_ephemeral(&src_pin, pool, str_pool);
         cow_unpin_ephemeral(val, pool, str_pool);
         return -1;
     }
@@ -755,6 +766,7 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
         elem_bind(pool, str_pool, val);
     } else {
         if (dst->len >= FLAT_OBJ_MAX_KEYS) {
+            cow_unpin_ephemeral(&src_pin, pool, str_pool);
             cow_unpin_ephemeral(val, pool, str_pool);
             return -1;
         }
@@ -763,6 +775,7 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
         elem_bind(pool, str_pool, val);
         dst->len++;
     }
+    cow_unpin_ephemeral(&src_pin, pool, str_pool);
     cow_unpin_ephemeral(val, pool, str_pool);
     return 0;
 }

@@ -1,0 +1,13 @@
+#main
+  keys = 'a,b'
+  foreach(keys, k, '#loop')
+  io.outln('done')
+  OK
+
+#loop
+  call #sub
+  io.outln(k)
+  return
+
+#sub
+  return

@@ -1,0 +1,6 @@
+use native list with L
+
+#main
+  L.push([1, 2], 3) -> xs
+  io.outln(xs)
+  OK

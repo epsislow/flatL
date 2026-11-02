@@ -1,0 +1,12 @@
+#main
+  keys = ''
+  foreach(keys, k, '#loop')
+  call #sub
+  io.outln('once')
+  OK
+
+#loop
+  return
+
+#sub
+  return
