@@ -74,7 +74,30 @@ When the guard at instruction index *n* in block `#target` evaluates to false, t
 #backtrack.#target.n
 ```
 
+Alternatively, if that instruction carries a **line label** (see §1.1.1), control may transfer to:
+
+```text
+#backtrack.#target.<lineLabel>
+```
+
 If no such block exists, the enclosing flow aborts with logical **FAIL**.
+
+#### 1.2.1 Line labels (`#.ident`)
+
+After a full instruction on a source line, an optional **end-of-line** marker may appear:
+
+```text
+amount = form.amount   #.loadAmount
+has_funds == true   #.checkFunds
+```
+
+| Rule | Detail |
+|------|--------|
+| Position | **EOL only** — whitespace, then `#.` + identifier; not inside expressions |
+| Identifier | Letter first; then letters, digits, `_`; no `.` |
+| Uniqueness | At most one `#.ident` per line; `(block, ident)` unique **per `.fl` file** |
+| Handlers | Define `#backtrack.#block.ident` or keep `#backtrack.#block.n`; numeric and named forms may coexist for the same instruction |
+| References | Use `#backtrack.#block.ident` (no `#.` in the path); last segment is either a **1-based index** or a **line label** |
 
 Example:
 
@@ -105,6 +128,8 @@ On an **infrastructure** fault at index *n* in block `#target`, the runtime rout
 ```text
 #panic.#target.n
 ```
+
+(or `#panic.#target.<lineLabel>` when the faulting instruction has a line label and a matching handler block exists).
 
 If no handler exists for that index, control falls through to **`#panic.any`** (e.g. transaction rollback via `tstop()`).
 

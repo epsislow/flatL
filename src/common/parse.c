@@ -1,4 +1,5 @@
 #include "fgir.h"
+#include "flat_line_label.h"
 #include "flat_link.h"
 #include "flat_native.h"
 #include "flat_str.h"
@@ -330,6 +331,11 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             }
             ins = &b->instr[b->instr_count];
             memset(ins, 0, sizeof *ins);
+            if (flat_line_label_strip_eol(p, ins->line_label, sizeof ins->line_label, path,
+                                          line_no, err, err_size) < 0) {
+                fclose(f);
+                return -1;
+            }
             snprintf(ins->text, sizeof ins->text, "%s", p);
             ins->kind = classify(p);
             ins->index = b->instr_count + 1;
@@ -354,6 +360,9 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
 
     if (allow_main && out->main_index < 0) {
         snprintf(err, err_size, "%s: missing #main", path);
+        return -1;
+    }
+    if (flat_line_label_validate_unit(out, path, err, err_size) != 0) {
         return -1;
     }
     return 0;

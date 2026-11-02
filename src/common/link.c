@@ -450,7 +450,6 @@ static int globalize_block_label(const char *local, const char *prefix_body,
     }
     if (strncmp(local, "#backtrack.", 11) == 0) {
         char target[FGIR_MAX_LABEL];
-        int idx = 0;
         const char *rest = local + 11;
         const char *dot = strrchr(rest, '.');
         if (!dot || dot == rest) {
@@ -458,16 +457,15 @@ static int globalize_block_label(const char *local, const char *prefix_body,
             return 0;
         }
         snprintf(target, sizeof target, "%.*s", (int)(dot - rest), rest);
-        idx = atoi(dot + 1);
         if (label_in_list(target, prim, n_prim)) {
             char gtarget[FGIR_MAX_LABEL];
+            const char *suffix = dot + 1;
             globalize_primary(target, prefix_body, gtarget, sizeof gtarget);
-            snprintf(out, out_sz, "#backtrack.%s.%d", gtarget, idx);
+            snprintf(out, out_sz, "#backtrack.%s.%s", gtarget, suffix);
             return 0;
         }
     } else if (strncmp(local, "#panic.", 7) == 0) {
         char target[FGIR_MAX_LABEL];
-        int idx = 0;
         const char *rest = local + 7;
         const char *dot = strrchr(rest, '.');
         if (!dot || dot == rest) {
@@ -475,11 +473,11 @@ static int globalize_block_label(const char *local, const char *prefix_body,
             return 0;
         }
         snprintf(target, sizeof target, "%.*s", (int)(dot - rest), rest);
-        idx = atoi(dot + 1);
         if (label_in_list(target, prim, n_prim)) {
             char gtarget[FGIR_MAX_LABEL];
+            const char *suffix = dot + 1;
             globalize_primary(target, prefix_body, gtarget, sizeof gtarget);
-            snprintf(out, out_sz, "#panic.%s.%d", gtarget, idx);
+            snprintf(out, out_sz, "#panic.%s.%s", gtarget, suffix);
             return 0;
         }
     }

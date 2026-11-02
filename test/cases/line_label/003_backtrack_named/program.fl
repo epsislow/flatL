@@ -1,0 +1,7 @@
+#main
+  false == true   #.needFail
+  OK
+
+#backtrack.#main.needFail
+  io.outln('handled')
+  FAIL

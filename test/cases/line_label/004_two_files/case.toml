@@ -1,0 +1,10 @@
+suite = "line_label"
+id = 4
+desc = "same #.tag in different linked files is OK"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "both"

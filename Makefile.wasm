@@ -37,7 +37,8 @@ VM_SRC = src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
          src/common/value_format.c src/common/value_io.c src/common/value_json.c $(STR_SRC) \
          $(NATIVE_VM_SRC)
 
-FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/native_use.c
+FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/line_label.c \
+           src/common/native_use.c
 
 WASM_SRC = src/fleditor_wasm/flat_wasm.c src/fleditor_wasm/flat_wasm_io.c \
            $(FGIR_SRC) $(FB_SRC) $(VM_SRC) $(PORT_SRC)

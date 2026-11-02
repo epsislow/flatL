@@ -1,0 +1,9 @@
+#main
+  a = 1   #.step
+  b = 2
+  a == 3
+  OK
+
+#backtrack.#main.3
+  io.outln('via index')
+  FAIL

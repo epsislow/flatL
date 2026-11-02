@@ -2,6 +2,7 @@
 #include "flat.h"
 #include "flat_value.h"
 #include "fb_format.h"
+#include "flat_line_label.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
 
@@ -302,12 +303,54 @@ static int find_block_idx(const FgirProgram *p, const char *label) {
     return -1;
 }
 
-static void backtrack_label(const FgirBlock *b, int instr_index, char *out, size_t out_sz) {
-    snprintf(out, out_sz, "#backtrack.%s.%d", b->label, instr_index);
+static int find_guard_handler(const FgirProgram *prog, const FgirBlock *b, const FgirInstr *ins) {
+    char lab[FGIR_MAX_LABEL];
+    int idx;
+
+    snprintf(lab, sizeof lab, "#backtrack.%s.%d", b->label, ins->index);
+    idx = find_block_idx(prog, lab);
+    if (idx >= 0) {
+        return idx;
+    }
+    if (ins->line_label[0]) {
+        snprintf(lab, sizeof lab, "#backtrack.%s.%s", b->label, ins->line_label);
+        return find_block_idx(prog, lab);
+    }
+    return -1;
 }
 
-static void panic_label(const FgirBlock *b, int instr_index, char *out, size_t out_sz) {
-    snprintf(out, out_sz, "#panic.%s.%d", b->label, instr_index);
+static int find_panic_handler(const FgirProgram *prog, const FgirBlock *b, const FgirInstr *ins) {
+    char lab[FGIR_MAX_LABEL];
+    int idx;
+
+    snprintf(lab, sizeof lab, "#panic.%s.%d", b->label, ins->index);
+    idx = find_block_idx(prog, lab);
+    if (idx >= 0) {
+        return idx;
+    }
+    if (ins->line_label[0]) {
+        snprintf(lab, sizeof lab, "#panic.%s.%s", b->label, ins->line_label);
+        return find_block_idx(prog, lab);
+    }
+    return -1;
+}
+
+static int validate_line_label_handlers(const FgirProgram *prog, char *err, size_t err_size) {
+    int i;
+
+    for (i = 0; i < prog->block_count; i++) {
+        const char *lab = prog->blocks[i].label;
+        char canonical[FGIR_MAX_LABEL];
+
+        if (strncmp(lab, "#backtrack.", 11) != 0 && strncmp(lab, "#panic.", 7) != 0) {
+            continue;
+        }
+        if (flat_line_label_resolve_handler(prog, lab, canonical, sizeof canonical, err,
+                                            err_size) < 0) {
+            return -1;
+        }
+    }
+    return 0;
 }
 
 typedef struct {
@@ -363,12 +406,10 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
         }
         case FGIR_GUARD: {
             uint8_t payload[4 + FGIR_MAX_LINE];
-            char bt[FGIR_MAX_LABEL];
             int bt_idx;
             uint32_t off32 = 0;
             uint8_t plen;
-            backtrack_label(b, ins->index, bt, sizeof bt);
-            bt_idx = find_block_idx(prog, bt);
+            bt_idx = find_guard_handler(prog, b, ins);
             if (bt_idx >= 0) {
                 off32 = (uint32_t)offs[bt_idx].abs_offset;
             }
@@ -457,11 +498,9 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
         }
         case FGIR_RAISE_PANIC: {
             uint8_t payload[4];
-            char plab[FGIR_MAX_LABEL];
             int pidx;
             uint32_t off32 = 0;
-            panic_label(b, ins->index, plab, sizeof plab);
-            pidx = find_block_idx(prog, plab);
+            pidx = find_panic_handler(prog, b, ins);
             if (pidx < 0) {
                 pidx = find_block_idx(prog, "#panic.any");
             }
@@ -513,6 +552,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
     if (validate_free_in_program(prog, err, err_size) != 0) {
+        return -1;
+    }
+    if (validate_line_label_handlers(prog, err, err_size) != 0) {
         return -1;
     }
     if (flat_native_use_validate_program(prog, err, err_size) != 0) {

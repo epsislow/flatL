@@ -1,0 +1,10 @@
+suite = "line_label"
+id = 6
+desc = "named backtrack handler in imported module"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 2
+stdout_contains = "lib handler"

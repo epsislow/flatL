@@ -44,9 +44,11 @@ VM_SRC  = src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/value_ops.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/value_json.c $(STR_SRC) $(NATIVE_VM_SRC)
-FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/native_use.c \
+FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/line_label.c \
+           src/common/native_use.c \
            $(STR_SRC) $(NATIVE_FLC_SRC)
 FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \
+           src/common/line_label.c \
             src/common/native_use.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb

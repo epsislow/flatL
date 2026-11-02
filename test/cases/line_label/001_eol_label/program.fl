@@ -1,0 +1,5 @@
+#main
+  x = 1   #.init
+  x == 1   #.checkOk
+  io.outln('ok')
+  OK

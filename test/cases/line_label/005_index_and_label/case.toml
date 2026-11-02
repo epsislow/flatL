@@ -1,0 +1,10 @@
+suite = "line_label"
+id = 5
+desc = "numeric #backtrack still works when line has #.label"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 2
+stdout_contains = "via index"

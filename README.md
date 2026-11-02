@@ -9,7 +9,7 @@
 
 Traditional block nesting (`if`, `try/catch`, deep indentation) hides where success, failure, and recovery actually go. flatL makes both ends of every branch visible:
 
-- **Guards** — a failed condition jumps to a named backtrack block (`#backtrack.#block.index`), not implicit fall-through.
+- **Guards** — a failed condition jumps to a named backtrack block (`#backtrack.#block.index` or `#backtrack.#block.lineLabel`), not implicit fall-through. Source lines may end with `#.lineLabel` after the instruction.
 - **Panics** — infrastructure faults route to `#panic.#block.index` or `#panic.any`, separate from logical `FAIL`.
 - **No programmer `goto`** — targets are derived at compile time from block name and instruction index.
 
