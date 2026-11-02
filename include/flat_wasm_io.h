@@ -19,6 +19,7 @@ enum FlatWasmIoInputKind {
 };
 
 void flat_wasm_io_write_stdout(const char *s, size_t n);
+void flat_wasm_io_write_stderr(const char *s, size_t n);
 
 void flat_wasm_io_fprint_io(const FlatValue *v, const struct FlatStringPool *pool,
                             const struct FlatCollectionPool *coll);

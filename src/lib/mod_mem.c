@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "flat_native_mod.h"
 #include "flat_mem_stats.h"
 #include "flat_value.h"

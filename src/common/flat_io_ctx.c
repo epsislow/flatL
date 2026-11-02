@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "flat_io_ctx.h"
 #include "flat_native_util.h"
 #include "flat_wasm_io.h"
@@ -168,7 +167,7 @@ static int write_bytes_to_ep(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint *
         break;
     case EP_TERR:
 #ifdef FLAT_WASM_BUILD
-        flat_wasm_io_write_stdout(data, len);
+        flat_wasm_io_write_stderr(data, len);
 #else
         fwrite(data, 1, len, stderr);
         fflush(stderr);

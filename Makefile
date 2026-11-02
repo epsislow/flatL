@@ -1,5 +1,5 @@
 CC      ?= gcc
-CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude
+CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude -D_GNU_SOURCE
 LDFLAGS ?=
 
 # Optional: FLC_LDFLAGS=-Wl,--stack,8388608 if an old flc ever overflows stack (heap IR is default).

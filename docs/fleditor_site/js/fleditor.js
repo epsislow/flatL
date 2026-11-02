@@ -66,6 +66,9 @@
   let ioAllowEmpty = false;
   let ioCharMode = false;
 
+  /** 'text' | 'binary' — binary shows hex dump, not editable */
+  let editorViewMode = 'text';
+
   let unsavedDialog = null;
   let unsavedContinueBtn = null;
   let unsavedCancelBtn = null;
@@ -320,7 +323,9 @@
       return;
     }
     const path = currentOpenPath();
-    editorPathLabel.textContent = dirty ? '(not saved) ' + path : path;
+    const prefix = dirty ? '(not saved) ' : '';
+    const suffix = editorViewMode === 'binary' ? ' [binary]' : '';
+    editorPathLabel.textContent = prefix + path + suffix;
   }
 
   function updateEditorEmptyState() {
@@ -330,7 +335,7 @@
     }
     if (cm) {
       const hideEditor = noFiles || !hasOpenFile();
-      cm.setOption('readOnly', hideEditor);
+      cm.setOption('readOnly', hideEditor || editorViewMode === 'binary');
       const wrap = cm.getWrapperElement();
       if (wrap) {
         wrap.style.visibility = hideEditor ? 'hidden' : 'visible';
@@ -344,7 +349,7 @@
     if (!running) {
       runBtn.disabled = !open;
     }
-    saveBtn.disabled = !open || !dirty;
+    saveBtn.disabled = !open || !dirty || editorViewMode === 'binary';
   }
 
   function setDirty(value) {
@@ -358,7 +363,7 @@
   }
 
   function flushEditorToProject() {
-    if (!hasOpenFile()) {
+    if (!hasOpenFile() || editorViewMode === 'binary') {
       return;
     }
     const path = currentOpenPath();
@@ -392,6 +397,7 @@
   }
 
   function enterEmptyEditorState() {
+    editorViewMode = 'text';
     project.openPath = null;
     suppressChange = true;
     cm.setValue('');
@@ -409,12 +415,19 @@
       return;
     }
     suppressChange = true;
-    cm.setValue(project.files[norm]);
+    if (P.isBinaryProjectValue(project.files[norm])) {
+      editorViewMode = 'binary';
+      cm.setValue(P.binaryProjectValueToHexView(project.files[norm]));
+    } else {
+      editorViewMode = 'text';
+      cm.setValue(project.files[norm]);
+    }
     cm.clearHistory();
     suppressChange = false;
     project.openPath = norm;
     setDirty(false);
     updateEditorEmptyState();
+    updateEditorHeader();
   }
 
   function afterOpenFileChange(deletedPath) {
@@ -1081,6 +1094,10 @@
         const text = new TextDecoder().decode(u8);
         if (term) term.write(text);
       },
+      flatWasmOnStderr: function (u8) {
+        const text = new TextDecoder().decode(u8);
+        if (term) term.write('\x1b[90m' + text + '\x1b[0m');
+      },
       flatWasmOnNeedLine: function (allowEmpty, prompt, kind, wake) {
         const io = parseNeedLineHook(allowEmpty, prompt, kind, wake);
         setStatus(io.allowEmpty ? 'waiting input (line, empty ok)' : 'waiting input (line)');
@@ -1117,6 +1134,7 @@
   function attachWasmHooks(Module) {
     const cfg = wasmModuleConfig();
     Module.flatWasmOnStdout = cfg.flatWasmOnStdout;
+    Module.flatWasmOnStderr = cfg.flatWasmOnStderr;
     Module.flatWasmOnNeedLine = cfg.flatWasmOnNeedLine;
     Module.flatWasmOnNeedChar = cfg.flatWasmOnNeedChar;
     Module.locateFile = cfg.locateFile;
@@ -1230,7 +1248,15 @@
     try {
       implicitSaveForRun();
       P.syncToMemfs(wasmModule, project.files);
+      const memfsBeforeRun = P.snapshotMemfsBytes(wasmModule);
       runOutcome = await runProjectEntry(wasmModule, currentOpenPath());
+      const importReport = P.syncMemfsChangesToProject(wasmModule, project, memfsBeforeRun);
+      const importMsg = P.formatMemfsImportReport(importReport);
+      if (importMsg) {
+        P.saveProject(project);
+        renderFileTree();
+        term.write('\r\n' + importMsg + '\r\n');
+      }
     } catch (e) {
       term.write('\r\n[error] ' + e.message + '\r\n');
       runOutcome = { exitCode: 1, compileFailed: false, termination: FLAT_TERM.ERROR };

@@ -97,6 +97,9 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 
 - **Project panel**; **Run** / **Save** / Undo/Redo on the **editor action bar** (under the file path). Run uses the open file; Run implicitly saves before compile.
 - **MEMFS** under `/fleditor/…` on Run.
+- Before VM execution, the runtime **`chdir`s to `/fleditor`**, so `file.readCtx('data.txt')` in source matches project file **`data.txt`** (no `/fleditor/` prefix required in `.fl`).
+- After **Run**, any file under `/fleditor/` that is **new** or **changed** (byte content vs snapshot right before execution) is **synced into the Project panel** and `localStorage`. Text is stored as UTF-8 strings; other bytes use an internal base64 wrapper (binary-safe round-trip via MEMFS). Opening a binary file shows a **read-only hex dump** in the editor (not the raw base64).
+- **`io.out*`** → terminal (normal). **`io.err*`** on default **`terr`** → same terminal, **gray** text (`flatWasmOnStderr`).
 - **`localStorage`** key `flatl-fleditor-project`.
 
 ### Delete and reset

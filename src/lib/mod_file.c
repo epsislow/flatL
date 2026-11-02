@@ -1,4 +1,3 @@
-#define _GNU_SOURCE
 #include "flat_file.h"
 #include "flat_io_ctx.h"
 #include "flat_native_mod.h"

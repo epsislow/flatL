@@ -34,6 +34,21 @@ void flat_wasm_io_fprint_io_ln(const FlatValue *v, const FlatStringPool *pool,
     wasm_fprint_to_stdout(flat_value_fprint_io_ln, v, pool, coll);
 }
 
+EM_JS(void, flat_wasm_js_stderr, (const char *ptr, int len), {
+  if (len <= 0) return;
+  var fn = (typeof Module !== 'undefined' && Module['flatWasmOnStderr'])
+    ? Module['flatWasmOnStderr']
+    : (typeof Module !== 'undefined' ? Module['flatWasmOnStdout'] : null);
+  if (!fn) return;
+  var heap = Module['HEAPU8'] || HEAPU8;
+  var start = ptr;
+  var end = ptr + len;
+  if (start < 0) return;
+  if (end > heap.length) end = heap.length;
+  if (start >= end) return;
+  fn(heap.subarray(start, end));
+});
+
 EM_JS(void, flat_wasm_js_stdout, (const char *ptr, int len), {
   if (len <= 0) return;
   if (typeof Module === 'undefined' || !Module['flatWasmOnStdout']) return;
@@ -98,6 +113,13 @@ void flat_wasm_io_write_stdout(const char *s, size_t n) {
         return;
     }
     flat_wasm_js_stdout(s, (int)n);
+}
+
+void flat_wasm_io_write_stderr(const char *s, size_t n) {
+    if (!s || n == 0) {
+        return;
+    }
+    flat_wasm_js_stderr(s, (int)n);
 }
 
 int flat_wasm_io_read_line(char *buf, size_t buf_size, int allow_empty, const char *prompt,

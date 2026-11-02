@@ -91,6 +91,184 @@
     return MEMFS_ROOT + '/' + norm;
   }
 
+  /** @returns {string[]} relative paths under MEMFS_ROOT */
+  function listMemfsRelFiles(Module) {
+    const out = [];
+    if (!Module.FS) {
+      return out;
+    }
+    function walk(absDir, relPrefix) {
+      let entries;
+      try {
+        entries = Module.FS.readdir(absDir);
+      } catch (_e) {
+        return;
+      }
+      for (let i = 0; i < entries.length; i++) {
+        const name = entries[i];
+        if (name === '.' || name === '..') {
+          continue;
+        }
+        const abs = absDir + '/' + name;
+        const rel = relPrefix ? relPrefix + '/' + name : name;
+        let stat;
+        try {
+          stat = Module.FS.stat(abs);
+        } catch (_e2) {
+          continue;
+        }
+        if (Module.FS.isDir(stat.mode)) {
+          walk(abs, rel);
+        } else {
+          out.push(rel);
+        }
+      }
+    }
+    walk(MEMFS_ROOT, '');
+    return out;
+  }
+
+  const BINARY_STORE_PREFIX = 'FLEDITOR::BINARY::BASE64::\n';
+
+  function isBinaryProjectValue(content) {
+    return typeof content === 'string' && content.startsWith(BINARY_STORE_PREFIX);
+  }
+
+  function bytesEqual(a, b) {
+    if (!a || !b || a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function readMemfsFileBytes(Module, rel) {
+    return Module.FS.readFile(memfsEntryPath(rel));
+  }
+
+  /** @returns {Map<string, Uint8Array>} */
+  function snapshotMemfsBytes(Module) {
+    const map = new Map();
+    if (!Module.FS) {
+      return map;
+    }
+    const rels = listMemfsRelFiles(Module);
+    for (let i = 0; i < rels.length; i++) {
+      const rel = rels[i];
+      try {
+        map.set(rel, readMemfsFileBytes(Module, rel));
+      } catch (_e) {
+        /* skip unreadable */
+      }
+    }
+    return map;
+  }
+
+  function bytesToProjectValue(u8) {
+    try {
+      const text = new TextDecoder('utf-8', { fatal: true }).decode(u8);
+      if (text.indexOf('\0') >= 0) {
+        throw new Error('binary');
+      }
+      return text;
+    } catch (_e) {
+      let bin = '';
+      for (let i = 0; i < u8.length; i++) {
+        bin += String.fromCharCode(u8[i]);
+      }
+      return BINARY_STORE_PREFIX + btoa(bin);
+    }
+  }
+
+  function projectValueToMemfsPayload(content) {
+    if (isBinaryProjectValue(content)) {
+      const raw = atob(content.slice(BINARY_STORE_PREFIX.length));
+      const u8 = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) {
+        u8[i] = raw.charCodeAt(i);
+      }
+      return u8;
+    }
+    return content;
+  }
+
+  /**
+   * Pull new or changed files from MEMFS into project.files (text or binary wrapper).
+   * @returns {{ path: string, kind: 'new'|'updated' }[]}
+   */
+  function syncMemfsChangesToProject(Module, project, beforeBytesMap) {
+    const report = [];
+    if (!Module.FS) {
+      return report;
+    }
+    const rels = listMemfsRelFiles(Module);
+    for (let i = 0; i < rels.length; i++) {
+      const rel = rels[i];
+      let after;
+      try {
+        after = readMemfsFileBytes(Module, rel);
+      } catch (_e) {
+        continue;
+      }
+      const before = beforeBytesMap.get(rel);
+      if (before && bytesEqual(before, after)) {
+        continue;
+      }
+      project.files[rel] = bytesToProjectValue(after);
+      ensureParentDirs(project, rel);
+      report.push({ path: rel, kind: before ? 'updated' : 'new' });
+    }
+    return report;
+  }
+
+  function formatMemfsImportReport(report) {
+    if (!report || report.length === 0) {
+      return '';
+    }
+    const parts = report.map(function (r) {
+      return r.path + (r.kind === 'updated' ? ' (updated)' : ' (new)');
+    });
+    return '[project] synced: ' + parts.join(', ');
+  }
+
+  function binaryProjectValueToBytes(content) {
+    const payload = projectValueToMemfsPayload(content);
+    return payload instanceof Uint8Array ? payload : new Uint8Array(0);
+  }
+
+  /** Read-only hex dump for the editor (offset, hex, ASCII). */
+  function binaryProjectValueToHexView(content) {
+    const u8 = binaryProjectValueToBytes(content);
+    if (u8.length === 0) {
+      return '; empty binary file (0 bytes)\n; Edited by flatL programs — view only in fleditor.\n';
+    }
+    const lineWidth = 16;
+    const lines = [
+      '; binary file — hex view (read-only in fleditor)',
+      '; length: ' + u8.length + ' bytes',
+      '',
+    ];
+    for (let off = 0; off < u8.length; off += lineWidth) {
+      const end = Math.min(off + lineWidth, u8.length);
+      let hex = '';
+      let ascii = '';
+      for (let i = off; i < end; i++) {
+        const b = u8[i];
+        hex += b.toString(16).padStart(2, '0') + ' ';
+        ascii += b >= 32 && b < 127 ? String.fromCharCode(b) : '.';
+      }
+      while (hex.length < lineWidth * 3) {
+        hex += '   ';
+      }
+      lines.push(off.toString(16).padStart(8, '0') + '  ' + hex + ' |' + ascii + '|');
+    }
+    return lines.join('\n') + '\n';
+  }
+
   function syncToMemfs(Module, files) {
     if (!Module.FS) {
       throw new Error('WASM FS not available');
@@ -113,7 +291,8 @@
       if (slash > MEMFS_ROOT.length) {
         Module.FS.mkdirTree(full.slice(0, slash));
       }
-      Module.FS.writeFile(full, files[norm] != null ? files[norm] : files[rel]);
+      const raw = files[norm] != null ? files[norm] : files[rel];
+      Module.FS.writeFile(full, projectValueToMemfsPayload(raw));
     }
   }
 
@@ -323,6 +502,12 @@
     saveProject,
     memfsEntryPath,
     syncToMemfs,
+    listMemfsRelFiles,
+    snapshotMemfsBytes,
+    syncMemfsChangesToProject,
+    formatMemfsImportReport,
+    isBinaryProjectValue,
+    binaryProjectValueToHexView,
     buildTree,
     ensureParentDirs,
     listFilePaths,

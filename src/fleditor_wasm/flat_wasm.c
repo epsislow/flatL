@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef FLAT_WASM_BUILD
+#include <unistd.h>
+#endif
+
 #define FLAT_WASM_SRC_PATH "/fleditor_src.fl"
 #define FLAT_WASM_FB_PATH "/fleditor_out.fb"
 
@@ -163,6 +167,10 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
         }
         return 1;
     }
+#ifdef FLAT_WASM_BUILD
+    /* So file.readCtx('out.txt') matches project files under /fleditor/out.txt */
+    (void)chdir("/fleditor");
+#endif
     memset(&bc, 0, sizeof bc);
     if (flat_fb_load_buffer(fb, len, &bc) != 0) {
         if (err && err_sz) {
