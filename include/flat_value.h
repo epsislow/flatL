@@ -31,6 +31,7 @@ typedef enum {
     VAL_STR_REF,
     VAL_LIST,
     VAL_OBJECT,
+    VAL_FILE,
     VAL_NULL
 } FlatValueTag;
 
@@ -45,6 +46,7 @@ typedef struct {
         } ins;
         uint32_t ref_id;
         uint32_t coll_id;
+        uint32_t file_id;
     } u;
 } FlatValue;
 
@@ -56,6 +58,8 @@ FlatStringPool *flat_pool_create(void);
 void flat_pool_destroy(FlatStringPool *pool);
 
 int flat_pool_alloc_copy(FlatStringPool *pool, const void *data, size_t len, uint32_t *out_id);
+int flat_pool_alloc_empty(FlatStringPool *pool, uint32_t *out_id);
+int flat_pool_append(FlatStringPool *pool, uint32_t id, const void *data, size_t len);
 int flat_pool_slice(FlatStringPool *pool, uint32_t parent_id, size_t offset, size_t len,
                     uint32_t *out_id);
 const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *out_len);
@@ -151,7 +155,8 @@ typedef enum {
     FLAT_IO_ERR = 1,
     FLAT_IO_PANIC_EOF = 2,
     FLAT_IO_PANIC_CANCEL = 3,
-    FLAT_IO_PANIC_PARSE = 4
+    FLAT_IO_PANIC_PARSE = 4,
+    FLAT_IO_PANIC_CTX = 5
 } FlatIoStatus;
 
 int flat_parse_bool_token(const char *token, int *out_bool);
@@ -161,11 +166,15 @@ int flat_parse_number_token(const char *token, double *out_num);
 int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                       FlatValue *vars, int var_count, const char (*var_names)[64],
                       FlatValue *out_result, FlatIoStatus *out_status);
+struct FlatIOContext;
+struct FlatFileTable;
+
 int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                                FlatValue *vars, int var_count, const char (*var_names)[64],
                                FlatValue *out_result, FlatIoStatus *out_status,
                                const FlatOptionalNativeDecl *decls, int decl_count,
-                               FlatMemLiveStats *mem_live, uint32_t vars_max);
+                               FlatMemLiveStats *mem_live, uint32_t vars_max,
+                               struct FlatIOContext *io_ctx, struct FlatFileTable *file_tbl);
 
 int flat_json_parse(const char *s, FlatValue *out, FlatStringPool *pool, FlatCollectionPool *coll);
 int flat_json_parse_list(const char *s, FlatValue *out, FlatStringPool *pool,

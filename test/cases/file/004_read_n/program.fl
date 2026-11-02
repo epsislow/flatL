@@ -1,0 +1,9 @@
+#main
+  fp = file.createCtx('chunk.dat')
+  file.write(fp, '1234567890')
+  file.close(fp)
+  fp = file.readCtx('chunk.dat')
+  file.read(fp, 4) -> part
+  file.close(fp)
+  io.outln(part)
+  OK

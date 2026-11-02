@@ -1,0 +1,7 @@
+#main
+  io.ctxin(tout)
+  OK
+
+#panic.any
+  io.outln('bad ctx')
+  OK

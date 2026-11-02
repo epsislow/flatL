@@ -1,0 +1,5 @@
+#main
+  io.ctxerr(terr)
+  io.errln('on stderr')
+  io.outln('on stdout')
+  OK

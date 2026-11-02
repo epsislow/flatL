@@ -1,0 +1,8 @@
+#main
+  buf = mem.ref_empty()
+  io.ctxout(buf)
+  io.out('Hello ')
+  io.out('flatL')
+  io.ctxout(tout)
+  io.outln(buf)
+  OK

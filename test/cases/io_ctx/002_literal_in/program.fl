@@ -1,0 +1,6 @@
+#main
+  io.ctxin('snapshot line')
+  io.inln() -> a
+  io.ctxin(tin)
+  io.outln(a)
+  OK

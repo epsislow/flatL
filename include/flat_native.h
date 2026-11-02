@@ -113,6 +113,27 @@ typedef enum {
     FLAT_NATIVE_MEM_NUM_USED,
     FLAT_NATIVE_MEM_NULL_USED,
     FLAT_NATIVE_IO_DOCS,
+    FLAT_NATIVE_IO_CTXIN,
+    FLAT_NATIVE_IO_CTXOUT,
+    FLAT_NATIVE_IO_CTXERR,
+    FLAT_NATIVE_IO_ERR,
+    FLAT_NATIVE_IO_ERRLN,
+    FLAT_NATIVE_MEM_REF_EMPTY,
+    FLAT_NATIVE_MEM_REF_FROM,
+    FLAT_NATIVE_FILE_READ_CTX,
+    FLAT_NATIVE_FILE_CREATE_CTX,
+    FLAT_NATIVE_FILE_WRITE_CTX,
+    FLAT_NATIVE_FILE_APPEND_CTX,
+    FLAT_NATIVE_FILE_READ_WRITE_CTX,
+    FLAT_NATIVE_FILE_READLN,
+    FLAT_NATIVE_FILE_READ,
+    FLAT_NATIVE_FILE_WRITE,
+    FLAT_NATIVE_FILE_FLUSH,
+    FLAT_NATIVE_FILE_POS,
+    FLAT_NATIVE_FILE_SIZE,
+    FLAT_NATIVE_FILE_SETPOS,
+    FLAT_NATIVE_FILE_ISEOF,
+    FLAT_NATIVE_FILE_CLOSE,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
@@ -123,6 +144,7 @@ typedef enum {
 #define FLAT_NATIVE_MODULE_LIST "list"
 #define FLAT_NATIVE_MODULE_OBJ "obj"
 #define FLAT_NATIVE_MODULE_MEM "mem"
+#define FLAT_NATIVE_MODULE_FILE "file"
 
 typedef struct {
     FlatStringPool *pool;
@@ -138,6 +160,8 @@ typedef struct {
     const FlatBytecode *bc;
     const FlatOptionalNativeDecl *doc_decls;
     int doc_decl_count;
+    struct FlatIOContext *io_ctx;
+    struct FlatFileTable *file_tbl;
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

@@ -39,6 +39,25 @@ static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_BOOL_USED, flat_native_mem_bool_used);
     flat_native_plugin_register(FLAT_NATIVE_MEM_NUM_USED, flat_native_mem_num_used);
     flat_native_plugin_register(FLAT_NATIVE_MEM_NULL_USED, flat_native_mem_null_used);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_REF_EMPTY, flat_native_mem_ref_empty);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_REF_FROM, flat_native_mem_ref_from);
+}
+
+static void register_embedded_file(void) {
+    flat_native_plugin_register(FLAT_NATIVE_FILE_READ_CTX, flat_native_file_read_ctx);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_CREATE_CTX, flat_native_file_create_ctx);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_WRITE_CTX, flat_native_file_write_ctx);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_APPEND_CTX, flat_native_file_append_ctx);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_READ_WRITE_CTX, flat_native_file_read_write_ctx);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_READLN, flat_native_file_readln);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_READ, flat_native_file_read);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_WRITE, flat_native_file_write);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_FLUSH, flat_native_file_flush);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_POS, flat_native_file_pos);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_SIZE, flat_native_file_size);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_SETPOS, flat_native_file_setpos);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_ISEOF, flat_native_file_iseof);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_CLOSE, flat_native_file_close);
 }
 
 static int manifest_has_module(const char *mod) {
@@ -305,6 +324,7 @@ void flat_native_runtime_reset(void) {
     g_loaded_obj = 0;
     g_search_dir[0] = '\0';
     register_embedded_mem();
+    register_embedded_file();
 }
 
 void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count) {

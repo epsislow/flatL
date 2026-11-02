@@ -1,0 +1,12 @@
+#main
+  fp = file.createCtx('seek.dat')
+  file.write(fp, '0123456789')
+  file.close(fp)
+  fp = file.readWriteCtx('seek.dat')
+  file.setpos(fp, 5)
+  file.read(fp, 3) -> mid
+  file.pos(fp) -> p
+  file.close(fp)
+  io.outln(mid)
+  io.outln(p)
+  OK

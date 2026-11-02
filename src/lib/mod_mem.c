@@ -1,8 +1,10 @@
+#define _GNU_SOURCE
 #include "flat_native_mod.h"
 #include "flat_mem_stats.h"
 #include "flat_value.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int mem_out_num(FlatNativeCtx *ctx, double n) {
@@ -107,4 +109,55 @@ int flat_native_mem_null_used(FlatNativeCtx *ctx) {
         return -1;
     }
     return mem_out_num(ctx, (double)ctx->mem_live->null_used);
+}
+
+int flat_native_mem_ref_empty(FlatNativeCtx *ctx) {
+    uint32_t id;
+
+    if (!ctx->out || !ctx->io_status || !ctx->pool) {
+        return -1;
+    }
+    if (ctx->inner && ctx->inner[0] != '\0') {
+        return -1;
+    }
+    if (flat_pool_alloc_empty(ctx->pool, &id) != 0) {
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_str_ref(ctx->out, id);
+}
+
+int flat_native_mem_ref_from(FlatNativeCtx *ctx) {
+    FlatValue src;
+    char *bytes = NULL;
+    size_t blen = 0;
+    FILE *mem;
+    uint32_t id;
+
+    if (!ctx->out || !ctx->io_status || !ctx->pool || !ctx->inner) {
+        return -1;
+    }
+    if (flat_native_eval_call(ctx, ctx->inner, &src) != 0 &&
+        flat_value_parse_assign_rhs(ctx->inner, &src, ctx->pool, ctx->coll, ctx->vars,
+                                    ctx->var_count, ctx->var_names) != 0) {
+        return -1;
+    }
+    mem = open_memstream(&bytes, &blen);
+    if (!mem) {
+        return -1;
+    }
+    flat_value_fprint_io(mem, &src, ctx->pool, ctx->coll);
+    fclose(mem);
+    if (blen == 0) {
+        if (flat_pool_alloc_empty(ctx->pool, &id) != 0) {
+            free(bytes);
+            return -1;
+        }
+    } else if (flat_pool_alloc_copy(ctx->pool, bytes, blen, &id) != 0) {
+        free(bytes);
+        return -1;
+    }
+    free(bytes);
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_str_ref(ctx->out, id);
 }

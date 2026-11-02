@@ -1,0 +1,11 @@
+#main
+  fp = file.createCtx('e.dat')
+  file.write(fp, 'x')
+  file.close(fp)
+  fp = file.readCtx('e.dat')
+  file.read(fp) -> all
+  file.iseof(fp) -> done
+  file.close(fp)
+  io.outln(all)
+  io.outln(done)
+  OK

@@ -1,0 +1,10 @@
+#main
+  buf = mem.ref_empty()
+  io.ctxout(buf)
+  free(buf)
+  io.out('after free')
+  OK
+
+#panic.any
+  io.outln('stale ok')
+  OK

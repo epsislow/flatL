@@ -1,7 +1,7 @@
 # flatL — I/O (`io.*`, `str.to_*`)
 
 Normative behavior for program **stdout/stdin** and host **stderr** debug.  
-Implementation status: **v0.4** — natives in **`src/lib/`** registry; bytecode **`OP_NATIVE`** (id + args). Legacy **`OP_IO`** still decoded for old `.fb`.
+Implementation status: **v0.5** — natives in **`src/lib/`** registry; **`io.ctx*`** redirect; module **`file.*`**. Bytecode **`OP_NATIVE`** (id + args). Legacy **`OP_IO`** still decoded for old `.fb`.
 
 See also: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (types), [TOOLCHAIN.md](./TOOLCHAIN.md) (`flvm --trace`), plan [.cursor/plans/debug-io.plan.md](../.cursor/plans/debug-io.plan.md).
 
@@ -17,6 +17,48 @@ See also: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (types), [TOOLCHAIN.md](./TOO
 
 Recovered PANIC (handler `#panic.*` / `#panic.any`) does **not** log to stderr by default.
 
+**Program stderr (logical):** `io.err` / `io.errln` write to **`ctxerr`** (default **`terr`** = host stderr). This is separate from **`flvm --trace`** on host stderr.
+
+### 1.1 I/O contexts (`io.ctx*`)
+
+Three **independent** redirects; defaults at VM start: **`tin`** / **`tout`** / **`terr`**.
+
+| Call | Selects source/sink for |
+|------|-------------------------|
+| `io.ctxin(source)` | `io.in*` |
+| `io.ctxout(destination)` | `io.out*` / `io.outvar` |
+| `io.ctxerr(destination)` | `io.err*` |
+
+| Token | Role |
+|-------|------|
+| **`tin`** | Host stdin (WASM: editor input) |
+| **`tout`** | Host stdout |
+| **`terr`** | Host stderr (program errors) |
+
+| Target | `ctxin` | `ctxout` / `ctxerr` |
+|--------|---------|---------------------|
+| String literal | one line per `io.inln` | invalid on `ctxin` only |
+| Inline STRING var | snapshot at `ctxin()` | snapshot buffer (≤127 B append) |
+| STRING REF var | read from ref | **append** (`io.out*` text) |
+| **`file`** handle | `file.readln` / byte read via `io.inln` | write formatted bytes to file |
+| **`tin` / `tout` / `terr`** | reset to terminal | reset to terminal |
+
+Invalid pairing (e.g. `io.ctxin(tout)`) → **PANIC** `io.context`.  
+If a **REF** variable bound to `ctxout` / `ctxerr` is **`free`d** or reassigned while active → **PANIC** `io.ctx_stale` (context resets before handler runs).
+
+Capture example (prefer **`mem.ref_empty()`** over test-only **`__ref__`**):
+
+```text
+buf = mem.ref_empty()
+io.ctxout(buf)
+io.out('Hello ')
+io.out('flatL')
+io.ctxout(tout)
+io.outln(buf)
+```
+
+See [natives/file.md](./natives/file.md) for **`file.*`** and `io.ctxin(fp)`.
+
 ---
 
 ## 2. Output (`io.out*`)
@@ -26,6 +68,8 @@ Recovered PANIC (handler `#panic.*` / `#panic.any`) does **not** log to stderr b
 | `io.out(expr)` | Print value, no newline |
 | `io.outln(expr)` | Print value + `\n` |
 | `io.outvar(name)` | Print variable + `\n` |
+| `io.err(expr)` | Print on **ctxerr** (no `\n`) |
+| `io.errln(expr)` | Print on **ctxerr** + `\n` |
 
 **Formatting (`flat_value_fprint_io`):**
 
@@ -192,7 +236,15 @@ Catalog source: **`src/io_generate_tests/main.c`**. Output directories are **com
 
 - **`io.in_list` / `io.in_object` / `io.in_bools`**, **`json.*`** — [IO_COLLECTIONS.md](./IO_COLLECTIONS.md), guide [LIST_OBJECT.md](./LIST_OBJECT.md), tests `test/cases/json/`
 
-## 11. Not in v0.3
+## 11. Tests (contexts & file)
+
+| Suite | Path |
+|-------|------|
+| I/O contexts | `test/cases/io_ctx/` |
+| File module | `test/cases/file/` |
+| `mem.ref_*` | `test/cases/memory/006_mem_ref_empty/` |
+
+## 12. Not planned (v0.5)
 
 - `io.inln_allow_empty`, `str.try_to_*`
-- Native module registry (`src/lib/`, `flat_native.h`) — D12 done
+- HTTP / network streams as `io.ctx*` targets

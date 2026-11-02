@@ -14,6 +14,11 @@ int flat_native_io_in_list(FlatNativeCtx *ctx);
 int flat_native_io_in_object(FlatNativeCtx *ctx);
 int flat_native_io_in_bools(FlatNativeCtx *ctx);
 int flat_native_io_docs(FlatNativeCtx *ctx);
+int flat_native_io_ctxin(FlatNativeCtx *ctx);
+int flat_native_io_ctxout(FlatNativeCtx *ctx);
+int flat_native_io_ctxerr(FlatNativeCtx *ctx);
+int flat_native_io_err(FlatNativeCtx *ctx);
+int flat_native_io_errln(FlatNativeCtx *ctx);
 int flat_native_str_to_num(FlatNativeCtx *ctx);
 int flat_native_str_to_bool(FlatNativeCtx *ctx);
 int flat_native_str_len(FlatNativeCtx *ctx);
@@ -114,5 +119,22 @@ int flat_native_mem_str_used(FlatNativeCtx *ctx);
 int flat_native_mem_bool_used(FlatNativeCtx *ctx);
 int flat_native_mem_num_used(FlatNativeCtx *ctx);
 int flat_native_mem_null_used(FlatNativeCtx *ctx);
+int flat_native_mem_ref_empty(FlatNativeCtx *ctx);
+int flat_native_mem_ref_from(FlatNativeCtx *ctx);
+
+int flat_native_file_read_ctx(FlatNativeCtx *ctx);
+int flat_native_file_create_ctx(FlatNativeCtx *ctx);
+int flat_native_file_write_ctx(FlatNativeCtx *ctx);
+int flat_native_file_append_ctx(FlatNativeCtx *ctx);
+int flat_native_file_read_write_ctx(FlatNativeCtx *ctx);
+int flat_native_file_readln(FlatNativeCtx *ctx);
+int flat_native_file_read(FlatNativeCtx *ctx);
+int flat_native_file_write(FlatNativeCtx *ctx);
+int flat_native_file_flush(FlatNativeCtx *ctx);
+int flat_native_file_pos(FlatNativeCtx *ctx);
+int flat_native_file_size(FlatNativeCtx *ctx);
+int flat_native_file_setpos(FlatNativeCtx *ctx);
+int flat_native_file_iseof(FlatNativeCtx *ctx);
+int flat_native_file_close(FlatNativeCtx *ctx);
 
 #endif

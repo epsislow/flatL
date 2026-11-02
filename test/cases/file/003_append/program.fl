@@ -1,0 +1,12 @@
+#main
+  fp = file.createCtx('log.txt')
+  file.write(fp, 'A')
+  file.close(fp)
+  fp = file.appendCtx('log.txt')
+  file.write(fp, 'B')
+  file.close(fp)
+  fp = file.readCtx('log.txt')
+  file.read(fp) -> all
+  file.close(fp)
+  io.outln(all)
+  OK

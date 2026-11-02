@@ -122,6 +122,27 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("mem", "num_used", "mem.num_used()"),
     META_SIG("mem", "null_used", "mem.null_used()"),
     META_SIG("io", "docs", "io.docs(query)"),
+    META_SIG("io", "ctxin", "io.ctxin(source)"),
+    META_SIG("io", "ctxout", "io.ctxout(destination)"),
+    META_SIG("io", "ctxerr", "io.ctxerr(destination)"),
+    META_SIG("io", "err", "io.err(expr)"),
+    META_SIG("io", "errln", "io.errln(expr)"),
+    META_SIG("mem", "ref_empty", "mem.ref_empty()"),
+    META_SIG("mem", "ref_from", "mem.ref_from(s)"),
+    META_SIG("file", "readCtx", "file.readCtx(path)"),
+    META_SIG("file", "createCtx", "file.createCtx(path)"),
+    META_SIG("file", "writeCtx", "file.writeCtx(path)"),
+    META_SIG("file", "appendCtx", "file.appendCtx(path)"),
+    META_SIG("file", "readWriteCtx", "file.readWriteCtx(path)"),
+    META_SIG("file", "readln", "file.readln(fp)"),
+    META_SIG("file", "read", "file.read(fp, n?)"),
+    META_SIG("file", "write", "file.write(fp, data)"),
+    META_SIG("file", "flush", "file.flush(fp)"),
+    META_SIG("file", "pos", "file.pos(fp)"),
+    META_SIG("file", "size", "file.size(fp)"),
+    META_SIG("file", "setpos", "file.setpos(fp, n)"),
+    META_SIG("file", "iseof", "file.iseof(fp)"),
+    META_SIG("file", "close", "file.close(fp)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -129,7 +150,7 @@ int flat_native_is_core_module(const char *mod) {
         return 0;
     }
     return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0 ||
-           strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0;
+           strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0 || strcmp(mod, FLAT_NATIVE_MODULE_FILE) == 0;
 }
 
 int flat_native_is_module_id(const char *mod) {
@@ -138,6 +159,7 @@ int flat_native_is_module_id(const char *mod) {
         "json",
         "str",
         FLAT_NATIVE_MODULE_MEM,
+        FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,
         FLAT_NATIVE_MODULE_MATH_STATS,
         FLAT_NATIVE_MODULE_MATH,
@@ -202,6 +224,9 @@ int flat_native_module_for_id(uint16_t id, char *mod_out, size_t mod_out_sz) {
 
 int flat_native_is_optional_id(uint16_t id) {
     if (id == (uint16_t)FLAT_NATIVE_IO_DOCS) {
+        return 0;
+    }
+    if (id >= (uint16_t)FLAT_NATIVE_IO_CTXIN && id <= (uint16_t)FLAT_NATIVE_IO_ERRLN) {
         return 0;
     }
     return id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && id < (uint16_t)FLAT_NATIVE_COUNT;

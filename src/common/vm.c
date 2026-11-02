@@ -1,4 +1,6 @@
 #include "vm.h"
+#include "flat_file.h"
+#include "flat_io_ctx.h"
 #include "flat_native_plugin.h"
 #include "flat.h"
 #include "flat_mem_stats.h"
@@ -57,6 +59,8 @@ typedef struct {
     int loop_sp;
     char panic_reason[64];
     int unhandled_panic;
+    FlatFileTable files;
+    FlatIOContext *io_ctx;
 } VmState;
 
 static void vm_teardown(VmState *st, int rc);
@@ -122,6 +126,8 @@ static const char *io_status_reason(FlatIoStatus st) {
         return "io.user_cancel";
     case FLAT_IO_PANIC_PARSE:
         return "io.parse";
+    case FLAT_IO_PANIC_CTX:
+        return "io.context";
     default:
         return "io.error";
     }
@@ -135,7 +141,13 @@ static int vm_handle_io_status(VmState *st, const FlatBytecode *bc, uint32_t *ip
     if (ios == FLAT_IO_ERR) {
         return 0;
     }
-    snprintf(st->panic_reason, sizeof st->panic_reason, "%s", io_status_reason(ios));
+    if (ios == FLAT_IO_PANIC_CTX && st && st->io_ctx) {
+        snprintf(st->panic_reason, sizeof st->panic_reason, "%s",
+                 flat_io_ctx_panic_reason(st->io_ctx));
+        flat_io_ctx_reset_terminals(st->io_ctx);
+    } else {
+        snprintf(st->panic_reason, sizeof st->panic_reason, "%s", io_status_reason(ios));
+    }
     return vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
 }
 
@@ -171,6 +183,8 @@ static int flat_value_same_storage(const FlatValue *a, const FlatValue *b) {
         return a->u.coll_id == b->u.coll_id;
     case VAL_OBJECT:
         return a->u.coll_id == b->u.coll_id;
+    case VAL_FILE:
+        return a->u.file_id == b->u.file_id;
     default:
         return 0;
     }
@@ -182,10 +196,19 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
         if (flat_value_same_storage(&st->vars[i].val, val)) {
             return 0;
         }
+        if (st->vars[i].val.tag == VAL_FILE) {
+            flat_file_release(&st->files, st->vars[i].val.u.file_id);
+        }
         flat_value_retain(st->coll, st->pool, val);
+        if (val->tag == VAL_FILE) {
+            flat_file_retain(&st->files, val->u.file_id);
+        }
         flat_value_live_replace(&st->live, &st->vars[i].val, val);
         flat_value_release(st->coll, st->pool, &st->vars[i].val);
         st->vars[i].val = *val;
+        if (st->io_ctx) {
+            flat_io_ctx_var_updated(st->io_ctx, i, val);
+        }
         return 0;
     }
     if ((uint32_t)st->var_count >= st->var_slots_max) {
@@ -195,9 +218,15 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
         return -1;
     }
     flat_value_retain(st->coll, st->pool, val);
+    if (val->tag == VAL_FILE) {
+        flat_file_retain(&st->files, val->u.file_id);
+    }
     flat_value_live_bind(&st->live, val);
     snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
     st->vars[st->var_count].val = *val;
+    if (st->io_ctx) {
+        flat_io_ctx_var_updated(st->io_ctx, st->var_count, val);
+    }
     st->var_count++;
     return 0;
 }
@@ -208,10 +237,16 @@ static int apply_free(VmState *st, const char *varname) {
     if (i < 0) {
         return 0;
     }
+    if (st->vars[i].val.tag == VAL_FILE) {
+        flat_file_release(&st->files, st->vars[i].val.u.file_id);
+    }
     flat_value_release(st->coll, st->pool, &st->vars[i].val);
     flat_value_set_null(&nullv);
     flat_value_live_replace(&st->live, &st->vars[i].val, &nullv);
     flat_value_set_null(&st->vars[i].val);
+    if (st->io_ctx) {
+        flat_io_ctx_var_updated(st->io_ctx, i, &nullv);
+    }
     return 0;
 }
 
@@ -278,8 +313,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip, const
 
         vm_native_decls_at_ip(bc, *ip, &ndecl, &ndecl_count);
         if (flat_io_exec_line_manifest(rhs, st->pool, st->coll, vals, st->var_count, names, &v,
-                                       &ios, ndecl, ndecl_count, &st->live, st->var_slots_max) !=
-            0) {
+                                       &ios, ndecl, ndecl_count, &st->live, st->var_slots_max,
+                                       st->io_ctx, &st->files) != 0) {
             rc = 0;
             goto done;
         }
@@ -525,6 +560,9 @@ static void vm_teardown(VmState *st, int rc) {
         free(st->vars);
         st->vars = NULL;
     }
+    flat_io_ctx_destroy(st->io_ctx);
+    st->io_ctx = NULL;
+    flat_file_table_close_all(&st->files);
     flat_coll_destroy(st->coll);
     flat_pool_destroy(st->pool);
 }
@@ -638,6 +676,8 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.mem_live = &st->live;
     ctx.vars_max = st->var_slots_max;
     ctx.bc = st->bc;
+    ctx.io_ctx = st->io_ctx;
+    ctx.file_tbl = &st->files;
     vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
     ios = FLAT_IO_ERR;
     if (flat_native_invoke(native_id, &ctx) != 0) {
@@ -723,6 +763,11 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         return vm_fail_setup(&st, opts);
     }
     flat_coll_set_live_stats(st.coll, &st.live);
+    flat_file_table_init(&st.files);
+    st.io_ctx = flat_io_ctx_create(&st.files);
+    if (!st.io_ctx) {
+        return vm_fail_setup(&st, opts);
+    }
     guard_names = calloc(scratch_n, 64);
     guard_vals = calloc(scratch_n, sizeof *guard_vals);
     if (!guard_names || !guard_vals) {

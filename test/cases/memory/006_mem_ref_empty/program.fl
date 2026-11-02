@@ -1,0 +1,7 @@
+#main
+  r = mem.ref_empty()
+  io.ctxout(r)
+  io.out('x')
+  io.ctxout(tout)
+  io.outln(r)
+  OK

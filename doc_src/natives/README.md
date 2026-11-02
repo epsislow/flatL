@@ -1,6 +1,6 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`, `mem`) are always linked into `flvm`. Call them directly; no header declaration required. Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**. String API: [str.md](./str.md).
+**Core natives** (`io`, `json`, `str`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**. String API: [str.md](./str.md).
 
 **Optional natives** extend the VM (for example trigonometry). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
@@ -37,7 +37,7 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `mem`, `math`, `math.trig`, `math.stats`, `list`, `obj`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `list`, `obj`. Example: `use native list with math` → error.
 
 ## Core vs optional
 

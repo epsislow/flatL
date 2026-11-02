@@ -174,6 +174,56 @@ int flat_pool_alloc_copy(FlatStringPool *pool, const void *data, size_t len, uin
     return 0;
 }
 
+int flat_pool_alloc_empty(FlatStringPool *pool, uint32_t *out_id) {
+    PoolSlot *s;
+    uint32_t id;
+
+    if (!pool || !out_id) {
+        return -1;
+    }
+    if (pool->live_count >= FLAT_POOL_MAX_SLOTS) {
+        return -1;
+    }
+    if (pool_slot_take(pool, &id) != 0) {
+        return -1;
+    }
+    s = &pool->slots[id];
+    s->data = NULL;
+    s->len = 0;
+    s->refcnt = 0;
+    *out_id = id;
+    return 0;
+}
+
+int flat_pool_append(FlatStringPool *pool, uint32_t id, const void *data, size_t len) {
+    PoolSlot *s;
+    uint8_t *grown;
+
+    if (!pool || !data || len == 0 || !pool_slot_active(pool, (int)id)) {
+        return -1;
+    }
+    s = &pool->slots[id];
+    if (s->parent_id >= 0) {
+        return -1;
+    }
+    if (s->len + len > FLAT_POOL_MAX_CHUNK || pool->total_bytes + len > FLAT_POOL_MAX_TOTAL) {
+        return -1;
+    }
+    grown = realloc(s->data, s->len + len);
+    if (!grown) {
+        return -1;
+    }
+    memcpy(grown + s->len, data, len);
+    if (!s->data) {
+        pool->total_bytes += len;
+    } else {
+        pool->total_bytes += len;
+    }
+    s->data = grown;
+    s->len += len;
+    return 0;
+}
+
 int flat_pool_slice(FlatStringPool *pool, uint32_t parent_id, size_t offset, size_t len,
                     uint32_t *out_id) {
     PoolSlot *s;

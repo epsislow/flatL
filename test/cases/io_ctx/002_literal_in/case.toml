@@ -1,0 +1,10 @@
+suite = "io_ctx"
+id = 2
+desc = "io.ctxin string literal one line"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "snapshot line"

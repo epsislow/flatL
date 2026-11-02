@@ -1,0 +1,8 @@
+#main
+  seed = 'abc'
+  buf = mem.ref_from(seed)
+  io.ctxout(buf)
+  io.out('XYZ')
+  io.ctxout(tout)
+  io.outln(buf)
+  OK

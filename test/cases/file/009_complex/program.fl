@@ -1,0 +1,16 @@
+#main
+  out = mem.ref_empty()
+  fp = file.createCtx('mixed.txt')
+  io.ctxout(out)
+  io.out('hdr ')
+  io.ctxout(tout)
+  file.write(fp, 'file-body')
+  file.close(fp)
+  fp = file.readCtx('mixed.txt')
+  io.ctxin(fp)
+  io.inln() -> fromf
+  io.ctxin(tin)
+  file.close(fp)
+  io.outln(out)
+  io.outln(fromf)
+  OK

@@ -1,0 +1,10 @@
+suite = "io_ctx"
+id = 4
+desc = "io.err* captured in ref via io.ctxerr"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "warn: 42"

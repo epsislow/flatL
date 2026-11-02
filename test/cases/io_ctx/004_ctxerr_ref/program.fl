@@ -1,0 +1,8 @@
+#main
+  errbuf = mem.ref_empty()
+  io.ctxerr(errbuf)
+  io.err('warn: ')
+  io.errln(42)
+  io.ctxerr(terr)
+  io.outln(errbuf)
+  OK

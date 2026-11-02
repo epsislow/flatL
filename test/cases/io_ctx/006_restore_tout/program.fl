@@ -1,0 +1,8 @@
+#main
+  buf = mem.ref_empty()
+  io.ctxout(buf)
+  io.out('hidden')
+  io.ctxout(tout)
+  io.out('visible')
+  io.outln(buf)
+  OK

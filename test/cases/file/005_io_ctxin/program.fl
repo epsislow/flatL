@@ -1,0 +1,11 @@
+#main
+  fp = file.createCtx('in.txt')
+  file.write(fp, 'from-file')
+  file.close(fp)
+  fp = file.readCtx('in.txt')
+  io.ctxin(fp)
+  io.inln() -> line
+  io.ctxin(tin)
+  file.close(fp)
+  io.outln(line)
+  OK

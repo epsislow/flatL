@@ -1,0 +1,10 @@
+suite = "file"
+id = 5
+desc = "io.ctxin(file) then io.inln"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && printf '' | {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "from-file"

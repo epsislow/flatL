@@ -13,7 +13,18 @@ Inline tags **BOOL**, **NUMBER**, **NULL** are counted separately (`bool_used`, 
 
 ## Functions
 
-All calls return **NUMBER**. Argument lists must be empty `()`.
+### STRING REF helpers
+
+| Call | Returns | Notes |
+|------|---------|--------|
+| `ref_empty()` | STRING REF | Zero-length pool slot; use with **`io.ctxout`** / **`io.ctxerr`** |
+| `ref_from(s)` | STRING REF | Copy of string content (inline or REF) |
+
+Prefer these over test-only **`__ref__('…')`** for capture buffers.
+
+### Introspection (NUMBER)
+
+Argument lists must be empty `()` unless noted above.
 
 ### Variables (from `.fb` `var_slots`)
 

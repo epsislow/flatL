@@ -139,6 +139,9 @@ static void flat_value_fprint_impl(FILE *out, const FlatValue *v, const FlatStri
     case VAL_OBJECT:
         fprint_object(out, pool, coll, v->u.coll_id, depth);
         break;
+    case VAL_FILE:
+        fputs("<file>", out);
+        break;
     default:
         fputs("<?>", out);
         break;

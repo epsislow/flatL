@@ -32,6 +32,16 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
         return flat_native_io_in_bools(ctx);
     case FLAT_NATIVE_IO_DOCS:
         return flat_native_io_docs(ctx);
+    case FLAT_NATIVE_IO_CTXIN:
+        return flat_native_io_ctxin(ctx);
+    case FLAT_NATIVE_IO_CTXOUT:
+        return flat_native_io_ctxout(ctx);
+    case FLAT_NATIVE_IO_CTXERR:
+        return flat_native_io_ctxerr(ctx);
+    case FLAT_NATIVE_IO_ERR:
+        return flat_native_io_err(ctx);
+    case FLAT_NATIVE_IO_ERRLN:
+        return flat_native_io_errln(ctx);
     case FLAT_NATIVE_STR_TO_NUM:
         return flat_native_str_to_num(ctx);
     case FLAT_NATIVE_STR_TO_BOOL:

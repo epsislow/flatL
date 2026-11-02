@@ -1,3 +1,4 @@
+#include "flat_io_ctx.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
@@ -271,6 +272,10 @@ int flat_native_io_outln(FlatNativeCtx *ctx) {
     if (eval_io_arg(ctx, &v) != 0) {
         return -1;
     }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        return flat_io_ctx_write(ctx->io_ctx, ctx, 1, &v, 1);
+    }
 #ifdef FLAT_WASM_BUILD
     flat_wasm_io_fprint_io_ln(&v, ctx->pool, ctx->coll);
 #else
@@ -289,6 +294,10 @@ int flat_native_io_out(FlatNativeCtx *ctx) {
     }
     if (eval_io_arg(ctx, &v) != 0) {
         return -1;
+    }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        return flat_io_ctx_write(ctx->io_ctx, ctx, 1, &v, 0);
     }
 #ifdef FLAT_WASM_BUILD
     flat_wasm_io_fprint_io(&v, ctx->pool, ctx->coll);
@@ -313,6 +322,10 @@ int flat_native_io_outvar(FlatNativeCtx *ctx) {
     if (vi < 0) {
         return -1;
     }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        return flat_io_ctx_write(ctx->io_ctx, ctx, 1, &ctx->vars[vi], 1);
+    }
 #ifdef FLAT_WASM_BUILD
     flat_wasm_io_fprint_io_ln(&ctx->vars[vi], ctx->pool, ctx->coll);
 #else
@@ -325,12 +338,22 @@ int flat_native_io_outvar(FlatNativeCtx *ctx) {
 
 int flat_native_io_in(FlatNativeCtx *ctx) {
     char prompt[256];
+    char ch[2];
 
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
     if (eval_prompt(ctx, prompt, sizeof prompt) != 0) {
         return -1;
+    }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        emit_prompt(prompt);
+        flat_io_ctx_read_char(ctx->io_ctx, ctx, ch, ctx->io_status);
+        if (*ctx->io_status != FLAT_IO_OK) {
+            return 0;
+        }
+        return flat_value_set_str_inline(ctx->out, ch, 1);
     }
     emit_prompt(prompt);
     read_one_char_with_prompt(ctx->out, ctx->io_status, prompt);
@@ -343,6 +366,13 @@ static int io_read_stdin_line(FlatNativeCtx *ctx, char *linebuf, size_t linebuf_
 
     if (eval_prompt(ctx, prompt, sizeof prompt) != 0) {
         return -1;
+    }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        emit_prompt(prompt);
+        flat_io_ctx_read_line(ctx->io_ctx, ctx, linebuf, linebuf_size, allow_empty, input_kind,
+                              ctx->io_status);
+        return 0;
     }
     emit_prompt(prompt);
     read_line_with_prompt(linebuf, linebuf_size, allow_empty, prompt, input_kind, ctx->io_status);
@@ -437,4 +467,73 @@ int flat_native_io_in_bools(FlatNativeCtx *ctx) {
         return 0;
     }
     return parse_in_collection_line(linebuf, 2, ctx->out, ctx->pool, ctx->coll, ctx->io_status);
+}
+
+int flat_native_io_ctxin(FlatNativeCtx *ctx) {
+    FlatIoStatus st;
+    if (!ctx->io_ctx || !ctx->io_status) {
+        return -1;
+    }
+    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+    flat_io_ctx_set_in(ctx->io_ctx, ctx, &st);
+    *ctx->io_status = st;
+    return 0;
+}
+
+int flat_native_io_ctxout(FlatNativeCtx *ctx) {
+    FlatIoStatus st;
+    if (!ctx->io_ctx || !ctx->io_status) {
+        return -1;
+    }
+    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+    flat_io_ctx_set_out(ctx->io_ctx, ctx, &st);
+    *ctx->io_status = st;
+    return 0;
+}
+
+int flat_native_io_ctxerr(FlatNativeCtx *ctx) {
+    FlatIoStatus st;
+    if (!ctx->io_ctx || !ctx->io_status) {
+        return -1;
+    }
+    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+    flat_io_ctx_set_err(ctx->io_ctx, ctx, &st);
+    *ctx->io_status = st;
+    return 0;
+}
+
+int flat_native_io_err(FlatNativeCtx *ctx) {
+    FlatValue v;
+    if (!ctx->io_status) {
+        return -1;
+    }
+    if (eval_io_arg(ctx, &v) != 0) {
+        return -1;
+    }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        return flat_io_ctx_write(ctx->io_ctx, ctx, 2, &v, 0);
+    }
+    flat_value_fprint_io(stderr, &v, ctx->pool, ctx->coll);
+    fflush(stderr);
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_io_errln(FlatNativeCtx *ctx) {
+    FlatValue v;
+    if (!ctx->io_status) {
+        return -1;
+    }
+    if (eval_io_arg(ctx, &v) != 0) {
+        return -1;
+    }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        return flat_io_ctx_write(ctx->io_ctx, ctx, 2, &v, 1);
+    }
+    flat_value_fprint_io_ln(stderr, &v, ctx->pool, ctx->coll);
+    fflush(stderr);
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
 }

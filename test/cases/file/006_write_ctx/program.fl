@@ -1,0 +1,12 @@
+#main
+  fp = file.createCtx('base.txt')
+  file.write(fp, 'ORIGINAL')
+  file.close(fp)
+  fp = file.writeCtx('base.txt')
+  file.write(fp, 'NEW')
+  file.close(fp)
+  fp = file.readCtx('base.txt')
+  file.read(fp) -> txt
+  file.close(fp)
+  io.outln(txt)
+  OK

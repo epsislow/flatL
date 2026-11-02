@@ -1,0 +1,9 @@
+#main
+  fp = file.createCtx('data.bin')
+  file.write(fp, 'payload')
+  file.close(fp)
+  fp2 = file.readCtx('data.bin')
+  file.read(fp2) -> body
+  file.close(fp2)
+  io.outln(body)
+  OK
