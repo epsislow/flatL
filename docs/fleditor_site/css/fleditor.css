@@ -404,6 +404,52 @@ body {
   height: 1rem;
 }
 
+.fleditor-binary-help-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border-top: 1px solid var(--fl-border);
+  background: var(--fl-surface-2, #25252c);
+  flex-shrink: 0;
+}
+
+.fleditor-binary-help-banner[hidden] {
+  display: none !important;
+}
+
+.fleditor-binary-help {
+  margin: 0;
+  flex: 1 1 auto;
+  font-size: 0.8rem;
+  color: var(--fl-text-muted);
+  line-height: 1.35;
+}
+
+.fleditor-binary-help code {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--fl-text);
+}
+
+.fleditor-binary-help-dismiss {
+  flex-shrink: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  line-height: 1;
+  font-size: 1.25rem;
+  background: transparent;
+  border: 1px solid var(--fl-border);
+  border-radius: 3px;
+  color: var(--fl-text-muted);
+  cursor: pointer;
+}
+
+.fleditor-binary-help-dismiss:hover {
+  color: var(--fl-text);
+  background: var(--fl-surface);
+}
+
 .fleditor-panel-label-actions {
   display: flex;
   align-items: center;

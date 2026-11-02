@@ -84,6 +84,7 @@
   let binaryPage = 0;
   let binarySearchAnchor = 0;
   let binaryParseTimer = null;
+  const BINARY_HELP_DISMISS_KEY = 'flatl-fleditor-hex-help-dismissed';
 
   let unsavedDialog = null;
   let unsavedContinueBtn = null;
@@ -435,9 +436,48 @@
     }
     const v = validateCurrentBinaryPage();
     if (binaryParseLabel) {
-      binaryParseLabel.textContent = v.ok ? 'Parse OK' : 'Parse error';
+      if (v.ok) {
+        binaryParseLabel.textContent = 'Parse OK';
+      } else {
+        binaryParseLabel.textContent = v.error || 'Parse error';
+      }
       binaryParseLabel.classList.toggle('fleditor-binary-parse--err', !v.ok);
     }
+    updateBinaryHelpBanner(n);
+  }
+
+  function isBinaryHelpDismissed() {
+    try {
+      return localStorage.getItem(BINARY_HELP_DISMISS_KEY) === '1';
+    } catch (_e) {
+      return false;
+    }
+  }
+
+  function updateBinaryHelpBanner(byteLength) {
+    const banner = document.getElementById('binaryHelpBanner');
+    const helpEl = document.getElementById('binaryHelpLabel');
+    if (!banner || !helpEl) {
+      return;
+    }
+    if (editorViewMode !== 'binary') {
+      banner.hidden = true;
+      return;
+    }
+    if (isBinaryHelpDismissed()) {
+      banner.hidden = true;
+      return;
+    }
+    if (byteLength === 0) {
+      helpEl.innerHTML =
+        'File is <strong>empty</strong>. Click <strong>Size…</strong> (e.g. 64) or <strong>Insert…</strong> at offset 0. ' +
+        'Do not type plain text — only edit <strong>hex pairs</strong> on dump lines.';
+    } else {
+      helpEl.innerHTML =
+        'Edit the <strong>hex pairs</strong> between the offset and <code>|ASCII|</code> ' +
+        '(e.g. change <code>00</code> to <code>48</code>). Not a text editor.';
+    }
+    banner.hidden = false;
   }
 
   function scheduleBinaryParseCheck() {
@@ -480,6 +520,10 @@
     binaryPage = 0;
     if (binaryHexBar) {
       binaryHexBar.hidden = true;
+    }
+    const banner = document.getElementById('binaryHelpBanner');
+    if (banner) {
+      banner.hidden = true;
     }
   }
 
@@ -1131,7 +1175,7 @@
     confirmDiscardIfDirty(function () {
       P.ensureParentDirs(project, norm);
       if (choice.binary) {
-        project.files[norm] = P.bytesToProjectValueBinary(new Uint8Array(0));
+        project.files[norm] = P.bytesToProjectValueBinary(H.newEmptyBinaryBuffer());
       } else {
         project.files[norm] = initialTextContentForPath(norm);
       }
@@ -1328,6 +1372,7 @@
         return;
       }
       if (editorViewMode === 'binary') {
+        setDirty(true);
         scheduleBinaryParseCheck();
         updateRunSaveButtons();
       } else {
@@ -1626,6 +1671,20 @@
   }
 
   function initBinaryBar() {
+    const helpDismiss = document.getElementById('binaryHelpDismiss');
+    if (helpDismiss) {
+      helpDismiss.addEventListener('click', function () {
+        try {
+          localStorage.setItem(BINARY_HELP_DISMISS_KEY, '1');
+        } catch (_e) {
+          /* ignore */
+        }
+        const banner = document.getElementById('binaryHelpBanner');
+        if (banner) {
+          banner.hidden = true;
+        }
+      });
+    }
     const startBtn = document.getElementById('binaryPageStart');
     const prevBtn = document.getElementById('binaryPagePrev');
     const nextBtn = document.getElementById('binaryPageNext');

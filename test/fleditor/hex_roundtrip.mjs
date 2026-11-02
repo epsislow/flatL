@@ -46,6 +46,12 @@ assert(H.bytesEqual(merged, p641), '641 merged');
 const bad = H.hexDumpPageToBytes('00000000  gg', 1);
 assert(!bad.ok, 'invalid hex rejected');
 
+const zeroText = H.hexDumpPageToBytes('asdada', 0);
+assert(!zeroText.ok, 'non-hex text rejected on empty file');
+
+const emptyBuf = H.newEmptyBinaryBuffer();
+assert(emptyBuf.length === H.DEFAULT_NEW_BINARY_SIZE, 'default new binary size');
+
 const ins = H.insertBytes(sample, 5, new Uint8Array([0x21]));
 assert(ins.length === 7 && ins[5] === 0x21, 'insert');
 const del = H.deleteBytes(ins, 0, 1);

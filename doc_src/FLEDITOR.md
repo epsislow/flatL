@@ -138,7 +138,7 @@ When a binary file is open, the panel title shows **Hex editor** and the path; F
 | **Import…** | Replace entire file from disk |
 | **Download** | Save raw bytes locally |
 
-Empty files (`0` bytes): use **Insert…** or **Size…** before you can edit hex on a page.
+New binary files from **+file** start with **64 zero bytes** so the hex grid is visible immediately. Empty files (`0` bytes) after Run/sync: use **Size…** or **Insert…** — do **not** type plain text in the editor; only change **hex pairs** on dump lines (e.g. `00` → `48`).
 
 ### FlatL programs
 

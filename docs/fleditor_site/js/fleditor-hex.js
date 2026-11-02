@@ -5,6 +5,8 @@
   const BYTES_PER_LINE = 16;
   const LINES_PER_PAGE = 40;
   const BYTES_PER_PAGE = BYTES_PER_LINE * LINES_PER_PAGE;
+  /** New binary files start with this many zero bytes so the hex grid is visible. */
+  const DEFAULT_NEW_BINARY_SIZE = 64;
 
   function copyBytes(u8) {
     return new Uint8Array(u8);
@@ -100,6 +102,18 @@
    */
   function hexDumpPageToBytes(text, expectedLen) {
     if (expectedLen === 0) {
+      const lines = (text || '').split('\n');
+      for (let li = 0; li < lines.length; li++) {
+        const line = lines[li].trim();
+        if (!line || line.startsWith(';')) {
+          continue;
+        }
+        return {
+          ok: false,
+          error: 'File has 0 bytes. Use Size… (e.g. 64) or Insert… — do not type plain text here.',
+          line: li + 1,
+        };
+      }
       return { ok: true, bytes: new Uint8Array(0) };
     }
     const out = [];
@@ -282,10 +296,16 @@
     return { ok: false, error: 'use hex pairs or base64' };
   }
 
+  function newEmptyBinaryBuffer() {
+    return new Uint8Array(DEFAULT_NEW_BINARY_SIZE);
+  }
+
   global.FleditorHex = {
     BYTES_PER_LINE,
     LINES_PER_PAGE,
     BYTES_PER_PAGE,
+    DEFAULT_NEW_BINARY_SIZE,
+    newEmptyBinaryBuffer,
     copyBytes,
     bytesEqual,
     pageCountForLength,

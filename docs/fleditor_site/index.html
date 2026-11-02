@@ -82,6 +82,11 @@
             <p>No files in project. Use <strong>+file</strong> or the <strong>⟲</strong> reset control on the Project panel.</p>
           </div>
           <textarea id="code" spellcheck="false"></textarea>
+          <div id="binaryHelpBanner" class="fleditor-binary-help-banner" hidden>
+            <p id="binaryHelpLabel" class="fleditor-binary-help"></p>
+            <button type="button" id="binaryHelpDismiss" class="fleditor-binary-help-dismiss"
+              title="Dismiss hint" aria-label="Dismiss hint">×</button>
+          </div>
         </section>
         <section id="terminalPanel" class="fleditor-terminal-wrap" hidden>
           <div class="fleditor-panel-label">
@@ -147,7 +152,7 @@
         placeholder="path/name.ext" />
       <label class="fleditor-newfile-binary">
         <input type="checkbox" id="newFileModalBinary" />
-        Binary (Hex editor)
+        Binary (Hex editor, starts as 64 zero bytes)
       </label>
       <div class="fleditor-io-actions">
         <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
@@ -191,6 +196,6 @@
   <script src="js/fleditor-hex.js"></script>
   <script src="js/fleditor-project.js"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=28"></script>
+  <script src="js/fleditor.js?v=30"></script>
 </body>
 </html>
