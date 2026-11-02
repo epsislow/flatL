@@ -303,8 +303,11 @@ static int find_block_idx(const FgirProgram *p, const char *label) {
     return -1;
 }
 
+/* Room for "#backtrack." / "#panic." + block label + suffix (GCC -Wformat-truncation). */
+enum { FLAT_HANDLER_LABEL_BUF = 12 + FGIR_MAX_LABEL + 64 };
+
 static int find_guard_handler(const FgirProgram *prog, const FgirBlock *b, const FgirInstr *ins) {
-    char lab[FGIR_MAX_LABEL];
+    char lab[FLAT_HANDLER_LABEL_BUF];
     int idx;
 
     snprintf(lab, sizeof lab, "#backtrack.%s.%d", b->label, ins->index);
@@ -320,7 +323,7 @@ static int find_guard_handler(const FgirProgram *prog, const FgirBlock *b, const
 }
 
 static int find_panic_handler(const FgirProgram *prog, const FgirBlock *b, const FgirInstr *ins) {
-    char lab[FGIR_MAX_LABEL];
+    char lab[FLAT_HANDLER_LABEL_BUF];
     int idx;
 
     snprintf(lab, sizeof lab, "#panic.%s.%d", b->label, ins->index);

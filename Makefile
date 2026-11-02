@@ -56,7 +56,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-project-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild rebuild-native fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-project-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -79,7 +79,9 @@ help:
 	@echo "  make fleditor-serve-forced  kill port 8765 then serve (fuser)"
 	@echo "  make fleditor-smoke  HTTP smoke test for fleditor static server"
 	@echo "  make fleditor-wasm-smoke / fleditor-wasm-multifile-smoke  headless WASM tests"
-	@echo "  make rebuild      make clean && make all (force full recompile)"
+	@echo "  make rebuild      clean + all + fleditor-wasm (native toolchain + browser compiler)"
+	@echo "  make rebuild-native  clean + all only (no emcc / WASM)"
+	@echo "  make fleditor-rebuild  alias for make rebuild (+ browser refresh hint)"
 	@echo ""
 	@echo "Note: if sources unchanged, make skips compile (up to date)."
 	@echo "      Targets still print 'OK: …' so you know nothing failed."
@@ -123,7 +125,11 @@ json_generate_tests: $(BINDIR)/json_generate_tests$(EXEEXT)
 	find test/cases/json -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 	$(BINDIR)/json_generate_tests$(EXEEXT)
 
-rebuild: clean all
+rebuild: clean all fleditor-wasm
+	@echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"
+
+rebuild-native: clean all
+	@echo "OK: rebuild-native (bin/* only; run make fleditor-wasm for fleditor)"
 
 fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
@@ -211,8 +217,8 @@ FLEDITOR_PORT ?= 8765
 fleditor-wasm:
 	$(MAKE) -f Makefile.wasm fleditor-wasm
 
-fleditor-rebuild: fleditor-wasm
-	@echo "OK: WASM rebuilt — restart serve if needed, then hard-refresh the browser (Ctrl+Shift+R)."
+fleditor-rebuild: rebuild
+	@echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R)."
 
 fleditor-serve:
 	$(NODE) docs/fleditor_site/node/serve.js $(FLEDITOR_PORT)

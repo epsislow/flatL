@@ -18,8 +18,9 @@
 
    ```bash
    source ~/emsdk/emsdk_env.sh   # if not in .bashrc yet
-   make fleditor-rebuild
-   # or: make fleditor-wasm / ./scripts/build-fleditor-wasm.sh
+   make rebuild                  # clean + bin/* + fleditor WASM (recommended after compiler changes)
+   # or: make fleditor-rebuild (same as rebuild) / make fleditor-wasm (WASM only)
+   # without emcc: make rebuild-native, then make fleditor-wasm when emsdk is available
    ```
 
 2. Build offline docs (optional, for **Docs** link in the editor):
@@ -50,7 +51,7 @@ use "lib/greet.fl" as #Greet_
   OK
 ```
 
-Paths in `use "…"` must match the project tree. Rebuild WASM after compiler changes: `make fleditor-rebuild`.
+Paths in `use "…"` must match the project tree. After compiler/link changes: `make rebuild` (native + WASM), then hard-refresh the browser.
 
 Windows without Emscripten: use prebuilt `docs/fleditor_site/wasm/flatl.js` + `flatl.wasm` from the repo, then `make fleditor-serve`.
 
