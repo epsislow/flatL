@@ -28,4 +28,7 @@ int flat_wasm_get_last_termination(void);
 /* flatL toolchain version string (same as flc/flvm). */
 const char *flat_wasm_toolchain_version(void);
 
+/* Applied to the next flat_wasm_run / flat_wasm_run_entry (same semantics as flvm). */
+void flat_wasm_set_run_limits(uint64_t max_jumps, uint64_t max_steps, int no_jump_limit);
+
 #endif

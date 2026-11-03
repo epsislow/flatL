@@ -252,6 +252,19 @@
               <label for="settingsTerminalClearOnRun">Clear on Run</label>
               <input type="checkbox" id="settingsTerminalClearOnRun" />
             </div>
+            <p class="fleditor-settings-hint">Run limits match <code>flvm</code> (stops infinite <code>jump</code> loops in WASM).</p>
+            <div class="fleditor-settings-field">
+              <label for="settingsTerminalMaxJumps">Max jumps per run</label>
+              <input type="number" id="settingsTerminalMaxJumps" min="0" max="100000000" step="1" />
+            </div>
+            <div class="fleditor-settings-field">
+              <label for="settingsTerminalMaxSteps">Max VM steps per run</label>
+              <input type="number" id="settingsTerminalMaxSteps" min="0" max="100000000" step="1" />
+            </div>
+            <div class="fleditor-settings-field">
+              <label for="settingsTerminalNoJumpLimit">No jump limit</label>
+              <input type="checkbox" id="settingsTerminalNoJumpLimit" />
+            </div>
           </div>
           <div id="settingsSectionAbout" class="fleditor-settings-section" data-settings-section="about" hidden>
             <p class="fleditor-settings-hint">flatL browser playground — edit, compile, and run FlatL via WebAssembly.</p>

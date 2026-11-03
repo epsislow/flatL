@@ -1886,10 +1886,32 @@
     );
   }
 
+  function applyWasmRunLimits(Module) {
+    const p = FleditorSettings.getTerminalPrefs();
+    const maxJumps = p.maxJumps || 0;
+    const maxSteps = p.maxSteps || 0;
+    const noJump = p.noJumpLimit ? 1 : 0;
+    if (typeof Module._flat_wasm_set_run_limits === 'function') {
+      Module._flat_wasm_set_run_limits(maxJumps, maxSteps, noJump);
+      return;
+    }
+    try {
+      const setLimits = Module.cwrap('flat_wasm_set_run_limits', null, [
+        'number',
+        'number',
+        'number',
+      ]);
+      setLimits(maxJumps, maxSteps, noJump);
+    } catch (_e) {
+      /* older wasm without export */
+    }
+  }
+
   async function runProjectEntry(Module, entryPath) {
     const errBuf = Module._malloc(4096);
     Module.setValue(errBuf, 0, 'i8');
     attachWasmHooks(Module);
+    applyWasmRunLimits(Module);
     setStatus('running');
     const memPath = P.memfsEntryPath(entryPath);
     let runRc = Module.ccall(

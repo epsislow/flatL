@@ -177,7 +177,7 @@ An **empty** `#or` handler block for a guard inside the loop body means **contin
 | Loop stack | **`for` / `foreach` frames cleared** on `jump` (abandon active loops) |
 | After jump | Instructions below `jump` in the same block are **not** executed |
 | vs `call` | Use **`call`** when you need a **`return`** back to the caller; use **`jump`** for shared paths (e.g. `#common`) without a frame |
-| Jump budget | Default **1000** `OP_JUMP` executions per run (`FLAT_VM_DEFAULT_MAX_JUMPS`); exceed → PANIC `vm.jump_limit` (routed like other panics). Override: `flvm --max-jumps N`, or `--no-jump-limit` |
+| Jump budget | Default **1000** `OP_JUMP` executions per run (`FLAT_VM_DEFAULT_MAX_JUMPS`); exceed → PANIC `vm.jump_limit` (routed like other panics). Override: `flvm --max-jumps N`, or `--no-jump-limit`. **fleditor WASM:** Settings → Terminal, or `flat_wasm_set_run_limits` before run |
 
 Work plan: [`.cursor/plans/jump-or-handlers.plan.md`](../.cursor/plans/jump-or-handlers.plan.md).
 

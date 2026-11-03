@@ -18,6 +18,25 @@
 
 static int g_last_termination;
 
+static struct {
+    uint64_t max_jumps;
+    uint64_t max_steps;
+    int no_jump_limit;
+} g_wasm_run_limits;
+
+void flat_wasm_set_run_limits(uint64_t max_jumps, uint64_t max_steps, int no_jump_limit) {
+    g_wasm_run_limits.max_jumps = max_jumps;
+    g_wasm_run_limits.max_steps = max_steps;
+    g_wasm_run_limits.no_jump_limit = no_jump_limit ? 1 : 0;
+}
+
+static void flat_wasm_fill_vm_opts(FlatVmOptions *opts) {
+    memset(opts, 0, sizeof *opts);
+    opts->max_jumps = g_wasm_run_limits.max_jumps;
+    opts->max_steps = g_wasm_run_limits.max_steps;
+    opts->no_jump_limit = g_wasm_run_limits.no_jump_limit;
+}
+
 static int read_file_bytes(const char *path, uint8_t **out, size_t *out_len, char *err,
                            size_t err_sz) {
     FILE *f;
@@ -179,8 +198,9 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
         }
         return 1;
     }
-    FlatVmOptions opts = {0};
+    FlatVmOptions opts;
     int term = (int)FLAT_TERM_UNKNOWN;
+    flat_wasm_fill_vm_opts(&opts);
     opts.out_termination = &term;
     rc = flat_vm_run_opts(&bc, &opts);
     g_last_termination = term;

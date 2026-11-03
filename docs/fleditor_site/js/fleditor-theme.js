@@ -219,6 +219,11 @@
   const DEFAULT_TERMINAL_PREFS = {
     fontSize: 14,
     clearOnRun: true,
+    /** 0 = VM default (1000); see FLAT_VM_DEFAULT_MAX_JUMPS */
+    maxJumps: 1000,
+    /** 0 = unlimited opcode steps per run */
+    maxSteps: 0,
+    noJumpLimit: false,
   };
 
   function isBuiltInPresetId(id) {
@@ -552,6 +557,9 @@
       return {
         fontSize: clampNum(p.fontSize, 10, 24, DEFAULT_TERMINAL_PREFS.fontSize),
         clearOnRun: typeof p.clearOnRun === 'boolean' ? p.clearOnRun : DEFAULT_TERMINAL_PREFS.clearOnRun,
+        maxJumps: clampNum(p.maxJumps, 0, 100000000, DEFAULT_TERMINAL_PREFS.maxJumps),
+        maxSteps: clampNum(p.maxSteps, 0, 100000000, DEFAULT_TERMINAL_PREFS.maxSteps),
+        noJumpLimit: typeof p.noJumpLimit === 'boolean' ? p.noJumpLimit : DEFAULT_TERMINAL_PREFS.noJumpLimit,
       };
     } catch (_e) {
       return Object.assign({}, DEFAULT_TERMINAL_PREFS);

@@ -286,6 +286,9 @@
     const editorWrap = document.getElementById('settingsEditorWordWrap');
     const termFont = document.getElementById('settingsTerminalFontSize');
     const termClear = document.getElementById('settingsTerminalClearOnRun');
+    const termMaxJumps = document.getElementById('settingsTerminalMaxJumps');
+    const termMaxSteps = document.getElementById('settingsTerminalMaxSteps');
+    const termNoJumpLimit = document.getElementById('settingsTerminalNoJumpLimit');
     if (editorFont) {
       editorFont.value = String(editorPrefs.fontSize);
     }
@@ -303,6 +306,24 @@
     }
     if (termClear) {
       termClear.checked = terminalPrefs.clearOnRun;
+    }
+    if (termMaxJumps) {
+      termMaxJumps.value = String(terminalPrefs.maxJumps);
+      termMaxJumps.disabled = !!terminalPrefs.noJumpLimit;
+    }
+    if (termMaxSteps) {
+      termMaxSteps.value = String(terminalPrefs.maxSteps);
+    }
+    if (termNoJumpLimit) {
+      termNoJumpLimit.checked = terminalPrefs.noJumpLimit;
+    }
+  }
+
+  function syncTerminalRunLimitFieldsDisabled() {
+    const termMaxJumps = document.getElementById('settingsTerminalMaxJumps');
+    const termNoJumpLimit = document.getElementById('settingsTerminalNoJumpLimit');
+    if (termMaxJumps && termNoJumpLimit) {
+      termMaxJumps.disabled = termNoJumpLimit.checked;
     }
   }
 
@@ -478,6 +499,34 @@
       termClear.addEventListener('change', function () {
         terminalPrefs = T.saveTerminalPrefs(null, { clearOnRun: termClear.checked });
       });
+    }
+
+    const termMaxJumps = document.getElementById('settingsTerminalMaxJumps');
+    const termMaxSteps = document.getElementById('settingsTerminalMaxSteps');
+    const termNoJumpLimit = document.getElementById('settingsTerminalNoJumpLimit');
+    if (termMaxJumps) {
+      termMaxJumps.value = String(terminalPrefs.maxJumps);
+      termMaxJumps.addEventListener('change', function () {
+        terminalPrefs = T.saveTerminalPrefs(null, {
+          maxJumps: Number(termMaxJumps.value),
+        });
+      });
+    }
+    if (termMaxSteps) {
+      termMaxSteps.value = String(terminalPrefs.maxSteps);
+      termMaxSteps.addEventListener('change', function () {
+        terminalPrefs = T.saveTerminalPrefs(null, {
+          maxSteps: Number(termMaxSteps.value),
+        });
+      });
+    }
+    if (termNoJumpLimit) {
+      termNoJumpLimit.checked = terminalPrefs.noJumpLimit;
+      termNoJumpLimit.addEventListener('change', function () {
+        terminalPrefs = T.saveTerminalPrefs(null, { noJumpLimit: termNoJumpLimit.checked });
+        syncTerminalRunLimitFieldsDisabled();
+      });
+      syncTerminalRunLimitFieldsDisabled();
     }
   }
 
