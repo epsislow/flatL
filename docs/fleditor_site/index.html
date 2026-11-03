@@ -8,12 +8,14 @@
   <link rel="stylesheet" href="ext/xterm.css">
   <link rel="stylesheet" href="css/fleditor.css?v=12">
   <link rel="stylesheet" href="css/fleditor-cm.css">
+  <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
 <body>
   <div class="fleditor-app">
     <header class="fleditor-toolbar">
       <h1>flatL fleditor</h1>
       <a class="fleditor-toolbar-link" href="../doc_site/index.html">Docs</a>
+      <button type="button" id="settingsBtn" class="fleditor-toolbar-link fleditor-settings-btn" title="Settings" aria-label="Settings">⚙</button>
       <span id="status" class="fleditor-status">idle</span>
     </header>
     <div id="wasmBanner" class="fleditor-banner" hidden></div>
@@ -196,6 +198,81 @@
       </div>
     </div>
   </dialog>
+  <dialog id="settingsModal" class="fleditor-settings-modal" aria-labelledby="settingsModalTitle">
+    <div class="fleditor-settings-shell">
+      <nav class="fleditor-settings-nav" aria-label="Settings sections">
+        <button type="button" class="fleditor-settings-nav-btn fleditor-settings-nav-btn--active" data-settings-section="display">Display</button>
+        <button type="button" class="fleditor-settings-nav-btn" data-settings-section="editor">Editor</button>
+        <button type="button" class="fleditor-settings-nav-btn" data-settings-section="terminal">Terminal</button>
+        <button type="button" class="fleditor-settings-nav-btn" data-settings-section="about">About</button>
+      </nav>
+      <div class="fleditor-settings-main">
+        <header class="fleditor-settings-head">
+          <h2 id="settingsModalTitle" class="fleditor-settings-title"><span id="settingsSectionTitle">Display</span></h2>
+        </header>
+        <div class="fleditor-settings-body">
+          <div id="settingsSectionDisplay" class="fleditor-settings-section" data-settings-section="display">
+            <p class="fleditor-settings-hint">Theme colors apply to all panels immediately. Editing a color switches to <strong>Custom</strong>.</p>
+            <div class="fleditor-settings-field">
+              <label for="settingsThemeSelect">Theme</label>
+              <select id="settingsThemeSelect" aria-label="Theme preset"></select>
+            </div>
+            <div class="fleditor-settings-actions">
+              <button type="button" id="settingsSaveThemeBtn" class="fleditor-io-btn">Save as new theme…</button>
+              <button type="button" id="settingsDeleteThemeBtn" class="fleditor-io-btn">Delete theme</button>
+              <button type="button" id="settingsResetThemeBtn" class="fleditor-io-btn">Reset to Dark</button>
+            </div>
+            <div id="settingsTokenCustomize"></div>
+          </div>
+          <div id="settingsSectionEditor" class="fleditor-settings-section" data-settings-section="editor" hidden>
+            <p class="fleditor-settings-hint">CodeMirror options (saved separately from theme colors).</p>
+            <div class="fleditor-settings-field">
+              <label for="settingsEditorFontSize">Font size</label>
+              <input type="number" id="settingsEditorFontSize" min="10" max="24" step="1" />
+            </div>
+            <div class="fleditor-settings-field">
+              <label for="settingsEditorLineNumbers">Line numbers</label>
+              <input type="checkbox" id="settingsEditorLineNumbers" />
+            </div>
+            <div class="fleditor-settings-field">
+              <label for="settingsEditorTabSize">Tab size</label>
+              <input type="number" id="settingsEditorTabSize" min="2" max="8" step="1" />
+            </div>
+            <div class="fleditor-settings-field">
+              <label for="settingsEditorWordWrap">Word wrap</label>
+              <input type="checkbox" id="settingsEditorWordWrap" />
+            </div>
+          </div>
+          <div id="settingsSectionTerminal" class="fleditor-settings-section" data-settings-section="terminal" hidden>
+            <div class="fleditor-settings-field">
+              <label for="settingsTerminalFontSize">Font size</label>
+              <input type="number" id="settingsTerminalFontSize" min="10" max="24" step="1" />
+            </div>
+            <div class="fleditor-settings-field">
+              <label for="settingsTerminalClearOnRun">Clear on Run</label>
+              <input type="checkbox" id="settingsTerminalClearOnRun" />
+            </div>
+          </div>
+          <div id="settingsSectionAbout" class="fleditor-settings-section" data-settings-section="about" hidden>
+            <p class="fleditor-settings-hint">flatL browser playground — edit, compile, and run FlatL via WebAssembly.</p>
+            <dl class="fleditor-settings-about-dl">
+              <dt>Fleditor UI</dt>
+              <dd id="settingsAboutUiVersion">—</dd>
+              <dt>flatL WASM (flc + flvm)</dt>
+              <dd id="settingsAboutWasmVersion">—</dd>
+            </dl>
+            <div class="fleditor-settings-actions">
+              <button type="button" id="settingsResetAllBtn" class="fleditor-io-btn fleditor-io-btn--danger">Reset all settings</button>
+            </div>
+            <p class="fleditor-settings-hint">Reset all settings restores theme (Dark), editor and terminal preferences. It does not change your project, panel layout (↺ dock), or open files.</p>
+          </div>
+        </div>
+        <footer class="fleditor-settings-foot">
+          <button type="button" id="settingsDoneBtn" class="fleditor-io-btn fleditor-io-btn--primary">Done</button>
+        </footer>
+      </div>
+    </div>
+  </dialog>
   <script src="ext/codemirror.min.js"></script>
   <script src="ext/xterm.js"></script>
   <script src="js/mode-flatl.js"></script>
@@ -203,6 +280,9 @@
   <script src="js/fleditor-hex-grid.js?v=6"></script>
   <script src="js/fleditor-project.js?v=4"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=46"></script>
+  <script src="js/fleditor-version.js"></script>
+  <script src="js/fleditor-theme.js"></script>
+  <script src="js/fleditor-settings.js"></script>
+  <script src="js/fleditor.js?v=49"></script>
 </body>
 </html>

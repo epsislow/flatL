@@ -32,6 +32,12 @@ setTimeout(() => {
       if (!body.includes('id="panelDock"')) fail('missing panel dock');
       if (!body.includes('id="dockResetLayoutBtn"')) fail('missing dock reset layout');
       if (!body.includes('fleditor-layout.js')) fail('missing layout script');
+      if (!body.includes('fleditor-theme.js')) fail('missing theme script');
+      if (!body.includes('fleditor-settings.js')) fail('missing settings script');
+      if (!body.includes('id="settingsModal"')) fail('missing settings modal');
+      if (!body.includes('id="settingsBtn"')) fail('missing settings button');
+      if (!body.includes('id="settingsSectionAbout"')) fail('missing settings About section');
+      if (!body.includes('fleditor-version.js')) fail('missing version script');
       if (!body.includes('>+file<')) fail('missing +file button');
       if (!body.includes('id="binaryHexGrid"')) fail('missing hex grid host');
       if (!body.includes('fleditor-hex-grid.js')) fail('missing hex grid script');

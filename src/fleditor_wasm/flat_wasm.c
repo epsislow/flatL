@@ -1,4 +1,5 @@
 #include "flat_wasm.h"
+#include "flat.h"
 #include "fb_format.h"
 #include "flat_link.h"
 #include "fgir.h"
@@ -192,6 +193,10 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
 
 int flat_wasm_get_last_termination(void) {
     return g_last_termination;
+}
+
+const char *flat_wasm_toolchain_version(void) {
+    return FLAT_TOOLCHAIN_VERSION;
 }
 
 void flat_wasm_free(void *p) {

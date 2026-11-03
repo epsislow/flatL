@@ -21,25 +21,25 @@
 }
 
 .cm-s-flatl-dark .cm-fl-string {
-  color: #c6e548;
+  color: var(--fl-cm-string, #c6e548);
 }
 
 .cm-s-flatl-dark .cm-fl-number {
-  color: #9bb8d4;
+  color: var(--fl-cm-number, #9bb8d4);
 }
 
 .cm-s-flatl-dark .cm-fl-keyword {
-  color: #d4a574;
+  color: var(--fl-cm-keyword, #d4a574);
 }
 
 .cm-s-flatl-dark .cm-fl-block {
-  color: #b8a0e8;
+  color: var(--fl-cm-block, #b8a0e8);
 }
 
 .cm-s-flatl-dark .cm-fl-native {
-  color: #7ec8e3;
+  color: var(--fl-cm-native, #7ec8e3);
 }
 
 .cm-s-flatl-dark .cm-fl-comment {
-  color: #8b8372;
+  color: var(--fl-cm-comment, #8b8372);
 }

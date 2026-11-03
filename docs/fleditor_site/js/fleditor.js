@@ -1,4 +1,4 @@
-/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTheme, FleditorSettings */
 (function () {
   'use strict';
 
@@ -1758,14 +1758,12 @@
   }
 
   function initTerminal() {
+    const tokens = FleditorTheme.effectiveTokens(FleditorTheme.loadThemeState());
+    const tPrefs = FleditorSettings.getTerminalPrefs();
     term = new Terminal({
-      theme: {
-        background: '#1c1c22',
-        foreground: '#e6dcc8',
-        cursor: '#e6dcc8',
-      },
+      theme: FleditorTheme.xtermThemeFromTokens(tokens),
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
-      fontSize: 14,
+      fontSize: tPrefs.fontSize,
       cursorBlink: true,
       convertEol: true,
     });
@@ -1829,6 +1827,17 @@
     Module.flatWasmOnNeedChar = cfg.flatWasmOnNeedChar;
     Module.locateFile = cfg.locateFile;
     return Module;
+  }
+
+  function getWasmToolchainVersion() {
+    if (!wasmModule) {
+      return null;
+    }
+    try {
+      return wasmModule.ccall('flat_wasm_toolchain_version', 'string', [], []);
+    } catch (_e) {
+      return null;
+    }
   }
 
   async function loadWasm() {
@@ -1933,7 +1942,9 @@
     setStatus('compiling');
     setTerminalOpen(true);
     scheduleLayoutRefresh();
-    term.clear();
+    if (FleditorSettings.getTerminalPrefs().clearOnRun) {
+      term.clear();
+    }
     let runOutcome = { exitCode: 1, compileFailed: false, termination: FLAT_TERM.ERROR };
     try {
       implicitSaveForRun();
@@ -2522,8 +2533,23 @@
     initAlertModal();
     initNewFileModal();
     initBinaryBar();
+    FleditorSettings.init({
+      appEl: document.querySelector('.fleditor-app'),
+      getCm: function () {
+        return cm;
+      },
+      getTerm: function () {
+        return term;
+      },
+      onRefreshLayout: scheduleLayoutRefresh,
+      showPrompt: showPrompt,
+      showAlert: showAlert,
+      getWasmToolchainVersion: getWasmToolchainVersion,
+    });
     await initEditor();
+    FleditorSettings.applyEditorPrefs();
     initTerminal();
+    FleditorSettings.applyTerminalTheme();
     initLayoutControls();
     window.addEventListener('resize', scheduleLayoutRefresh);
     clearBtn.addEventListener('click', () => term.clear());
@@ -2544,7 +2570,12 @@
     }
     loadWasm().then((m) => {
       wasmModule = m;
-      if (m) showBanner('');
+      if (m) {
+        showBanner('');
+        if (global.FleditorSettings && FleditorSettings.refreshAboutPanel) {
+          FleditorSettings.refreshAboutPanel();
+        }
+      }
     });
   }
 

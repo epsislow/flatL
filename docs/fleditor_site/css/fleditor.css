@@ -275,7 +275,7 @@ body {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  background: var(--fl-panel-bg);
+  background: var(--fl-bg);
 }
 
 .fleditor-work--no-terminal .fleditor-editor-wrap {
@@ -290,12 +290,20 @@ body {
   overflow: hidden;
 }
 
-.fleditor-editor-wrap--idle,
 .fleditor-editor-wrap--flatl,
-.fleditor-editor-wrap--text,
+.fleditor-editor-wrap--idle {
+  --fl-editor-pane-bg: var(--fl-editor-fl-bg, var(--fl-surface));
+  --fl-editor-gutter-bg: var(--fl-editor-fl-gutter, var(--fl-editor-fl-bg, var(--fl-surface)));
+}
+
+.fleditor-editor-wrap--text {
+  --fl-editor-pane-bg: var(--fl-editor-text-bg, var(--fl-surface));
+  --fl-editor-gutter-bg: var(--fl-editor-text-gutter, var(--fl-editor-text-bg, var(--fl-surface)));
+}
+
 .fleditor-editor-wrap--binary {
-  --fl-editor-pane-bg: var(--fl-panel-bg);
-  --fl-editor-gutter-bg: var(--fl-panel-bg);
+  --fl-editor-pane-bg: var(--fl-editor-hex-bg, var(--fl-surface));
+  --fl-editor-gutter-bg: var(--fl-editor-hex-bg, var(--fl-surface));
 }
 
 .fleditor-terminal-wrap {
@@ -306,7 +314,7 @@ body {
   max-height: 65%;
   overflow: hidden;
   border-top: 1px solid var(--fl-border);
-  background: var(--fl-panel-bg);
+  background: var(--fl-xterm-bg, var(--fl-surface));
 }
 
 .fleditor-splitter--east {

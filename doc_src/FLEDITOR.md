@@ -184,6 +184,15 @@ Runs `test/fleditor/hex_roundtrip.mjs`, `hex_project_smoke.mjs`, and `hex_grid.m
 
 Layout prefs: `localStorage` key `flatl-fleditor-layout`.
 
+### Settings
+
+- Toolbar **⚙ Settings** (right of **Docs**) opens a modal: **Display**, **Editor**, **Terminal** (nav left, content right).
+- **Display:** theme preset (**Dark**, **Light**, **Carbon**, **Turquoise Gray**, **Custom**, plus **My themes** you save). Colors apply live to chrome, **Project panel** (sidebar only), **Fl editor** + **FlatL syntax**, **Text editor**, **Hex editor**, and **Terminal**. Project panel background does not paint the editor area. Any manual color edit switches to **Custom**. **Save as new theme…** / **Delete theme** (user themes only) / **Reset to Dark**.
+- **Editor:** font size, line numbers, tab size, word wrap (`flatl-fleditor-editor-prefs`).
+- **Terminal:** font size, **Clear on Run** (`flatl-fleditor-terminal-prefs`).
+- Theme state: `localStorage` key **`flatl-fleditor-theme`**. Does not change project files or panel layout reset (↺).
+- **About:** fleditor UI version and **flatL WASM** toolchain version (after `make fleditor-wasm`). **Reset all settings** — theme + editor + terminal prefs only (not project or dock layout ↺).
+
 ## Limits
 
 - Optional natives static-linked in WASM when declared with `use native`.

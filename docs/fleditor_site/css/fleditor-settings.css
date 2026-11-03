@@ -1,0 +1,211 @@
+.fleditor-settings-btn {
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.35rem 0.65rem !important;
+  min-width: 2.25rem;
+}
+
+.fleditor-settings-modal {
+  width: min(920px, 96vw);
+  max-width: 96vw;
+  max-height: min(88vh, 720px);
+  padding: 0;
+  border: 1px solid var(--fl-border);
+  border-radius: 6px;
+  background: var(--fl-surface);
+  color: var(--fl-text);
+}
+
+.fleditor-settings-modal::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.fleditor-settings-shell {
+  display: flex;
+  min-height: min(72vh, 560px);
+  max-height: min(88vh, 680px);
+}
+
+.fleditor-settings-nav {
+  flex: 0 0 11rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.75rem 0.5rem;
+  border-right: 1px solid var(--fl-border);
+  background: var(--fl-bg);
+}
+
+.fleditor-settings-nav-btn {
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: var(--fl-text-muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.65rem;
+}
+
+.fleditor-settings-nav-btn:hover {
+  color: var(--fl-text);
+  background: rgba(230, 220, 200, 0.06);
+}
+
+.fleditor-settings-nav-btn--active {
+  color: var(--fl-text);
+  background: rgba(90, 122, 74, 0.22);
+  font-weight: 600;
+}
+
+.fleditor-settings-main {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.fleditor-settings-head {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem 0.5rem;
+  border-bottom: 1px solid var(--fl-border);
+}
+
+.fleditor-settings-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.fleditor-settings-body {
+  flex: 1 1 0;
+  overflow: auto;
+  padding: 0.85rem 1rem 1rem;
+  font-size: 0.875rem;
+}
+
+.fleditor-settings-section[hidden] {
+  display: none !important;
+}
+
+.fleditor-settings-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.fleditor-settings-field label {
+  flex: 0 0 auto;
+  min-width: 6rem;
+  color: var(--fl-text-muted);
+}
+
+.fleditor-settings-field select,
+.fleditor-settings-field input[type='number'],
+.fleditor-settings-field input[type='text'] {
+  background: var(--fl-bg);
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  color: var(--fl-text);
+  font-size: 0.875rem;
+  padding: 0.35rem 0.5rem;
+}
+
+.fleditor-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.fleditor-settings-hint {
+  margin: 0 0 0.75rem;
+  color: var(--fl-text-muted);
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.fleditor-settings-token-group {
+  margin-bottom: 0.65rem;
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  background: var(--fl-bg);
+}
+
+.fleditor-settings-token-group summary {
+  cursor: pointer;
+  padding: 0.45rem 0.65rem;
+  font-weight: 600;
+  color: var(--fl-text-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.fleditor-settings-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  padding: 0.35rem 0.65rem;
+  border-top: 1px solid var(--fl-border);
+  font-size: 0.8rem;
+}
+
+.fleditor-settings-token-row label {
+  flex: 1 1 8rem;
+  min-width: 6rem;
+  color: var(--fl-text);
+}
+
+.fleditor-settings-token-row input[type='color'] {
+  width: 2rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 1px solid var(--fl-border);
+  background: transparent;
+  cursor: pointer;
+}
+
+.fleditor-settings-token-row input[type='text'] {
+  width: 5.5rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+}
+
+.fleditor-settings-foot {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid var(--fl-border);
+  background: var(--fl-surface);
+}
+
+.fleditor-settings-foot .fleditor-io-btn {
+  min-width: 5rem;
+}
+
+.fleditor-settings-about-dl {
+  margin: 0 0 1rem;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.35rem 1rem;
+  font-size: 0.875rem;
+}
+
+.fleditor-settings-about-dl dt {
+  margin: 0;
+  color: var(--fl-text-muted);
+  font-weight: 600;
+}
+
+.fleditor-settings-about-dl dd {
+  margin: 0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  color: var(--fl-text);
+}
