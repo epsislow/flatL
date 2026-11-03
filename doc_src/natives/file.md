@@ -1,6 +1,6 @@
 # Native module `file`
 
-**File handles** and byte/line I/O. **Core** — always linked into `flvm` / `flatl` (like **`io`** / **`mem`**). Handles are opaque values (printed as `<file>`); they are not exposed as numbers.
+**File handles** and byte/line I/O. **Core** — always linked into `flvm` / `flatl` (like **`io`** / **`mem`**). Handles are opaque values (printed as `<file>`); they are not exposed as numbers. Stream I/O: [io.md](./io.md).
 
 Paths are STRING (inline or REF). Tests often use **`cd {tmp}`** in `case.toml` so relative paths resolve next to the compiled `.fb`.
 
@@ -37,6 +37,8 @@ All open handles are closed on VM exit.
 
 ## With `io.ctx*`
 
+See [IO_CONTEXTS.md](../IO_CONTEXTS.md).
+
 ```text
 fp = file.readCtx('input.txt')
 io.ctxin(fp)
@@ -55,6 +57,6 @@ file.close(fp)
 
 ## Related
 
-- [IO.md](../IO.md) §1.1 — context redirect rules  
+- [IO_CONTEXTS.md](../IO_CONTEXTS.md) — `io.ctx*` redirect rules  
 - [mem.md](./mem.md) — `mem.ref_empty()` for in-memory capture  
 - Implementation: `src/lib/mod_file.c`, `src/common/flat_file.c`

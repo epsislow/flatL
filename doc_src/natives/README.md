@@ -1,6 +1,6 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**. String API: [str.md](./str.md).
+**Core natives** (`io`, `json`, `str`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
 
 **Optional natives** extend the VM (for example trigonometry). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
@@ -47,6 +47,17 @@ The token after **`with`** must **not** equal any **module id**: `io`, `str`, `j
 ## `io.docs`
 
 Uses the **`use native` table of the file where the call appears** (not program-wide). **`io.docs('mem')`**, **`io.docs('list')`**, or a **local alias** (`io.docs('trig')`) when declared in that file. Same-file union for shared **`kit`**. Alias unknown in that file → **`unknown module`**. See [IO.md §2.1](../IO.md#21-introspection-iodocs).
+
+## Core modules (documented)
+
+| Module | Doc |
+|--------|-----|
+| `io` | [io.md](./io.md) — behavior [IO.md](../IO.md) |
+| `io.ctx*` | [IO_CONTEXTS.md](../IO_CONTEXTS.md) |
+| `json` | [json.md](./json.md) — [IO_COLLECTIONS.md](../IO_COLLECTIONS.md) |
+| `file` | [file.md](./file.md) |
+| `str` | [str.md](./str.md) |
+| `mem` | [mem.md](./mem.md) |
 
 ## Optional modules (documented)
 

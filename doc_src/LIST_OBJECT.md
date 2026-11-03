@@ -19,6 +19,8 @@ Optional natives: **`list.*`**, **`obj.*`** — see [natives/list.md](./natives/
 
 ## 2. JSON module (`json.*`)
 
+Reference: [natives/json.md](./natives/json.md).
+
 | Call | Role |
 |------|------|
 | `json.parse(s)` | Any JSON value; **`json.parse('')` → null** |

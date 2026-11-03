@@ -6,15 +6,19 @@
     { "id": "toolchain", "label": "Toolchain", "file": "TOOLCHAIN.md" },
     { "id": "portability", "label": "Portability", "file": "PORTABILITY.md" },
     { "id": "io", "label": "I/O", "file": "IO.md" },
+    { "id": "io-contexts", "label": "I/O contexts", "file": "IO_CONTEXTS.md" },
     { "id": "io-collections", "label": "I/O collections", "file": "IO_COLLECTIONS.md" },
     { "id": "list-object", "label": "LIST / OBJECT guide", "file": "LIST_OBJECT.md" },
     { "id": "natives", "label": "Optional natives", "file": "natives/README.md" },
+    { "id": "io-native", "label": "Native io", "file": "natives/io.md" },
+    { "id": "json-native", "label": "Native json", "file": "natives/json.md" },
     { "id": "math", "label": "Native math", "file": "natives/math.md" },
     { "id": "math-trig", "label": "Native math.trig", "file": "natives/math.trig.md" },
     { "id": "math-stats", "label": "Native math.stats", "file": "natives/math.stats.md" },
     { "id": "list-native", "label": "Native list", "file": "natives/list.md" },
     { "id": "str-native", "label": "Native str", "file": "natives/str.md" },
     { "id": "obj-native", "label": "Native obj", "file": "natives/obj.md" },
-    { "id": "mem-native", "label": "Native mem", "file": "natives/mem.md" }
+    { "id": "mem-native", "label": "Native mem", "file": "natives/mem.md" },
+    { "id": "file-native", "label": "Native file", "file": "natives/file.md" }
   ]
 }

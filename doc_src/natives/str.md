@@ -8,8 +8,6 @@ use native str with S
 
 Then both `str.len('x')` and `S.len('x')` work.
 
-Parsing helpers **`str.to_num`** / **`str.to_bool`** are also documented in [IO.md](../IO.md) §5 (same silent-fail rules on assign / `->`).
-
 ## Syntax
 
 | Form | Example |
@@ -47,18 +45,28 @@ Most mutating-style operations (**`concat`**, **`slice`**, **`trim`**, **`lower`
 
 ## Error behavior
 
-On **`… -> var`** or **`var = …`**, if a handler rejects arguments (wrong type, out-of-range slice, empty split separator, overflow past **`FLAT_POOL_MAX_CHUNK`**, etc.), the assign **fails silently**: **`var`** is unchanged. This matches **`str.to_num`** / **`io.in_num`** (see [IO.md](../IO.md)).
+On **`… -> var`** or **`var = …`**, if a handler rejects arguments (wrong type, out-of-range slice, empty split separator, overflow past **`FLAT_POOL_MAX_CHUNK`**, etc.), the assign **fails silently**: **`var`** is unchanged. This matches **`str.to_num`** / **`io.in_num`** (see [IO.md](../IO.md) §3–§5).
 
 There is **no** PANIC path for `str.*` today.
 
 ## Function reference
 
-### Conversions
+### Conversions (`str.to_*`)
+
+No stdin. Invalid parse on **`->`** / **`=`** → **fails silently** (variable unchanged); no PANIC. Same rules apply when **`io.in_num`** / **`io.in_bool`** parse a line ([IO.md](../IO.md) §3–§5).
 
 | Call | Args | Returns | Description |
 |------|------|---------|-------------|
 | `to_num(s)` | 1 STRING | NUMBER | Parse decimal integer/float (`strtod` rules); invalid → silent fail |
-| `to_bool(s)` | 1 STRING | BOOL | Trim; ASCII tokens per [IO.md](../IO.md) §6; invalid → silent fail |
+| `to_bool(s)` | 1 STRING | BOOL | Trim; tokens per table below; invalid → silent fail |
+
+#### BOOL tokens (for `to_bool` / `io.in_bool`)
+
+Single token after trim, ASCII case-insensitive:
+
+| true | false |
+|------|-------|
+| `true`, `t`, `yes`, `y`, `on`, `1` | `false`, `f`, `no`, `n`, `off`, `0` |
 
 ```text
 #main

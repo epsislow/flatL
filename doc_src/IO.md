@@ -1,7 +1,13 @@
-# flatL — I/O (`io.*`, `str.to_*`)
+# flatL — I/O (`io.*`)
 
-Normative behavior for program **stdout/stdin** and host **stderr** debug.  
-Implementation status: **v0.5** — natives in **`src/lib/`** registry; **`io.ctx*`** redirect; module **`file.*`**. Bytecode **`OP_NATIVE`** (id + args). Legacy **`OP_IO`** still decoded for old `.fb`.
+Normative behavior for program **stdout/stdin**, **`io.in*`**, and host **stderr** debug.  
+Implementation status: **v0.5** — natives in **`src/lib/`** registry. Bytecode **`OP_NATIVE`** (id + args). Legacy **`OP_IO`** still decoded for old `.fb`.
+
+**Native API (all `io.*` calls):** [natives/io.md](./natives/io.md).  
+**I/O contexts** (`io.ctxin` / `io.ctxout` / `io.ctxerr`): [IO_CONTEXTS.md](./IO_CONTEXTS.md).  
+**String parsing** (`str.to_num`, `str.to_bool`, …): [natives/str.md](./natives/str.md).  
+**JSON & collection I/O:** [natives/json.md](./natives/json.md), [IO_COLLECTIONS.md](./IO_COLLECTIONS.md).  
+**File handles:** [natives/file.md](./natives/file.md).
 
 See also: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (types), [TOOLCHAIN.md](./TOOLCHAIN.md) (`flvm --trace`), plan [.cursor/plans/debug-io.plan.md](../.cursor/plans/debug-io.plan.md).
 
@@ -17,47 +23,7 @@ See also: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (types), [TOOLCHAIN.md](./TOO
 
 Recovered PANIC (handler `#panic.*` / `#panic.any`) does **not** log to stderr by default.
 
-**Program stderr (logical):** `io.err` / `io.errln` write to **`ctxerr`** (default **`terr`** = host stderr). This is separate from **`flvm --trace`** on host stderr.
-
-### 1.1 I/O contexts (`io.ctx*`)
-
-Three **independent** redirects; defaults at VM start: **`tin`** / **`tout`** / **`terr`**.
-
-| Call | Selects source/sink for |
-|------|-------------------------|
-| `io.ctxin(source)` | `io.in*` |
-| `io.ctxout(destination)` | `io.out*` / `io.outvar` |
-| `io.ctxerr(destination)` | `io.err*` |
-
-| Token | Role |
-|-------|------|
-| **`tin`** | Host stdin (WASM: editor input) |
-| **`tout`** | Host stdout |
-| **`terr`** | Host stderr (program errors) |
-
-| Target | `ctxin` | `ctxout` / `ctxerr` |
-|--------|---------|---------------------|
-| String literal | one line per `io.inln` | invalid on `ctxin` only |
-| Inline STRING var | snapshot at `ctxin()` | snapshot buffer (≤127 B append) |
-| STRING REF var | read from ref | **append** (`io.out*` text) |
-| **`file`** handle | `file.readln` / byte read via `io.inln` | write formatted bytes to file |
-| **`tin` / `tout` / `terr`** | reset to terminal | reset to terminal |
-
-Invalid pairing (e.g. `io.ctxin(tout)`) → **PANIC** `io.context`.  
-If a **REF** variable bound to `ctxout` / `ctxerr` is **`free`d** or reassigned while active → **PANIC** `io.ctx_stale` (context resets before handler runs).
-
-Capture example (prefer **`mem.ref_empty()`** over test-only **`__ref__`**):
-
-```text
-buf = mem.ref_empty()
-io.ctxout(buf)
-io.out('Hello ')
-io.out('flatL')
-io.ctxout(tout)
-io.outln(buf)
-```
-
-See [natives/file.md](./natives/file.md) for **`file.*`** and `io.ctxin(fp)`.
+**Program stderr (logical):** `io.err` / `io.errln` write to **`ctxerr`** (default **`terr`** = host stderr). Redirects: [IO_CONTEXTS.md](./IO_CONTEXTS.md). This is separate from **`flvm --trace`** on host stderr.
 
 ---
 
@@ -139,6 +105,8 @@ io.inln('Name:') -> name
 io.in_num('Price:') -> price
 ```
 
+For parsing rules shared with **`str.to_num`** / **`str.to_bool`**, see [natives/str.md](./natives/str.md).
+
 ---
 
 ## 4. Binding results (`->` and `=`)
@@ -147,14 +115,19 @@ Preferred:
 
 ```text
 io.inln() -> line
-str.to_num(raw) -> n
 ```
 
 Equivalent:
 
 ```text
 line = io.inln()
-n = str.to_num(raw)
+```
+
+Parse STRING to NUMBER/BOOL with **`str.to_num`** / **`str.to_bool`** ([natives/str.md](./natives/str.md)):
+
+```text
+raw = io.inln()
+str.to_num(raw) -> n
 ```
 
 **`OP_NATIVE` payload:** `uint16` native id, then argument string (paren contents) `\0`, then optional bind name `\0`.  
@@ -162,30 +135,7 @@ Registry: `include/flat_native.h`, table in `src/lib/native_registry.c`, handler
 
 ---
 
-## 5. Conversions (`str.to_*`)
-
-| Call | Input | Output |
-|------|--------|--------|
-| `str.to_num(s)` | STRING | NUMBER |
-| `str.to_bool(s)` | STRING | BOOL |
-
-No stdin. Invalid parse → assign/`->` **fails silently** (variable unchanged); no PANIC.
-
-Other **`str.*`** functions (`len`, `slice`, `concat`, `split`, …) share the same silent-fail assign behavior and are documented in [natives/str.md](./natives/str.md).
-
----
-
-## 6. BOOL tokens (no truthy)
-
-Single token after trim, ASCII case-insensitive:
-
-| true | false |
-|------|-------|
-| `true`, `t`, `yes`, `y`, `on`, `1` | `false`, `f`, `no`, `n`, `off`, `0` |
-
----
-
-## 7. Cancel / EOF (`io.in*` only)
+## 5. Cancel / EOF (`io.in*` only)
 
 Not mapped to `false`, `0`, or `''`. Triggers **PANIC** → `#panic.any` if present.
 
@@ -200,11 +150,11 @@ Not mapped to `false`, `0`, or `''`. Triggers **PANIC** → `#panic.any` if pres
 
 **Not cancel:** typing `cancel` into `io.inln` returns STRING `cancel`.
 
-Invalid NUMBER/BOOL line on `io.in_num` / `io.in_bool` → PANIC `io.parse` (when not caught).
+Invalid NUMBER/BOOL line on `io.in_num` / `io.in_bool` → PANIC `io.parse` (when not caught). BOOL token rules: [natives/str.md](./natives/str.md#bool-tokens-for-to_bool--ioin_bool).
 
 ---
 
-## 8. Host debug
+## 6. Host debug
 
 ```bash
 bin/flvm --trace program.fb
@@ -217,7 +167,7 @@ Unhandled PANIC: stderr `flvm: unhandled panic: …` and exit **1**.
 
 ---
 
-## 9. Tests
+## 7. Tests
 
 Suite **`test/cases/io/`** — 30 pipeline cases (`stdout_contains`, stdin via `printf … | flvm` in `case.toml`).
 
@@ -232,19 +182,10 @@ Catalog source: **`src/io_generate_tests/main.c`**. Output directories are **com
 
 ---
 
-## 10. Collections & JSON (v0.4)
+## 8. Collections & JSON (v0.4)
 
 - **`io.in_list` / `io.in_object` / `io.in_bools`**, **`json.*`** — [IO_COLLECTIONS.md](./IO_COLLECTIONS.md), guide [LIST_OBJECT.md](./LIST_OBJECT.md), tests `test/cases/json/`
 
-## 11. Tests (contexts & file)
-
-| Suite | Path |
-|-------|------|
-| I/O contexts | `test/cases/io_ctx/` |
-| File module | `test/cases/file/` |
-| `mem.ref_*` | `test/cases/memory/006_mem_ref_empty/` |
-
-## 12. Not planned (v0.5)
+## 9. Not planned (v0.5)
 
 - `io.inln_allow_empty`, `str.try_to_*`
-- HTTP / network streams as `io.ctx*` targets

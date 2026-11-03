@@ -3,7 +3,7 @@
 **Status:** **implemented** in VM (v0.4) — `src/common/value_json.c`, tests in `test/cases/json/`.  
 Builds on [IO.md](./IO.md) (streams, prompts, `->`, PANIC on `io.in*`) and [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (LIST/OBJECT).
 
-When implemented, natives live under **`json.*`** and **`io.in_list` / `io.in_object` / `io.in_bools`**.
+Native call tables: [natives/json.md](./natives/json.md), [natives/io.md](./natives/io.md) (`io.in_list` / `io.in_object` / `io.in_bools`).
 
 ---
 
