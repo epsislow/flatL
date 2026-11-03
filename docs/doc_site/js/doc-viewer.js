@@ -196,15 +196,15 @@
           rows.push(parseRow(lines[i]));
           i++;
         }
+        html.push('<div class="docs-table-wrap"><table><thead><tr>');
         html.push(
-          '<table><thead><tr>' +
-            headers
-              .map(function (h) {
-                return '<th>' + inlineFormat(h) + '</th>';
-              })
-              .join('') +
-            '</tr></thead><tbody>'
+          headers
+            .map(function (h) {
+              return '<th>' + inlineFormat(h) + '</th>';
+            })
+            .join('')
         );
+        html.push('</tr></thead><tbody>');
         rows.forEach(function (r) {
           html.push(
             '<tr>' +
@@ -216,7 +216,7 @@
               '</tr>'
           );
         });
-        html.push('</tbody></table>');
+        html.push('</tbody></table></div>');
         continue;
       }
 

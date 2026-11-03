@@ -13,12 +13,19 @@
   box-sizing: border-box;
 }
 
+html {
+  overflow-x: auto;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.55;
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .docs-header {
@@ -80,6 +87,9 @@ body {
 .docs-layout {
   display: flex;
   min-height: calc(100vh - 5rem);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .docs-toc {
@@ -116,9 +126,14 @@ body {
 
 .docs-content {
   flex: 1;
+  min-width: 0;
   padding: 1.25rem 2rem 3rem;
   max-width: 52rem;
+  overflow-x: auto;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .docs-content h1,
@@ -144,6 +159,8 @@ body {
   border-radius: 6px;
   padding: 0.75rem 1rem;
   overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
   font-size: 0.88rem;
 }
 
@@ -158,6 +175,25 @@ body {
 .docs-content pre code {
   background: transparent;
   padding: 0;
+  white-space: pre;
+  word-break: normal;
+}
+
+.docs-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  margin: 0.75rem 0;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.docs-table-wrap table {
+  border-collapse: collapse;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  font-size: 0.92rem;
 }
 
 .docs-content table {
@@ -211,6 +247,7 @@ body {
   .docs-layout {
     flex-direction: column;
     min-height: auto;
+    overflow-x: auto;
   }
 
   .docs-toc {
@@ -235,23 +272,16 @@ body {
   .docs-content {
     flex: none;
     width: 100%;
-    max-width: none;
+    max-width: 100%;
     padding: 1rem max(1rem, env(safe-area-inset-right, 0px)) 2.5rem
       max(1rem, env(safe-area-inset-left, 0px));
-    overflow-x: hidden;
+    overflow-x: auto;
     overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   .docs-content h1 {
     font-size: 1.45rem;
-  }
-
-  .docs-content table {
-    display: block;
-    width: max-content;
-    min-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
   }
 
   .docs-content pre {

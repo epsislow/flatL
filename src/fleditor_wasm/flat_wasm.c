@@ -19,12 +19,12 @@
 static int g_last_termination;
 
 static struct {
-    uint64_t max_jumps;
-    uint64_t max_steps;
+    unsigned max_jumps;
+    unsigned max_steps;
     int no_jump_limit;
 } g_wasm_run_limits;
 
-void flat_wasm_set_run_limits(uint64_t max_jumps, uint64_t max_steps, int no_jump_limit) {
+void flat_wasm_set_run_limits(unsigned max_jumps, unsigned max_steps, int no_jump_limit) {
     g_wasm_run_limits.max_jumps = max_jumps;
     g_wasm_run_limits.max_steps = max_steps;
     g_wasm_run_limits.no_jump_limit = no_jump_limit ? 1 : 0;

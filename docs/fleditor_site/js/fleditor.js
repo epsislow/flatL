@@ -1888,22 +1888,15 @@
 
   function applyWasmRunLimits(Module) {
     const p = FleditorSettings.getTerminalPrefs();
-    const maxJumps = p.maxJumps || 0;
-    const maxSteps = p.maxSteps || 0;
+    const maxJumps = (p.maxJumps >>> 0) || 0;
+    const maxSteps = (p.maxSteps >>> 0) || 0;
     const noJump = p.noJumpLimit ? 1 : 0;
-    if (typeof Module._flat_wasm_set_run_limits === 'function') {
-      Module._flat_wasm_set_run_limits(maxJumps, maxSteps, noJump);
-      return;
-    }
     try {
-      const setLimits = Module.cwrap('flat_wasm_set_run_limits', null, [
-        'number',
-        'number',
-        'number',
-      ]);
-      setLimits(maxJumps, maxSteps, noJump);
+      if (typeof Module._flat_wasm_set_run_limits === 'function') {
+        Module._flat_wasm_set_run_limits(maxJumps, maxSteps, noJump);
+      }
     } catch (_e) {
-      /* older wasm without export */
+      /* older wasm without export or signature mismatch */
     }
   }
 
