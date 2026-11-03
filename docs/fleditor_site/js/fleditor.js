@@ -42,7 +42,11 @@
   const binaryImportFile = document.getElementById('binaryImportFile');
   const newFileBtn = document.getElementById('newFileBtn');
   const newFolderBtn = document.getElementById('newFolderBtn');
+  const mainLayout = document.querySelector('.fleditor-main');
   const projectPanel = document.getElementById('projectPanel');
+  const projectPanelResize = document.getElementById('projectPanelResize');
+  const editorPanelResize = document.getElementById('editorPanelResize');
+  const terminalPanelResize = document.getElementById('terminalPanelResize');
   const terminalPanel = document.getElementById('terminalPanel');
   const workPanel = document.getElementById('workPanel');
   const projectPanelToggle = document.getElementById('projectPanelToggle');
@@ -216,19 +220,112 @@
     }
   }
 
+  const stackLayoutMq = window.matchMedia('(max-aspect-ratio: 1/1)');
+
+  function isStackLayout() {
+    return stackLayoutMq.matches;
+  }
+
+  function syncLayoutModeClass() {
+    const stack = isStackLayout();
+    document.documentElement.classList.toggle('fleditor-layout--stack', stack);
+    document.documentElement.classList.toggle('fleditor-layout--row', !stack);
+  }
+
+  function workPanelHeightPx() {
+    if (!workPanel) {
+      return 480;
+    }
+    const h = workPanel.getBoundingClientRect().height;
+    return h > 0 ? h : 480;
+  }
+
+  function stackTerminalHeightPx() {
+    const workH = workPanelHeightPx();
+    if (typeof layoutState.stackTerminalHeightPx === 'number') {
+      return L.clampStackTerminalHeightPx(layoutState.stackTerminalHeightPx, workH);
+    }
+    return L.clampStackTerminalHeightPx(layoutState.terminalFraction * workH, workH);
+  }
+
+  function captureStackTerminalHeightFromDom() {
+    if (!terminalPanel || !layoutState.terminalOpen) {
+      return;
+    }
+    const h = terminalPanel.getBoundingClientRect().height;
+    if (h > 8) {
+      layoutState.stackTerminalHeightPx = L.clampStackTerminalHeightPx(h, workPanelHeightPx());
+    }
+  }
+
+  function syncLayoutModeTerminalSizing(fromStack, toStack) {
+    if (!layoutState.terminalOpen || !terminalPanel || !workPanel) {
+      return;
+    }
+    if (toStack && !fromStack) {
+      captureStackTerminalHeightFromDom();
+    } else if (!toStack && fromStack) {
+      const workH = workPanelHeightPx();
+      const px =
+        typeof layoutState.stackTerminalHeightPx === 'number'
+          ? layoutState.stackTerminalHeightPx
+          : terminalPanel.getBoundingClientRect().height;
+      layoutState.terminalFraction = L.clampFraction(px / workH);
+    }
+  }
+
+  function applyTerminalPanelSizing(stack) {
+    if (!terminalPanel || !workPanel) {
+      return;
+    }
+    if (layoutState.terminalOpen) {
+      if (stack) {
+        const px = stackTerminalHeightPx();
+        terminalPanel.style.flexBasis = px + 'px';
+      } else {
+        const pct = Math.round(layoutState.terminalFraction * 1000) / 10;
+        terminalPanel.style.flexBasis = pct + '%';
+      }
+      terminalPanel.style.flexGrow = '0';
+      terminalPanel.style.flexShrink = '0';
+    } else {
+      terminalPanel.style.flexBasis = '';
+      terminalPanel.style.flexGrow = '';
+      terminalPanel.style.flexShrink = '';
+    }
+  }
+
   function applyLayout() {
+    syncLayoutModeClass();
+    const stack = isStackLayout();
     if (projectPanel) {
       projectPanel.hidden = !layoutState.projectOpen;
+      if (layoutState.projectOpen) {
+        if (stack) {
+          projectPanel.style.width = '100%';
+          const stackPct = Math.round(layoutState.stackProjectFraction * 1000) / 10;
+          projectPanel.style.flexBasis = stackPct + '%';
+          projectPanel.style.flexGrow = '0';
+          projectPanel.style.flexShrink = '0';
+        } else {
+          projectPanel.style.flexBasis = '';
+          projectPanel.style.flexGrow = '';
+          projectPanel.style.flexShrink = '0';
+          projectPanel.style.width = layoutState.projectWidthPx + 'px';
+        }
+      } else {
+        projectPanel.style.width = '';
+        projectPanel.style.flexBasis = '';
+      }
+    }
+    if (projectPanelResize) {
+      projectPanelResize.hidden =
+        stack || !layoutState.projectOpen;
     }
     if (terminalPanel && workPanel) {
       terminalPanel.hidden = !layoutState.terminalOpen;
       workPanel.classList.toggle('fleditor-work--no-terminal', !layoutState.terminalOpen);
-      if (layoutState.terminalOpen) {
-        const pct = Math.round(layoutState.terminalFraction * 1000) / 10;
-        terminalPanel.style.flexBasis = pct + '%';
-      } else {
-        terminalPanel.style.flexBasis = '';
-      }
+      applyTerminalPanelSizing(stack);
     }
     syncDock();
     scheduleLayoutRefresh();
@@ -1844,8 +1941,205 @@
     }
   }
 
+  function initPanelResizers() {
+    /** @type {null | (() => void)} */
+    let cancelActiveDrag = null;
+
+    function releasePointerSafe(el, pointerId) {
+      if (!el || typeof el.hasPointerCapture !== 'function') {
+        return;
+      }
+      try {
+        if (el.hasPointerCapture(pointerId)) {
+          el.releasePointerCapture(pointerId);
+        }
+      } catch (_e) {
+        /* ignore */
+      }
+    }
+
+    function stopActiveDrag() {
+      if (cancelActiveDrag) {
+        cancelActiveDrag();
+        cancelActiveDrag = null;
+      }
+    }
+
+    function startPointerDrag(e, captureEl, onMove, onEnd) {
+      stopActiveDrag();
+      const pointerId = e.pointerId;
+      if (captureEl && captureEl.setPointerCapture) {
+        try {
+          captureEl.setPointerCapture(pointerId);
+        } catch (_err) {
+          /* ignore */
+        }
+      }
+      document.body.classList.add('fleditor-resize-active');
+      if (captureEl) {
+        captureEl.classList.add('fleditor-splitter--active');
+      }
+
+      function cleanup() {
+        document.removeEventListener('pointermove', onPointerMove);
+        document.removeEventListener('pointerup', onPointerUp);
+        document.removeEventListener('pointercancel', onPointerUp);
+        window.removeEventListener('blur', onWindowBlur);
+        document.body.classList.remove('fleditor-resize-active');
+        if (captureEl) {
+          captureEl.classList.remove('fleditor-splitter--active');
+        }
+        releasePointerSafe(captureEl, pointerId);
+        cancelActiveDrag = null;
+      }
+
+      function onPointerMove(ev) {
+        if (ev.pointerId !== pointerId) {
+          return;
+        }
+        if (ev.pointerType === 'mouse' && ev.buttons === 0) {
+          onPointerUp(ev);
+          return;
+        }
+        onMove(ev.clientX, ev.clientY);
+      }
+
+      function onPointerUp(ev) {
+        if (ev.pointerId !== pointerId) {
+          return;
+        }
+        cleanup();
+        if (onEnd) {
+          onEnd();
+        }
+      }
+
+      function onWindowBlur() {
+        cleanup();
+        if (onEnd) {
+          onEnd();
+        }
+      }
+
+      document.addEventListener('pointermove', onPointerMove);
+      document.addEventListener('pointerup', onPointerUp);
+      document.addEventListener('pointercancel', onPointerUp);
+      window.addEventListener('blur', onWindowBlur);
+      cancelActiveDrag = cleanup;
+    }
+
+    function isInteractiveTarget(el) {
+      return !!(el && el.closest && el.closest('button, a, input, textarea, select'));
+    }
+
+    if (projectPanelResize && mainLayout && projectPanel) {
+      projectPanelResize.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0 || isStackLayout() || !layoutState.projectOpen) {
+          return;
+        }
+        e.preventDefault();
+        const mainRect = mainLayout.getBoundingClientRect();
+        const maxW = Math.min(560, Math.floor(mainRect.width * 0.55));
+        startPointerDrag(
+          e,
+          projectPanelResize,
+          function (clientX) {
+            const w = L.clampProjectWidthPx(Math.min(maxW, clientX - mainRect.left));
+            layoutState.projectWidthPx = w;
+            projectPanel.style.width = w + 'px';
+            scheduleLayoutRefresh();
+          },
+          function () {
+            persistLayout();
+          }
+        );
+      });
+    }
+
+    if (editorPanelResize && mainLayout) {
+      editorPanelResize.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0 || !isStackLayout() || isInteractiveTarget(e.target)) {
+          return;
+        }
+        e.preventDefault();
+        if (layoutState.terminalOpen) {
+          captureStackTerminalHeightFromDom();
+        }
+        const lockedTerminalPx = layoutState.terminalOpen ? stackTerminalHeightPx() : null;
+        const mainRect = mainLayout.getBoundingClientRect();
+        startPointerDrag(
+          e,
+          editorPanelResize,
+          function (_x, clientY) {
+            const frac = L.clampStackProjectFraction((clientY - mainRect.top) / mainRect.height);
+            layoutState.stackProjectFraction = frac;
+            const stackPct = Math.round(frac * 1000) / 10;
+            if (projectPanel) {
+              projectPanel.style.flexBasis = stackPct + '%';
+            }
+            if (lockedTerminalPx != null && terminalPanel) {
+              terminalPanel.style.flexBasis = lockedTerminalPx + 'px';
+              terminalPanel.style.flexGrow = '0';
+              terminalPanel.style.flexShrink = '0';
+            }
+            scheduleLayoutRefresh();
+          },
+          function () {
+            persistLayout();
+          }
+        );
+      });
+    }
+
+    if (terminalPanelResize && workPanel && terminalPanel) {
+      terminalPanelResize.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0 || !layoutState.terminalOpen || isInteractiveTarget(e.target)) {
+          return;
+        }
+        e.preventDefault();
+        const stack = isStackLayout();
+        startPointerDrag(
+          e,
+          terminalPanelResize,
+          function (_x, clientY) {
+            const workRect = workPanel.getBoundingClientRect();
+            if (stack) {
+              const px = L.clampStackTerminalHeightPx(workRect.bottom - clientY, workRect.height);
+              layoutState.stackTerminalHeightPx = px;
+              terminalPanel.style.flexBasis = px + 'px';
+            } else {
+              const frac = L.clampFraction((workRect.bottom - clientY) / workRect.height);
+              layoutState.terminalFraction = frac;
+              const pct = Math.round(frac * 1000) / 10;
+              terminalPanel.style.flexBasis = pct + '%';
+            }
+            scheduleLayoutRefresh();
+          },
+          function () {
+            persistLayout();
+          }
+        );
+      });
+    }
+
+    if (typeof stackLayoutMq.addEventListener === 'function') {
+      stackLayoutMq.addEventListener('change', function () {
+        const nowStack = isStackLayout();
+        syncLayoutModeTerminalSizing(!nowStack, nowStack);
+        applyLayout();
+      });
+    } else if (typeof stackLayoutMq.addListener === 'function') {
+      stackLayoutMq.addListener(function () {
+        const nowStack = isStackLayout();
+        syncLayoutModeTerminalSizing(!nowStack, nowStack);
+        applyLayout();
+      });
+    }
+  }
+
   function initLayoutControls() {
     applyLayout();
+    initPanelResizers();
     if (projectPanelToggle) {
       projectPanelToggle.addEventListener('click', () => setProjectOpen(false));
     }

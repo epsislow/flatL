@@ -121,6 +121,7 @@ body {
   min-height: 0;
   border-right: 1px solid var(--fl-border);
   background: var(--fl-surface);
+  position: relative;
 }
 
 .fleditor-sidebar[hidden] {
@@ -270,9 +271,59 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 45%;
+  max-height: 65%;
   overflow: hidden;
   border-top: 1px solid var(--fl-border);
+}
+
+.fleditor-splitter--east {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+
+.fleditor-splitter--east:hover,
+.fleditor-splitter--east.fleditor-splitter--active {
+  background: rgba(90, 122, 74, 0.35);
+}
+
+.fleditor-layout--stack .fleditor-splitter--east {
+  display: none;
+}
+
+.fleditor-panel-label--resize-ns {
+  touch-action: none;
+  user-select: none;
+}
+
+.fleditor-layout--stack .fleditor-editor-head .fleditor-panel-label--resize-ns {
+  cursor: ns-resize;
+}
+
+.fleditor-layout--stack .fleditor-terminal-wrap .fleditor-panel-label--resize-ns {
+  cursor: ns-resize;
+}
+
+.fleditor-layout--row .fleditor-terminal-wrap .fleditor-panel-label--resize-ns {
+  cursor: ns-resize;
+}
+
+.fleditor-layout--row .fleditor-editor-head .fleditor-panel-label--resize-ns {
+  cursor: default;
+}
+
+body.fleditor-resize-active {
+  user-select: none;
+  cursor: inherit;
+}
+
+body.fleditor-resize-active * {
+  cursor: inherit !important;
 }
 
 .fleditor-terminal-wrap[hidden] {
@@ -996,7 +1047,8 @@ body {
 
   .fleditor-sidebar {
     width: 100%;
-    max-height: 28vh;
+    max-height: none;
+    flex: 0 0 28%;
     border-right: none;
     border-bottom: 1px solid var(--fl-border);
   }

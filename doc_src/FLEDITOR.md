@@ -176,6 +176,7 @@ Runs `test/fleditor/hex_roundtrip.mjs`, `hex_project_smoke.mjs`, and `hex_grid.m
 - **Project** (left) and **Terminal (I/O)** (below editor) use **`[−]`** on the panel header to **minimize** (not destroy state).
 - Minimized panels appear on the **bottom dock** as **`[+]` Project** / **`[+]` Terminal** — click to restore.
 - **↺** on the bottom dock (after the restore buttons) **Reset layout** — default: Project open, terminal minimized; does not change your `.fl` files.
+- **Resize panels** (saved in layout prefs): wide screen — drag the **right edge** of Project; drag the **Terminal** title bar up/down. Narrow / stacked screen — drag the **editor** title bar (Project vs editor) and the **Terminal** title bar (editor vs terminal).
 - **Run** still opens the terminal if it was minimized.
 - **Undo** / **Redo** / **Save** / **Run** on the editor action bar; top toolbar is title, **Docs**, and status only.
 - **Clear** on the terminal panel tool row (below the Terminal title).

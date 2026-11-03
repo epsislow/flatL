@@ -42,6 +42,12 @@ if (m.terminalFraction !== 0.6) {
   process.exit(1);
 }
 
+const w = mergeLayout({ projectWidthPx: 900, stackProjectFraction: 0.9 });
+if (w.projectWidthPx !== 560 || w.stackProjectFraction !== 0.55) {
+  console.error('layout_smoke: size clamp failed', w);
+  process.exit(1);
+}
+
 const store = new MemStorage();
 saveLayout(store, { projectOpen: false, terminalOpen: true });
 const loaded = loadLayout(store);

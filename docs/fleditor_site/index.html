@@ -6,7 +6,7 @@
   <title>flatL fleditor</title>
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=7">
+  <link rel="stylesheet" href="css/fleditor.css?v=8">
   <link rel="stylesheet" href="css/fleditor-cm.css">
 </head>
 <body>
@@ -31,11 +31,14 @@
           <button type="button" id="newFolderBtn" class="fleditor-sidebar-btn" title="New folder">+dir</button>
         </div>
         <div id="fileTree" class="fleditor-tree" role="tree"></div>
+        <div id="projectPanelResize" class="fleditor-splitter fleditor-splitter--east" role="separator"
+          aria-orientation="vertical" aria-label="Resize project panel" tabindex="-1"></div>
       </aside>
       <div id="workPanel" class="fleditor-work fleditor-work--no-terminal">
         <section class="fleditor-editor-wrap">
           <div class="fleditor-editor-head">
-            <div class="fleditor-panel-label fleditor-panel-label--editor">
+            <div id="editorPanelResize" class="fleditor-panel-label fleditor-panel-label--editor fleditor-panel-label--resize-ns"
+              title="Drag to resize project panel">
               <span id="editorKindLabel" class="fleditor-editor-kind">Fl editor</span>
               <span id="editorPathLabel" class="fleditor-editor-path">No file open</span>
               <span id="dirtyBadge" class="fleditor-dirty" hidden title="Unsaved changes">●</span>
@@ -91,7 +94,8 @@
           </div>
         </section>
         <section id="terminalPanel" class="fleditor-terminal-wrap" hidden>
-          <div class="fleditor-panel-label">
+          <div id="terminalPanelResize" class="fleditor-panel-label fleditor-panel-label--resize-ns"
+            title="Drag to resize terminal">
             <span class="fleditor-panel-label-text">Terminal (I/O)</span>
             <div class="fleditor-panel-label-actions">
               <button type="button" id="terminalPanelToggle" class="fleditor-panel-toggle" title="Minimize terminal" aria-label="Minimize terminal">[−]</button>
@@ -199,6 +203,6 @@
   <script src="js/fleditor-hex-grid.js?v=6"></script>
   <script src="js/fleditor-project.js?v=3"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=39"></script>
+  <script src="js/fleditor.js?v=42"></script>
 </body>
 </html>
