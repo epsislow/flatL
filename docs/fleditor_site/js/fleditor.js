@@ -49,6 +49,7 @@
   const terminalPanelResize = document.getElementById('terminalPanelResize');
   const terminalPanel = document.getElementById('terminalPanel');
   const workPanel = document.getElementById('workPanel');
+  const editorWrap = document.getElementById('editorWrap');
   const projectPanelToggle = document.getElementById('projectPanelToggle');
   const terminalPanelToggle = document.getElementById('terminalPanelToggle');
   const dockRestoreProject = document.getElementById('dockRestoreProject');
@@ -475,6 +476,28 @@
     }
     if (grid) {
       grid.hidden = mode !== 'binary';
+    }
+    syncEditorWrapKind();
+  }
+
+  function syncEditorWrapKind() {
+    if (!editorWrap) {
+      return;
+    }
+    editorWrap.classList.remove(
+      'fleditor-editor-wrap--flatl',
+      'fleditor-editor-wrap--text',
+      'fleditor-editor-wrap--binary',
+      'fleditor-editor-wrap--idle'
+    );
+    if (!hasOpenFile()) {
+      editorWrap.classList.add('fleditor-editor-wrap--idle');
+    } else if (editorViewMode === 'binary') {
+      editorWrap.classList.add('fleditor-editor-wrap--binary');
+    } else if (editorViewMode === 'flatl') {
+      editorWrap.classList.add('fleditor-editor-wrap--flatl');
+    } else {
+      editorWrap.classList.add('fleditor-editor-wrap--text');
     }
   }
 
@@ -1212,6 +1235,7 @@
             row.appendChild(spacer);
           }
           label.textContent = node.name + '/';
+          label.classList.add('fleditor-tree-row-label--dir');
           label.addEventListener('click', function () {
             if (hasChildren) {
               toggleFolderExpanded(node.path);
@@ -1231,13 +1255,19 @@
           if (node.path === open) {
             row.classList.add('fleditor-tree-row--active');
           }
-          if (node.path === open && dirty) {
-            row.classList.add('fleditor-tree-row--dirty');
-          }
-          const isBin = P.isBinaryProjectFile(node.path, project.files[node.path]);
-          label.textContent = (isBin ? '⬡ ' : '') + node.name;
+          const kind = P.projectFileEditorKind(node.path, project.files[node.path]);
+          label.textContent = node.name;
+          label.classList.add('fleditor-tree-row-label--' + kind);
           row.tabIndex = 0;
           row.appendChild(label);
+          if (node.path === open && dirty) {
+            const dirtyMark = document.createElement('span');
+            dirtyMark.className = 'fleditor-tree-dirty';
+            dirtyMark.textContent = '●';
+            dirtyMark.title = 'Unsaved changes';
+            dirtyMark.setAttribute('aria-hidden', 'true');
+            row.appendChild(dirtyMark);
+          }
           addDeleteButton(row, 'Delete file', function () {
             requestDeleteFile(node.path);
           });

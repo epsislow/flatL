@@ -51,6 +51,17 @@ if (!P.isFlatlProjectFile('main.fl') || P.isFlatlProjectFile('data.txt')) {
   process.exit(1);
 }
 
+const binVal = P.bytesToProjectValueBinary(new Uint8Array([1]));
+if (
+  P.projectFileEditorKind('x.fl', '#main\n') !== 'flatl' ||
+  P.projectFileEditorKind('a.txt', 'x') !== 'text' ||
+  P.projectFileEditorKind('test', 'x') !== 'text' ||
+  P.projectFileEditorKind('x.bin', binVal) !== 'binary'
+) {
+  console.error('project_smoke: projectFileEditorKind');
+  process.exit(1);
+}
+
 const rp = { files: { 'examples/aa.txt': 'hi' } };
 if (P.resolveProjectFilePath(rp, 'aa.txt') !== 'examples/aa.txt') {
   console.error('project_smoke: resolveProjectFilePath basename');

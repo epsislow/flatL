@@ -1,10 +1,10 @@
 .cm-s-flatl-dark.CodeMirror {
-  background: var(--fl-surface);
+  background: var(--fl-editor-pane-bg, var(--fl-panel-bg, var(--fl-surface)));
   color: var(--fl-text);
 }
 
 .cm-s-flatl-dark .CodeMirror-gutters {
-  background: #18181e;
+  background: var(--fl-editor-gutter-bg, var(--fl-panel-bg, #1c1c22));
   border-right: 1px solid var(--fl-border);
 }
 

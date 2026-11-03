@@ -193,6 +193,17 @@
     return !isBinaryProjectValue(content);
   }
 
+  /** @returns {'flatl' | 'binary' | 'text'} */
+  function projectFileEditorKind(path, content) {
+    if (isBinaryProjectValue(content)) {
+      return 'binary';
+    }
+    if (isFlatlProjectFile(path)) {
+      return 'flatl';
+    }
+    return 'text';
+  }
+
   /**
    * Match a tree path or leaf name to a project.files key (exact, suffix, or unique basename).
    * @returns {string} resolved key, or normalized input if none
@@ -557,6 +568,7 @@
     isBinaryProjectFile,
     isFlatlProjectFile,
     isTextProjectFile,
+    projectFileEditorKind,
     resolveProjectFilePath,
     buildTree,
     ensureParentDirs,

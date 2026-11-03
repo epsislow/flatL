@@ -1,6 +1,8 @@
 :root {
   --fl-bg: #141418;
   --fl-surface: #1c1c22;
+  /** Unified panel / editor chrome background */
+  --fl-panel-bg: var(--fl-surface);
   --fl-border: #3a3844;
   --fl-text: #e6dcc8;
   --fl-text-muted: #6e6878;
@@ -8,6 +10,10 @@
   --fl-error: #f07178;
   --fl-btn-run: #5a7a4a;
   --fl-btn-run-hover: #6d9460;
+  --fl-tree-dir: #a89ec4;
+  --fl-tree-fl: #b8d67a;
+  --fl-tree-binary: #e8b060;
+  --fl-tree-text: #7eb8da;
 }
 
 * {
@@ -120,7 +126,7 @@ body {
   flex-direction: column;
   min-height: 0;
   border-right: 1px solid var(--fl-border);
-  background: var(--fl-surface);
+  background: var(--fl-panel-bg);
   position: relative;
 }
 
@@ -158,6 +164,7 @@ body {
   padding: 0.35rem 0;
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 0.8rem;
+  background: var(--fl-panel-bg);
 }
 
 .fleditor-tree-row {
@@ -222,7 +229,6 @@ body {
 
 .fleditor-tree-row--file {
   cursor: pointer;
-  color: var(--fl-text);
 }
 
 .fleditor-tree-row--file:hover {
@@ -233,16 +239,33 @@ body {
   background: rgba(90, 122, 74, 0.22);
 }
 
-.fleditor-tree-row--dirty::after {
-  content: ' ●';
+.fleditor-tree-dirty {
+  flex: 0 0 auto;
   color: var(--fl-string);
   font-size: 0.65rem;
+  line-height: 1;
+  margin-right: 0.1rem;
 }
 
 .fleditor-tree-row--dir {
   font-weight: 600;
-  color: var(--fl-text-muted);
   cursor: default;
+}
+
+.fleditor-tree-row-label--dir {
+  color: var(--fl-tree-dir);
+}
+
+.fleditor-tree-row-label--flatl {
+  color: var(--fl-tree-fl);
+}
+
+.fleditor-tree-row-label--binary {
+  color: var(--fl-tree-binary);
+}
+
+.fleditor-tree-row-label--text {
+  color: var(--fl-tree-text);
 }
 
 .fleditor-work {
@@ -252,6 +275,7 @@ body {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+  background: var(--fl-panel-bg);
 }
 
 .fleditor-work--no-terminal .fleditor-editor-wrap {
@@ -266,6 +290,14 @@ body {
   overflow: hidden;
 }
 
+.fleditor-editor-wrap--idle,
+.fleditor-editor-wrap--flatl,
+.fleditor-editor-wrap--text,
+.fleditor-editor-wrap--binary {
+  --fl-editor-pane-bg: var(--fl-panel-bg);
+  --fl-editor-gutter-bg: var(--fl-panel-bg);
+}
+
 .fleditor-terminal-wrap {
   flex: 0 0 35%;
   display: flex;
@@ -274,6 +306,7 @@ body {
   max-height: 65%;
   overflow: hidden;
   border-top: 1px solid var(--fl-border);
+  background: var(--fl-panel-bg);
 }
 
 .fleditor-splitter--east {
@@ -508,7 +541,7 @@ body.fleditor-resize-active * {
   overflow-x: auto;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  background: var(--fl-bg);
+  background: var(--fl-editor-pane-bg, var(--fl-panel-bg));
   padding: 0.35rem 0.5rem;
 }
 
@@ -898,7 +931,7 @@ body.fleditor-resize-active * {
   text-align: center;
   color: var(--fl-text-muted);
   font-size: 0.9rem;
-  background: var(--fl-bg);
+  background: var(--fl-editor-pane-bg, var(--fl-panel-bg));
 }
 
 .fleditor-editor-empty[hidden] {
@@ -915,6 +948,11 @@ body.fleditor-resize-active * {
   height: 100% !important;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 14px;
+  background: var(--fl-editor-pane-bg, var(--fl-panel-bg));
+}
+
+.fleditor-editor-wrap .CodeMirror-gutters {
+  background: var(--fl-editor-gutter-bg, var(--fl-panel-bg));
 }
 
 .fleditor-editor-wrap .CodeMirror-scroll {
@@ -925,7 +963,7 @@ body.fleditor-resize-active * {
   flex: 1 1 0;
   min-height: 0;
   padding: 0.25rem;
-  background: var(--fl-surface);
+  background: var(--fl-panel-bg);
   overflow: hidden;
   position: relative;
 }

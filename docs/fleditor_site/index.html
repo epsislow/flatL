@@ -6,7 +6,7 @@
   <title>flatL fleditor</title>
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=8">
+  <link rel="stylesheet" href="css/fleditor.css?v=12">
   <link rel="stylesheet" href="css/fleditor-cm.css">
 </head>
 <body>
@@ -35,7 +35,7 @@
           aria-orientation="vertical" aria-label="Resize project panel" tabindex="-1"></div>
       </aside>
       <div id="workPanel" class="fleditor-work fleditor-work--no-terminal">
-        <section class="fleditor-editor-wrap">
+        <section id="editorWrap" class="fleditor-editor-wrap fleditor-editor-wrap--idle">
           <div class="fleditor-editor-head">
             <div id="editorPanelResize" class="fleditor-panel-label fleditor-panel-label--editor fleditor-panel-label--resize-ns"
               title="Drag to resize project panel">
@@ -201,8 +201,8 @@
   <script src="js/mode-flatl.js"></script>
   <script src="js/fleditor-hex.js"></script>
   <script src="js/fleditor-hex-grid.js?v=6"></script>
-  <script src="js/fleditor-project.js?v=3"></script>
+  <script src="js/fleditor-project.js?v=4"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=42"></script>
+  <script src="js/fleditor.js?v=46"></script>
 </body>
 </html>

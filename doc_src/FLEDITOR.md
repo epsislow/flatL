@@ -99,7 +99,7 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 - **MEMFS** under `/fleditor/…` on Run.
 - Before VM execution, the runtime **`chdir`s to `/fleditor`**, so `file.readCtx('data.txt')` in source matches project file **`data.txt`** (no `/fleditor/` prefix required in `.fl`). After **Run**, MEMFS sync adds files by **relative path** (e.g. `aa.txt` at project root, not under `examples/` unless you created `examples/aa.txt`).
 - After **Run**, any file under `/fleditor/` that is **new** or **changed** (byte content vs snapshot right before execution) is **synced into the Project panel** and `localStorage`. Text is stored as UTF-8 strings; other bytes use an internal base64 wrapper (binary-safe round-trip via MEMFS). The wrapper is never shown in the UI.
-- **`+file`** opens a dialog: enter the **path with extension**, check **Binary (Hex editor)** for a binary file (empty, wrapper storage), or leave unchecked for **text**. New `.fl` files get a minimal `#main` … `OK` template; other text paths start empty. Binary entries in the tree are marked with **⬡** (wrapper only, not by extension alone).
+- **`+file`** opens a dialog: enter the **path with extension**, check **Binary (Hex editor)** for a binary file (empty, wrapper storage), or leave unchecked for **text**. New `.fl` files get a minimal `#main` … `OK` template; other text paths start empty. Binary entries in the tree use an **orange** label (wrapper storage, not extension alone).
 - **Run** compiles a **`.fl` entry** (`main.fl` if present, else the first `.fl` in the project), even when a **text** or **hex** file is open in the editor.
 
 ## Text editor (non-binary, not `.fl`)
