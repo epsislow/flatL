@@ -1,10 +1,11 @@
-/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid */
 (function () {
   'use strict';
 
   const P = FleditorProject;
   const L = FleditorLayout;
   const H = FleditorHex;
+  const G = FleditorHexGrid;
 
   const IO_OK = 0;
   const IO_PANIC_EOF = 2;
@@ -37,6 +38,7 @@
   const binaryParseLabel = document.getElementById('binaryParseLabel');
   const binaryGoOffset = document.getElementById('binaryGoOffset');
   const binarySearchInput = document.getElementById('binarySearchInput');
+  const binarySearchCount = document.getElementById('binarySearchCount');
   const binaryImportFile = document.getElementById('binaryImportFile');
   const newFileBtn = document.getElementById('newFileBtn');
   const newFolderBtn = document.getElementById('newFolderBtn');
@@ -83,7 +85,11 @@
   let binarySavedSnapshot = null;
   let binaryPage = 0;
   let binarySearchAnchor = 0;
-  let binaryParseTimer = null;
+  /** @type {number[]} */
+  let binarySearchMatches = [];
+  let binarySearchMatchIndex = -1;
+  let binaryHighlightOffset = -1;
+  let binaryFocusAppendAfterRender = false;
   const BINARY_HELP_DISMISS_KEY = 'flatl-fleditor-hex-help-dismissed';
 
   let unsavedDialog = null;
@@ -339,41 +345,6 @@
     return editorViewMode === 'binary';
   }
 
-  function binaryExpectedPageLen() {
-    if (!binaryBuffer) {
-      return 0;
-    }
-    return H.bytesOnPage(binaryBuffer.length, binaryPage);
-  }
-
-  function validateCurrentBinaryPage() {
-    if (!binaryBuffer) {
-      return { ok: true };
-    }
-    return H.hexDumpPageToBytes(cm.getValue(), binaryExpectedPageLen());
-  }
-
-  function commitCurrentBinaryPage(silent) {
-    if (editorViewMode !== 'binary' || !binaryBuffer) {
-      return true;
-    }
-    const expected = binaryExpectedPageLen();
-    const parsed = H.hexDumpPageToBytes(cm.getValue(), expected);
-    if (!parsed.ok) {
-      if (!silent) {
-        showAlert(parsed.error || 'Invalid hex on this page', 'Hex editor');
-      }
-      return false;
-    }
-    const off = H.pageByteOffset(binaryPage);
-    const next = H.copyBytes(binaryBuffer);
-    if (expected > 0) {
-      next.set(parsed.bytes, off);
-    }
-    binaryBuffer = next;
-    return true;
-  }
-
   function refreshBinaryDirty() {
     if (!binaryBuffer || !binarySavedSnapshot) {
       return;
@@ -381,7 +352,157 @@
     setDirty(!H.bytesEqual(binaryBuffer, binarySavedSnapshot));
   }
 
-  function showBinaryPage(pageIndex, skipCommit) {
+  function binaryHexGridEl() {
+    return document.getElementById('binaryHexGrid');
+  }
+
+  function setEditorSurfaceMode(mode) {
+    const grid = binaryHexGridEl();
+    if (cm) {
+      const wrap = cm.getWrapperElement();
+      if (wrap) {
+        wrap.style.display = mode === 'binary' ? 'none' : '';
+      }
+    }
+    if (grid) {
+      grid.hidden = mode !== 'binary';
+    }
+  }
+
+  function setBinaryPosFieldFromGrid(offset) {
+    if (!binaryGoOffset) {
+      return;
+    }
+    binaryGoOffset.value = String(offset);
+  }
+
+  function focusBinaryGridAppend() {
+    if (!binaryBuffer) {
+      return;
+    }
+    const page = G.appendSlotPageIndex(binaryBuffer.length);
+    if (page !== binaryPage) {
+      binaryPage = page;
+      renderBinaryGrid();
+      updateBinaryBarMeta();
+      refreshBinaryDirty();
+    }
+    const grid = binaryHexGridEl();
+    window.requestAnimationFrame(function () {
+      if (grid && G.focusAppendCell(grid)) {
+        setBinaryPosFieldFromGrid(binaryBuffer.length);
+      }
+    });
+  }
+
+  function focusBinaryGridOffset(offset) {
+    if (!binaryBuffer || offset < 0) {
+      return;
+    }
+    if (offset >= binaryBuffer.length) {
+      if (offset === binaryBuffer.length) {
+        focusBinaryGridAppend();
+      }
+      return;
+    }
+    const page = Math.floor(offset / H.BYTES_PER_PAGE);
+    if (page !== binaryPage) {
+      binaryPage = page;
+      renderBinaryGrid();
+      updateBinaryBarMeta();
+      refreshBinaryDirty();
+    }
+    const grid = binaryHexGridEl();
+    window.requestAnimationFrame(function () {
+      if (grid && G.focusCellByOffset(grid, offset)) {
+        setBinaryPosFieldFromGrid(offset);
+      }
+    });
+  }
+
+  function updateBinarySearchCountLabel() {
+    if (!binarySearchCount) {
+      return;
+    }
+    const n = binarySearchMatches.length;
+    if (n === 0) {
+      binarySearchCount.textContent = '0';
+      return;
+    }
+    const pos = binarySearchMatchIndex >= 0 ? binarySearchMatchIndex + 1 : '—';
+    binarySearchCount.textContent = pos + ' / ' + n;
+  }
+
+  function recomputeBinarySearchMatches() {
+    if (!binaryBuffer || !binarySearchInput) {
+      binarySearchMatches = [];
+      binarySearchMatchIndex = -1;
+      updateBinarySearchCountLabel();
+      return;
+    }
+    const q = binarySearchInput.value.trim();
+    if (!q) {
+      binarySearchMatches = [];
+      binarySearchMatchIndex = -1;
+      updateBinarySearchCountLabel();
+      return;
+    }
+    const pat = H.parseSearchPattern(binarySearchInput.value);
+    if (!pat.ok) {
+      binarySearchMatches = [];
+      binarySearchMatchIndex = -1;
+      updateBinarySearchCountLabel();
+      return;
+    }
+    binarySearchMatches = H.findAllMatches(binaryBuffer, pat.bytes);
+    binarySearchMatchIndex = binarySearchMatches.indexOf(binarySearchAnchor);
+    updateBinarySearchCountLabel();
+  }
+
+  function renderBinaryGrid() {
+    const grid = binaryHexGridEl();
+    if (!grid || !binaryBuffer || !G) {
+      return;
+    }
+    G.renderHexGrid(grid, binaryBuffer, binaryPage, {
+      highlightOffset: binaryHighlightOffset >= 0 ? binaryHighlightOffset : undefined,
+      savedBuffer: binarySavedSnapshot || undefined,
+      onCellChange: function (offset, byte) {
+        binaryBuffer[offset] = byte;
+        setDirty(true);
+        updateBinaryBarMeta();
+      },
+      onCellFocus: function (offset) {
+        setBinaryPosFieldFromGrid(offset);
+      },
+      onAppendByte: function (byte) {
+        const off = binaryBuffer.length;
+        binaryBuffer = H.insertBytes(binaryBuffer, off, new Uint8Array([byte]));
+        setDirty(true);
+        recomputeBinarySearchMatches();
+        binaryFocusAppendAfterRender = true;
+        const page = G.appendSlotPageIndex(binaryBuffer.length);
+        if (page !== binaryPage) {
+          binaryPage = page;
+        }
+        renderBinaryGrid();
+        updateBinaryBarMeta();
+        refreshBinaryDirty();
+      },
+      onRequestFocusOffset: focusBinaryGridOffset,
+      onRequestFocusAppend: focusBinaryGridAppend,
+    });
+    if (binaryFocusAppendAfterRender) {
+      binaryFocusAppendAfterRender = false;
+      window.requestAnimationFrame(function () {
+        if (G.focusAppendCell(grid)) {
+          setBinaryPosFieldFromGrid(binaryBuffer.length);
+        }
+      });
+    }
+  }
+
+  function showBinaryPage(pageIndex) {
     if (!binaryBuffer) {
       return;
     }
@@ -393,17 +514,8 @@
     if (p >= pages) {
       p = pages - 1;
     }
-    if (!skipCommit && binaryPage !== p) {
-      if (!commitCurrentBinaryPage(true)) {
-        updateBinaryBarMeta();
-        return;
-      }
-    }
     binaryPage = p;
-    suppressChange = true;
-    cm.setValue(H.hexDumpPageFromBytes(binaryBuffer, binaryPage));
-    cm.clearHistory();
-    suppressChange = false;
+    renderBinaryGrid();
     updateBinaryBarMeta();
     refreshBinaryDirty();
   }
@@ -434,14 +546,9 @@
         '–' +
         (onPage > 0 ? off + onPage - 1 : off);
     }
-    const v = validateCurrentBinaryPage();
     if (binaryParseLabel) {
-      if (v.ok) {
-        binaryParseLabel.textContent = 'Parse OK';
-      } else {
-        binaryParseLabel.textContent = v.error || 'Parse error';
-      }
-      binaryParseLabel.classList.toggle('fleditor-binary-parse--err', !v.ok);
+      binaryParseLabel.textContent = dirty ? 'Modified' : 'Grid';
+      binaryParseLabel.classList.remove('fleditor-binary-parse--err');
     }
     updateBinaryHelpBanner(n);
   }
@@ -470,33 +577,14 @@
     }
     if (byteLength === 0) {
       helpEl.innerHTML =
-        'File is <strong>empty</strong>. Click <strong>Size…</strong> (e.g. 64) or <strong>Insert…</strong> at offset 0. ' +
-        'Do not type plain text — only edit <strong>hex pairs</strong> on dump lines.';
+        'File is <strong>empty</strong>. Click <strong>Size…</strong> (e.g. 64) or <strong>Insert…</strong> at offset 0 — ' +
+        'then edit bytes in the grid cells below.';
     } else {
       helpEl.innerHTML =
-        'Edit the <strong>hex pairs</strong> between the offset and <code>|ASCII|</code> ' +
-        '(e.g. change <code>00</code> to <code>48</code>). Not a text editor.';
+        'Click a cell and type hex (overwrite, then auto-advance). At EOF use the <strong>+</strong> cell to append bytes. ' +
+        'Clear a cell → <strong>00</strong> on blur. Modified bytes stay highlighted until Save.';
     }
     banner.hidden = false;
-  }
-
-  function scheduleBinaryParseCheck() {
-    if (editorViewMode !== 'binary') {
-      return;
-    }
-    if (binaryParseTimer) {
-      window.clearTimeout(binaryParseTimer);
-    }
-    binaryParseTimer = window.setTimeout(function () {
-      binaryParseTimer = null;
-      if (editorViewMode !== 'binary') {
-        return;
-      }
-      if (commitCurrentBinaryPage(true)) {
-        refreshBinaryDirty();
-      }
-      updateBinaryBarMeta();
-    }, 280);
   }
 
   function enterBinaryEditorFromBytes(bytes) {
@@ -504,33 +592,40 @@
     binarySavedSnapshot = H.copyBytes(bytes);
     binaryPage = 0;
     binarySearchAnchor = 0;
+    binaryHighlightOffset = -1;
     editorViewMode = 'binary';
     if (binaryHexBar) {
       binaryHexBar.hidden = false;
     }
-    cm.setOption('mode', 'text/plain');
-    showBinaryPage(0, true);
+    setEditorSurfaceMode('binary');
+    showBinaryPage(0);
+    recomputeBinarySearchMatches();
     updateEditorHeader();
     updateEditorEmptyState();
+    updateUndoRedoButtons();
   }
 
   function leaveBinaryEditor() {
     binaryBuffer = null;
     binarySavedSnapshot = null;
     binaryPage = 0;
+    binaryHighlightOffset = -1;
+    setEditorSurfaceMode('text');
     if (binaryHexBar) {
       binaryHexBar.hidden = true;
+    }
+    const grid = binaryHexGridEl();
+    if (grid) {
+      grid.innerHTML = '';
     }
     const banner = document.getElementById('binaryHelpBanner');
     if (banner) {
       banner.hidden = true;
     }
+    updateUndoRedoButtons();
   }
 
   function saveBinaryEditorToProject() {
-    if (!commitCurrentBinaryPage(false)) {
-      return false;
-    }
     const path = currentOpenPath();
     project.files[path] = P.bytesToProjectValueBinary(binaryBuffer);
     binarySavedSnapshot = H.copyBytes(binaryBuffer);
@@ -568,9 +663,14 @@
       const hideEditor = noFiles || !hasOpenFile();
       cm.setOption('readOnly', hideEditor);
       const wrap = cm.getWrapperElement();
-      if (wrap) {
+      if (wrap && editorViewMode !== 'binary') {
         wrap.style.visibility = hideEditor ? 'hidden' : 'visible';
+        wrap.style.display = hideEditor ? 'none' : '';
       }
+    }
+    const grid = binaryHexGridEl();
+    if (grid && editorViewMode === 'binary') {
+      grid.hidden = noFiles || !hasOpenFile();
     }
     updateRunSaveButtons();
   }
@@ -580,12 +680,7 @@
     if (!running) {
       runBtn.disabled = !open;
     }
-    if (editorViewMode === 'binary') {
-      const parseOk = validateCurrentBinaryPage().ok;
-      saveBtn.disabled = !open || !dirty || !parseOk;
-    } else {
-      saveBtn.disabled = !open || !dirty;
-    }
+    saveBtn.disabled = !open || !dirty;
   }
 
   function setDirty(value) {
@@ -620,15 +715,16 @@
       return;
     }
     if (editorViewMode === 'binary') {
-      if (!saveBinaryEditorToProject()) {
-        updateRunSaveButtons();
-        return;
-      }
+      saveBinaryEditorToProject();
     } else {
       flushEditorToProject();
     }
     persistProject();
     setDirty(false);
+    if (editorViewMode === 'binary') {
+      renderBinaryGrid();
+      updateBinaryBarMeta();
+    }
     setStatus('saved');
     window.setTimeout(function () {
       if (!running && statusEl.textContent === 'saved') {
@@ -639,9 +735,7 @@
 
   function implicitSaveForRun() {
     if (editorViewMode === 'binary') {
-      if (!saveBinaryEditorToProject()) {
-        throw new Error('Fix hex parse errors before Run');
-      }
+      saveBinaryEditorToProject();
     } else {
       flushEditorToProject();
     }
@@ -1210,6 +1304,11 @@
     if (!cm || !undoBtn || !redoBtn) {
       return;
     }
+    if (editorViewMode === 'binary') {
+      undoBtn.disabled = true;
+      redoBtn.disabled = true;
+      return;
+    }
     const hist = cm.historySize ? cm.historySize() : { undo: 0, redo: 0 };
     undoBtn.disabled = !hist.undo;
     redoBtn.disabled = !hist.redo;
@@ -1372,12 +1471,9 @@
         return;
       }
       if (editorViewMode === 'binary') {
-        setDirty(true);
-        scheduleBinaryParseCheck();
-        updateRunSaveButtons();
-      } else {
-        setDirty(true);
+        return;
       }
+      setDirty(true);
       updateUndoRedoButtons();
     });
     cm.on('keydown', function (_cm, e) {
@@ -1638,6 +1734,10 @@
       }
     }
     binarySearchAnchor = i;
+    binaryHighlightOffset = i;
+    binarySearchMatchIndex = binarySearchMatches.indexOf(i);
+    updateBinarySearchCountLabel();
+    setBinaryPosFieldFromGrid(i);
     const page = Math.floor(i / H.BYTES_PER_PAGE);
     showBinaryPage(page);
   }
@@ -1647,27 +1747,52 @@
       return;
     }
     const q = binarySearchInput.value;
+    if (!q.trim()) {
+      showAlert('Enter a search pattern', 'Hex editor');
+      return;
+    }
     const pat = H.parseSearchPattern(q);
     if (!pat.ok) {
       showAlert(pat.error || 'Invalid search', 'Hex editor');
       return;
     }
-    if (!commitCurrentBinaryPage(false)) {
+    binarySearchMatches = H.findAllMatches(binaryBuffer, pat.bytes);
+    const list = binarySearchMatches;
+    if (!list.length) {
+      binarySearchMatchIndex = -1;
+      updateBinarySearchCountLabel();
       return;
     }
-    let start = direction === 'next' ? binarySearchAnchor + 1 : binarySearchAnchor - 1;
-    if (direction === 'next' && start > binaryBuffer.length - pat.bytes.length) {
-      start = 0;
+    let idx;
+    const cur = list.indexOf(binarySearchAnchor);
+    if (direction === 'next') {
+      if (cur >= 0) {
+        idx = (cur + 1) % list.length;
+      } else {
+        idx = list.findIndex(function (m) {
+          return m > binarySearchAnchor;
+        });
+        if (idx < 0) {
+          idx = 0;
+        }
+      }
+    } else if (cur >= 0) {
+      idx = (cur - 1 + list.length) % list.length;
+    } else {
+      idx = -1;
+      for (let i = list.length - 1; i >= 0; i--) {
+        if (list[i] < binarySearchAnchor) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0) {
+        idx = list.length - 1;
+      }
     }
-    if (direction === 'prev' && start < 0) {
-      start = binaryBuffer.length - pat.bytes.length;
-    }
-    const at = H.findMatch(binaryBuffer, pat.bytes, start, direction);
-    if (at < 0) {
-      showAlert('No match', 'Hex editor');
-      return;
-    }
-    binaryGoToByte(at);
+    binarySearchMatchIndex = idx;
+    binaryGoToByte(list[idx]);
+    updateBinarySearchCountLabel();
   }
 
   function initBinaryBar() {
@@ -1763,6 +1888,11 @@
         binarySearchStep('next');
       });
     }
+    if (binarySearchInput) {
+      binarySearchInput.addEventListener('input', function () {
+        recomputeBinarySearchMatches();
+      });
+    }
     if (insertBtn) {
       insertBtn.addEventListener('click', async function () {
         if (editorViewMode !== 'binary' || !binaryBuffer) {
@@ -1794,12 +1924,10 @@
           await showAlert(payload.error, 'Insert bytes');
           return;
         }
-        if (!commitCurrentBinaryPage(false)) {
-          return;
-        }
         binaryBuffer = H.insertBytes(binaryBuffer, offP.value, payload.bytes);
         showBinaryPage(Math.floor(offP.value / H.BYTES_PER_PAGE));
         setDirty(!H.bytesEqual(binaryBuffer, binarySavedSnapshot));
+        recomputeBinarySearchMatches();
         updateBinaryBarMeta();
       });
     }
@@ -1834,12 +1962,10 @@
           await showAlert(countP.error, 'Delete bytes');
           return;
         }
-        if (!commitCurrentBinaryPage(false)) {
-          return;
-        }
         binaryBuffer = H.deleteBytes(binaryBuffer, offP.value, countP.value);
-        showBinaryPage(binaryPage, true);
+        showBinaryPage(binaryPage);
         setDirty(!H.bytesEqual(binaryBuffer, binarySavedSnapshot));
+        recomputeBinarySearchMatches();
         updateBinaryBarMeta();
       });
     }
@@ -1861,12 +1987,10 @@
           await showAlert(nP.error, 'Set file size');
           return;
         }
-        if (!commitCurrentBinaryPage(false)) {
-          return;
-        }
         binaryBuffer = H.setFileSize(binaryBuffer, nP.value);
-        showBinaryPage(0, true);
+        showBinaryPage(0);
         setDirty(!H.bytesEqual(binaryBuffer, binarySavedSnapshot));
+        recomputeBinarySearchMatches();
         updateBinaryBarMeta();
       });
     }
@@ -1876,8 +2000,9 @@
           return;
         }
         binaryBuffer = H.copyBytes(binarySavedSnapshot);
-        showBinaryPage(binaryPage, true);
+        showBinaryPage(binaryPage);
         setDirty(false);
+        recomputeBinarySearchMatches();
         updateBinaryBarMeta();
       });
     }
@@ -1895,7 +2020,7 @@
         reader.onload = function () {
           const buf = new Uint8Array(reader.result);
           binaryBuffer = H.copyBytes(buf);
-          showBinaryPage(0, true);
+          showBinaryPage(0);
           setDirty(!H.bytesEqual(binaryBuffer, binarySavedSnapshot));
           updateBinaryBarMeta();
         };
@@ -1905,9 +2030,6 @@
     if (downloadBtn) {
       downloadBtn.addEventListener('click', function () {
         if (!binaryBuffer || !currentOpenPath()) {
-          return;
-        }
-        if (!commitCurrentBinaryPage(false)) {
           return;
         }
         const path = currentOpenPath();

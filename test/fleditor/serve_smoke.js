@@ -33,6 +33,8 @@ setTimeout(() => {
       if (!body.includes('id="dockResetLayoutBtn"')) fail('missing dock reset layout');
       if (!body.includes('fleditor-layout.js')) fail('missing layout script');
       if (!body.includes('>+file<')) fail('missing +file button');
+      if (!body.includes('id="binaryHexGrid"')) fail('missing hex grid host');
+      if (!body.includes('fleditor-hex-grid.js')) fail('missing hex grid script');
       if (!body.includes('id="resetProjectBtn"')) fail('missing reset project control');
       if (!body.includes('fleditor-editor-actions')) fail('missing editor actions bar');
       if (!body.includes('id="undoBtn"')) fail('missing undo in editor bar');

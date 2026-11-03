@@ -107,16 +107,19 @@ When a binary file is open, the panel title shows **Hex editor** and the path; F
 
 ### View layout
 
-- **16 bytes per line**, **40 lines per page** → **640 bytes per page** in CodeMirror.
-- Each line: `offset  XX XX …  |ASCII|`. Offsets are informational; **Save** rebuilds lines from bytes.
+- **16 bytes per line**, **40 lines per page** → **640 bytes per page** in a **hex grid** (one input cell per byte). CodeMirror is hidden; **Fl editor** still uses CodeMirror for text.
+- Each row: fixed **offset**, **16 hex cells** (00–ff), read-only **ASCII**.
 - **Paginate always:** `|<` `<` `>` `>|`, page indicator, byte range for the current page.
-- **Parse OK / Parse error** reflects the current page (must match the expected byte count for that page).
+- Status shows **Grid** or **Modified** (no parse step — invalid input reverts on blur).
 
 ### Editing
 
-- Change **hex pairs** on the current page; switching page **commits** the page into the in-memory buffer (invalid hex blocks navigation and Save).
-- **Save** writes the full buffer to the project (base64 wrapper) and `localStorage`, then refreshes the page view.
-- **Run** saves first; invalid hex blocks Run. After Run, if the open file was synced from MEMFS and you have no unsaved edits, the editor reloads from the project.
+- Click a cell, type hex in **overwrite** mode (two digits then auto-advance to the next cell). Clearing a cell and leaving it → **00**. Invalid hex reverts on blur.
+- On the **last page**, the **`+`** cell after the final byte **appends** a byte when you enter hex (same typing rules; focus clears the `+`).
+- Cells that differ from the last **saved** snapshot are **highlighted** until Save.
+- Edits apply immediately to the in-memory buffer; **Save** writes the full buffer to the project (base64 wrapper) and `localStorage`.
+- **Run** saves first. After Run, if the open file was synced from MEMFS and you have no unsaved edits, the editor reloads from the project.
+- **Undo / Redo** are disabled in hex mode (byte edits are not in CodeMirror history).
 
 ### Go to byte
 
@@ -125,7 +128,8 @@ When a binary file is open, the panel title shows **Hex editor** and the path; F
 ### Search
 
 - **Search** accepts **hex** (`48 65`), **base64**, or **literal text** (UTF-8 bytes).
-- **Prev** / **Next** find in the **whole file** and jump to the match.
+- **Prev** / **Next** cycle through matches in the **whole file** (wrap at ends). Counter **`n / total`** between the buttons shows **`0`** when there are no matches.
+- Focusing a grid cell updates **Pos** to that byte index.
 
 ### Size and payload tools
 
@@ -138,7 +142,7 @@ When a binary file is open, the panel title shows **Hex editor** and the path; F
 | **Import…** | Replace entire file from disk |
 | **Download** | Save raw bytes locally |
 
-New binary files from **+file** start with **64 zero bytes** so the hex grid is visible immediately. Empty files (`0` bytes) after Run/sync: use **Size…** or **Insert…** — do **not** type plain text in the editor; only change **hex pairs** on dump lines (e.g. `00` → `48`).
+New binary files from **+file** start with **64 zero bytes** so the hex grid is visible immediately. Empty files (`0` bytes) after Run/sync: use **Size…** or **Insert…**, then edit cells (e.g. `00` → `48`).
 
 ### FlatL programs
 
@@ -150,7 +154,7 @@ Use [`file.read`](./natives/file.md), [`file.writeBytes`](./natives/file.md), et
 make fleditor-hex-smoke
 ```
 
-Runs `test/fleditor/hex_roundtrip.mjs` and `hex_project_smoke.mjs` (parse/format + project wrapper).
+Runs `test/fleditor/hex_roundtrip.mjs`, `hex_project_smoke.mjs`, and `hex_grid.mjs` (dump helpers, project wrapper, grid cell parsing).
 - **`io.out*`** → terminal (normal). **`io.err*`** on default **`terr`** → same terminal, **gray** text (`flatWasmOnStderr`).
 - **`localStorage`** key `flatl-fleditor-project`.
 

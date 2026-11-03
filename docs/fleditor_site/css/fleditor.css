@@ -450,6 +450,118 @@ body {
   background: var(--fl-surface);
 }
 
+.fleditor-hex-grid-host {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: auto;
+  background: var(--fl-bg);
+  padding: 0.35rem 0.5rem;
+}
+
+.fleditor-hex-grid-host[hidden] {
+  display: none !important;
+}
+
+.fleditor-hex-grid-empty {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  color: var(--fl-text-muted);
+}
+
+.fleditor-hex-grid-table {
+  border-collapse: collapse;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 13px;
+  width: 100%;
+  max-width: 52rem;
+}
+
+.fleditor-hex-grid-table th,
+.fleditor-hex-grid-table td {
+  padding: 0.12rem 0.2rem;
+  border: none;
+}
+
+.fleditor-hex-grid-col-h {
+  color: var(--fl-text-muted);
+  font-weight: normal;
+  font-size: 0.75rem;
+}
+
+.fleditor-hex-grid-offset {
+  color: var(--fl-text-muted);
+  text-align: right;
+  padding-right: 0.5rem !important;
+  user-select: none;
+}
+
+.fleditor-hex-grid-ascii {
+  color: var(--fl-string, #a3c89a);
+  padding-left: 0.75rem !important;
+  user-select: none;
+}
+
+.fleditor-hex-grid-pad {
+  background: transparent;
+}
+
+.fleditor-hex-grid-cell {
+  width: 2.1rem;
+  box-sizing: border-box;
+  text-align: center;
+  font: inherit;
+  padding: 0.1rem 0;
+  background: var(--fl-surface);
+  border: 1px solid var(--fl-border);
+  border-radius: 2px;
+  color: var(--fl-text);
+}
+
+.fleditor-hex-grid-cell:focus {
+  outline: 1px solid var(--fl-btn-run, #5a7a4a);
+  border-color: var(--fl-btn-run, #5a7a4a);
+}
+
+.fleditor-hex-grid-cell--hi {
+  outline: 2px solid var(--fl-btn-run, #5a7a4a);
+  background: rgba(90, 122, 74, 0.2);
+}
+
+.fleditor-hex-grid-cell--dirty {
+  background: rgba(200, 160, 72, 0.38);
+  border-color: rgba(200, 160, 72, 0.85);
+}
+
+.fleditor-hex-grid-cell--dirty:focus {
+  outline-color: rgba(200, 160, 72, 0.95);
+  border-color: rgba(200, 160, 72, 0.95);
+}
+
+.fleditor-hex-grid-cell--append {
+  min-width: 2.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fl-text-muted);
+  border-style: dashed;
+  cursor: pointer;
+}
+
+.fleditor-hex-grid-cell--append:focus {
+  font-size: 13px;
+  color: var(--fl-text);
+  border-style: solid;
+  cursor: text;
+}
+
+.fleditor-binary-search-count {
+  display: inline-block;
+  min-width: 3.5rem;
+  text-align: center;
+  font-size: 0.8rem;
+  color: var(--fl-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .fleditor-panel-label-actions {
   display: flex;
   align-items: center;

@@ -211,6 +211,30 @@
     return { ok: true, bytes: enc.encode(raw) };
   }
 
+  function bytesMatchAt(haystack, needle, i) {
+    for (let j = 0; j < needle.length; j++) {
+      if (haystack[i + j] !== needle[j]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function findAllMatches(haystack, needle) {
+    const out = [];
+    if (!needle.length || haystack.length < needle.length) {
+      return out;
+    }
+    const max = haystack.length - needle.length;
+    for (let i = 0; i <= max; i++) {
+      if (bytesMatchAt(haystack, needle, i)) {
+        out.push(i);
+      }
+    }
+    return out;
+  }
+
+  /** Linear scan; does not wrap. */
   function findMatch(haystack, needle, fromIndex, direction) {
     if (!needle.length || haystack.length < needle.length) {
       return -1;
@@ -218,32 +242,40 @@
     const max = haystack.length - needle.length;
     if (direction === 'next') {
       for (let i = Math.max(0, fromIndex); i <= max; i++) {
-        let ok = true;
-        for (let j = 0; j < needle.length; j++) {
-          if (haystack[i + j] !== needle[j]) {
-            ok = false;
-            break;
-          }
-        }
-        if (ok) {
+        if (bytesMatchAt(haystack, needle, i)) {
           return i;
         }
       }
       return -1;
     }
     for (let i = Math.min(fromIndex, max); i >= 0; i--) {
-      let ok = true;
-      for (let j = 0; j < needle.length; j++) {
-        if (haystack[i + j] !== needle[j]) {
-          ok = false;
-          break;
-        }
-      }
-      if (ok) {
+      if (bytesMatchAt(haystack, needle, i)) {
         return i;
       }
     }
     return -1;
+  }
+
+  /** Wraps to start/end when no match ahead/behind (strictly after/before fromIndex). */
+  function findMatchWrap(haystack, needle, fromIndex, direction) {
+    const all = findAllMatches(haystack, needle);
+    if (!all.length) {
+      return -1;
+    }
+    if (direction === 'next') {
+      for (let k = 0; k < all.length; k++) {
+        if (all[k] > fromIndex) {
+          return all[k];
+        }
+      }
+      return all[0];
+    }
+    for (let k = all.length - 1; k >= 0; k--) {
+      if (all[k] < fromIndex) {
+        return all[k];
+      }
+    }
+    return all[all.length - 1];
   }
 
   function insertBytes(buffer, offset, payload) {
@@ -316,7 +348,9 @@
     hexDumpPageToBytes,
     parseByteOffset,
     parseSearchPattern,
+    findAllMatches,
     findMatch,
+    findMatchWrap,
     insertBytes,
     deleteBytes,
     setFileSize,

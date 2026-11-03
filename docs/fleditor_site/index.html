@@ -66,6 +66,7 @@
                 <input type="text" id="binarySearchInput" size="14" spellcheck="false" autocomplete="off" />
               </label>
               <button type="button" id="binarySearchPrev" title="Previous match">Prev</button>
+              <span id="binarySearchCount" class="fleditor-binary-search-count" aria-live="polite">0</span>
               <button type="button" id="binarySearchNext" title="Next match">Next</button>
             </div>
             <div class="fleditor-binary-row">
@@ -82,6 +83,7 @@
             <p>No files in project. Use <strong>+file</strong> or the <strong>⟲</strong> reset control on the Project panel.</p>
           </div>
           <textarea id="code" spellcheck="false"></textarea>
+          <div id="binaryHexGrid" class="fleditor-hex-grid-host" hidden aria-label="Hex byte grid"></div>
           <div id="binaryHelpBanner" class="fleditor-binary-help-banner" hidden>
             <p id="binaryHelpLabel" class="fleditor-binary-help"></p>
             <button type="button" id="binaryHelpDismiss" class="fleditor-binary-help-dismiss"
@@ -194,8 +196,9 @@
   <script src="ext/xterm.js"></script>
   <script src="js/mode-flatl.js"></script>
   <script src="js/fleditor-hex.js"></script>
+  <script src="js/fleditor-hex-grid.js?v=2"></script>
   <script src="js/fleditor-project.js"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=30"></script>
+  <script src="js/fleditor.js?v=34"></script>
 </body>
 </html>

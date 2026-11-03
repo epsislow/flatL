@@ -241,6 +241,7 @@ fleditor-project-smoke:
 fleditor-hex-smoke:
 	$(NODE) test/fleditor/hex_roundtrip.mjs
 	$(NODE) test/fleditor/hex_project_smoke.mjs
+	$(NODE) test/fleditor/hex_grid.mjs
 
 fleditor-examples-smoke:
 	$(NODE) test/fleditor/examples_smoke.mjs

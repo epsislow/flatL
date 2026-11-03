@@ -64,6 +64,17 @@ assert(pat.ok && pat.bytes.length === 2, 'search hex');
 const at = H.findMatch(sample, pat.bytes, 0, 'next');
 assert(at === 0, 'find match');
 
+const all = H.findAllMatches(sample, pat.bytes);
+assert(all.length === 1 && all[0] === 0, 'find all matches');
+
+const dup = new Uint8Array([0x48, 0x65, 0x48, 0x65]);
+const all2 = H.findAllMatches(dup, pat.bytes);
+assert(all2.length === 2, 'two matches');
+assert(H.findMatchWrap(dup, pat.bytes, 1, 'next') === 2, 'next after first byte');
+assert(H.findMatchWrap(dup, pat.bytes, 3, 'next') === 0, 'next wraps to start');
+assert(H.findMatchWrap(dup, pat.bytes, 2, 'prev') === 0, 'prev from second match');
+assert(H.findMatchWrap(dup, pat.bytes, 0, 'prev') === 2, 'prev wraps to end');
+
 const b64 = H.parseSearchPattern('SGVs');
 assert(b64.ok, 'search base64 hello prefix');
 
