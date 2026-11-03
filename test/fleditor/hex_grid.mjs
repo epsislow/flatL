@@ -52,4 +52,11 @@ assert(G.appendSlotPageIndex(640) === 1, 'append page 640');
 assert(G.pageShowsAppendSlot(640, 1), 'append on page 1 at 640 bytes');
 assert(G.gridRowCountForPage(0, 0) === 1, 'empty file one row for append');
 
+assert(G.arrowTargetOffset(15, 'ArrowRight', 20) === 16, 'right wraps row');
+assert(G.arrowTargetOffset(16, 'ArrowLeft', 20) === 15, 'left wraps row');
+assert(G.arrowTargetOffset(5, 'ArrowDown', 25) === 21, 'down same column');
+assert(G.arrowTargetOffset(5, 'ArrowDown', 20) === 19, 'down clamps partial last row');
+assert(G.arrowTargetOffset(5, 'ArrowDown', 10) === null, 'down past end');
+assert(G.arrowTargetFromAppend('ArrowLeft', 16) === 15, 'append left');
+
 console.log('OK: hex_grid');

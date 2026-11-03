@@ -115,7 +115,9 @@ When a binary file is open, the panel title shows **Hex editor** and the path; F
 ### Editing
 
 - Click a cell, type hex in **overwrite** mode (two digits then auto-advance to the next cell). Clearing a cell and leaving it → **00**. Invalid hex reverts on blur.
-- On the **last page**, the **`+`** cell after the final byte **appends** a byte when you enter hex (same typing rules; focus clears the `+`).
+- On the **last page**, the **`+`** cell after the final byte **appends** a byte when you enter hex (same typing rules; focus clears the `+`). It uses the same cell size as other bytes (dashed border when idle).
+- **Delete** removes the byte at the focused offset and shifts the rest; focus stays on that offset (or on **`+`** if you deleted the last byte). **Backspace** removes the previous byte and moves focus one cell left (**Backspace** on **`+`** deletes the last byte).
+- **Arrow keys** move between cells (**Left** / **Right** follow byte order across row breaks; **Up** / **Down** stay in the same column). **Right** from the last byte focuses **`+`**.
 - Cells that differ from the last **saved** snapshot are **highlighted** until Save.
 - Edits apply immediately to the in-memory buffer; **Save** writes the full buffer to the project (base64 wrapper) and `localStorage`.
 - **Run** saves first. After Run, if the open file was synced from MEMFS and you have no unsaved edits, the editor reloads from the project.
@@ -142,7 +144,7 @@ When a binary file is open, the panel title shows **Hex editor** and the path; F
 | **Import…** | Replace entire file from disk |
 | **Download** | Save raw bytes locally |
 
-New binary files from **+file** start with **64 zero bytes** so the hex grid is visible immediately. Empty files (`0` bytes) after Run/sync: use **Size…** or **Insert…**, then edit cells (e.g. `00` → `48`).
+New binary files from **+file** start at **0 bytes**; the grid shows only the **`+`** append cell until you add data. After Run/sync, an empty file behaves the same way.
 
 ### FlatL programs
 

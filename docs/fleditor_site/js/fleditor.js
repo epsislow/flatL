@@ -89,7 +89,8 @@
   let binarySearchMatches = [];
   let binarySearchMatchIndex = -1;
   let binaryHighlightOffset = -1;
-  let binaryFocusAppendAfterRender = false;
+  /** @type {{ type: 'append' } | { type: 'offset', off: number } | null} */
+  let binaryGridFocusAfterRender = null;
   const BINARY_HELP_DISMISS_KEY = 'flatl-fleditor-hex-help-dismissed';
 
   let unsavedDialog = null;
@@ -459,6 +460,45 @@
     updateBinarySearchCountLabel();
   }
 
+  function scheduleBinaryGridFocusAfterRender() {
+    const grid = binaryHexGridEl();
+    if (!binaryGridFocusAfterRender || !grid || !binaryBuffer) {
+      return;
+    }
+    const f = binaryGridFocusAfterRender;
+    binaryGridFocusAfterRender = null;
+    window.requestAnimationFrame(function () {
+      if (f.type === 'append') {
+        if (G.focusAppendCell(grid)) {
+          setBinaryPosFieldFromGrid(binaryBuffer.length);
+        }
+        return;
+      }
+      if (G.focusCellByOffset(grid, f.off)) {
+        setBinaryPosFieldFromGrid(f.off);
+        return;
+      }
+      focusBinaryGridOffset(f.off);
+    });
+  }
+
+  function afterBinaryShrink(focusOff) {
+    setDirty(true);
+    recomputeBinarySearchMatches();
+    binaryGridFocusAfterRender =
+      focusOff >= binaryBuffer.length ? { type: 'append' } : { type: 'offset', off: focusOff };
+    const page =
+      focusOff >= binaryBuffer.length
+        ? G.appendSlotPageIndex(binaryBuffer.length)
+        : Math.floor(focusOff / H.BYTES_PER_PAGE);
+    if (page !== binaryPage) {
+      binaryPage = page;
+    }
+    renderBinaryGrid();
+    updateBinaryBarMeta();
+    refreshBinaryDirty();
+  }
+
   function renderBinaryGrid() {
     const grid = binaryHexGridEl();
     if (!grid || !binaryBuffer || !G) {
@@ -480,7 +520,7 @@
         binaryBuffer = H.insertBytes(binaryBuffer, off, new Uint8Array([byte]));
         setDirty(true);
         recomputeBinarySearchMatches();
-        binaryFocusAppendAfterRender = true;
+        binaryGridFocusAfterRender = { type: 'append' };
         const page = G.appendSlotPageIndex(binaryBuffer.length);
         if (page !== binaryPage) {
           binaryPage = page;
@@ -489,17 +529,35 @@
         updateBinaryBarMeta();
         refreshBinaryDirty();
       },
+      onDeleteByteAt: function (off) {
+        if (!binaryBuffer || off < 0 || off >= binaryBuffer.length) {
+          return;
+        }
+        binaryBuffer = H.deleteBytes(binaryBuffer, off, 1);
+        afterBinaryShrink(off);
+      },
+      onBackspaceByteAt: function (off) {
+        if (!binaryBuffer || binaryBuffer.length === 0) {
+          return;
+        }
+        let delAt;
+        let focusAt;
+        if (off >= binaryBuffer.length) {
+          delAt = binaryBuffer.length - 1;
+          focusAt = delAt;
+        } else if (off > 0) {
+          delAt = off - 1;
+          focusAt = delAt;
+        } else {
+          return;
+        }
+        binaryBuffer = H.deleteBytes(binaryBuffer, delAt, 1);
+        afterBinaryShrink(focusAt);
+      },
       onRequestFocusOffset: focusBinaryGridOffset,
       onRequestFocusAppend: focusBinaryGridAppend,
     });
-    if (binaryFocusAppendAfterRender) {
-      binaryFocusAppendAfterRender = false;
-      window.requestAnimationFrame(function () {
-        if (G.focusAppendCell(grid)) {
-          setBinaryPosFieldFromGrid(binaryBuffer.length);
-        }
-      });
-    }
+    scheduleBinaryGridFocusAfterRender();
   }
 
   function showBinaryPage(pageIndex) {
@@ -577,8 +635,7 @@
     }
     if (byteLength === 0) {
       helpEl.innerHTML =
-        'File is <strong>empty</strong>. Click <strong>Size…</strong> (e.g. 64) or <strong>Insert…</strong> at offset 0 — ' +
-        'then edit bytes in the grid cells below.';
+        'File is <strong>empty</strong> (0 bytes). Click the <strong>+</strong> cell to append bytes, or use <strong>Size…</strong> / <strong>Insert…</strong>.';
     } else {
       helpEl.innerHTML =
         'Click a cell and type hex (overwrite, then auto-advance). At EOF use the <strong>+</strong> cell to append bytes. ' +

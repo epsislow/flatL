@@ -5,8 +5,8 @@
   const BYTES_PER_LINE = 16;
   const LINES_PER_PAGE = 40;
   const BYTES_PER_PAGE = BYTES_PER_LINE * LINES_PER_PAGE;
-  /** New binary files start with this many zero bytes so the hex grid is visible. */
-  const DEFAULT_NEW_BINARY_SIZE = 64;
+  /** New binary files from +file start empty (0 bytes); use the grid **+** cell to append. */
+  const DEFAULT_NEW_BINARY_SIZE = 0;
 
   function copyBytes(u8) {
     return new Uint8Array(u8);

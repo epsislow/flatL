@@ -6,7 +6,7 @@
   <title>flatL fleditor</title>
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css">
+  <link rel="stylesheet" href="css/fleditor.css?v=7">
   <link rel="stylesheet" href="css/fleditor-cm.css">
 </head>
 <body>
@@ -154,7 +154,7 @@
         placeholder="path/name.ext" />
       <label class="fleditor-newfile-binary">
         <input type="checkbox" id="newFileModalBinary" />
-        Binary (Hex editor, starts as 64 zero bytes)
+        Binary (Hex editor, starts empty — use + to append)
       </label>
       <div class="fleditor-io-actions">
         <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
@@ -196,9 +196,9 @@
   <script src="ext/xterm.js"></script>
   <script src="js/mode-flatl.js"></script>
   <script src="js/fleditor-hex.js"></script>
-  <script src="js/fleditor-hex-grid.js?v=2"></script>
+  <script src="js/fleditor-hex-grid.js?v=6"></script>
   <script src="js/fleditor-project.js"></script>
   <script src="js/fleditor-layout.js"></script>
-  <script src="js/fleditor.js?v=34"></script>
+  <script src="js/fleditor.js?v=35"></script>
 </body>
 </html>

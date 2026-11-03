@@ -161,6 +161,92 @@
     return true;
   }
 
+  function requestFocusAt(container, offset, buffer, opts) {
+    if (offset < 0) {
+      return;
+    }
+    if (offset < buffer.length) {
+      if (focusCellByOffset(container, offset)) {
+        if (opts.onCellFocus) {
+          opts.onCellFocus(offset);
+        }
+        return;
+      }
+      if (opts.onRequestFocusOffset) {
+        opts.onRequestFocusOffset(offset);
+      }
+      return;
+    }
+    if (offset === buffer.length) {
+      if (focusAppendCell(container)) {
+        if (opts.onCellFocus) {
+          opts.onCellFocus(buffer.length);
+        }
+        return;
+      }
+      if (opts.onRequestFocusAppend) {
+        opts.onRequestFocusAppend();
+      }
+    }
+  }
+
+  /** @returns {number | null} */
+  function arrowTargetOffset(abs, key, bufferLength) {
+    if (!H || bufferLength < 0) {
+      return null;
+    }
+    if (key === 'ArrowLeft') {
+      return abs > 0 ? abs - 1 : null;
+    }
+    if (key === 'ArrowRight') {
+      return abs + 1 <= bufferLength ? abs + 1 : null;
+    }
+    if (key === 'ArrowUp') {
+      const col = abs % H.BYTES_PER_LINE;
+      const row = Math.floor(abs / H.BYTES_PER_LINE);
+      if (row <= 0) {
+        return null;
+      }
+      return (row - 1) * H.BYTES_PER_LINE + col;
+    }
+    if (key === 'ArrowDown') {
+      const col = abs % H.BYTES_PER_LINE;
+      const row = Math.floor(abs / H.BYTES_PER_LINE);
+      const nextRowStart = (row + 1) * H.BYTES_PER_LINE;
+      if (nextRowStart >= bufferLength) {
+        return null;
+      }
+      return Math.min(nextRowStart + col, bufferLength - 1);
+    }
+    return null;
+  }
+
+  /** @returns {number | null} */
+  function arrowTargetFromAppend(key, bufferLength) {
+    if (!H || bufferLength < 0) {
+      return null;
+    }
+    const appendCol = bufferLength % H.BYTES_PER_LINE;
+    const appendRow = Math.floor(bufferLength / H.BYTES_PER_LINE);
+    if (key === 'ArrowLeft') {
+      return bufferLength > 0 ? bufferLength - 1 : null;
+    }
+    if (key === 'ArrowRight') {
+      return null;
+    }
+    if (key === 'ArrowUp') {
+      if (appendRow <= 0) {
+        return bufferLength > 0 ? Math.min(appendCol, bufferLength - 1) : null;
+      }
+      const up = (appendRow - 1) * H.BYTES_PER_LINE + appendCol;
+      return up < bufferLength ? up : bufferLength - 1;
+    }
+    if (key === 'ArrowDown') {
+      return null;
+    }
+    return null;
+  }
+
   function advanceToNextCell(container, abs, buffer, opts) {
     const next = abs + 1;
     if (next < buffer.length) {
@@ -221,6 +307,34 @@
       applyCellValue(inp, buffer, abs, opts, asciiTd);
     });
     inp.addEventListener('keydown', function (e) {
+      if (
+        e.key === 'ArrowLeft' ||
+        e.key === 'ArrowRight' ||
+        e.key === 'ArrowUp' ||
+        e.key === 'ArrowDown'
+      ) {
+        const target = arrowTargetOffset(abs, e.key, buffer.length);
+        if (target != null) {
+          e.preventDefault();
+          applyCellValue(inp, buffer, abs, opts, asciiTd);
+          requestFocusAt(container, target, buffer, opts);
+        }
+        return;
+      }
+      if (e.key === 'Delete') {
+        e.preventDefault();
+        if (opts.onDeleteByteAt) {
+          opts.onDeleteByteAt(abs);
+        }
+        return;
+      }
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (opts.onBackspaceByteAt) {
+          opts.onBackspaceByteAt(abs);
+        }
+        return;
+      }
       if (e.key === 'Tab' && !e.shiftKey) {
         e.preventDefault();
         applyCellValue(inp, buffer, abs, opts, asciiTd);
@@ -275,6 +389,31 @@
       }
     });
     inp.addEventListener('keydown', function (e) {
+      if (
+        e.key === 'ArrowLeft' ||
+        e.key === 'ArrowRight' ||
+        e.key === 'ArrowUp' ||
+        e.key === 'ArrowDown'
+      ) {
+        const target = arrowTargetFromAppend(e.key, buffer.length);
+        if (target != null) {
+          e.preventDefault();
+          commitAppendInput(inp, buffer, opts);
+          requestFocusAt(container, target, buffer, opts);
+        }
+        return;
+      }
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (buffer.length > 0 && opts.onBackspaceByteAt) {
+          opts.onBackspaceByteAt(buffer.length);
+        }
+        return;
+      }
+      if (e.key === 'Delete') {
+        e.preventDefault();
+        return;
+      }
       if (e.key === 'Enter') {
         e.preventDefault();
         commitAppendInput(inp, buffer, opts);
@@ -322,6 +461,20 @@
     table.className = 'fleditor-hex-grid-table';
     table.setAttribute('role', 'grid');
 
+    const colgroup = document.createElement('colgroup');
+    const colOff = document.createElement('col');
+    colOff.className = 'fleditor-hex-grid-col-offset';
+    colgroup.appendChild(colOff);
+    for (let ci = 0; ci < H.BYTES_PER_LINE; ci++) {
+      const colByte = document.createElement('col');
+      colByte.className = 'fleditor-hex-grid-col-byte';
+      colgroup.appendChild(colByte);
+    }
+    const colAsc = document.createElement('col');
+    colAsc.className = 'fleditor-hex-grid-col-ascii';
+    colgroup.appendChild(colAsc);
+    table.appendChild(colgroup);
+
     const thead = document.createElement('thead');
     const hr = document.createElement('tr');
     const corner = document.createElement('th');
@@ -347,8 +500,7 @@
       const rowStart = pageBase + row * H.BYTES_PER_LINE;
       const tr = document.createElement('tr');
 
-      const offTd = document.createElement('th');
-      offTd.scope = 'row';
+      const offTd = document.createElement('td');
       offTd.className = 'fleditor-hex-grid-offset';
       offTd.textContent = rowStart.toString(16).padStart(8, '0');
       tr.appendChild(offTd);
@@ -359,6 +511,7 @@
 
       for (let col = 0; col < H.BYTES_PER_LINE; col++) {
         const td = document.createElement('td');
+        td.className = 'fleditor-hex-grid-byte-td';
         const abs = rowStart + col;
         if (showAppend && abs === buffer.length) {
           mountAppendCell(td, buffer, opts, container);
@@ -366,7 +519,7 @@
           continue;
         }
         if (abs >= buffer.length) {
-          td.className = 'fleditor-hex-grid-pad';
+          td.classList.add('fleditor-hex-grid-pad');
           tr.appendChild(td);
           continue;
         }
@@ -400,6 +553,8 @@
     buildAsciiForRow,
     focusCellByOffset,
     focusAppendCell,
+    arrowTargetOffset,
+    arrowTargetFromAppend,
     renderHexGrid,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
