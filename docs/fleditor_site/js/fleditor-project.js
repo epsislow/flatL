@@ -49,10 +49,11 @@
             }
           }
           data.files = files;
-          if (!files[data.openPath]) {
+          data.openPath = resolveProjectFilePath({ files: files }, data.openPath);
+          if (files[data.openPath] == null) {
             const keys = Object.keys(files);
             data.openPath = keys[0] || DEFAULT_MAIN;
-            if (!files[data.openPath]) {
+            if (files[data.openPath] == null) {
               files[data.openPath] = DEFAULT_SOURCE;
             }
           }
@@ -179,6 +180,50 @@
   /** Binary when stored with the project wrapper (e.g. created with +file → Binary). */
   function isBinaryProjectFile(_path, content) {
     return isBinaryProjectValue(content);
+  }
+
+  /** FlatL source path (syntax-highlighted editor). */
+  function isFlatlProjectFile(path) {
+    const norm = normalizePath(path);
+    return !!norm && norm.endsWith('.fl');
+  }
+
+  /** UTF-8 text in project storage (not binary wrapper). */
+  function isTextProjectFile(_path, content) {
+    return !isBinaryProjectValue(content);
+  }
+
+  /**
+   * Match a tree path or leaf name to a project.files key (exact, suffix, or unique basename).
+   * @returns {string} resolved key, or normalized input if none
+   */
+  function resolveProjectFilePath(project, pathOrLeaf) {
+    const norm = normalizePath(pathOrLeaf);
+    if (!norm || !project || !project.files) {
+      return norm;
+    }
+    if (Object.prototype.hasOwnProperty.call(project.files, norm)) {
+      return norm;
+    }
+    const leaf = norm.split('/').pop();
+    const paths = listFilePaths(project);
+    const matches = paths.filter(function (p) {
+      return p === norm || p.endsWith('/' + norm) || p.split('/').pop() === leaf;
+    });
+    if (matches.length === 1) {
+      return matches[0];
+    }
+    if (matches.length > 1) {
+      const prefer = matches.find(function (p) {
+        return p === norm || p.endsWith('/' + leaf);
+      });
+      if (prefer) {
+        return prefer;
+      }
+      matches.sort();
+      return matches[0];
+    }
+    return norm;
   }
 
   function bytesToProjectValue(u8) {
@@ -510,6 +555,9 @@
     bytesToProjectValue,
     bytesToProjectValueBinary,
     isBinaryProjectFile,
+    isFlatlProjectFile,
+    isTextProjectFile,
+    resolveProjectFilePath,
     buildTree,
     ensureParentDirs,
     listFilePaths,

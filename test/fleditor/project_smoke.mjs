@@ -46,4 +46,15 @@ if (!reset.files[P.DEFAULT_MAIN] || P.listFilePaths(reset).length !== 1) {
   process.exit(1);
 }
 
+if (!P.isFlatlProjectFile('main.fl') || P.isFlatlProjectFile('data.txt')) {
+  console.error('project_smoke: isFlatlProjectFile');
+  process.exit(1);
+}
+
+const rp = { files: { 'examples/aa.txt': 'hi' } };
+if (P.resolveProjectFilePath(rp, 'aa.txt') !== 'examples/aa.txt') {
+  console.error('project_smoke: resolveProjectFilePath basename');
+  process.exit(1);
+}
+
 console.log('OK: fleditor project smoke');

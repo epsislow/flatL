@@ -77,8 +77,8 @@
   let ioAllowEmpty = false;
   let ioCharMode = false;
 
-  /** 'text' | 'binary' */
-  let editorViewMode = 'text';
+  /** 'flatl' | 'plaintext' | 'binary' */
+  let editorViewMode = 'flatl';
   /** @type {Uint8Array | null} */
   let binaryBuffer = null;
   /** @type {Uint8Array | null} */
@@ -188,6 +188,17 @@
     treeFolderState.set(dirPath, !currently);
     saveTreeFolderState();
     renderFileTree();
+  }
+
+  function expandAncestorDirsForPath(filePath) {
+    const norm = P.normalizePath(filePath);
+    if (!norm) {
+      return;
+    }
+    for (const d of ancestorDirPaths(norm)) {
+      treeFolderState.set(d, true);
+    }
+    saveTreeFolderState();
   }
 
   treeFolderState = loadTreeFolderState();
@@ -667,6 +678,7 @@
     binarySavedSnapshot = null;
     binaryPage = 0;
     binaryHighlightOffset = -1;
+    editorViewMode = 'flatl';
     setEditorSurfaceMode('text');
     if (binaryHexBar) {
       binaryHexBar.hidden = true;
@@ -689,14 +701,46 @@
     return true;
   }
 
+  function runEntryPath() {
+    const open = currentOpenPath();
+    if (open && P.isFlatlProjectFile(open)) {
+      return open;
+    }
+    const paths = P.listFilePaths(project);
+    if (paths.includes(P.DEFAULT_MAIN)) {
+      return P.DEFAULT_MAIN;
+    }
+    for (let i = 0; i < paths.length; i++) {
+      if (P.isFlatlProjectFile(paths[i])) {
+        return paths[i];
+      }
+    }
+    return open || P.DEFAULT_MAIN;
+  }
+
+  function loadTextEditorForPath(norm, content) {
+    editorViewMode = P.isFlatlProjectFile(norm) ? 'flatl' : 'plaintext';
+    setEditorSurfaceMode('text');
+    cm.setOption('mode', editorViewMode === 'flatl' ? 'flatl' : 'text/plain');
+    cm.setValue(typeof content === 'string' ? content : '');
+    cm.clearHistory();
+    const wrap = cm.getWrapperElement();
+    if (wrap) {
+      wrap.style.display = '';
+      wrap.style.visibility = 'visible';
+    }
+  }
+
   function updateEditorHeader() {
     if (editorKindLabel) {
       if (!hasOpenFile()) {
         editorKindLabel.textContent = 'Editor';
       } else if (editorViewMode === 'binary') {
         editorKindLabel.textContent = 'Hex editor';
-      } else {
+      } else if (editorViewMode === 'flatl') {
         editorKindLabel.textContent = 'Fl editor';
+      } else {
+        editorKindLabel.textContent = 'Text editor';
       }
     }
     if (!editorPathLabel) {
@@ -802,7 +846,7 @@
 
   function enterEmptyEditorState() {
     leaveBinaryEditor();
-    editorViewMode = 'text';
+    editorViewMode = 'flatl';
     project.openPath = null;
     suppressChange = true;
     cm.setValue('');
@@ -815,8 +859,8 @@
   }
 
   function loadFileIntoEditor(path) {
-    const norm = P.normalizePath(path);
-    if (!project.files[norm]) {
+    const norm = P.resolveProjectFilePath(project, path);
+    if (project.files[norm] == null) {
       return;
     }
     leaveBinaryEditor();
@@ -826,13 +870,11 @@
       suppressChange = false;
       enterBinaryEditorFromBytes(bytes);
     } else {
-      editorViewMode = 'text';
-      cm.setOption('mode', 'flatl');
-      cm.setValue(project.files[norm]);
-      cm.clearHistory();
+      loadTextEditorForPath(norm, project.files[norm]);
       suppressChange = false;
       updateEditorEmptyState();
       updateEditorHeader();
+      updateUndoRedoButtons();
     }
     project.openPath = norm;
     setDirty(false);
@@ -998,16 +1040,26 @@
   }
 
   function openFile(path) {
-    const norm = P.normalizePath(path);
-    if (!project.files[norm]) {
+    const norm = P.resolveProjectFilePath(project, path);
+    if (project.files[norm] == null) {
+      const hint = P.listFilePaths(project)
+        .filter(function (p) {
+          return p.split('/').pop() === P.normalizePath(path).split('/').pop();
+        })
+        .join(', ');
+      const msg = hint
+        ? 'File not in project: ' + path + ' (try: ' + hint + ')'
+        : 'File not in project: ' + path;
+      void showAlert(msg, 'Open file');
       return;
     }
-    if (norm === currentOpenPath()) {
-      return;
+    const switching = norm !== currentOpenPath();
+    if (switching && hasOpenFile()) {
+      flushEditorToProject();
+      persistProject();
+      dirty = false;
     }
-    confirmDiscardIfDirty(function () {
-      loadFileIntoEditor(norm);
-    });
+    loadFileIntoEditor(norm);
   }
 
   function renderFileTree() {
@@ -1074,6 +1126,7 @@
           });
         } else {
           row.classList.add('fleditor-tree-row--file');
+          row.dataset.path = node.path;
           const spacer = document.createElement('span');
           spacer.className = 'fleditor-tree-toggle-spacer';
           spacer.setAttribute('aria-hidden', 'true');
@@ -1086,16 +1139,7 @@
           }
           const isBin = P.isBinaryProjectFile(node.path, project.files[node.path]);
           label.textContent = (isBin ? '⬡ ' : '') + node.name;
-          label.tabIndex = 0;
-          label.addEventListener('click', function () {
-            openFile(node.path);
-          });
-          label.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              openFile(node.path);
-            }
-          });
+          row.tabIndex = 0;
           row.appendChild(label);
           addDeleteButton(row, 'Delete file', function () {
             requestDeleteFile(node.path);
@@ -1111,6 +1155,37 @@
     }
 
     renderNodes(P.buildTree(project), 0);
+  }
+
+  function initFileTreeOpen() {
+    if (!fileTreeEl || fileTreeEl.dataset.openBound === '1') {
+      return;
+    }
+    fileTreeEl.dataset.openBound = '1';
+    fileTreeEl.addEventListener('click', function (e) {
+      const row = e.target.closest('.fleditor-tree-row--file');
+      if (!row || e.target.closest('.fleditor-tree-delete')) {
+        return;
+      }
+      const path = row.dataset.path;
+      if (path) {
+        openFile(path);
+      }
+    });
+    fileTreeEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') {
+        return;
+      }
+      const row = e.target.closest('.fleditor-tree-row--file');
+      if (!row || e.target.closest('.fleditor-tree-delete')) {
+        return;
+      }
+      e.preventDefault();
+      const path = row.dataset.path;
+      if (path) {
+        openFile(path);
+      }
+    });
   }
 
   function initDeleteModal() {
@@ -1258,11 +1333,13 @@
       e.preventDefault();
       const raw = pathInput.value;
       const isBinary = binaryCheck.checked;
-      dialog.close();
       const resolve = newFileModalResolve;
       newFileModalResolve = null;
+      dialog.close();
       if (resolve) {
-        resolve({ path: raw, binary: isBinary });
+        window.requestAnimationFrame(function () {
+          resolve({ path: raw, binary: isBinary });
+        });
       }
     });
     cancelBtn.addEventListener('click', function () {
@@ -1323,15 +1400,22 @@
       await showAlert('File already exists.', 'New file');
       return;
     }
-    confirmDiscardIfDirty(function () {
-      P.ensureParentDirs(project, norm);
-      if (choice.binary) {
-        project.files[norm] = P.bytesToProjectValueBinary(H.newEmptyBinaryBuffer());
-      } else {
-        project.files[norm] = initialTextContentForPath(norm);
-      }
-      persistProject();
-      loadFileIntoEditor(norm);
+    if (hasOpenFile() && dirty) {
+      flushEditorToProject();
+      dirty = false;
+    }
+    P.ensureParentDirs(project, norm);
+    if (choice.binary) {
+      project.files[norm] = P.bytesToProjectValueBinary(H.newEmptyBinaryBuffer());
+    } else {
+      project.files[norm] = initialTextContentForPath(norm);
+    }
+    expandAncestorDirsForPath(norm);
+    persistProject();
+    loadFileIntoEditor(norm);
+    renderFileTree();
+    window.requestAnimationFrame(function () {
+      renderFileTree();
     });
   }
 
@@ -1540,6 +1624,7 @@
       }
     });
     updateUndoRedoButtons();
+    initFileTreeOpen();
     renderFileTree();
     updateEditorHeader();
     updateEditorEmptyState();
@@ -1727,13 +1812,16 @@
       implicitSaveForRun();
       P.syncToMemfs(wasmModule, project.files);
       const memfsBeforeRun = P.snapshotMemfsBytes(wasmModule);
-      runOutcome = await runProjectEntry(wasmModule, currentOpenPath());
+      runOutcome = await runProjectEntry(wasmModule, runEntryPath());
       const importReport = P.syncMemfsChangesToProject(wasmModule, project, memfsBeforeRun);
       const importMsg = P.formatMemfsImportReport(importReport);
       if (importMsg) {
         P.saveProject(project);
         renderFileTree();
         term.write('\r\n' + importMsg + '\r\n');
+      }
+      if (hasOpenFile()) {
+        loadFileIntoEditor(currentOpenPath());
       }
     } catch (e) {
       term.write('\r\n[error] ' + e.message + '\r\n');

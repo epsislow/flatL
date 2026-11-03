@@ -97,13 +97,18 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 
 - **Project panel**; **Run** / **Save** / Undo/Redo on the **editor action bar** (under the file path). Run uses the open file; Run implicitly saves before compile.
 - **MEMFS** under `/fleditor/…` on Run.
-- Before VM execution, the runtime **`chdir`s to `/fleditor`**, so `file.readCtx('data.txt')` in source matches project file **`data.txt`** (no `/fleditor/` prefix required in `.fl`).
+- Before VM execution, the runtime **`chdir`s to `/fleditor`**, so `file.readCtx('data.txt')` in source matches project file **`data.txt`** (no `/fleditor/` prefix required in `.fl`). After **Run**, MEMFS sync adds files by **relative path** (e.g. `aa.txt` at project root, not under `examples/` unless you created `examples/aa.txt`).
 - After **Run**, any file under `/fleditor/` that is **new** or **changed** (byte content vs snapshot right before execution) is **synced into the Project panel** and `localStorage`. Text is stored as UTF-8 strings; other bytes use an internal base64 wrapper (binary-safe round-trip via MEMFS). The wrapper is never shown in the UI.
-- **`+file`** opens a dialog: enter the **path with extension**, check **Binary (Hex editor)** for a binary file (empty, wrapper storage), or leave unchecked for **text** (Fl editor). New `.fl` files get a minimal `#main` … `OK` template; other text paths start empty. Binary entries in the tree are marked with **⬡** (wrapper only, not by extension alone).
+- **`+file`** opens a dialog: enter the **path with extension**, check **Binary (Hex editor)** for a binary file (empty, wrapper storage), or leave unchecked for **text**. New `.fl` files get a minimal `#main` … `OK` template; other text paths start empty. Binary entries in the tree are marked with **⬡** (wrapper only, not by extension alone).
+- **Run** compiles a **`.fl` entry** (`main.fl` if present, else the first `.fl` in the project), even when a **text** or **hex** file is open in the editor.
+
+## Text editor (non-binary, not `.fl`)
+
+UTF-8 project files such as **`data.txt`**, **`config.json`**, or **`notes.md`** open in **Text editor** (plain CodeMirror, no FlatL highlighting). Click the file row in the Project tree to open it; switching files **auto-saves** the previous file into the project (no discard dialog). **Save** writes `localStorage`. After **Run**, the open file reloads if MEMFS changed it.
 
 ## Hex editor (binary files)
 
-When a binary file is open, the panel title shows **Hex editor** and the path; FlatL sources use **Fl editor**.
+When a binary file is open, the panel title shows **Hex editor** and the path. **`.fl`** sources use **Fl editor**.
 
 ### View layout
 
