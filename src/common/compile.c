@@ -319,7 +319,14 @@ static int find_guard_handler(const FgirProgram *prog, const FgirBlock *b, const
     }
     if (ins->line_label[0]) {
         snprintf(lab, sizeof lab, FLAT_OR_HANDLER_PREFIX "%s.%s", b->label, ins->line_label);
-        return find_block_idx(prog, lab);
+        idx = find_block_idx(prog, lab);
+        if (idx >= 0) {
+            return idx;
+        }
+        if (flat_label_is_or_handler(b->label)) {
+            snprintf(lab, sizeof lab, FLAT_OR_HANDLER_PREFIX "%s", ins->line_label);
+            return find_block_idx(prog, lab);
+        }
     }
     return -1;
 }
@@ -440,6 +447,25 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             memcpy(payload + 4, ins->call_out, strlen(ins->call_out) + 1);
             plen = (uint8_t)(4 + strlen(ins->call_out) + 1);
             if (emit_instr(code, OP_CALL, payload, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case FGIR_JUMP: {
+            uint8_t payload[4];
+            int tgt = find_block_idx(prog, ins->call_target);
+            uint32_t off32 = 0;
+            if (tgt < 0) {
+                snprintf(err, err_size, "unknown jump target %s", ins->call_target);
+                return -1;
+            }
+            if (ins->call_target[0] == '\0') {
+                snprintf(err, err_size, "jump requires #block target");
+                return -1;
+            }
+            off32 = (uint32_t)offs[tgt].abs_offset;
+            memcpy(payload, &off32, 4);
+            if (emit_instr(code, OP_JUMP, payload, 4) != 0) {
                 return -1;
             }
             break;

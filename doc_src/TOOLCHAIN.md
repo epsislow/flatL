@@ -165,7 +165,8 @@ Use forward slashes or escaped backslashes; link **`src\port\flat_port_win.c`** 
 ```bash
 bin/flvm --version
 bin/flvm program.fb
-bin/flvm --trace program.fb          # opcode log → stderr
+bin/flvm --trace program.fb
+bin/flvm --max-steps 1000000 program.fb          # opcode log → stderr
 bin/flvm --trace-vars program.fb     # opcode + variables → stderr
 ```
 

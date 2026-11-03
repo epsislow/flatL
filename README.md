@@ -122,6 +122,7 @@ See [doc_src/TOOLCHAIN.md — flatl](doc_src/TOOLCHAIN.md#flatl-driver-optional-
 | `OP_ASSIGN` | `0x01` | State / assignment |
 | `OP_GUARD` | `0x02` | Conditional; jump on false |
 | `OP_CALL` | `0x03` | Call block; push return address |
+| `OP_JUMP` | `0x0D` | Jump to block; no call frame; clears loop frames |
 | `OP_RETURN` | `0x04` | Pop call stack |
 | `OP_FOREACH` | `0x05` | Collection iteration |
 | `OP_FOR` | `0x0C` | Numeric `for(ntimes, i, '#block')` |

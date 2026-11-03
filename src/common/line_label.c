@@ -129,17 +129,23 @@ int flat_line_label_validate_unit(const FgirProgram *unit, const char *path, cha
         int j;
         for (j = 0; j < b->instr_count; j++) {
             const char *lab = b->instr[j].line_label;
+            int bi2;
             int k;
 
             if (!lab[0]) {
                 continue;
             }
-            for (k = j + 1; k < b->instr_count; k++) {
-                if (b->instr[k].line_label[0] &&
-                    strcmp(b->instr[k].line_label, lab) == 0) {
-                    snprintf(err, err_size, "%s: duplicate line label #.%s in %s", path, lab,
-                             b->label);
-                    return -1;
+            for (bi2 = 0; bi2 < unit->block_count; bi2++) {
+                const FgirBlock *b2 = &unit->blocks[bi2];
+                for (k = 0; k < b2->instr_count; k++) {
+                    if (bi2 == bi && k == j) {
+                        continue;
+                    }
+                    if (b2->instr[k].line_label[0] &&
+                        strcmp(b2->instr[k].line_label, lab) == 0) {
+                        snprintf(err, err_size, "%s: duplicate line label #.%s", path, lab);
+                        return -1;
+                    }
                 }
             }
         }

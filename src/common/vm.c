@@ -61,6 +61,9 @@ typedef struct {
     int unhandled_panic;
     FlatFileTable files;
     FlatIOContext *io_ctx;
+    int via_jump;
+    uint64_t step_count;
+    uint64_t jump_count;
 } VmState;
 
 static void vm_teardown(VmState *st, int rc);
@@ -78,6 +81,16 @@ static int vm_finish(VmState *st, char *guard_names, FlatValue *guard_vals, int 
 
 static FlatTermination vm_term_for_exit1(const VmState *st) {
     return st->unhandled_panic ? FLAT_TERM_PANIC : FLAT_TERM_ERROR;
+}
+
+static uint64_t vm_effective_max_jumps(const FlatVmOptions *opts) {
+    if (opts && opts->no_jump_limit) {
+        return UINT64_MAX;
+    }
+    if (opts && opts->max_jumps > 0) {
+        return opts->max_jumps;
+    }
+    return (uint64_t)FLAT_VM_DEFAULT_MAX_JUMPS;
 }
 
 static int vm_fail_setup(VmState *st, const FlatVmOptions *opts) {
@@ -593,6 +606,8 @@ static const char *opcode_name(uint8_t opcode) {
         return "NATIVE";
     case OP_FREE:
         return "FREE";
+    case OP_JUMP:
+        return "JUMP";
     default:
         return "?";
     }
@@ -794,6 +809,17 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         uint8_t payload_size;
         const uint8_t *payload;
 
+        if (opts && opts->max_steps > 0) {
+            st.step_count++;
+            if (st.step_count > opts->max_steps) {
+                if (vm_jump_panic_any(&st, bc, &ip, "vm.step_limit", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC,
+                                     opts);
+                }
+                continue;
+            }
+        }
+
         if ((size_t)ip + 2 > bc->code_size) {
             return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE, opts);
         }
@@ -932,7 +958,28 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             if (st.call_sp >= VM_MAX_CALL) {
                 return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
             }
+            st.via_jump = 0;
             st.calls[st.call_sp++].return_ip = ip + 2u + payload_size;
+            ip = target;
+            continue;
+        }
+        case OP_JUMP: {
+            uint32_t target = 0;
+            uint64_t jump_max = vm_effective_max_jumps(opts);
+            if (payload_size < 4) {
+                return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
+            }
+            st.jump_count++;
+            if (st.jump_count > jump_max) {
+                if (vm_jump_panic_any(&st, bc, &ip, "vm.jump_limit", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC,
+                                     opts);
+                }
+                continue;
+            }
+            memcpy(&target, payload, 4);
+            st.loop_sp = 0;
+            st.via_jump = 1;
             ip = target;
             continue;
         }

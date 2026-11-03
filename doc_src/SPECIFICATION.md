@@ -24,6 +24,7 @@ Programs are **not** abstract syntax trees. They are a **flat graph** of **basic
 | `#name(arg1, arg2)` | Block with parameter list |
 | Indented lines under a block | Sequential execution (implicit AND), top to bottom |
 | `call #block(args) -> var` | Invoke another block; bind result to `var` |
+| `jump #block` | Transfer control to block **without** a `call` frame (no trailing `;`) |
 | `expr == value` | Guard; on false, branch to `#or` handler |
 | `OK` / `FAIL` | Terminal success / logical failure |
 | `return expr` | Return from block to caller |
@@ -39,13 +40,13 @@ Programs are **not** abstract syntax trees. They are a **flat graph** of **basic
 - **No trailing comments** on instruction lines — `--` in the middle of a line is part of the instruction text.
 - Block comments and line comments may appear before blocks, between blocks, or between instructions.
 
-There is **no programmer-visible `goto`**. Jump targets are derived from block names and **1-based** instruction indices.
+Explicit **`jump #block`** transfers control at compile-time-resolved block entry. Guard failure still uses **`#or.*`** handler blocks (not `jump`).
 
 ### 1.1.1 Language keywords vs native libraries
 
 **Keywords** (compile to VM opcodes — not optional “built-in functions”):
 
-- `#block`, `call`, `return`, `foreach`, `for`, `OK`, `FAIL`, `->` (call result binding)
+- `#block`, `call`, `jump`, `return`, `foreach`, `for`, `OK`, `FAIL`, `->` (call result binding)
 - **`free(var)`** — release pool-backed value held by **`var`**; **`var`** becomes **`null`** (see [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) §5)
 - Guards and assignment lines (`=`, `==`) map to `OP_ASSIGN` / `OP_GUARD`
 
@@ -96,9 +97,16 @@ has_funds == true   #.checkFunds
 |------|--------|
 | Position | **EOL only** — whitespace, then `#.` + identifier; not inside expressions |
 | Identifier | Letter first; then letters, digits, `_`; no `.` |
-| Uniqueness | At most one `#.ident` per line; `(block, ident)` unique **per `.fl` file** |
-| Handlers | Define `#or.#block.ident` or `#or.#block.n`; numeric and named forms may coexist for the same instruction |
+| Uniqueness | At most one `#.ident` per line; each **ident** appears on **at most one line in the `.fl` file** (global per unit) |
+| Handlers | Define `#or.#block.ident` or `#or.#block.n`; in a **`#or.*` handler block**, a failed guard may use short handler **`#or.<ident>`** (same `ident` as the guard’s `#.<ident>`) |
 | References | Use `#or.#block.ident` (no `#.` in the path); last segment is either a **1-based index** or a **line label** |
+
+When a guard fails, the compiler resolves the handler block in order:
+
+1. **`#or.<currentBlock>.<n>`** or **`#or.<currentBlock>.<lineLabel>`** (always tried first).
+2. If **`<currentBlock>`** is itself a **`#or.*`** handler and the guard has **`#.<lineLabel>`**, also try **`#or.<lineLabel>`** (short chain form).
+
+There is **at most one** handler per **`#.<lineLabel>`** in a file — do not define both `#or.#main.X` and `#or.X` for the same line label.
 
 Example:
 
@@ -160,7 +168,20 @@ Example:
 
 An **empty** `#or` handler block for a guard inside the loop body means **continue** to the next collection item.
 
-#### 1.4.2 `for` (numeric)
+#### 1.4.2 `jump` (control transfer)
+
+| Rule | Detail |
+|------|--------|
+| Syntax | **`jump #block`** — no semicolon; **`#block`** must exist |
+| Call stack | **Unchanged** — no push, no pop |
+| Loop stack | **`for` / `foreach` frames cleared** on `jump` (abandon active loops) |
+| After jump | Instructions below `jump` in the same block are **not** executed |
+| vs `call` | Use **`call`** when you need a **`return`** back to the caller; use **`jump`** for shared paths (e.g. `#common`) without a frame |
+| Jump budget | Default **1000** `OP_JUMP` executions per run (`FLAT_VM_DEFAULT_MAX_JUMPS`); exceed → PANIC `vm.jump_limit` (routed like other panics). Override: `flvm --max-jumps N`, or `--no-jump-limit` |
+
+Work plan: [`.cursor/plans/jump-or-handlers.plan.md`](../.cursor/plans/jump-or-handlers.plan.md).
+
+#### 1.4.3 `for` (numeric)
 
 `for(ntimes, i, '#loop_body')` — same **block + `return`** model as `foreach`; third argument is a **block label** (quoted `'#name'`), rewritten on `use` link like `foreach`.
 
@@ -290,6 +311,7 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 | `OP_FREE` | `0x0B` | Variable name **NUL-terminated** — unbind pool value; **`var = null`** |
 | `OP_GUARD` | `0x02` | `uint32` absolute IP of `#or.<block>.<index>` handler + guard expr **NUL-terminated** |
 | `OP_CALL` | `0x03` | `uint32` target block IP + output var name **NUL-terminated** (may be empty) |
+| `OP_JUMP` | `0x0D` | `uint32` target block IP |
 | `OP_RETURN` | `0x04` | Empty — pops call or advances `foreach` |
 | `OP_FOREACH` | `0x05` | `uint32` loop block IP + original `foreach(...)` line **NUL-terminated** |
 | `OP_FOR` | `0x0C` | `uint32` loop block IP + original `for(...)` line **NUL-terminated** |
@@ -334,7 +356,7 @@ Conceptual bytecode for `#main`:
 
 - Block headers: `#name` or `#name(a, b)`; exactly one `#main`.
 - Lines under a block are instructions; full-line `--` comments and `--<` … `-->` blocks skipped.
-- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `for(...)`, `call #…`, lines with `==` (guard), else `assign`.
+- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `for(...)`, `call #…`, `jump #…`, lines with `==` (guard), else `assign`.
 
 **Compile-time linking:**
 
@@ -351,7 +373,8 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 |-----------|----------|
 | **Variables** | v0.2: tagged **BOOL**, **NUMBER**, **STRING** (INLINE ≤127 B or REF pool + slice views). Details: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md). |
 | **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to `#or` handler IP or exit 2 if unmapped. |
-| **Call** | Push return IP, jump to target block. |
+| **Call** | Push return IP, jump to target block; clears “entered via jump” flag. |
+| **Jump** | Set IP to target block; **clear** active `for`/`foreach` frames; mark entry as via jump (no call frame). |
 | **Return** | Pop **call** frame first if any; else if inside `foreach` / `for` body: next iteration or resume after the loop; else exit 0 (complete). |
 | **Foreach** | Reads collection variable as comma-separated list; binds item var; enters loop block; `return` advances iterator. |
 | **PANIC** | Keyword in source emits `OP_PANIC`; jumps to handler block (handler may end with `OK`). |

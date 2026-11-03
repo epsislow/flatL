@@ -13,9 +13,13 @@ static void print_version(void) {
 
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
-    fprintf(stderr, "       %s [--trace] [--trace-vars] program.fb\n", prog);
+    fprintf(stderr, "       %s [--trace] [--trace-vars] [--max-steps N] program.fb\n", prog);
     fprintf(stderr, "\n  --trace       log each opcode to stderr\n");
     fprintf(stderr, "  --trace-vars  log opcode + variable snapshot to stderr\n");
+    fprintf(stderr, "  --max-jumps N cap OP_JUMP count (default %u; 0 = default)\n",
+            (unsigned)FLAT_VM_DEFAULT_MAX_JUMPS);
+    fprintf(stderr, "  --no-jump-limit disable jump cap\n");
+    fprintf(stderr, "  --max-steps N cap total opcode dispatches (0 = unlimited)\n");
     return 2;
 }
 
@@ -38,6 +42,24 @@ int main(int argc, char **argv) {
         if (strcmp(argv[i], "--trace-vars") == 0) {
             opts.trace = 1;
             opts.trace_vars = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--max-steps") == 0) {
+            if (i + 1 >= argc) {
+                return usage(argv[0]);
+            }
+            opts.max_steps = (uint64_t)strtoull(argv[++i], NULL, 10);
+            continue;
+        }
+        if (strcmp(argv[i], "--max-jumps") == 0) {
+            if (i + 1 >= argc) {
+                return usage(argv[0]);
+            }
+            opts.max_jumps = (uint64_t)strtoull(argv[++i], NULL, 10);
+            continue;
+        }
+        if (strcmp(argv[i], "--no-jump-limit") == 0) {
+            opts.no_jump_limit = 1;
             continue;
         }
         if (argv[i][0] == '-') {

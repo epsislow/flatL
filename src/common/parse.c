@@ -119,6 +119,9 @@ static FgirInstrKind classify(const char *line) {
     if (starts_with_kw(line, "call")) {
         return FGIR_CALL;
     }
+    if (starts_with_kw(line, "jump")) {
+        return FGIR_JUMP;
+    }
     if (flat_native_is_call_line(line)) {
         return FGIR_IO;
     }
@@ -375,7 +378,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             snprintf(ins->text, sizeof ins->text, "%s", p);
             ins->kind = classify(p);
             ins->index = b->instr_count + 1;
-            if (ins->kind == FGIR_CALL) {
+            if (ins->kind == FGIR_CALL || ins->kind == FGIR_JUMP) {
                 parse_call_extras(ins);
             }
             if (ins->kind == FGIR_FOREACH) {

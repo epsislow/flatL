@@ -1,0 +1,12 @@
+#main
+  for(3, k, '#step')
+  io.outln('after')
+  OK
+
+#step
+  jump #leave
+  return
+
+#leave
+  io.outln('left')
+  return

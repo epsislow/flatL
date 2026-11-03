@@ -1,0 +1,6 @@
+#main
+  jump #main
+  OK
+
+#panic.any
+  FAIL

@@ -1,0 +1,19 @@
+#main
+  A = 4
+  A == 2 #.A2
+  io.outln('two')
+  jump #common
+
+#common
+  B = A * 2
+  io.outln(B)
+  OK
+
+#or.#main.A2
+  A == 3 #.A3
+  io.outln('three')
+  jump #common
+
+#or.A3
+  io.outln('other')
+  jump #common

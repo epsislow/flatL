@@ -3,6 +3,8 @@
 
 #include "fb_format.h"
 
+#include <stdint.h>
+
 typedef enum FlatTermination {
     FLAT_TERM_UNKNOWN = 0,
     FLAT_TERM_OK = 1,
@@ -12,10 +14,15 @@ typedef enum FlatTermination {
     FLAT_TERM_ERROR = 5
 } FlatTermination;
 
+#define FLAT_VM_DEFAULT_MAX_JUMPS 1000u
+
 typedef struct FlatVmOptions {
     int trace;
     int trace_vars;
     int *out_termination;
+    uint64_t max_steps; /* 0 = unlimited total opcodes */
+    uint64_t max_jumps; /* 0 = use FLAT_VM_DEFAULT_MAX_JUMPS */
+    int no_jump_limit;  /* ignore jump budget (tests / long runs) */
 } FlatVmOptions;
 
 int flat_vm_run(const FlatBytecode *bc);

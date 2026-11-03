@@ -1,0 +1,8 @@
+#main
+  jump #common
+  io.outln('skipped')
+  OK
+
+#common
+  io.outln('joined')
+  OK
