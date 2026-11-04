@@ -82,8 +82,8 @@ help:
 	@echo "  make fleditor-serve-forced  kill port 8765 then serve (fuser)"
 	@echo "  make fleditor-smoke  HTTP smoke test for fleditor static server"
 	@echo "  make fleditor-wasm-smoke / fleditor-wasm-multifile-smoke  headless WASM tests"
-	@echo "  make rebuild      clean + all + fleditor-wasm (native toolchain + browser compiler)"
-	@echo "  make rebuild-native  clean + all only (no emcc / WASM)"
+	@echo "  make rebuild      clean + all; fleditor-wasm if emcc on PATH"
+	@echo "  make rebuild-native  clean + all only (never runs emcc)"
 	@echo "  make fleditor-rebuild  alias for make rebuild (+ browser refresh hint)"
 	@echo ""
 	@echo "Note: if sources unchanged, make skips compile (up to date)."
@@ -128,11 +128,20 @@ json_generate_tests: $(BINDIR)/json_generate_tests$(EXEEXT)
 	find test/cases/json -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 	$(BINDIR)/json_generate_tests$(EXEEXT)
 
-rebuild: clean all fleditor-wasm
-	@echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"
+rebuild: clean all fleditor-wasm-optional
 
 rebuild-native: clean all
-	@echo "OK: rebuild-native (bin/* only; run make fleditor-wasm for fleditor)"
+	@echo "OK: rebuild-native (bin/* only; run make fleditor-wasm when emcc is on PATH)"
+
+.PHONY: fleditor-wasm-optional
+fleditor-wasm-optional:
+	@if command -v emcc >/dev/null 2>&1; then \
+		$(MAKE) -f Makefile.wasm fleditor-wasm; \
+		echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"; \
+	else \
+		echo "OK: rebuild (bin/* only; emcc not on PATH — skipped fleditor-wasm)"; \
+		echo "Tip: make rebuild-native is the same without WASM; install Emscripten for fleditor in browser."; \
+	fi
 
 fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
