@@ -1,5 +1,5 @@
 #main
   n = 1
-  n = json.parse_object('[]')
+  ? n = json.parse_object('[]')
   n == 1
   OK

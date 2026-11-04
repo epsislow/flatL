@@ -3,6 +3,6 @@ use native obj with O
 #main
   o = { ok: true }
   sentinel = 42
-  O.get(o, 'missing') -> sentinel
+  ? O.get(o, 'missing') -> sentinel
   io.outln(sentinel)
   OK

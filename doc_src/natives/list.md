@@ -25,27 +25,31 @@ Mutators (**`push`**, **`prepend`**, **`insert`**, **`set`**, **`remove_at`**, *
 
 **Memory:** LIST slots use **`bindCount`** and slot reuse (see [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §5). Reassigning **`xs = …`** releases the old list handle implicitly.
 
+## Line modifiers
+
+Recoverable errors → **PANIC** **`list.<fn>`** by default; **`?`** / **`~`** per [SPECIFICATION.md](../SPECIFICATION.md) §1.2.2.
+
 ## Functions
 
-| Call | Returns | Description |
-|------|---------|-------------|
-| `empty()` | LIST | New empty list (same as `[]`) |
-| `pack(v1, v2, …)` | LIST | New list from values; **`pack()`** → `[]`; max **1024** elements |
-| `push(list, val)` | LIST | Append at end (COW) |
-| `prepend(list, val)` | LIST | Insert at index **0** (COW) |
-| `insert(list, index, val)` | LIST | Insert at **index**; **index** ∈ [0, len]; **index == len** appends |
-| `set(list, index, val)` | LIST | Replace element at **index** (no length change) |
-| `get(list, index)` | any | Element at **index** (0-based); out of range → I/O error |
-| `len(list)` | NUMBER | Element count |
-| `index_of(list, val)` | NUMBER | First index where value equals **`val`** (`flat_value_equals`); **−1** if missing |
-| `contains(list, val)` | BOOL | **`index_of >= 0`** |
-| `remove_at(list, index)` | LIST | LIST without element at **index** |
-| `slice(list, start, end)` | LIST | Sublist **[start, end)** (half-open) |
-| `splice(list, start, count)` | LIST | Remove **`count`** elements starting at **`start`** (delete-only; no variadic insert yet) |
-| `range(stop)` | LIST | **`[0, 1, …, stop − 1)`** — one arg: **`stop`** is exclusive upper bound (whole NUMBER) |
-| `range(start, stop)` | LIST | **`[start, start+1, …)`** while **`x < stop`** (step **1**) |
-| `range(start, stop, step)` | LIST | Arithmetic progression; **`step != 0`**; forward if **`step > 0`**, backward if **`step < 0`** |
-| `repeat(n, value)` | LIST | **`n`** copies of **`value`**; **`n`** non-negative whole NUMBER, **`0 … 1024`**; **`n == 0`** → `[]` |
+| Call | Returns | Panic (no modifier) |
+|------|---------|---------------------|
+| `empty()` | LIST | **`list.empty`** — allocation failure |
+| `pack(v1, v2, …)` | LIST | **`list.pack`** — bad args or &gt;1024 elements |
+| `push(list, val)` | LIST | **`list.push`** — bad types / unknown list |
+| `prepend(list, val)` | LIST | **`list.prepend`** — bad types / unknown list |
+| `insert(list, index, val)` | LIST | **`list.insert`** — bad index or types |
+| `set(list, index, val)` | LIST | **`list.set`** — bad index or types |
+| `get(list, index)` | any | **`list.get`** — out-of-range or bad types |
+| `len(list)` | NUMBER | **`list.len`** — bad types / unknown list |
+| `index_of(list, val)` | NUMBER | **`list.index_of`** — bad types (success may return **−1**) |
+| `contains(list, val)` | BOOL | **`list.contains`** — bad types |
+| `remove_at(list, index)` | LIST | **`list.remove_at`** — bad index or types |
+| `slice(list, start, end)` | LIST | **`list.slice`** — bad range or types |
+| `splice(list, start, count)` | LIST | **`list.splice`** — bad range or types |
+| `range(stop)` | LIST | **`list.range`** — bad numeric args or overflow |
+| `range(start, stop)` | LIST | **`list.range`** — same |
+| `range(start, stop, step)` | LIST | **`list.range`** — same (**`step == 0`** fails) |
+| `repeat(n, value)` | LIST | **`list.repeat`** — bad **`n`** or types |
 
 **`range`** follows Python-style half-open bounds (same spirit as **`list.slice`**). Element count is capped at **`FLAT_LIST_MAX_ELEMS` (1024)**. Floating-point NUMBER elements are stored as NUMBER (whole-number arguments only at the API).
 

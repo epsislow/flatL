@@ -1,0 +1,8 @@
+#main
+  json.parse_list('[') -> xs
+  io.outln('skip')
+  OK
+
+#panic.any
+  io.outln('recovered')
+  OK

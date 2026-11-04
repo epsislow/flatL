@@ -4,34 +4,36 @@
 
 Paths are STRING (inline or REF). Tests often use **`cd {tmp}`** in `case.toml` so relative paths resolve next to the compiled `.fb`.
 
+Recoverable failures use **PANIC** with reason **`file.<fn>`** (or **`io.eof`** on EOF reads) unless the line has **`?`** / **`~`** ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).
+
 ## Opening
 
-| Call | Mode |
-|------|------|
-| `file.readCtx(path)` | Read existing file |
-| `file.createCtx(path)` | Create / truncate (`w+`) |
-| `file.writeCtx(path)` | Read/write existing, seek to 0 |
-| `file.appendCtx(path)` | Read/write, seek to EOF |
-| `file.readWriteCtx(path)` | Read/write existing |
+| Call | Mode | Panic (no modifier) |
+|------|------|---------------------|
+| `file.readCtx(path)` | Read existing file | **`file.readCtx`** — missing path, open error |
+| `file.createCtx(path)` | Create / truncate (`w+`) | **`file.createCtx`** |
+| `file.writeCtx(path)` | Read/write existing, seek to 0 | **`file.writeCtx`** |
+| `file.appendCtx(path)` | Read/write, seek to EOF | **`file.appendCtx`** |
+| `file.readWriteCtx(path)` | Read/write existing | **`file.readWriteCtx`** |
 
 Returns a **FILE** handle bound to a variable or `->` target.
 
 ## Handle operations
 
-| Call | Result |
-|------|--------|
-| `file.readln(fp)` | One line (strip `\n`); EOF → PANIC `io.eof` |
-| `file.writeln(fp, data)` | Write formatted **data** plus `\n` (like **`io.outln`**, but to the file) |
-| `file.read(fp)` | Rest of file as STRING REF |
-| `file.read(fp, n)` | Up to **n** bytes as STRING REF |
-| `file.write(fp, data)` | Write formatted value at current position (no trailing newline) |
-| `file.writeBytes(fp, data)` | Write raw STRING bytes (inline or REF); no formatting |
-| `file.flush(fp)` | Flush stdio buffer |
-| `file.pos(fp)` | Current byte offset (NUMBER) |
-| `file.size(fp)` | File size in bytes (NUMBER) |
-| `file.setpos(fp, n)` | Absolute seek |
-| `file.iseof(fp)` | BOOL after reads |
-| `file.close(fp)` | Close handle; if it was an active **`io.ctx*`** target, revert to **tin/tout/terr** |
+| Call | Result | Panic (no modifier) |
+|------|--------|---------------------|
+| `file.readln(fp)` | One line (strip `\n`) | **`file.readln`** / **`io.eof`** at EOF |
+| `file.writeln(fp, data)` | Write **data** + `\n` | **`file.writeln`** — bad handle / write error |
+| `file.read(fp)` | Rest of file as STRING REF | **`file.read`** |
+| `file.read(fp, n)` | Up to **n** bytes as STRING REF | **`file.read`** |
+| `file.write(fp, data)` | Write at current position | **`file.write`** |
+| `file.writeBytes(fp, data)` | Raw STRING bytes | **`file.writeBytes`** |
+| `file.flush(fp)` | Flush stdio buffer | **`file.flush`** |
+| `file.pos(fp)` | Current byte offset (NUMBER) | **`file.pos`** — invalid handle |
+| `file.size(fp)` | File size in bytes (NUMBER) | **`file.size`** |
+| `file.setpos(fp, n)` | Absolute seek | **`file.setpos`** |
+| `file.iseof(fp)` | BOOL after reads | **`file.iseof`** |
+| `file.close(fp)` | Close handle; revert active **`io.ctx*`** if needed | **`file.close`** |
 
 All open handles are closed on VM exit.
 

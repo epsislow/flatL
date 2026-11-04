@@ -393,12 +393,33 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             break;
         case FGIR_ASSIGN: {
-            uint8_t plen = (uint8_t)(strlen(ins->text) + 1);
-            if (plen > 220) {
+            uint8_t payload[1 + FGIR_MAX_LINE + 4];
+            uint32_t or_off = 0;
+            size_t tlen = strlen(ins->text) + 1;
+            uint8_t plen;
+
+            if (tlen + 1 > sizeof payload) {
                 snprintf(err, err_size, "assign too long");
                 return -1;
             }
-            if (emit_instr(code, OP_ASSIGN, ins->text, plen) != 0) {
+            if (ins->line_mod == FGIR_LINE_MOD_TILDE) {
+                int bt_idx = find_guard_handler(prog, b, ins);
+                if (bt_idx >= 0) {
+                    or_off = (uint32_t)offs[bt_idx].abs_offset;
+                }
+            }
+            payload[0] = (uint8_t)ins->line_mod;
+            memcpy(payload + 1, ins->text, tlen);
+            plen = (uint8_t)(1 + tlen);
+            if (ins->line_mod == FGIR_LINE_MOD_TILDE) {
+                memcpy(payload + plen, &or_off, 4);
+                plen = (uint8_t)(plen + 4);
+            }
+            if (plen > 225) {
+                snprintf(err, err_size, "assign too long");
+                return -1;
+            }
+            if (emit_instr(code, OP_ASSIGN, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -510,13 +531,14 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             break;
         }
         case FGIR_IO: {
-            uint8_t payload[2 + FGIR_MAX_LINE + 64];
+            uint8_t payload[2 + FGIR_MAX_LINE + 64 + 5];
             uint16_t native_id;
             char inner[FGIR_MAX_LINE];
             size_t il;
             size_t bl;
             size_t total;
             uint8_t plen;
+            uint32_t or_off = 0;
 
             {
                 char nerr[256];
@@ -532,9 +554,15 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                     return -1;
                 }
             }
+            if (ins->line_mod == FGIR_LINE_MOD_TILDE) {
+                int bt_idx = find_guard_handler(prog, b, ins);
+                if (bt_idx >= 0) {
+                    or_off = (uint32_t)offs[bt_idx].abs_offset;
+                }
+            }
             il = strlen(inner) + 1;
             bl = strlen(ins->call_out) + 1;
-            total = 2 + il + bl;
+            total = 2 + il + bl + 1 + 4;
             if (total > sizeof payload || total > 255) {
                 snprintf(err, err_size, "native payload too long");
                 return -1;
@@ -543,6 +571,8 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             payload[1] = (uint8_t)((native_id >> 8) & 0xffu);
             memcpy(payload + 2, inner, il);
             memcpy(payload + 2 + il, ins->call_out, bl);
+            payload[2 + il + bl] = (uint8_t)ins->line_mod;
+            memcpy(payload + 2 + il + bl + 1, &or_off, 4);
             plen = (uint8_t)total;
             if (emit_instr(code, OP_NATIVE, payload, plen) != 0) {
                 return -1;

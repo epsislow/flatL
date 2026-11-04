@@ -108,7 +108,56 @@ When a guard fails, the compiler resolves the handler block in order:
 
 There is **at most one** handler per **`#.<lineLabel>`** in a file — do not define both `#or.#main.X` and `#or.X` for the same line label.
 
+### 1.2.2 Line modifiers (`?` and `~`)
+
+Optional markers at the **start of an instruction line** (after indent), before any native call or assign-to-native:
+
+| Modifier | On recoverable native failure |
+|----------|--------------------------------|
+| *(none)* | **PANIC** — reason string is the **qualified native name** (e.g. `str.to_num`, `json.parse_list`, `obj.get`); handlers **`#panic.#block.n`**, **`#panic.#block.#.ident`**, or **`#panic.any`** (same as I/O panic) |
+| **`?`** | **Silent** — target binding unchanged; execution continues with the next line in the block |
+| **`~`** | **Logical failure** — no bind; branch to the same **`#or.*`** target as a **false guard** on that line (index or **`#.<ident>`**); if no handler → **FAIL** (exit 2) |
+
+Rules:
+
+- At most **one** of **`?`** or **`~`**; **`?~`** / **`~?`** → compile error.
+- Allowed only on lines that call a **native** (`io.outln(…)`, `str.to_num(…) -> n`, `n = json.parse_list(…)`, …). **`? OK`**, **`? x = 1`**, **`? call …`**, guards, **`jump`**, etc. → compile error.
+- **`? n = str.to_num(x)`** and **`? str.to_num(x) -> n`** are equivalent.
+- Scope is the **whole line**: any outcome that would be PANIC without a modifier is covered (parse fail, EOF on `? io.in_num`, stale I/O context, …).
+- **Bind** is atomic: on failure the assignment target is unchanged. **I/O** already performed on that line is not rolled back.
+
+Example — default panic vs silent:
+
+```text
+#main
+  raw = 'x'
+  str.to_num(raw) -> price
+  OK
+```
+
+→ PANIC `str.to_num` unless `#panic.any` (or a indexed handler) exists.
+
+```text
+  ? str.to_num(raw) -> price
+  io.outln('continues')
+  OK
+```
+
+Example — `~` and `#or`:
+
+```text
+#main
+  ~ str.to_num(raw) -> price   #.badNum
+  io.outln('only if parse OK')
+  OK
+
+#or.#main.badNum
+  io.outln('not a number')
+  OK
+```
+
 Example:
+
 
 ```text
 #main
@@ -307,7 +356,8 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 
 | Name | Hex | Payload (v0.1) |
 |------|-----|----------------|
-| `OP_ASSIGN` | `0x01` | Source line as UTF-8 **NUL-terminated** string (VM: simple `name = value` store) |
+| `OP_ASSIGN` | `0x01` | `u8` line_mod + source line **NUL-terminated**; if mod is **`~`**, trailing `u32` **`#or`** handler IP |
+| `OP_NATIVE` | `0x0A` | `u16` native id + inner args **NUL-terminated** + bind name **NUL-terminated** + `u8` line_mod + `u32` **`#or`** IP (IP used when mod is **`~`**) |
 | `OP_FREE` | `0x0B` | Variable name **NUL-terminated** — unbind pool value; **`var = null`** |
 | `OP_GUARD` | `0x02` | `uint32` absolute IP of `#or.<block>.<index>` handler + guard expr **NUL-terminated** |
 | `OP_CALL` | `0x03` | `uint32` target block IP + output var name **NUL-terminated** (may be empty) |

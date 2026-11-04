@@ -1,0 +1,8 @@
+#main
+  ~ str.to_num('x') -> n   #.badNum
+  io.outln('ok')
+  OK
+
+#or.#main.badNum
+  io.outln('bad')
+  OK

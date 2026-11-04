@@ -1,0 +1,5 @@
+#main
+  n = 7
+  ? n = json.parse_list('[')
+  io.outln(n)
+  OK

@@ -9,16 +9,18 @@ Native call tables: [natives/json.md](./natives/json.md), [natives/io.md](./nati
 
 ## 1. Layering
 
-| API | stdin | On invalid parse |
-|-----|--------|------------------|
-| `json.stringify(v)` | — | — |
-| `json.parse_list(s)` | — | assign / `->` **fails silently** (like `str.to_num`) |
-| `json.parse_object(s)` | — | same |
-| `json.parse_bools(s)` | — | same |
-| `json.parse(s)` | — | any JSON value (object, array, string, number, bool); same silent fail |
-| `io.in_list(prompt?)` | one line | **PANIC** `io.parse` (like `io.in_num`) |
+| API | stdin | On invalid parse (no line modifier) |
+|-----|--------|-------------------------------------|
+| `json.stringify(v)` | — | **PANIC** `json.stringify` if not serializable |
+| `json.parse_list(s)` | — | **PANIC** `json.parse_list`; use **`?`** for silent (no bind) |
+| `json.parse_object(s)` | — | **PANIC** `json.parse_object`; **`?`** for silent |
+| `json.parse_bools(s)` | — | **PANIC** `json.parse_bools`; **`?`** for silent |
+| `json.parse(s)` | — | **PANIC** `json.parse`; **`?`** for silent |
+| `io.in_list(prompt?)` | one line | **PANIC** `io.parse` (native reason may be `io.in_list`) |
 | `io.in_object(prompt?)` | one line | **PANIC** `io.parse` |
 | `io.in_bools(prompt?)` | one line | **PANIC** `io.parse` |
+
+Line modifiers **`?`** / **`~`**: [SPECIFICATION.md](./SPECIFICATION.md) §1.2.2.
 
 `io.in_*` ≈ read line (with optional prompt on stdout) then call the matching `json.parse_*`.
 
@@ -47,7 +49,7 @@ These are **different** APIs; do not conflate them:
 |--------------------|-----------------|----------------------|-------------------------|
 | `""` | **NULL** (see §1.2) | empty LIST `[]` | empty OBJECT `{}` |
 | `"[1,2]"` | LIST value | (use `parse_list` or `parse`) | — |
-| `"{"` | silent fail | silent fail | silent fail |
+| `"{"` | **PANIC** `json.parse` | **PANIC** `json.parse_list` | **PANIC** `json.parse_object` |
 
 **Stdin:** `io.in_*` reads a line first; **Enter** → trimmed `""` → row above (`[]` / `{}`, not NULL).  
 Only the **`json.parse("")`** call returns NULL, not “empty object”.
@@ -73,7 +75,7 @@ Typed parsers **reject** wrong top-level kind:
 
 **`io.in_object`** with line `[1,2,3]` → **PANIC** `io.parse` (not coerced to LIST).
 
-Malformed JSON (`[`, `{`, `[true,,false]`, trailing garbage) → **`json.parse*`** silent fail; **`io.in_*`** → **PANIC** `io.parse`.
+Malformed JSON (`[`, `{`, `[true,,false]`, trailing garbage) → **`json.parse*`** **PANIC** (unless **`?`**); **`io.in_*`** → **PANIC** `io.parse`.
 
 ---
 

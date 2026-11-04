@@ -97,6 +97,52 @@ static int is_free_line(const char *line) {
     return flat_parse_free_varname(line, tmp, sizeof tmp) == 0;
 }
 
+static int assign_rhs_is_native_call(const char *line) {
+    char buf[FGIR_MAX_LINE];
+    char *eq;
+    char *rhs;
+
+    snprintf(buf, sizeof buf, "%s", line);
+    eq = strchr(buf, '=');
+    if (!eq || strstr(buf, "==") != NULL) {
+        return 0;
+    }
+    rhs = trim(eq + 1);
+    return flat_native_is_call_line(rhs);
+}
+
+static int parse_line_modifier(char *line, FgirLineMod *mod_out, const char *path, int line_no,
+                               char *err, size_t err_size) {
+    char *p = trim(line);
+
+    *mod_out = FGIR_LINE_MOD_NONE;
+    if (*p != '?' && *p != '~') {
+        memmove(line, p, strlen(p) + 1);
+        return 0;
+    }
+    if (p[1] == '?' || p[1] == '~') {
+        snprintf(err, err_size, "%s:%d: line may have only one modifier (? or ~)", path, line_no);
+        return -1;
+    }
+    *mod_out = (*p == '?') ? FGIR_LINE_MOD_Q : FGIR_LINE_MOD_TILDE;
+    p++;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    memmove(line, p, strlen(p) + 1);
+    return 0;
+}
+
+static int line_mod_allowed(FgirInstrKind kind, const char *text) {
+    if (kind == FGIR_IO) {
+        return 1;
+    }
+    if (kind == FGIR_ASSIGN && assign_rhs_is_native_call(text)) {
+        return 1;
+    }
+    return 0;
+}
+
 static FgirInstrKind classify(const char *line) {
     if (strcmp(line, "OK") == 0) {
         return FGIR_OK;
@@ -370,13 +416,28 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             }
             ins = &b->instr[b->instr_count];
             memset(ins, 0, sizeof *ins);
-            if (flat_line_label_strip_eol(p, ins->line_label, sizeof ins->line_label, path,
-                                          line_no, err, err_size) < 0) {
+            {
+                char work[FGIR_MAX_LINE + 8];
+                snprintf(work, sizeof work, "%s", p);
+                if (parse_line_modifier(work, &ins->line_mod, path, line_no, err, err_size) < 0) {
+                    fclose(f);
+                    return -1;
+                }
+                if (flat_line_label_strip_eol(work, ins->line_label, sizeof ins->line_label,
+                                                path, line_no, err, err_size) < 0) {
+                    fclose(f);
+                    return -1;
+                }
+                snprintf(ins->text, sizeof ins->text, "%s", work);
+            }
+            ins->kind = classify(ins->text);
+            if (ins->line_mod != FGIR_LINE_MOD_NONE && !line_mod_allowed(ins->kind, ins->text)) {
+                snprintf(err, err_size,
+                         "%s:%d: line modifier (? or ~) requires a native call on this line", path,
+                         line_no);
                 fclose(f);
                 return -1;
             }
-            snprintf(ins->text, sizeof ins->text, "%s", p);
-            ins->kind = classify(p);
             ins->index = b->instr_count + 1;
             if (ins->kind == FGIR_CALL || ins->kind == FGIR_JUMP) {
                 parse_call_extras(ins);

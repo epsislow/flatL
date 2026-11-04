@@ -29,7 +29,7 @@ Reference: [natives/json.md](./natives/json.md).
 | `json.parse_bools(s)` | List of BOOL; **`''` → `[]`** |
 | `json.stringify(v)` | JSON text (object keys **sorted**) |
 
-Invalid parse on assign / `->`: **silent fail** (like `str.to_num`).
+Invalid parse on assign / `->`: **PANIC** (native reason e.g. `json.parse_list`); prefix the line with **`?`** for silent fail (binding unchanged).
 
 ---
 

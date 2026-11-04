@@ -43,22 +43,28 @@ str.split('a,b,c', ',') -> parts
 
 Most mutating-style operations (**`concat`**, **`slice`**, **`trim`**, **`lower`**, …) **allocate a new STRING** (INLINE if it fits, otherwise REF). They do not modify the input in place.
 
-## Error behavior
+## Line modifiers and errors
 
-On **`… -> var`** or **`var = …`**, if a handler rejects arguments (wrong type, out-of-range slice, empty split separator, overflow past **`FLAT_POOL_MAX_CHUNK`**, etc.), the assign **fails silently**: **`var`** is unchanged. This matches **`str.to_num`** / **`io.in_num`** (see [IO.md](../IO.md) §3–§5).
+See [SPECIFICATION.md](../SPECIFICATION.md) §1.2.2. On **recoverable** failure (wrong type, invalid parse, out-of-range slice, empty split separator, size limit, …):
 
-There is **no** PANIC path for `str.*` today.
+| Modifier | Effect |
+|----------|--------|
+| *(none)* | **PANIC** — reason **`str.<fn>`** (e.g. `str.to_num`) |
+| **`?`** | No bind; next line runs |
+| **`~`** | No bind; **`#or.*`** for that line |
+
+Use **`?`** when you want the old silent-fail behavior (binding unchanged).
 
 ## Function reference
 
 ### Conversions (`str.to_*`)
 
-No stdin. Invalid parse on **`->`** / **`=`** → **fails silently** (variable unchanged); no PANIC. Same rules apply when **`io.in_num`** / **`io.in_bool`** parse a line ([IO.md](../IO.md) §3–§5).
+No stdin.
 
-| Call | Args | Returns | Description |
-|------|------|---------|-------------|
-| `to_num(s)` | 1 STRING | NUMBER | Parse decimal integer/float (`strtod` rules); invalid → silent fail |
-| `to_bool(s)` | 1 STRING | BOOL | Trim; tokens per table below; invalid → silent fail |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `to_num(s)` | 1 STRING | NUMBER | **`str.to_num`** — invalid number text |
+| `to_bool(s)` | 1 STRING | BOOL | **`str.to_bool`** — token not in BOOL table |
 
 #### BOOL tokens (for `to_bool` / `io.in_bool`)
 
@@ -79,10 +85,10 @@ Single token after trim, ASCII case-insensitive:
 
 ### Length and repetition
 
-| Call | Args | Returns | Description |
-|------|------|---------|-------------|
-| `len(s)` | 1 STRING | NUMBER | Byte length (UTF-8 bytes as stored; no Unicode grapheme logic) |
-| `repeat(s, n)` | STRING, non-negative **whole** NUMBER | STRING | Repeat **`s`** **`n`** times; **`n == 0`** → `''`; product must fit **`FLAT_POOL_MAX_CHUNK`** |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `len(s)` | 1 STRING | NUMBER | **`str.len`** — arg not STRING |
+| `repeat(s, n)` | STRING, non-negative **whole** NUMBER | STRING | **`str.repeat`** — bad types, negative/non-integer **`n`**, or product &gt; **`FLAT_POOL_MAX_CHUNK`** |
 
 ```text
 #main
@@ -93,10 +99,10 @@ Single token after trim, ASCII case-insensitive:
 
 ### Concatenation and slicing
 
-| Call | Args | Returns | Description |
-|------|------|---------|-------------|
-| `concat(s1, s2, …)` | 1–32 STRINGs | STRING | Variadic join; max **32** parts; total size ≤ **`FLAT_POOL_MAX_CHUNK`** |
-| `slice(s, start, end)` | STRING, int, int | STRING | Substring **`[start, end)`** half-open; **`0 <= start <= end <= len(s)`** |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `concat(s1, s2, …)` | 1–32 STRINGs | STRING | **`str.concat`** — wrong types, &gt;32 parts, or total &gt; **`FLAT_POOL_MAX_CHUNK`** |
+| `slice(s, start, end)` | STRING, int, int | STRING | **`str.slice`** — bad types or indices outside **`0 … len(s)`** |
 
 **`str.slice`** replaces the removed VM helper **`__slice__(s, start, len)`**. Migration:
 
@@ -122,12 +128,12 @@ head = str.slice(body, 0, 4)
 
 ### Search and predicates
 
-| Call | Args | Returns | Description |
-|------|------|---------|-------------|
-| `index_of(haystack, needle)` | 2 STRINGs | NUMBER | First byte index of **`needle`** in **`haystack`**, or **−1**; empty **`needle`** → **0** |
-| `contains(haystack, needle)` | 2 STRINGs | BOOL | **`index_of >= 0`**; empty **`needle`** → **true** |
-| `starts_with(s, prefix)` | 2 STRINGs | BOOL | Prefix match (bytes) |
-| `ends_with(s, suffix)` | 2 STRINGs | BOOL | Suffix match (bytes) |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `index_of(haystack, needle)` | 2 STRINGs | NUMBER | **`str.index_of`** — arg not STRING (success returns index or **−1**) |
+| `contains(haystack, needle)` | 2 STRINGs | BOOL | **`str.contains`** — arg not STRING |
+| `starts_with(s, prefix)` | 2 STRINGs | BOOL | **`str.starts_with`** — arg not STRING |
+| `ends_with(s, suffix)` | 2 STRINGs | BOOL | **`str.ends_with`** — arg not STRING |
 
 ```text
 #main
@@ -144,20 +150,20 @@ head = str.slice(body, 0, 4)
 
 ### Trim and case (ASCII)
 
-| Call | Args | Returns | Description |
-|------|------|---------|-------------|
-| `trim(s)` | 1 STRING | STRING | Strip leading/trailing **`isspace`** bytes |
-| `lower(s)` | 1 STRING | STRING | **`A`–`Z`** → **`a`–`z`** only |
-| `upper(s)` | 1 STRING | STRING | **`a`–`z`** → **`A`–`Z`** only |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `trim(s)` | 1 STRING | STRING | **`str.trim`** — arg not STRING |
+| `lower(s)` | 1 STRING | STRING | **`str.lower`** — arg not STRING |
+| `upper(s)` | 1 STRING | STRING | **`str.upper`** — arg not STRING |
 
 Non-ASCII code points are copied unchanged.
 
 ### Split and join
 
-| Call | Args | Returns | Description |
-|------|------|---------|-------------|
-| `split(s, sep)` | 2 STRINGs | LIST | Split on every occurrence of **`sep`**; **`sep`** must be non-empty; max **1024** parts (**`FLAT_LIST_MAX_ELEMS`**) |
-| `join(sep, list)` | STRING, LIST | STRING | Join LIST elements (each must be STRING) with **`sep`** between; empty list → `''` |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `split(s, sep)` | 2 STRINGs | LIST | **`str.split`** — bad types, empty **`sep`**, or &gt;1024 parts |
+| `join(sep, list)` | STRING, LIST | STRING | **`str.join`** — bad types, non-STRING element, or output too large |
 
 Requires optional **`list`** only if you bind the LIST for further work; **`split`** returns a LIST without a `use native list` line when you only pass it to **`join`** in one expression chain — but typical style declares **`list`**:
 
@@ -177,10 +183,10 @@ Trailing empty segments: if **`s`** ends with **`sep`**, the final part after th
 
 ### Replace
 
-| Call | Args | Returns | Description |
-|------|------|---------|-------------|
-| `replace(s, old, new)` | 3 STRINGs | STRING | Replace **first** occurrence of **`old`**; **`old`** must be non-empty |
-| `replace_all(s, old, new)` | 3 STRINGs | STRING | Replace **all** non-overlapping occurrences |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `replace(s, old, new)` | 3 STRINGs | STRING | **`str.replace`** — bad types, empty **`old`**, or output too large |
+| `replace_all(s, old, new)` | 3 STRINGs | STRING | **`str.replace_all`** — same as **`replace`** |
 
 ```text
 #main

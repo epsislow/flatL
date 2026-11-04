@@ -20,4 +20,12 @@ typedef enum {
     OP_JUMP    = 0x0D  /* uint32 target block IP */
 } OpCode;
 
+/* Line modifiers on native / assign-native lines (see SPECIFICATION.md). */
+#define FLAT_LINE_MOD_NONE  0
+#define FLAT_LINE_MOD_Q     1
+#define FLAT_LINE_MOD_TILDE 2
+
+/* OP_NATIVE payload: uint16 id + inner\\0 + bind\\0 + mod u8 + or_ip u32 (or_ip for ~ only) */
+/* OP_ASSIGN payload: mod u8 + assign line\\0 */
+
 #endif

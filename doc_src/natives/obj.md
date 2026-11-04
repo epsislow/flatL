@@ -27,13 +27,13 @@ Commas inside quoted strings in argument lists are **not** argument separators (
 
 **`get`**, **`has`**, **`len`**, **`keys`**, **`values`** do not mutate the input object.
 
-## Error behavior
+## Line modifiers and errors
 
-On **`… -> var`** or **`var = …`**, invalid types, unknown object id, pool full, or **`get`** on a **missing key** → assign **fails silently** (target variable unchanged). No PANIC.
+See [SPECIFICATION.md](../SPECIFICATION.md) §1.2.2. Recoverable failures → **PANIC** with reason **`obj.<fn>`** unless the line has **`?`** (silent, no bind) or **`~`** (**`#or.*`**).
 
-Use **`obj.has(o, 'key')`** before **`get`** when you need to branch.
+Use **`obj.has(o, 'key')`** before **`get`** when you want a guard instead of panic/`#or`.
 
-### Example — missing key (silent fail)
+### Example — missing key with **`?`**
 
 ```text
 use native obj with O
@@ -41,7 +41,7 @@ use native obj with O
 #main
   o = { ok: true }
   sentinel = 42
-  obj.get(o, 'missing') -> sentinel
+  ? O.get(o, 'missing') -> sentinel
   io.outln(sentinel)
   OK
 ```
@@ -50,16 +50,16 @@ Prints **`42`** — **`sentinel`** was not updated.
 
 ## Functions (v1)
 
-| Call | Returns | Description |
-|------|---------|-------------|
-| `empty()` | OBJECT | New `{}` |
-| `get(obj, key)` | any | Field value; **`key`**: quoted string or identifier token (field name, not variable lookup for bare ids) |
-| `set(obj, key, val)` | OBJECT | COW set or add field |
-| `has(obj, key)` | BOOL | Whether **`key`** exists |
-| `len(obj)` | NUMBER | Key count (0…128) |
-| `remove(obj, key)` | OBJECT | COW without **`key`**; missing key → **identical copy** |
-| `keys(obj)` | LIST | LIST of STRING keys, insertion order |
-| `values(obj)` | LIST | LIST of values in the same order as **`keys`** |
+| Call | Returns | Panic (no modifier) |
+|------|---------|---------------------|
+| `empty()` | OBJECT | **`obj.empty`** — pool / allocation failure |
+| `get(obj, key)` | any | **`obj.get`** — bad types, bad object id, or **missing key** |
+| `set(obj, key, val)` | OBJECT | **`obj.set`** — bad types, unknown object, pool full |
+| `has(obj, key)` | BOOL | **`obj.has`** — bad types or unknown object |
+| `len(obj)` | NUMBER | **`obj.len`** — bad types or unknown object |
+| `remove(obj, key)` | OBJECT | **`obj.remove`** — bad types or unknown object (missing key → copy, no panic) |
+| `keys(obj)` | LIST | **`obj.keys`** — bad types or unknown object |
+| `values(obj)` | LIST | **`obj.values`** — bad types or unknown object |
 
 ### Key argument
 

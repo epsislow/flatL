@@ -40,6 +40,11 @@
   color: var(--fl-cm-native, #7ec8e3);
 }
 
+.cm-s-flatl-dark .cm-fl-modifier {
+  color: #f78c6c;
+  font-weight: bold;
+}
+
 .cm-s-flatl-dark .cm-fl-comment {
   color: var(--fl-cm-comment, #8b8372);
 }

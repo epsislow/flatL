@@ -34,9 +34,16 @@ typedef enum {
     FGIR_JUMP
 } FgirInstrKind;
 
+typedef enum {
+    FGIR_LINE_MOD_NONE = 0,
+    FGIR_LINE_MOD_Q = 1,
+    FGIR_LINE_MOD_TILDE = 2
+} FgirLineMod;
+
 typedef struct {
     FgirInstrKind kind;
     char text[FGIR_MAX_LINE];
+    FgirLineMod line_mod;
     int index; /* 1-based within block */
     char call_target[FGIR_MAX_LABEL];
     char call_out[64];

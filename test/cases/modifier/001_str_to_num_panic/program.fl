@@ -1,0 +1,4 @@
+#main
+  n = 0
+  str.to_num('x') -> n
+  OK

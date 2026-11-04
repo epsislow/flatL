@@ -5,6 +5,10 @@
   CodeMirror.defineMode('flatl', function () {
     return {
       token: function (stream) {
+        if (stream.sol()) {
+          stream.eatSpace();
+          if (stream.match(/^[\?~](?=\s|$)/)) return 'fl-modifier';
+        }
         if (stream.eatSpace()) return null;
         if (stream.match(/^#.*/)) return 'fl-block';
         if (stream.match(/^'(?:\\.|[^'\\])*'/)) return 'fl-string';

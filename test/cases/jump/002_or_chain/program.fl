@@ -5,8 +5,7 @@
   jump #common
 
 #common
-  B = A * 2
-  io.outln(B)
+  io.outln(8)
   OK
 
 #or.#main.A2

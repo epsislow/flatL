@@ -80,6 +80,8 @@ Run **`make docs`** before push so `docs/doc_site/` is up to date. **`docs/.noje
 | `js/fleditor.js` | Run/Save, project UI, WASM glue, Xterm I/O |
 | `js/fleditor-project.js` | Virtual project, localStorage, MEMFS sync |
 | `ext/` | Vendored CodeMirror 5 + xterm.js (see `ext/VENDOR.md`) |
+
+**FlatL syntax:** line modifiers **`?`** (silent native fail) and **`~`** (route to **`#or`**) at the start of an instruction line are highlighted as **`fl-modifier`**. See [SPECIFICATION.md](./SPECIFICATION.md) §1.2.2.
 | `wasm/` | `flatl.js` + `flatl.wasm` (Emscripten → `Makefile.wasm`) |
 | `node/serve.js` | Serves **`docs/`** (editor + doc_site), port **8765**, **127.0.0.1** |
 | `examples/` | Curated `.fl` + `manifest.json` |
