@@ -1,0 +1,20 @@
+#main
+  mem.type_of(true) -> tb
+  tb == 'bool'
+  mem.type_of(42) -> tn
+  tn == 'number'
+  mem.type_of('hi') -> ts
+  ts == 'string'
+  mem.type_of(null) -> tnull
+  tnull == 'null'
+  xs = [1, 2]
+  mem.type_of(xs) -> tl
+  tl == 'list'
+  box = { k: 1 }
+  mem.type_of(box) -> to
+  to == 'object'
+  ref = mem.ref_from('pool-backed')
+  mem.type_of(ref) -> tr
+  tr == 'string'
+  io.outln('mem-type-of-ok')
+  OK

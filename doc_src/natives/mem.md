@@ -19,8 +19,39 @@ Inline tags **BOOL**, **NUMBER**, **NULL** are counted separately (`bool_used`, 
 |------|---------|--------|
 | `ref_empty()` | STRING REF | Zero-length pool slot; use with **`io.ctxout`** / **`io.ctxerr`** |
 | `ref_from(s)` | STRING REF | Copy of string content (inline or REF) |
+| `type_of(v)` | STRING | Logical type name of value **`v`** (see below) |
 
 Prefer these over test-only **`__ref__('…')`** for capture buffers.
+
+### Value type (`type_of`)
+
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `type_of(v)` | Any expression / variable | STRING | **`mem.type_of`** — missing/invalid argument expression |
+
+Returns the **logical** type (not VM storage detail). Inline STRING and STRING REF both report **`string`**.
+
+| Result | When |
+|--------|------|
+| `bool` | `true` / `false` |
+| `number` | numeric values |
+| `string` | inline or REF text |
+| `list` | LIST values |
+| `object` | OBJECT values |
+| `null` | **`null`** |
+| `file` | open file handle |
+| `empty` | unassigned slot (rare in normal programs) |
+
+```text
+#main
+  xs = [1, 2]
+  mem.type_of(xs) -> kind
+  kind == 'list'
+  io.outln(kind)
+  OK
+```
+
+There is **no** separate **`date`** type — datetimes are **`string`** or epoch **`number`**.
 
 ### Introspection (NUMBER)
 

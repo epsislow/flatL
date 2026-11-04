@@ -1,6 +1,7 @@
 #include "flat_memstream.h"
 #include "flat_native_mod.h"
 #include "flat_mem_stats.h"
+#include "flat_native.h"
 #include "flat_value.h"
 
 #include <stdio.h>
@@ -109,6 +110,51 @@ int flat_native_mem_null_used(FlatNativeCtx *ctx) {
         return -1;
     }
     return mem_out_num(ctx, (double)ctx->mem_live->null_used);
+}
+
+static const char *mem_logical_type_name(FlatValueTag tag) {
+    switch (tag) {
+    case VAL_BOOL:
+        return "bool";
+    case VAL_NUMBER:
+        return "number";
+    case VAL_STR_INLINE:
+    case VAL_STR_REF:
+        return "string";
+    case VAL_LIST:
+        return "list";
+    case VAL_OBJECT:
+        return "object";
+    case VAL_NULL:
+        return "null";
+    case VAL_FILE:
+        return "file";
+    case VAL_EMPTY:
+        return "empty";
+    default:
+        return "unknown";
+    }
+}
+
+int flat_native_mem_type_of(FlatNativeCtx *ctx) {
+    FlatValue src;
+    const char *kind;
+
+    if (!ctx->out || !ctx->io_status || !ctx->inner || ctx->inner[0] == '\0') {
+        if (ctx->io_status) {
+            *ctx->io_status = FLAT_IO_ERR;
+        }
+        return -1;
+    }
+    if (flat_native_eval_call(ctx, ctx->inner, &src) != 0 &&
+        flat_value_parse_assign_rhs(ctx->inner, &src, ctx->pool, ctx->coll, ctx->vars,
+                                    ctx->var_count, ctx->var_names) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    kind = mem_logical_type_name(src.tag);
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_str_inline(ctx->out, kind, strlen(kind));
 }
 
 int flat_native_mem_ref_empty(FlatNativeCtx *ctx) {

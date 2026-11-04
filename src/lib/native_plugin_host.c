@@ -41,6 +41,7 @@ static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_NULL_USED, flat_native_mem_null_used);
     flat_native_plugin_register(FLAT_NATIVE_MEM_REF_EMPTY, flat_native_mem_ref_empty);
     flat_native_plugin_register(FLAT_NATIVE_MEM_REF_FROM, flat_native_mem_ref_from);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_TYPE_OF, flat_native_mem_type_of);
 }
 
 static void register_embedded_date(void) {

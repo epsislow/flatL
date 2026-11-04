@@ -1,0 +1,13 @@
+suite = "memory"
+id = 8
+desc = "mem.type_of missing arg panics"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "mem.type_of"
+
+[flatl]
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"

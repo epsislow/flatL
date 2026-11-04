@@ -121,6 +121,7 @@ int flat_native_mem_num_used(FlatNativeCtx *ctx);
 int flat_native_mem_null_used(FlatNativeCtx *ctx);
 int flat_native_mem_ref_empty(FlatNativeCtx *ctx);
 int flat_native_mem_ref_from(FlatNativeCtx *ctx);
+int flat_native_mem_type_of(FlatNativeCtx *ctx);
 
 int flat_native_file_read_ctx(FlatNativeCtx *ctx);
 int flat_native_file_create_ctx(FlatNativeCtx *ctx);

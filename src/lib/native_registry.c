@@ -162,6 +162,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("date", "time_to_sec", "date.time_to_sec(t)"),
     META_SIG("date", "sec_to_time", "date.sec_to_time(n)"),
     META_SIG("date", "run_offset", "date.run_offset(offset)"),
+    META_SIG("mem", "type_of", "mem.type_of(v)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
