@@ -1,0 +1,10 @@
+suite = "file"
+id = 12
+desc = "setpos negative from EOF"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "789"

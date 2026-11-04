@@ -79,6 +79,7 @@ static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_POS, flat_native_file_pos);
     flat_native_plugin_register(FLAT_NATIVE_FILE_SIZE, flat_native_file_size);
     flat_native_plugin_register(FLAT_NATIVE_FILE_SETPOS, flat_native_file_setpos);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_SETPOS_REL, flat_native_file_setposrel);
     flat_native_plugin_register(FLAT_NATIVE_FILE_ISEOF, flat_native_file_iseof);
     flat_native_plugin_register(FLAT_NATIVE_FILE_CLOSE, flat_native_file_close);
 }

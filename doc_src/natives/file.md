@@ -31,8 +31,18 @@ Returns a **FILE** handle bound to a variable or `->` target.
 | `file.flush(fp)` | Flush stdio buffer | **`file.flush`** |
 | `file.pos(fp)` | Current byte offset (NUMBER) | **`file.pos`** — invalid handle |
 | `file.size(fp)` | File size in bytes (NUMBER) | **`file.size`** |
-| `file.setpos(fp, n)` | Absolute seek | **`file.setpos`** |
+| `file.setpos(fp, n)` | Seek: **`n >= 0`** absolute from start; **`n < 0`** from EOF (e.g. `-3` = 3 bytes before end) | **`file.setpos`** |
+| `file.setposrel(fp, delta)` | Seek relative to current position (`SEEK_CUR`) | **`file.setposrel`** |
 | `file.iseof(fp)` | BOOL after reads | **`file.iseof`** |
+
+### Seeking
+
+- **`file.setpos(fp, 0)`** — start of file (not EOF).
+- **`file.setpos(fp, n)`** with **`n >= 0`** — byte offset from the beginning.
+- **`file.setpos(fp, n)`** with **`n < 0`** — offset from end of file (same idea as `SEEK_END`; `-1` is the last byte).
+- **`file.setposrel(fp, delta)`** — move the cursor by **delta** bytes forward (positive) or backward (negative) without changing the meaning of **`setpos`**.
+
+Binary reads/writes use the current position; combine **`setpos`** / **`setposrel`** with **`file.read(fp, n)`** and **`file.writeBytes`** for opaque blobs.
 | `file.close(fp)` | Close handle; revert active **`io.ctx*`** if needed | **`file.close`** |
 
 All open handles are closed on VM exit.

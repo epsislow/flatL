@@ -137,6 +137,7 @@ int flat_native_file_flush(FlatNativeCtx *ctx);
 int flat_native_file_pos(FlatNativeCtx *ctx);
 int flat_native_file_size(FlatNativeCtx *ctx);
 int flat_native_file_setpos(FlatNativeCtx *ctx);
+int flat_native_file_setposrel(FlatNativeCtx *ctx);
 int flat_native_file_iseof(FlatNativeCtx *ctx);
 int flat_native_file_close(FlatNativeCtx *ctx);
 

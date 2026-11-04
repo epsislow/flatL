@@ -441,7 +441,43 @@ int flat_native_file_setpos(FlatNativeCtx *ctx) {
         return -1;
     }
     fp = flat_file_fp(ctx->file_tbl, fid);
-    if (!fp || fseek(fp, (long)n.u.number, SEEK_SET) != 0) {
+    if (!fp) {
+        return -1;
+    }
+    {
+        long off = (long)n.u.number;
+        int whence = off < 0 ? SEEK_END : SEEK_SET;
+        if (fseek(fp, off, whence) != 0) {
+            return -1;
+        }
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_file_setposrel(FlatNativeCtx *ctx) {
+    char inner_buf[4096];
+    char *left;
+    char *right;
+    uint32_t fid;
+    FILE *fp;
+    FlatValue n;
+
+    if (!ctx->io_status || !ctx->inner) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        return -1;
+    }
+    if (require_fp(ctx, left, &fid) != 0) {
+        return -1;
+    }
+    if (parse_expr(ctx, right, &n) != 0 || n.tag != VAL_NUMBER) {
+        return -1;
+    }
+    fp = flat_file_fp(ctx->file_tbl, fid);
+    if (!fp || fseek(fp, (long)n.u.number, SEEK_CUR) != 0) {
         return -1;
     }
     *ctx->io_status = FLAT_IO_OK;

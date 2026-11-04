@@ -1,0 +1,16 @@
+#main
+  fp = file.createCtx('rel.dat')
+  file.write(fp, '0123456789')
+  file.close(fp)
+  fp = file.readWriteCtx('rel.dat')
+  file.setpos(fp, 2)
+  file.setposrel(fp, 3)
+  file.read(fp, 2) -> mid
+  file.pos(fp) -> p
+  file.setposrel(fp, -1)
+  file.read(fp, 1) -> back
+  file.close(fp)
+  io.outln(mid)
+  io.outln(p)
+  io.outln(back)
+  OK
