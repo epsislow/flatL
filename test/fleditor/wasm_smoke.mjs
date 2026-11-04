@@ -33,14 +33,27 @@ async function runSource(Module, source, onNeedLine) {
   );
   if (rc && typeof rc.then === 'function') rc = await rc;
   const err = M.UTF8ToString(errBuf);
+  let term = 0;
+  try {
+    term = M.ccall('flat_wasm_get_last_termination', 'number', [], []);
+  } catch (_e) {
+    /* ignore */
+  }
   M._free(errBuf);
-  return { rc, out, err };
+  return { rc, out, err, term };
 }
 
 const hello = "#main\n  io.outln('hello from fleditor')\n  OK\n";
 const r1 = await runSource(null, hello, null);
 if (r1.rc !== 0 || !r1.out.includes('hello from fleditor')) {
   console.error('wasm_smoke: hello failed', r1);
+  process.exit(1);
+}
+
+const failProg = "#main\n  io.outln('before fail')\n  FAIL\n  OK\n";
+const rFail = await runSource(null, failProg, null);
+if (rFail.rc !== 2 || rFail.err !== '' || rFail.term !== 3 || !rFail.out.includes('before fail')) {
+  console.error('wasm_smoke: FAIL line failed', rFail);
   process.exit(1);
 }
 
@@ -61,4 +74,4 @@ if (r2.rc !== 0 || !r2.out.includes('Ada')) {
   process.exit(1);
 }
 
-console.log('OK: fleditor wasm smoke (hello + inln)');
+console.log('OK: fleditor wasm smoke (hello + FAIL + inln)');

@@ -205,7 +205,8 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
     rc = flat_vm_run_opts(&bc, &opts);
     g_last_termination = term;
     flat_fb_free(&bc);
-    if (rc != 0 && err && err_sz) {
+    /* Logical FAIL (exit 2) is normal program outcome — not a runner error. */
+    if (rc != 0 && err && err_sz && term != (int)FLAT_TERM_FAIL) {
         snprintf(err, err_sz, "program exited with code %d", rc);
     }
     return rc;

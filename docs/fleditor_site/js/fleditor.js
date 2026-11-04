@@ -1918,8 +1918,19 @@
       runRc = await runRc;
     }
 
+    let termination = FLAT_TERM.UNKNOWN;
+    try {
+      termination = Module.ccall('flat_wasm_get_last_termination', 'number', [], []);
+    } catch (_e) {
+      /* older wasm without export */
+    }
+
+    const logicalFail =
+      runRc === 2 &&
+      (termination === FLAT_TERM.FAIL || termination === FLAT_TERM.UNKNOWN);
+
     let compileFailed = false;
-    if (runRc !== 0) {
+    if (runRc !== 0 && !logicalFail) {
       const msg = Module.UTF8ToString(errBuf);
       if (isCompileErrorMessage(msg)) {
         compileFailed = true;
@@ -1929,12 +1940,6 @@
       } else {
         term.write('\r\n[error] program failed (exit ' + runRc + ')\r\n');
       }
-    }
-    let termination = FLAT_TERM.UNKNOWN;
-    try {
-      termination = Module.ccall('flat_wasm_get_last_termination', 'number', [], []);
-    } catch (_e) {
-      /* older wasm without export */
     }
     Module._free(errBuf);
     return { exitCode: runRc, compileFailed: compileFailed, termination: termination };
