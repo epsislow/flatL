@@ -240,7 +240,7 @@ bin/run_tests e2e[1-7] flc -v -e
 bin/run_tests -w 20          # wrap progress dots (default: 40 per line)
 ```
 
-Progress prints `.` / `F` in ANSI color; after every **N** characters (see **`-w` / `--progress-width`**, default **40**) a line ends with **`(run/total)`**, same idea as `sside`’s `node/run_tests.js`.
+Progress prints `.` / `F` in ANSI color (flushed after each character so dots appear one-by-one); after every **N** characters (see **`-w` / `--progress-width`**, default **40**) a line ends with **`(run/total)`**, same idea as `sside`’s `node/run_tests.js`.
 
 ### Filters
 

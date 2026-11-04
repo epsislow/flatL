@@ -52,10 +52,15 @@ static void print_help(const char *prog) {
     printf("  --flatl                    pipeline: [flatl] in case.toml, else compile+run fallback\n");
 }
 
+static void progress_flush(void) {
+    fflush(stdout);
+}
+
 static void progress_finish_line(Progress *p) {
     if (p->chars_on_line > 0) {
         printf(" (%d/%d)\n", p->run, p->total);
         p->chars_on_line = 0;
+        progress_flush();
     }
 }
 
@@ -73,6 +78,7 @@ static void progress_on_fail(Progress *p, const FlatCase *c, int verbose, const 
         printf("\n  FAIL %s#%d — %s\n", c->suite, c->id, c->desc);
     }
     p->chars_on_line = 0;
+    progress_flush();
 }
 
 static void progress_on_result(Progress *p, int ok, const FlatCase *c, int verbose,
@@ -81,11 +87,13 @@ static void progress_on_result(Progress *p, int ok, const FlatCase *c, int verbo
     if (ok) {
         printf("%s.%s", ANSI_GREEN, ANSI_RESET);
         p->chars_on_line++;
+        progress_flush();
         if (p->chars_on_line >= p->width) {
             progress_finish_line(p);
         }
     } else {
         printf("%sF%s", ANSI_RED, ANSI_RESET);
+        progress_flush();
         progress_on_fail(p, c, verbose, err);
     }
 }
