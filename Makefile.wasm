@@ -33,7 +33,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_d
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
 VM_SRC = src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
-         src/common/flat_file.c src/common/flat_io_ctx.c \
+         src/common/flat_file.c src/common/flat_io_ctx.c src/common/flat_memstream.c \
           src/common/value_collection.c \
          src/common/value_live.c src/common/value_ops.c src/common/value_parse.c \
          src/common/value_format.c src/common/value_io.c src/common/value_json.c $(STR_SRC) \

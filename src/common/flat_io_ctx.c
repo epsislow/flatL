@@ -1,4 +1,5 @@
 #include "flat_io_ctx.h"
+#include "flat_memstream.h"
 #include "flat_native_util.h"
 #include "flat_wasm_io.h"
 
@@ -135,7 +136,7 @@ static int value_to_bytes(FlatNativeCtx *ctx, const FlatValue *v, int with_nl, c
     char *buf = NULL;
     size_t sz = 0;
 
-    mem = open_memstream(&buf, &sz);
+    mem = flat_open_memstream(&buf, &sz);
     if (!mem) {
         return -1;
     }
@@ -143,7 +144,9 @@ static int value_to_bytes(FlatNativeCtx *ctx, const FlatValue *v, int with_nl, c
     if (with_nl) {
         fputc('\n', mem);
     }
-    fclose(mem);
+    if (flat_close_memstream(mem) != 0) {
+        return -1;
+    }
     *out_buf = buf;
     *out_len = sz;
     return 0;

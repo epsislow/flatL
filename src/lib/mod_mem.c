@@ -1,3 +1,4 @@
+#include "flat_memstream.h"
 #include "flat_native_mod.h"
 #include "flat_mem_stats.h"
 #include "flat_value.h"
@@ -141,12 +142,14 @@ int flat_native_mem_ref_from(FlatNativeCtx *ctx) {
                                     ctx->var_count, ctx->var_names) != 0) {
         return -1;
     }
-    mem = open_memstream(&bytes, &blen);
+    mem = flat_open_memstream(&bytes, &blen);
     if (!mem) {
         return -1;
     }
     flat_value_fprint_io(mem, &src, ctx->pool, ctx->coll);
-    fclose(mem);
+    if (flat_close_memstream(mem) != 0) {
+        return -1;
+    }
     if (blen == 0) {
         if (flat_pool_alloc_empty(ctx->pool, &id) != 0) {
             free(bytes);

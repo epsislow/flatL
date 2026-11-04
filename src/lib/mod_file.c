@@ -1,5 +1,6 @@
 #include "flat_file.h"
 #include "flat_io_ctx.h"
+#include "flat_memstream.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
@@ -250,12 +251,14 @@ int flat_native_file_write(FlatNativeCtx *ctx) {
     if (!fp) {
         return -1;
     }
-    mem = open_memstream(&bytes, &blen);
+    mem = flat_open_memstream(&bytes, &blen);
     if (!mem) {
         return -1;
     }
     flat_value_fprint_io(mem, &data, ctx->pool, ctx->coll);
-    fclose(mem);
+    if (flat_close_memstream(mem) != 0) {
+        return -1;
+    }
     if (fwrite(bytes, 1, blen, fp) != blen) {
         free(bytes);
         return -1;
@@ -293,12 +296,14 @@ int flat_native_file_writeln(FlatNativeCtx *ctx) {
     if (!fp) {
         return -1;
     }
-    mem = open_memstream(&bytes, &blen);
+    mem = flat_open_memstream(&bytes, &blen);
     if (!mem) {
         return -1;
     }
     flat_value_fprint_io_ln(mem, &data, ctx->pool, ctx->coll);
-    fclose(mem);
+    if (flat_close_memstream(mem) != 0) {
+        return -1;
+    }
     if (fwrite(bytes, 1, blen, fp) != blen) {
         free(bytes);
         return -1;

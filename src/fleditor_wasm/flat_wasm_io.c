@@ -1,3 +1,4 @@
+#include "flat_memstream.h"
 #include "flat_wasm_io.h"
 #include "flat_value.h"
 
@@ -12,12 +13,14 @@ static void wasm_fprint_to_stdout(void (*fn)(FILE *, const FlatValue *, const Fl
                                   const FlatCollectionPool *coll) {
     char *ptr = NULL;
     size_t len = 0;
-    FILE *f = open_memstream(&ptr, &len);
+    FILE *f = flat_open_memstream(&ptr, &len);
     if (!f) {
         return;
     }
     fn(f, v, pool, coll);
-    fclose(f);
+    if (flat_close_memstream(f) != 0) {
+        return;
+    }
     if (len > 0 && ptr) {
         flat_wasm_io_write_stdout(ptr, len);
     }
