@@ -67,7 +67,7 @@ Seventy-five pipeline tests for **`date.*`** and **`str.to_date` / `to_time` / `
 | Goal | Command |
 |------|---------|
 | Run date suite only | `bin/run_tests date -v` |
-| Regenerate case folders (maintainers) | `python3 scripts/gen_date_tests.py` |
+| Regenerate case folders (maintainers) | `make date_generate_tests` or `python3 scripts/gen_date_tests.py` |
 
 Deterministic **`now`** / **`today`** cases set **`FLAT_DATE_NOW_SEC`** (and sometimes **`FLAT_DATE_RUN_OFFSET`**) in `case.toml` **`run =`** lines.
 

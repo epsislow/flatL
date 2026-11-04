@@ -59,7 +59,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests rebuild rebuild-native fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -75,6 +75,7 @@ help:
 	@echo "  make run_tests    rebuild test runner only"
 	@echo "  make io_generate_tests   rebuild bin/io_generate_tests and regenerate test/cases/io/*"
 	@echo "  make json_generate_tests rebuild bin/json_generate_tests and regenerate test/cases/json/*"
+	@echo "  make date_generate_tests regenerate test/cases/date/* (scripts/gen_date_tests.py)"
 	@echo "  make fixtures     regenerate min_ok.fb examples"
 	@echo "  make docs         bin/gen_doc_site → docs/doc_site/ (offline HTML docs)"
 	@echo "  make fleditor-wasm   Emscripten → docs/fleditor_site/wasm/ (needs emcc)"
@@ -127,6 +128,10 @@ io_generate_tests: $(BINDIR)/io_generate_tests$(EXEEXT)
 json_generate_tests: $(BINDIR)/json_generate_tests$(EXEEXT)
 	find test/cases/json -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 	$(BINDIR)/json_generate_tests$(EXEEXT)
+
+date_generate_tests:
+	python3 scripts/gen_date_tests.py
+	@echo "OK: test/cases/date/ (75 cases)"
 
 rebuild: clean all fleditor-wasm-optional
 
