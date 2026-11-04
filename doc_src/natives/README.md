@@ -1,6 +1,6 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
+**Core natives** (`io`, `json`, `str`, `date`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
 
 **Optional natives** extend the VM (for example trigonometry). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
@@ -37,7 +37,7 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `list`, `obj`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `list`, `obj`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
@@ -57,6 +57,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `json` | [json.md](./json.md) — [IO_COLLECTIONS.md](../IO_COLLECTIONS.md) |
 | `file` | [file.md](./file.md) |
 | `str` | [str.md](./str.md) |
+| `date` | [date.md](./date.md) |
 | `mem` | [mem.md](./mem.md) |
 
 ## Optional modules (documented)

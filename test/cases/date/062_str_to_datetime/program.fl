@@ -1,0 +1,4 @@
+#main
+  str.to_datetime('2026-09-30T15:30') -> t
+  io.outln(t)
+  OK

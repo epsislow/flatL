@@ -1,0 +1,5 @@
+#main
+  date.parse('15:30', 'HH:mm') -> s
+  date.time_to_sec('15:30:00') -> e
+  io.outln(e)
+  OK

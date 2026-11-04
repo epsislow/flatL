@@ -1,0 +1,4 @@
+#main
+  str.to_time('15:30') -> t
+  io.outln(t)
+  OK

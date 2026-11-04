@@ -1,0 +1,4 @@
+#main
+  date.format(0, 'YYYY-MM-DD') -> d
+  io.outln(d)
+  OK

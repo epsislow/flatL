@@ -139,4 +139,22 @@ int flat_native_file_setpos(FlatNativeCtx *ctx);
 int flat_native_file_iseof(FlatNativeCtx *ctx);
 int flat_native_file_close(FlatNativeCtx *ctx);
 
+int flat_native_str_to_date(FlatNativeCtx *ctx);
+int flat_native_str_to_time(FlatNativeCtx *ctx);
+int flat_native_str_to_datetime(FlatNativeCtx *ctx);
+int flat_native_date_format(FlatNativeCtx *ctx);
+int flat_native_date_parse_auto(FlatNativeCtx *ctx);
+int flat_native_date_parse(FlatNativeCtx *ctx);
+int flat_native_date_now(FlatNativeCtx *ctx);
+int flat_native_date_today(FlatNativeCtx *ctx);
+int flat_native_date_add(FlatNativeCtx *ctx);
+int flat_native_date_cmp(FlatNativeCtx *ctx);
+int flat_native_date_to_seconds(FlatNativeCtx *ctx);
+int flat_native_date_from_seconds(FlatNativeCtx *ctx);
+int flat_native_date_to_ms(FlatNativeCtx *ctx);
+int flat_native_date_from_ms(FlatNativeCtx *ctx);
+int flat_native_date_time_to_sec(FlatNativeCtx *ctx);
+int flat_native_date_sec_to_time(FlatNativeCtx *ctx);
+int flat_native_date_run_offset(FlatNativeCtx *ctx);
+
 #endif

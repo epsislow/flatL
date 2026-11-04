@@ -1,0 +1,4 @@
+#main
+  date.time_to_sec('15:30:00') -> s
+  io.outln(s)
+  OK

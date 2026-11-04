@@ -1,0 +1,8 @@
+#main
+  ~ str.to_date('bad') -> d   #.bad
+  io.outln('ok')
+  OK
+
+#or.#main.bad
+  io.outln('or')
+  OK

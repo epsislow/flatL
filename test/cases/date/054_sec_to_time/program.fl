@@ -1,0 +1,4 @@
+#main
+  date.sec_to_time(55800) -> t
+  io.outln(t)
+  OK

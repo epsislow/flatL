@@ -1,0 +1,5 @@
+#main
+  k = 1
+  ? date.parse('x', 'DD.MM.YYYY') -> s
+  io.outln(k)
+  OK

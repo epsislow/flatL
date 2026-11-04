@@ -1,0 +1,4 @@
+#main
+  date.cmp(1790769600, 1790769601) -> c
+  io.outln(c)
+  OK

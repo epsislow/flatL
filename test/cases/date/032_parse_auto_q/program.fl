@@ -1,0 +1,5 @@
+#main
+  n = 7
+  ? date.parse_auto('bad') -> s
+  io.outln(n)
+  OK

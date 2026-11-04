@@ -1,0 +1,3 @@
+#main
+  str.to_datetime('nope') -> t
+  OK

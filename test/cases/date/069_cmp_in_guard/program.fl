@@ -1,0 +1,5 @@
+#main
+  date.cmp(1, 2) -> c
+  c == -1
+  io.outln('yes')
+  OK

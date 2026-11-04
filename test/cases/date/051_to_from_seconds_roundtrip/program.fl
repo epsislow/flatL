@@ -1,0 +1,5 @@
+#main
+  date.to_seconds('2026-09-30T12:00:00Z') -> s
+  date.from_seconds(s) -> t
+  io.outln(t)
+  OK

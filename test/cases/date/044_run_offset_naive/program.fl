@@ -1,0 +1,5 @@
+#main
+  date.run_offset('+03:00')
+  date.format('2026-09-30T12:00:00', 'HH') -> d
+  io.outln(d)
+  OK

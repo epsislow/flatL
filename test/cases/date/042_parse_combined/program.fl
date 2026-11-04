@@ -1,0 +1,5 @@
+#main
+  date.parse('30.09.2026 15:30', 'DD.MM.YYYY HH:mm') -> s
+  date.format(s, 'DD.MM.YYYY HH:mm') -> d
+  io.outln(d)
+  OK

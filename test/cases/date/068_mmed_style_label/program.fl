@@ -1,0 +1,5 @@
+#main
+  iso = '2026-09-30'
+  date.format(iso, 'DD.MM.YYYY') -> label
+  io.outln(label)
+  OK

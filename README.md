@@ -142,6 +142,8 @@ make test-flatl   # same cases via [flatl] in case.toml
 bin/run_tests -h
 ```
 
+**Testing policy:** Every automated check in this repo is **must-pass**. There are no optional, skipped, or “nice-to-have” tiers in the runner (`bin/run_tests` has no xfail/skip flags). **`make test`** and **`make test-flatl`** must finish with **0 failed** — each `test/cases/*/…/case.toml` that is discovered counts. Additional checks (e.g. **`make fleditor-smoke`**, **`make fleditor-wasm-smoke`**, and related fleditor targets) are separate Makefile targets but follow the same rule: when you run them, they must pass; do not merge or ship with known failures. New suites and cases should be written as required gates, not as best-effort extras.
+
 **Cross-platform:** `flc` and `flvm` are portable C; **`make test`** uses `run_tests`, which runs pipeline commands through a **POSIX shell** (e.g. `printf … | flvm`). On Windows, use **WSL** for the full suite, or compile/run bytecode manually. I/O test files under `test/cases/io/` are committed — regenerate only when changing the catalog: `make io_generate_tests` (`bin/io_generate_tests`, no Bash). Details: [doc_src/TOOLCHAIN.md — Portability](doc_src/TOOLCHAIN.md#portability-windows-shell-and-io-tests) · [test/README.md](test/README.md).
 
 **Docs:** [doc_src/README.md](doc_src/README.md) · [TOOLCHAIN.md](doc_src/TOOLCHAIN.md) · [SPECIFICATION.md](doc_src/SPECIFICATION.md) · [LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md) · [IO.md](doc_src/IO.md)

@@ -1,0 +1,5 @@
+#main
+  date.parse_auto('+2d') -> s
+  date.format(s, 'YYYY-MM-DD') -> d
+  io.outln(d)
+  OK

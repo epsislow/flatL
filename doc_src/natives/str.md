@@ -65,6 +65,11 @@ No stdin.
 |------|------|---------|---------------------|
 | `to_num(s)` | 1 STRING | NUMBER | **`str.to_num`** — invalid number text |
 | `to_bool(s)` | 1 STRING | BOOL | **`str.to_bool`** — token not in BOOL table |
+| `to_date(s)` | 1 STRING | STRING `YYYY-MM-DD` | **`str.to_date`** — not ISO day or `DD.MM.YYYY` |
+| `to_time(s)` | 1 STRING | STRING `HH:mm:ss` | **`str.to_time`** — not `HH:mm` / `HH:mm:ss` |
+| `to_datetime(s)` | 1 STRING | STRING (naive or `…Z`) | **`str.to_datetime`** — unrecognised datetime text |
+
+Datetime **motor** (format, epoch, offset): [date.md](./date.md). **`json.parse*`** leaves datetime fields as **STRING** — use **`str.to_*`** or **`date.*`** explicitly.
 
 #### BOOL tokens (for `to_bool` / `io.in_bool`)
 

@@ -1,0 +1,5 @@
+#main
+  x = 'keep'
+  ? date.format('bad') -> d
+  io.outln(x)
+  OK

@@ -1,0 +1,5 @@
+#main
+  date.parse_auto('2026-09-30') -> s
+  date.format(s, 'YYYY-MM-DD') -> d
+  io.outln(d)
+  OK

@@ -1,0 +1,5 @@
+#main
+  date.run_offset('+03:00')
+  date.format(1790769600, 'HH:mm') -> d
+  io.outln(d)
+  OK

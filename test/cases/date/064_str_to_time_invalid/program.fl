@@ -1,0 +1,3 @@
+#main
+  str.to_time('nope') -> t
+  OK

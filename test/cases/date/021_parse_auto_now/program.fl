@@ -1,0 +1,4 @@
+#main
+  date.parse_auto('now') -> s
+  io.outln(s)
+  OK

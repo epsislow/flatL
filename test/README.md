@@ -60,6 +60,17 @@ bin/run_tests port -v
 bin/port_check
 ```
 
+## Date suite (`cases/date/`)
+
+Seventy-five pipeline tests for **`date.*`** and **`str.to_date` / `to_time` / `to_datetime`** (format tokens, `parse_auto`, offset, epoch, modifiers). Spec: [doc_src/natives/date.md](../doc_src/natives/date.md).
+
+| Goal | Command |
+|------|---------|
+| Run date suite only | `bin/run_tests date -v` |
+| Regenerate case folders (maintainers) | `python3 scripts/gen_date_tests.py` |
+
+Deterministic **`now`** / **`today`** cases set **`FLAT_DATE_NOW_SEC`** (and sometimes **`FLAT_DATE_RUN_OFFSET`**) in `case.toml` **`run =`** lines.
+
 ## I/O suite (`cases/io/`)
 
 Thirty pipeline tests for `io.*` / `str.to_*` (stdin simulation, stdout checks). Spec: [doc_src/IO.md](../doc_src/IO.md).

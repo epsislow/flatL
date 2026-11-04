@@ -32,6 +32,8 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 
 **Mixed-type comparison** (`==`, `>=`, …): if types differ → result is **false** (no implicit coercion).
 
+**Datetimes (no `VAL_DATE`):** calendar values are **STRING**; absolute instants use **NUMBER** = **Unix seconds UTC** (`date.now()`, `date.parse_auto`, …). See [natives/date.md](./natives/date.md).
+
 ---
 
 ## 2. STRING — INLINE vs REF

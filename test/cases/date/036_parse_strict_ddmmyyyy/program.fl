@@ -1,0 +1,5 @@
+#main
+  date.parse('20.10.2026', 'DD.MM.YYYY') -> s
+  date.format(s, 'YYYY-MM-DD') -> d
+  io.outln(d)
+  OK

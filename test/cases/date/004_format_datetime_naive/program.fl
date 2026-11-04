@@ -1,0 +1,4 @@
+#main
+  date.format('2026-09-30T15:30', 'DD.MM.YYYY HH:mm') -> d
+  io.outln(d)
+  OK

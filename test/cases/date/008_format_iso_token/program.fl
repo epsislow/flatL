@@ -1,0 +1,4 @@
+#main
+  date.format(1790769600000, 'ISO') -> d
+  io.outln(d)
+  OK

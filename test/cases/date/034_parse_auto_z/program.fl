@@ -1,0 +1,4 @@
+#main
+  date.parse_auto('2026-09-30T12:00:00Z') -> s
+  io.outln(s)
+  OK

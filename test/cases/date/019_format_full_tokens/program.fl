@@ -1,0 +1,4 @@
+#main
+  date.format(1790769600, 'YYYY-MM-DD HH:mm:ss') -> d
+  io.outln(d)
+  OK

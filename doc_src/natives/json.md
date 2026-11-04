@@ -20,6 +20,8 @@ Implementation: `src/lib/mod_json.c`, `src/common/value_json.c`.
 
 Use **`?`** on a line to keep the previous binding when parse fails (former silent behavior).
 
+**Datetimes:** JSON string values (e.g. `"2026-09-30T12:00:00Z"`) are ordinary **STRING**s after **`json.parse_object`** — no automatic date typing. Normalise with **`str.to_datetime`**, **`str.to_date`**, or **`date.parse_auto`** ([date.md](./date.md)).
+
 **`json.parse("")`** → **NULL** (`null` keyword in programs). This differs from **`json.parse_object("")`** → `{}` and **`json.parse_list("")`** → `[]`.
 
 **`io.in_list` / `io.in_object` / `io.in_bools`** read one stdin line then apply the matching parser; invalid input → **PANIC** `io.parse` (or **`io.in_list`**, etc. as native reason). Use **`?`** / **`~`** on those lines if needed. See [IO.md](../IO.md) and [io.md](./io.md).

@@ -1,0 +1,5 @@
+#main
+  v = 'x'
+  ? str.to_date('bad') -> d
+  io.outln(v)
+  OK

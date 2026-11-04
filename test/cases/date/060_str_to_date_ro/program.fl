@@ -1,0 +1,4 @@
+#main
+  str.to_date('30.09.2026') -> d
+  io.outln(d)
+  OK

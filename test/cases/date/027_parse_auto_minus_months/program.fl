@@ -1,0 +1,5 @@
+#main
+  date.parse_auto('2026-03-15-1months') -> s
+  date.format(s, 'YYYY-MM') -> d
+  io.outln(d)
+  OK

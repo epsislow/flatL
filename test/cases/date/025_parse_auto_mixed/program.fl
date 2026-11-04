@@ -1,0 +1,4 @@
+#main
+  date.parse_auto('+1d+2h') -> s
+  io.outln(s)
+  OK

@@ -1,0 +1,7 @@
+use native obj with O
+
+#main
+  json.parse_object('{"at":"2026-09-30T12:00:00Z"}') -> o
+  O.get(o, 'at') -> at
+  io.outln(at)
+  OK

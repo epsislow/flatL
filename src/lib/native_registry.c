@@ -145,6 +145,23 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("file", "setpos", "file.setpos(fp, n)"),
     META_SIG("file", "iseof", "file.iseof(fp)"),
     META_SIG("file", "close", "file.close(fp)"),
+    META_SIG("str", "to_date", "str.to_date(s)"),
+    META_SIG("str", "to_time", "str.to_time(s)"),
+    META_SIG("str", "to_datetime", "str.to_datetime(s)"),
+    META_SIG("date", "format", "date.format(src, format?)"),
+    META_SIG("date", "parse_auto", "date.parse_auto(s)"),
+    META_SIG("date", "parse", "date.parse(s, format)"),
+    META_SIG("date", "now", "date.now()"),
+    META_SIG("date", "today", "date.today()"),
+    META_SIG("date", "add", "date.add(base, modifier)"),
+    META_SIG("date", "cmp", "date.cmp(a, b)"),
+    META_SIG("date", "to_seconds", "date.to_seconds(x)"),
+    META_SIG("date", "from_seconds", "date.from_seconds(n)"),
+    META_SIG("date", "to_ms", "date.to_ms(x)"),
+    META_SIG("date", "from_ms", "date.from_ms(n)"),
+    META_SIG("date", "time_to_sec", "date.time_to_sec(t)"),
+    META_SIG("date", "sec_to_time", "date.sec_to_time(n)"),
+    META_SIG("date", "run_offset", "date.run_offset(offset)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -152,7 +169,8 @@ int flat_native_is_core_module(const char *mod) {
         return 0;
     }
     return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0 ||
-           strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0 || strcmp(mod, FLAT_NATIVE_MODULE_FILE) == 0;
+           strcmp(mod, FLAT_NATIVE_MODULE_DATE) == 0 || strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0 ||
+           strcmp(mod, FLAT_NATIVE_MODULE_FILE) == 0;
 }
 
 int flat_native_is_module_id(const char *mod) {
@@ -160,6 +178,7 @@ int flat_native_is_module_id(const char *mod) {
         "io",
         "json",
         "str",
+        FLAT_NATIVE_MODULE_DATE,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

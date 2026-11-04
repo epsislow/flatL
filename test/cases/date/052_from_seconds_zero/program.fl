@@ -1,0 +1,4 @@
+#main
+  date.from_seconds(0) -> t
+  io.outln(t)
+  OK

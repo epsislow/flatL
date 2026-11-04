@@ -1,0 +1,4 @@
+#main
+  date.parse_auto(1790769600000) -> s
+  io.outln(s)
+  OK

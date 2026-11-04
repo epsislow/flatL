@@ -1,0 +1,3 @@
+#main
+  date.parse_auto('2026-09-30 +2d extra') -> s
+  OK

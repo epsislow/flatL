@@ -1,0 +1,5 @@
+#main
+  date.run_offset('-05:30')
+  date.format(0, 'HH') -> d
+  io.outln(d)
+  OK

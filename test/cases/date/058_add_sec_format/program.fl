@@ -1,0 +1,5 @@
+#main
+  date.add(1790769600, '+1d') -> s
+  date.format(s, 'YYYY-MM-DD') -> d
+  io.outln(d)
+  OK

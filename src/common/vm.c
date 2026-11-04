@@ -1,4 +1,5 @@
 #include "vm.h"
+#include "flat_date.h"
 #include "flat_file.h"
 #include "flat_io_ctx.h"
 #include "flat_native_plugin.h"
@@ -870,6 +871,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         return 1;
     }
     flat_native_runtime_reset();
+    flat_date_run_begin(flat_date_global_state());
     flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);
     memset(&st, 0, sizeof st);
     st.bc = bc;

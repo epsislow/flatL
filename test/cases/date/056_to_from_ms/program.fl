@@ -1,0 +1,5 @@
+#main
+  date.to_ms(1790769600) -> m
+  date.from_ms(m) -> t
+  io.outln(t)
+  OK

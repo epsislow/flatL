@@ -43,6 +43,26 @@ static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_REF_FROM, flat_native_mem_ref_from);
 }
 
+static void register_embedded_date(void) {
+    flat_native_plugin_register(FLAT_NATIVE_STR_TO_DATE, flat_native_str_to_date);
+    flat_native_plugin_register(FLAT_NATIVE_STR_TO_TIME, flat_native_str_to_time);
+    flat_native_plugin_register(FLAT_NATIVE_STR_TO_DATETIME, flat_native_str_to_datetime);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_FORMAT, flat_native_date_format);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_PARSE_AUTO, flat_native_date_parse_auto);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_PARSE, flat_native_date_parse);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_NOW, flat_native_date_now);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_TODAY, flat_native_date_today);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_ADD, flat_native_date_add);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_CMP, flat_native_date_cmp);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_TO_SECONDS, flat_native_date_to_seconds);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_FROM_SECONDS, flat_native_date_from_seconds);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_TO_MS, flat_native_date_to_ms);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_FROM_MS, flat_native_date_from_ms);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_TIME_TO_SEC, flat_native_date_time_to_sec);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_SEC_TO_TIME, flat_native_date_sec_to_time);
+    flat_native_plugin_register(FLAT_NATIVE_DATE_RUN_OFFSET, flat_native_date_run_offset);
+}
+
 static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_READ_CTX, flat_native_file_read_ctx);
     flat_native_plugin_register(FLAT_NATIVE_FILE_CREATE_CTX, flat_native_file_create_ctx);
@@ -327,6 +347,7 @@ void flat_native_runtime_reset(void) {
     g_search_dir[0] = '\0';
     register_embedded_mem();
     register_embedded_file();
+    register_embedded_date();
 }
 
 void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count) {

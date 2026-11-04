@@ -1,0 +1,5 @@
+#main
+  date.run_offset('+03:00')
+  date.today() -> d
+  io.outln(d)
+  OK
