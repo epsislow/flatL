@@ -428,7 +428,12 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                     fclose(f);
                     return -1;
                 }
-                snprintf(ins->text, sizeof ins->text, "%s", work);
+                if (strlen(work) >= sizeof ins->text) {
+                    snprintf(err, err_size, "%s:%d: line too long", path, line_no);
+                    fclose(f);
+                    return -1;
+                }
+                memcpy(ins->text, work, strlen(work) + 1);
             }
             ins->kind = classify(ins->text);
             if (ins->line_mod != FGIR_LINE_MOD_NONE && !line_mod_allowed(ins->kind, ins->text)) {

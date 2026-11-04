@@ -139,8 +139,7 @@ fleditor-wasm-optional:
 		$(MAKE) -f Makefile.wasm fleditor-wasm; \
 		echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"; \
 	else \
-		echo "OK: rebuild (bin/* only; emcc not on PATH — skipped fleditor-wasm)"; \
-		echo "Tip: make rebuild-native is the same without WASM; install Emscripten for fleditor in browser."; \
+		echo "OK: rebuild (bin/*; skipped fleditor-wasm — no emcc on PATH)"; \
 	fi
 
 fixtures: $(MIN_OK_FB)
