@@ -5,6 +5,7 @@
     "use/main.fl",
     "use/lib/helper.fl",
     "native_list.fl",
+    "or.fl",
     "obj.fl",
     "obj.fl2"
   ]
