@@ -1,0 +1,5 @@
+use native vcx with V
+
+#main
+  io.outln(mem.vars_used())
+  OK

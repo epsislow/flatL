@@ -304,7 +304,7 @@ int flat_native_split_call_manifest(const char *line, const FlatOptionalNativeDe
     if (flat_native_lookup(resolved, func, out_id) != 0) {
         return -1;
     }
-    if (*out_id >= (uint16_t)FLAT_NATIVE_CORE_COUNT) {
+    if (*out_id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && !flat_native_is_core_module(resolved)) {
         int i;
         int ok = 0;
         for (i = 0; i < decl_count; i++) {

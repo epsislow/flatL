@@ -24,7 +24,8 @@ int flat_native_eval_call(FlatNativeCtx *ctx, const char *line, FlatValue *out) 
     }
     if (ctx->doc_decls && ctx->doc_decl_count > 0) {
         if (flat_native_split_call_manifest(trimmed, ctx->doc_decls, ctx->doc_decl_count, &id,
-                                            inner, sizeof inner) != 0) {
+                                            inner, sizeof inner) != 0 &&
+            flat_native_split_call(trimmed, &id, inner, sizeof inner) != 0) {
             return -1;
         }
     } else if (flat_native_split_call(trimmed, &id, inner, sizeof inner) != 0) {
