@@ -41,13 +41,35 @@ Context IDs stored in variables exist only in the **context where that variable 
 | `varsCopyLike(src, dst, pattern)` | — | Glob on **variable names** only (`*`, `?`) |
 | `varsUsed(ctx)` | NUMBER | Bound variables in that context |
 | `varsAvail(ctx)` | NUMBER | `capacity - used` |
-| `varsMax(ctx)` | NUMBER | Fixed capacity (global = program `var_slots`) |
+| `varsMax(ctx)` | NUMBER | **Capacity** of that context (see below) |
 
 Wildcards match the **whole** variable name (case-sensitive). Pattern `*` selects all names (similar to full **`varsCopy`** source set).
 
+## `var_slots` (compile) vs context **capacity** (runtime)
+
+At **compile** time, `flc` scans the whole program and counts **distinct bind names** (assign LHS, `io`/`call` bind targets, `foreach`/`for` item vars, …). That count is written into the `.fb` as **`var_slots`** (≤ `FLAT_MAX_VARS`). It is **fixed for one compiled program** — it does **not** grow when you bind more values at runtime.
+
+| Context | Capacity (`varsMax` / `mem.vars_max` when active) |
+|---------|---------------------------------------------------|
+| **Global** (ID **1**) | **`var_slots`** from bytecode |
+| **`create(N)`** | **`N`** (chosen at the `create` call; unchanged for that ID) |
+
+Example: only `globalCtx`, `user`, `scratchCtx` in source → **`var_slots = 3`**, global **`mem.vars_max() = 3`**. After **`V.create(20)`** and **`V.set(scratchCtx)`**, **`mem.vars_max() = 20`** — that is the **`create`** size, not `var_slots`.
+
+**`mem.vars_used()`** / **`vars_avail()`** on the active context: `used` = names bound **in that storage**; `avail = capacity − used`.
+
+### Can capacity become 21?
+
+- **At runtime, no.** Global stays **`var_slots`**. An existing **`create(N)`** context keeps **N**. When **`used == capacity`**, another **new** bind in that context fails; bytecode **`var_slots`** is unchanged.
+- **After recompile:** adding an 11th distinct bind name in source sets **`var_slots = 11`** in a **new** `.fb`; global **`varsMax`** on the next run is **11**. Contexts already created with **`create(20)`** still cap at **20** unless you **`create(21)`** (new ID) and copy.
+
+Compile-time **names** are program-wide: the slot table is the universe of names the program may bind.
+
 ## `mem.*` vs `vcx.*`
 
-**`mem.vars_used`**, **`mem.vars_max`**, **`mem.vars_avail`**, **`mem.free`**, and other **`mem.*`** counters refer to the **active** context (same as **`vcx.current()`**). Use **`vcx.varsUsed(ctx)`** etc. to inspect another context without **`set`**.
+**`mem.vars_used`**, **`mem.vars_max`**, **`mem.vars_avail`**, **`mem.free`**, and other **`mem.*`** counters refer to the **active** context (same as **`vcx.current()`**). Use **`vcx.varsUsed(ctx)`**, **`vcx.varsMax(ctx)`**, … to inspect another context without **`set`**.
+
+With **VCX off**, **`mem.vars_max()`** is always program **`var_slots`** (single storage).
 
 ## Control flow
 

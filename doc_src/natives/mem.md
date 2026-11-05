@@ -57,15 +57,17 @@ There is **no** separate **`date`** type — datetimes are **`string`** or epoch
 
 Argument lists must be empty `()` unless noted above.
 
-### Variables (from `.fb` `var_slots`)
+### Variables (runtime storage)
 
 | Call | Meaning |
 |------|---------|
-| `vars_max()` | Upper bound on distinct variable names for this program (`var_slots` in bytecode) |
-| `vars_used()` | Current `var_count` |
+| `vars_max()` | **Capacity** of the active variable storage (max bind slots in that context) |
+| `vars_used()` | Names currently bound there (`var_count`) |
 | `vars_avail()` | `vars_max - vars_used` (≥ 0) |
 
-When the optional **[`vcx`](./vcx.md)** module is used, these three counts apply to the **active** variable context (default: global context at VM start). Other contexts: **`vcx.varsUsed(ctx)`**, etc.
+**Without VCX:** one storage; **`vars_max()`** = program **`var_slots`** in bytecode (distinct bind names counted at compile — see [`vcx.md`](./vcx.md) § `var_slots`).
+
+**With [`vcx`](./vcx.md):** same three calls apply to the **active** context — global capacity = **`var_slots`**, **`create(N)`** contexts = **`N`**. Other contexts: **`vcx.varsUsed(ctx)`**, **`vcx.varsMax(ctx)`**, etc. Capacity does **not** increase at runtime when you add bindings; recompile changes **`var_slots`** (global on next run), not existing **`create`** capacities.
 
 ### LIST / OBJECT pools
 
