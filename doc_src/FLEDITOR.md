@@ -91,7 +91,7 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 ## I/O model
 
 - **Stdout** (`io.out*`) → xterm.js terminal.
-- **Stdin** (`io.in*`) → **Settings → Terminal → Program input**: **inline in terminal** (default; prompt on stdout, type in xterm, Enter) or **dialog modal** (legacy `<dialog>`). WASM uses Asyncify + `emscripten_sleep` while waiting.
+- **Stdin** (`io.in*`) → **Settings → Terminal → Program input**: **inline in terminal** (default; prompt on stdout, type in xterm, Enter submits, **Escape** cancels) or **dialog modal** (legacy `<dialog>`). WASM uses Asyncify + `emscripten_sleep` while waiting.
 - Project actions use **`<dialog>`** — no native `prompt` / `confirm` / `alert`.
 - Empty line on `io.inln` / `io.in_num` / `io.in_bool` → cancel (`#panic.any`), same as desktop [IO.md](IO.md).
 

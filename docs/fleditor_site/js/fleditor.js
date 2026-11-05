@@ -1715,8 +1715,21 @@
     return prefs.programInput !== 'modal';
   }
 
+  function cancelTerminalIoInput() {
+    ioLineBuffer = '';
+    if (term) {
+      term.write('\r\n');
+    }
+    finishIoWake('', IO_PANIC_CANCEL);
+  }
+
   function handleTerminalIoData(data) {
     if (!programInputUsesTerminal() || !ioPendingWake || !term) {
+      return;
+    }
+
+    if (data === '\x1b') {
+      cancelTerminalIoInput();
       return;
     }
 
@@ -1728,6 +1741,10 @@
       }
       if (data === '\r' || data === '\n') {
         finishIoWake('', IO_PANIC_CANCEL);
+        return;
+      }
+      if (data.charCodeAt(0) === 27) {
+        cancelTerminalIoInput();
         return;
       }
       const ch = data.charAt(0);
@@ -1770,12 +1787,18 @@
         continue;
       }
       if (ch === '\x1b') {
+        const seqStart = i + 1;
         i += 1;
         while (i < data.length && !/[A-Za-z~]/.test(data[i])) {
           i += 1;
         }
         if (i < data.length) {
           i += 1;
+          continue;
+        }
+        if (seqStart >= data.length) {
+          cancelTerminalIoInput();
+          return;
         }
         continue;
       }
