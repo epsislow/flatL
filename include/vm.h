@@ -20,6 +20,8 @@ typedef struct FlatVmOptions {
     int trace;
     int trace_vars;
     int *out_termination;
+    char *out_panic_msg;     /* optional: last run diagnostic (NUL-terminated) */
+    size_t out_panic_msg_sz; /* size of out_panic_msg buffer */
     uint64_t max_steps; /* 0 = unlimited total opcodes */
     uint64_t max_jumps; /* 0 = use FLAT_VM_DEFAULT_MAX_JUMPS */
     int no_jump_limit;  /* ignore jump budget (tests / long runs) */

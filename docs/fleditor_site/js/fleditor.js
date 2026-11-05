@@ -397,21 +397,22 @@
     ERROR: 5
   };
 
-  function runFinishedEpilog(exitCode, termReason) {
+  function runFinishedEpilog(exitCode, termReason, panicDetail) {
+    const detail = (panicDetail || '').trim();
     if (termReason === FLAT_TERM.OK) {
       return '-- finished: OK';
     }
     if (termReason === FLAT_TERM.FAIL || exitCode === 2) {
-      return '-- finished: FAIL';
+      return detail ? '-- finished: FAIL — ' + detail : '-- finished: FAIL';
     }
     if (termReason === FLAT_TERM.COMPLETE) {
       return '-- finished: complete';
     }
     if (termReason === FLAT_TERM.PANIC) {
-      return '-- finished: panic';
+      return detail ? '-- finished: panic — ' + detail : '-- finished: panic';
     }
     if (exitCode !== 0) {
-      return '-- finished: error';
+      return detail ? '-- finished: error — ' + detail : '-- finished: error';
     }
     return '-- finished: complete';
   }
@@ -2088,6 +2089,13 @@
       /* older wasm without export */
     }
 
+    let panicDetail = '';
+    try {
+      panicDetail = Module.ccall('flat_wasm_get_last_panic', 'string', [], []) || '';
+    } catch (_e2) {
+      /* older wasm without export */
+    }
+
     const logicalFail =
       runRc === 2 &&
       (termination === FLAT_TERM.FAIL || termination === FLAT_TERM.UNKNOWN);
@@ -2099,13 +2107,26 @@
         compileFailed = true;
         term.write('\r\n[compile/link error] ' + msg + '\r\n');
       } else if (msg) {
-        term.write('\r\n[run] ' + msg + '\r\n');
+        const tag =
+          termination === FLAT_TERM.PANIC
+            ? 'panic'
+            : termination === FLAT_TERM.ERROR
+              ? 'error'
+              : 'run';
+        term.write('\r\n[' + tag + '] ' + msg + '\r\n');
+      } else if (panicDetail) {
+        term.write('\r\n[panic] ' + panicDetail + '\r\n');
       } else {
         term.write('\r\n[error] program failed (exit ' + runRc + ')\r\n');
       }
     }
     Module._free(errBuf);
-    return { exitCode: runRc, compileFailed: compileFailed, termination: termination };
+    return {
+      exitCode: runRc,
+      compileFailed: compileFailed,
+      termination: termination,
+      panicDetail: panicDetail,
+    };
   }
 
   async function onRun() {
@@ -2128,7 +2149,12 @@
     if (FleditorSettings.getTerminalPrefs().clearOnRun) {
       term.clear();
     }
-    let runOutcome = { exitCode: 1, compileFailed: false, termination: FLAT_TERM.ERROR };
+    let runOutcome = {
+      exitCode: 1,
+      compileFailed: false,
+      termination: FLAT_TERM.ERROR,
+      panicDetail: '',
+    };
     try {
       implicitSaveForRun();
       P.syncToMemfs(wasmModule, project.files);
@@ -2146,14 +2172,23 @@
       }
     } catch (e) {
       term.write('\r\n[error] ' + e.message + '\r\n');
-      runOutcome = { exitCode: 1, compileFailed: false, termination: FLAT_TERM.ERROR };
+      runOutcome = {
+        exitCode: 1,
+        compileFailed: false,
+        termination: FLAT_TERM.ERROR,
+        panicDetail: '',
+      };
       setStatus('failed', true);
     } finally {
       if (runOutcome.compileFailed) {
         writeTerminalEpilog('-- compile failed');
       } else {
         writeTerminalEpilog(
-          runFinishedEpilog(runOutcome.exitCode, runOutcome.termination)
+          runFinishedEpilog(
+            runOutcome.exitCode,
+            runOutcome.termination,
+            runOutcome.panicDetail
+          )
         );
       }
       running = false;

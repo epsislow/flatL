@@ -164,7 +164,7 @@ make fleditor-hex-smoke
 ```
 
 Runs `test/fleditor/hex_roundtrip.mjs`, `hex_project_smoke.mjs`, and `hex_grid.mjs` (dump helpers, project wrapper, grid cell parsing).
-- **`io.out*`** → terminal (normal). **`io.err*`** on default **`terr`** → same terminal, **gray** text (`flatWasmOnStderr`).
+- **`io.out*`** → terminal (normal). **`io.err*`** on default **`terr`** → same terminal, **gray** text (`flatWasmOnStderr`). Unhandled **PANIC** lines also go to stderr (gray in terminal), with **`[panic]`** / **`-- finished: panic — …`** summarizing the reason when WASM is rebuilt.
 - **`localStorage`** key `flatl-fleditor-project`.
 
 ### Delete and reset

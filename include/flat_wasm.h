@@ -25,6 +25,9 @@ void flat_wasm_free(void *p);
 /* Last flat_vm_run termination (FlatTermination); 0 if no run yet. */
 int flat_wasm_get_last_termination(void);
 
+/* Last run diagnostic (empty if none); valid until next flat_wasm_run*. */
+const char *flat_wasm_get_last_panic(void);
+
 /* flatL toolchain version string (same as flc/flvm). */
 const char *flat_wasm_toolchain_version(void);
 

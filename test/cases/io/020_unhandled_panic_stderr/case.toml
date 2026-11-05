@@ -7,7 +7,7 @@ source = "program.fl"
 compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
 run = "printf '\n' | {root}/bin/flvm {tmp}/out.fb"
 expect_exit = 1
-stdout_contains = "unhandled panic"
+stdout_contains = "unhandled PANIC"
 
 [flatl]
 compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"

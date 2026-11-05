@@ -17,6 +17,7 @@
 #define FLAT_WASM_FB_PATH "/fleditor_out.fb"
 
 static int g_last_termination;
+static char g_last_panic_msg[256];
 
 static struct {
     unsigned max_jumps;
@@ -202,18 +203,29 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
     int term = (int)FLAT_TERM_UNKNOWN;
     flat_wasm_fill_vm_opts(&opts);
     opts.out_termination = &term;
+    g_last_panic_msg[0] = '\0';
+    opts.out_panic_msg = g_last_panic_msg;
+    opts.out_panic_msg_sz = sizeof g_last_panic_msg;
     rc = flat_vm_run_opts(&bc, &opts);
     g_last_termination = term;
     flat_fb_free(&bc);
     /* Logical FAIL (exit 2) is normal program outcome — not a runner error. */
     if (rc != 0 && err && err_sz && term != (int)FLAT_TERM_FAIL) {
-        snprintf(err, err_sz, "program exited with code %d", rc);
+        if (g_last_panic_msg[0] != '\0') {
+            snprintf(err, err_sz, "%s", g_last_panic_msg);
+        } else {
+            snprintf(err, err_sz, "program exited with code %d", rc);
+        }
     }
     return rc;
 }
 
 int flat_wasm_get_last_termination(void) {
     return g_last_termination;
+}
+
+const char *flat_wasm_get_last_panic(void) {
+    return g_last_panic_msg;
 }
 
 const char *flat_wasm_toolchain_version(void) {

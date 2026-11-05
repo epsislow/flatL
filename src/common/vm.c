@@ -9,6 +9,10 @@
 #include "flat_str.h"
 #include "flat_value.h"
 
+#ifdef FLAT_WASM_BUILD
+#include "flat_wasm_io.h"
+#endif
+
 #include <ctype.h>
 #include <limits.h>
 #include <math.h>
@@ -65,7 +69,49 @@ typedef struct {
     int via_jump;
     uint64_t step_count;
     uint64_t jump_count;
+    const FlatVmOptions *run_opts;
 } VmState;
+
+static void vm_write_stderr(const char *s) {
+    size_t n;
+
+    if (!s || !*s) {
+        return;
+    }
+    n = strlen(s);
+#ifdef FLAT_WASM_BUILD
+    flat_wasm_io_write_stderr(s, n);
+#else
+    fwrite(s, 1, n, stderr);
+#endif
+}
+
+static void vm_record_run_message(const FlatVmOptions *opts, const VmState *st, FlatTermination term,
+                                  int exit_code) {
+    if (!opts || !opts->out_panic_msg || opts->out_panic_msg_sz == 0) {
+        return;
+    }
+    opts->out_panic_msg[0] = '\0';
+    if (exit_code == 0) {
+        return;
+    }
+    if (st && st->panic_reason[0] != '\0') {
+        if (st->unhandled_panic) {
+            snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "unhandled PANIC: %s",
+                     st->panic_reason);
+        } else {
+            snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "%s", st->panic_reason);
+        }
+        return;
+    }
+    if (term == FLAT_TERM_FAIL) {
+        snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "logical FAIL");
+    } else if (term == FLAT_TERM_PANIC) {
+        snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "unhandled PANIC");
+    } else if (term == FLAT_TERM_ERROR) {
+        snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "VM error");
+    }
+}
 
 static void vm_teardown(VmState *st, int rc);
 
@@ -74,6 +120,7 @@ static int vm_finish(VmState *st, char *guard_names, FlatValue *guard_vals, int 
     if (opts && opts->out_termination) {
         *opts->out_termination = (int)term;
     }
+    vm_record_run_message(opts, st, term, exit_code);
     free(guard_names);
     free(guard_vals);
     vm_teardown(st, exit_code);
@@ -117,7 +164,11 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
     uint32_t want = flat_label_hash("#panic.any");
 
     if (trace) {
-        fprintf(stderr, "[trace] panic reason=%s handler=#panic.any\n", reason);
+        {
+            char tbuf[128];
+            snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=#panic.any\n", reason);
+            vm_write_stderr(tbuf);
+        }
     }
     for (i = 0; i < bc->block_count; i++) {
         if (bc->blocks[i].block_id == want) {
@@ -125,9 +176,14 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
             return 0;
         }
     }
-    fprintf(stderr, "flvm: unhandled panic: %s\n", reason);
+    {
+        char line[128];
+        snprintf(line, sizeof line, "flvm: unhandled PANIC: %s\n", reason);
+        vm_write_stderr(line);
+    }
     if (st) {
         st->unhandled_panic = 1;
+        snprintf(st->panic_reason, sizeof st->panic_reason, "%s", reason ? reason : "panic");
     }
     return 1;
 }
@@ -874,6 +930,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     flat_date_run_begin(flat_date_global_state());
     flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);
     memset(&st, 0, sizeof st);
+    st.run_opts = opts;
     st.bc = bc;
     st.var_slots_max = bc->var_slots;
     scratch_n = st.var_slots_max > 0 ? st.var_slots_max : 1u;
@@ -1136,7 +1193,12 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             continue;
         }
         default:
-            fprintf(stderr, "flvm: unsupported opcode 0x%02x at %u\n", opcode, ip);
+            snprintf(st.panic_reason, sizeof st.panic_reason, "unsupported opcode 0x%02x", opcode);
+            {
+                char line[96];
+                snprintf(line, sizeof line, "flvm: %s at ip %u\n", st.panic_reason, ip);
+                vm_write_stderr(line);
+            }
             return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
         }
     }
