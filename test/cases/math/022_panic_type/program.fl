@@ -1,0 +1,6 @@
+use native math with m
+
+#main
+  S = 'x'
+  m.calc('S + 1') -> r
+  OK

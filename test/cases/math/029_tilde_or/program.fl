@@ -1,0 +1,10 @@
+use native math with m
+
+#main
+  ~ m.calc('1 / 0') -> r   #.fallback
+  io.outln('FAIL')
+  OK
+
+#or.#main.fallback
+  io.outln('OR')
+  OK

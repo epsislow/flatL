@@ -1,0 +1,7 @@
+use native math with m
+
+#main
+  r = 99
+  ? m.calc('1 + * 2') -> r
+  io.outln(r)
+  OK

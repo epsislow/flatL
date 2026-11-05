@@ -50,6 +50,69 @@ Argument **`xs`**: **LIST** of **NUMBER**, length **≥ 1**. Empty list → I/O 
 | `min(xs)` | Minimum |
 | `max(xs)` | Maximum |
 
+## `calc(expr)` — arithmetic expressions
+
+Evaluate a **STRING** expression and return a **NUMBER**. Use this when you need infix operators (for example `B = math.calc('A * 2')`); plain assignment RHS still accepts only a single literal or variable, not `A * 2`.
+
+| Call | Returns |
+|------|---------|
+| `calc(expr)` | **NUMBER** — result of evaluating **expr** |
+
+**Argument `expr`:** a **STRING** (literal `'…'` / `"…"`, or a variable holding STRING / REF). The string body is the expression text (no surrounding quotes).
+
+### Operators (precedence, high → low)
+
+| Level | Operators | Notes |
+|-------|-----------|--------|
+| 1 | `^` | Power, **right-associative** (`2 ^ 3 ^ 2` → `2 ^ (3 ^ 2)`). Same as `math.pow`. |
+| 2 | Unary `+` / `-` | Unary minus binds **below** `^` (`-2 ^ 2` → **-4**, not 4). |
+| 3 | `*`, `/`, `%`, `%%` | `%` = **fmod** (like `math.mod`); `%%` = **floor_mod** (like `math.floor_mod`). |
+| 4 | `+`, `-` | Addition / subtraction. |
+| Grouping | `( … )` | Overrides precedence. |
+
+Whitespace between tokens is ignored. **Identifiers** (`A`, `foo_bar`) refer to program variables and must be **NUMBER**.
+
+### Examples
+
+```text
+use native math with m
+
+#main
+  A = 6
+  m.calc('(A + 2) * 3') -> r1
+  m.calc('-2 ^ 2') -> r2
+  m.calc('-7 %% 3') -> r3
+  io.outln(r1)
+  io.outln(r2)
+  io.outln(r3)
+  OK
+```
+
+Output:
+
+```text
+24
+-4
+2
+```
+
+### PANIC sub-reasons (no `?` / `~`)
+
+On failure without line modifiers, the VM reports **`unhandled PANIC:`** with a dotted reason:
+
+| Situation | Reason |
+|-----------|--------|
+| Invalid expression (bad token, unbalanced `)`, trailing garbage) | `math.calc.syntax` |
+| Unknown identifier in the expression | `math.calc.unknown_var` |
+| Variable exists but is not **NUMBER** | `math.calc.type` |
+| Division or modulo by zero (`/`, `%`, `%%`) | `math.calc.divzero` |
+| Bad `calc` argument (not STRING, parse error, empty string) | `math.calc.arg` |
+| Non-finite result (NaN / infinity from evaluation) | `math.calc.range` |
+
+With **`?`** or **`~`**, behavior matches other natives (silent skip or `#or` branch); sub-reasons appear only when a panic would actually run (trace / stderr).
+
+Implementation: `src/lib/flat_math_calc.c`, handler in `src/lib/mod_math.c`.
+
 ## Two scalars (distinct names)
 
 | Call | Returns |
@@ -88,6 +151,7 @@ Output:
 | File | Role |
 |------|------|
 | `src/lib/mod_math.c` | Handlers |
+| `src/lib/flat_math_calc.c` | `calc` expression parser |
 | `src/lib/plugin_math_entry.c` | Plugin entry |
 | `include/flat_native.h` | IDs `FLAT_NATIVE_MATH_*` |
 

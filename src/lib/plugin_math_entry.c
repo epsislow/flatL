@@ -25,5 +25,6 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_MATH_NUM_PI, flat_native_math_num_pi);
     reg(FLAT_NATIVE_MATH_NUM_TAU, flat_native_math_num_tau);
     reg(FLAT_NATIVE_MATH_NUM_E, flat_native_math_num_e);
+    reg(FLAT_NATIVE_MATH_CALC, flat_native_math_calc);
     return 0;
 }

@@ -82,6 +82,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("math", "num_pi", "math.num_pi()"),
     META_SIG("math", "num_tau", "math.num_tau()"),
     META_SIG("math", "num_e", "math.num_e()"),
+    META_SIG("math", "calc", "math.calc(expr)"),
     META_SIG("list", "empty", "list.empty()"),
     META_SIG("list", "pack", "list.pack(v1, v2, ...)"),
     META_SIG("list", "push", "list.push(list, val)"),

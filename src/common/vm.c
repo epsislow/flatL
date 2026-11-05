@@ -221,7 +221,7 @@ static int vm_handle_io_status(VmState *st, const FlatBytecode *bc, uint32_t *ip
 /* 0 = continue; 1 = unhandled panic; 2 = logical FAIL (~ without #or). */
 static int vm_line_mod_outcome(VmState *st, const FlatBytecode *bc, uint32_t *ip, uint16_t native_id,
                                uint8_t mod, uint32_t or_target, int invoke_rc, FlatIoStatus ios,
-                               int trace) {
+                               const char *panic_detail, int trace) {
     int soft_fail = (invoke_rc != 0 || ios == FLAT_IO_ERR);
 
     if (!soft_fail && ios == FLAT_IO_OK) {
@@ -254,7 +254,11 @@ static int vm_line_mod_outcome(VmState *st, const FlatBytecode *bc, uint32_t *ip
         *ip = or_target;
         return 0;
     }
-    snprintf(st->panic_reason, sizeof st->panic_reason, "%s", flat_native_name(native_id));
+    if (panic_detail && panic_detail[0] != '\0') {
+        snprintf(st->panic_reason, sizeof st->panic_reason, "%s", panic_detail);
+    } else {
+        snprintf(st->panic_reason, sizeof st->panic_reason, "%s", flat_native_name(native_id));
+    }
     if (trace) {
         fprintf(stderr, "[trace] panic reason=%s (native fail)\n", st->panic_reason);
     }
@@ -452,7 +456,9 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         int ndecl_count = 0;
         char inner[4096];
         int invoke_rc;
+        FlatNativeCtx ctx;
 
+        ctx.panic_detail[0] = '\0';
         vm_native_decls_at_ip(bc, *ip, &ndecl, &ndecl_count);
         ios = FLAT_IO_ERR;
         if (ndecl && ndecl_count > 0) {
@@ -466,7 +472,6 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
                 flat_native_split_call(rhs, &native_id, inner, sizeof inner) != 0 ? -1 : 0;
         }
         if (invoke_rc == 0) {
-            FlatNativeCtx ctx;
             ctx.pool = st->pool;
             ctx.coll = st->coll;
             ctx.vars = vals;
@@ -483,7 +488,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
             invoke_rc = flat_native_invoke(native_id, &ctx);
         }
-        rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios, trace);
+        rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios,
+                                 ctx.panic_detail, trace);
         if (rc != 0) {
             goto done;
         }
@@ -846,11 +852,13 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.bc = st->bc;
     ctx.io_ctx = st->io_ctx;
     ctx.file_tbl = &st->files;
+    ctx.panic_detail[0] = '\0';
     vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
     ios = FLAT_IO_ERR;
     {
         int invoke_rc = flat_native_invoke(native_id, &ctx);
-        rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios, trace);
+        rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios,
+                                 ctx.panic_detail, trace);
         if (rc != 0) {
             goto done;
         }

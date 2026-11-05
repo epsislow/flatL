@@ -1,0 +1,6 @@
+use native math with m
+
+#main
+  m.calc('9 ^ 0.5') -> r
+  io.outln(r)
+  OK

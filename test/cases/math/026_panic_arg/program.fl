@@ -1,0 +1,5 @@
+use native math with m
+
+#main
+  m.calc(42) -> r
+  OK

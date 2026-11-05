@@ -164,6 +164,7 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_MATH_NUM_PI, flat_native_math_num_pi);
         flat_native_plugin_register(FLAT_NATIVE_MATH_NUM_TAU, flat_native_math_num_tau);
         flat_native_plugin_register(FLAT_NATIVE_MATH_NUM_E, flat_native_math_num_e);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_CALC, flat_native_math_calc);
         g_loaded_math = 1;
         return 0;
     }

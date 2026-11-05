@@ -73,6 +73,7 @@ typedef enum {
     FLAT_NATIVE_MATH_NUM_PI,
     FLAT_NATIVE_MATH_NUM_TAU,
     FLAT_NATIVE_MATH_NUM_E,
+    FLAT_NATIVE_MATH_CALC,
     FLAT_NATIVE_LIST_EMPTY,
     FLAT_NATIVE_LIST_PACK,
     FLAT_NATIVE_LIST_PUSH,
@@ -185,6 +186,7 @@ typedef struct {
     int doc_decl_count;
     struct FlatIOContext *io_ctx;
     struct FlatFileTable *file_tbl;
+    char panic_detail[64];
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

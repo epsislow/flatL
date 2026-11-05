@@ -77,6 +77,7 @@ int flat_native_math_max2(FlatNativeCtx *ctx);
 int flat_native_math_num_pi(FlatNativeCtx *ctx);
 int flat_native_math_num_tau(FlatNativeCtx *ctx);
 int flat_native_math_num_e(FlatNativeCtx *ctx);
+int flat_native_math_calc(FlatNativeCtx *ctx);
 
 int flat_native_list_empty(FlatNativeCtx *ctx);
 int flat_native_list_pack(FlatNativeCtx *ctx);

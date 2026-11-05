@@ -1,0 +1,6 @@
+use native math with m
+
+#main
+  m.calc('-7 %% 3') -> r
+  io.outln(r)
+  OK

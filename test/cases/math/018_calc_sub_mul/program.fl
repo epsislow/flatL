@@ -1,0 +1,6 @@
+use native math with m
+
+#main
+  m.calc('10 - 2 * 3 + 4') -> r
+  io.outln(r)
+  OK

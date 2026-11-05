@@ -1,0 +1,7 @@
+use native math with m
+
+#main
+  E = '2 + 4'
+  m.calc(E) -> r
+  io.outln(r)
+  OK

@@ -1,0 +1,8 @@
+use native math with m
+
+#main
+  X = 3
+  Y = 4
+  m.calc('X + Y') -> r
+  io.outln(r)
+  OK

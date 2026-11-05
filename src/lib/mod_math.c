@@ -1,3 +1,4 @@
+#include "flat_math_calc.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
@@ -389,4 +390,73 @@ int flat_native_math_num_e(FlatNativeCtx *ctx) {
     }
     *ctx->io_status = FLAT_IO_OK;
     return flat_value_set_number(ctx->out, exp(1.0));
+}
+
+static void calc_set_panic(FlatNativeCtx *ctx, FlatMathCalcErr err) {
+    if (ctx && ctx->panic_detail[0] == '\0') {
+        flat_math_calc_reason(err, ctx->panic_detail, sizeof ctx->panic_detail);
+    }
+}
+
+static int calc_set_panic_arg(FlatNativeCtx *ctx) {
+    if (!ctx || !ctx->io_status) {
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_ERR;
+    snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "math.calc.arg");
+    return -1;
+}
+
+static int string_from_value(FlatNativeCtx *ctx, const FlatValue *v, char *buf, size_t buf_sz) {
+    if (!v || !buf || buf_sz == 0) {
+        return -1;
+    }
+    if (v->tag == VAL_STR_INLINE) {
+        if (v->u.ins.len + 1 > buf_sz) {
+            return -1;
+        }
+        memcpy(buf, v->u.ins.bytes, v->u.ins.len);
+        buf[v->u.ins.len] = '\0';
+        return 0;
+    }
+    if (v->tag == VAL_STR_REF && ctx && ctx->pool) {
+        size_t len = 0;
+        const uint8_t *p = flat_pool_read(ctx->pool, v->u.ref_id, &len);
+        if (!p || len + 1 > buf_sz) {
+            return -1;
+        }
+        memcpy(buf, p, len);
+        buf[len] = '\0';
+        return 0;
+    }
+    return -1;
+}
+
+int flat_native_math_calc(FlatNativeCtx *ctx) {
+    FlatValue src;
+    char expr[4096];
+    double result;
+    FlatMathCalcErr err;
+
+    if (!ctx || !ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_expr(ctx, ctx->inner, &src) != 0) {
+        return calc_set_panic_arg(ctx);
+    }
+    if (string_from_value(ctx, &src, expr, sizeof expr) != 0) {
+        return calc_set_panic_arg(ctx);
+    }
+    if (expr[0] == '\0') {
+        return calc_set_panic_arg(ctx);
+    }
+    err = flat_math_calc_eval(expr, ctx->vars, ctx->var_count, ctx->var_names, &result);
+    if (err != FLAT_MATH_CALC_OK) {
+        *ctx->io_status = FLAT_IO_ERR;
+        calc_set_panic(ctx, err);
+        return -1;
+    }
+    return flat_value_set_number(ctx->out, result);
 }

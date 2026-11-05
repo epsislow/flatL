@@ -1,0 +1,7 @@
+use native math with m
+
+#main
+  A = 10
+  m.calc('A * 2') -> r
+  io.outln(r)
+  OK

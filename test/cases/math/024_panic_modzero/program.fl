@@ -1,0 +1,5 @@
+use native math with m
+
+#main
+  m.calc('5 % 0') -> r
+  OK
