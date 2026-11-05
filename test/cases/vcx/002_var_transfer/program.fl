@@ -1,0 +1,11 @@
+use native vcx with V
+
+#main
+  s = V.create(10)
+  V.set(1)
+  user = 'global'
+  V.set(s)
+  user = 'scratch'
+  user = V.var(1, 'user')
+  io.outln(user)
+  OK

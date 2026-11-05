@@ -157,6 +157,16 @@ typedef enum {
     FLAT_NATIVE_DATE_SEC_TO_TIME,
     FLAT_NATIVE_DATE_RUN_OFFSET,
     FLAT_NATIVE_MEM_TYPE_OF,
+    FLAT_NATIVE_VCX_CURRENT,
+    FLAT_NATIVE_VCX_SET,
+    FLAT_NATIVE_VCX_CREATE,
+    FLAT_NATIVE_VCX_VAR,
+    FLAT_NATIVE_VCX_HAS_VAR,
+    FLAT_NATIVE_VCX_VARS_COPY,
+    FLAT_NATIVE_VCX_VARS_COPY_LIKE,
+    FLAT_NATIVE_VCX_VARS_USED,
+    FLAT_NATIVE_VCX_VARS_AVAIL,
+    FLAT_NATIVE_VCX_VARS_MAX,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
@@ -170,6 +180,9 @@ typedef enum {
 #define FLAT_NATIVE_MODULE_OBJ "obj"
 #define FLAT_NATIVE_MODULE_MEM "mem"
 #define FLAT_NATIVE_MODULE_FILE "file"
+#define FLAT_NATIVE_MODULE_VCX "vcx"
+
+struct FlatVcxRuntime;
 
 typedef struct {
     FlatStringPool *pool;
@@ -187,6 +200,7 @@ typedef struct {
     int doc_decl_count;
     struct FlatIOContext *io_ctx;
     struct FlatFileTable *file_tbl;
+    struct FlatVcxRuntime *vcx;
     char panic_detail[64];
 } FlatNativeCtx;
 

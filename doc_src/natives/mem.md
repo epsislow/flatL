@@ -65,6 +65,8 @@ Argument lists must be empty `()` unless noted above.
 | `vars_used()` | Current `var_count` |
 | `vars_avail()` | `vars_max - vars_used` (≥ 0) |
 
+When the optional **[`vcx`](./vcx.md)** module is used, these three counts apply to the **active** variable context (default: global context at VM start). Other contexts: **`vcx.varsUsed(ctx)`**, etc.
+
 ### LIST / OBJECT pools
 
 | Call | Max constant |

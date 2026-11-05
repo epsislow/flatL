@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  b = V.create(10)
+  V.set(1)
+  cost_net = 10
+  user_id = 99
+  V.varsCopyLike(1, b, 'cost*')
+  V.set(b)
+  io.outln(cost_net)
+  io.outln(V.hasVar(V.current(), 'user_id'))
+  OK

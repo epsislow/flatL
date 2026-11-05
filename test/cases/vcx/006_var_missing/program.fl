@@ -1,0 +1,6 @@
+use native vcx with V
+
+#main
+  c = V.current()
+  V.var(c, 'nope')
+  OK

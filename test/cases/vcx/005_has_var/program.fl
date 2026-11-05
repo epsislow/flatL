@@ -1,0 +1,7 @@
+use native vcx with V
+
+#main
+  name = 'x'
+  io.outln(V.hasVar(V.current(), 'missing'))
+  io.outln(V.hasVar(V.current(), name))
+  OK

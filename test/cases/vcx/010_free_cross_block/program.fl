@@ -1,0 +1,9 @@
+#main
+  x = 1
+  call #cleanup
+  io.outln('ok')
+  OK
+
+#cleanup
+  free(x)
+  return

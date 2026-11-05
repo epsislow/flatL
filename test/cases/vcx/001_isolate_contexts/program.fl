@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  scratchCtx = V.create(20)
+  user = 'John'
+  age = '30'
+  V.set(scratchCtx)
+  user = 'Alice'
+  age = '25'
+  V.set(1)
+  io.outln(str.concat(user, ':', age))
+  OK

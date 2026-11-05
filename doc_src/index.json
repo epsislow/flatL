@@ -19,6 +19,7 @@
     { "id": "str-native", "label": "Native str", "file": "natives/str.md" },
     { "id": "date-native", "label": "Native date", "file": "natives/date.md" },
     { "id": "obj-native", "label": "Native obj", "file": "natives/obj.md" },
+    { "id": "vcx-native", "label": "Native vcx", "file": "natives/vcx.md" },
     { "id": "mem-native", "label": "Native mem", "file": "natives/mem.md" },
     { "id": "file-native", "label": "Native file", "file": "natives/file.md" }
   ]

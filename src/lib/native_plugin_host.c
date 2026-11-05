@@ -21,6 +21,7 @@ static int g_loaded_math_stats;
 static int g_loaded_math;
 static int g_loaded_list;
 static int g_loaded_obj;
+static int g_loaded_vcx;
 
 static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_VARS_MAX, flat_native_mem_vars_max);
@@ -63,6 +64,22 @@ static void register_embedded_date(void) {
     flat_native_plugin_register(FLAT_NATIVE_DATE_SEC_TO_TIME, flat_native_date_sec_to_time);
     flat_native_plugin_register(FLAT_NATIVE_DATE_RUN_OFFSET, flat_native_date_run_offset);
 }
+
+#if !defined(FLAT_WASM_BUILD)
+static void register_embedded_vcx(void) {
+    flat_native_plugin_register(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_HAS_VAR, flat_native_vcx_has_var);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY, flat_native_vcx_vars_copy);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY_LIKE, flat_native_vcx_vars_copy_like);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_USED, flat_native_vcx_vars_used);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_AVAIL, flat_native_vcx_vars_avail);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_MAX, flat_native_vcx_vars_max);
+    g_loaded_vcx = 1;
+}
+#endif
 
 static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_READ_CTX, flat_native_file_read_ctx);
@@ -206,6 +223,23 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         g_loaded_obj = 1;
         return 0;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_VCX) == 0) {
+        if (g_loaded_vcx) {
+            return 0;
+        }
+        flat_native_plugin_register(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_HAS_VAR, flat_native_vcx_has_var);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY, flat_native_vcx_vars_copy);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY_LIKE, flat_native_vcx_vars_copy_like);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_USED, flat_native_vcx_vars_used);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_AVAIL, flat_native_vcx_vars_avail);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_MAX, flat_native_vcx_vars_max);
+        g_loaded_vcx = 1;
+        return 0;
+    }
     snprintf(err, err_size, "optional native module not available: \"%s\"", mod);
     return -1;
 }
@@ -265,6 +299,9 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         return 0;
     }
     if (strcmp(mod, FLAT_NATIVE_MODULE_OBJ) == 0 && g_loaded_obj) {
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_VCX) == 0 && g_loaded_vcx) {
         return 0;
     }
 
@@ -337,6 +374,9 @@ ok:
     if (strcmp(mod, FLAT_NATIVE_MODULE_OBJ) == 0) {
         g_loaded_obj = 1;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_VCX) == 0) {
+        g_loaded_vcx = 1;
+    }
     return 0;
 }
 
@@ -348,10 +388,14 @@ void flat_native_runtime_reset(void) {
     g_loaded_math = 0;
     g_loaded_list = 0;
     g_loaded_obj = 0;
+    g_loaded_vcx = 0;
     g_search_dir[0] = '\0';
     register_embedded_mem();
     register_embedded_file();
     register_embedded_date();
+#ifndef FLAT_WASM_BUILD
+    register_embedded_vcx();
+#endif
 }
 
 void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count) {

@@ -8,6 +8,7 @@
 #include "flat_native.h"
 #include "flat_str.h"
 #include "flat_value.h"
+#include "flat_vcx.h"
 
 #ifdef FLAT_WASM_BUILD
 #include "flat_wasm_io.h"
@@ -67,6 +68,7 @@ typedef struct {
     uint64_t step_count;
     uint64_t jump_count;
     const FlatVmOptions *run_opts;
+    FlatVcxRuntime *vcx;
 } VmState;
 
 static void vm_write_stderr(const char *s) {
@@ -342,6 +344,9 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
         flat_io_ctx_var_updated(st->io_ctx, st->var_count, val);
     }
     st->var_count++;
+    if (st->vcx) {
+        flat_vcx_runtime_sync_bind_var_count(st->vcx);
+    }
     return 0;
 }
 
@@ -456,7 +461,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         int invoke_rc;
         FlatNativeCtx ctx;
 
-        ctx.panic_detail[0] = '\0';
+        memset(&ctx, 0, sizeof ctx);
         vm_native_decls_at_ip(bc, *ip, &ndecl, &ndecl_count);
         ios = FLAT_IO_ERR;
         if (ndecl && ndecl_count > 0) {
@@ -483,6 +488,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.bc = st->bc;
             ctx.io_ctx = st->io_ctx;
             ctx.file_tbl = &st->files;
+            ctx.vcx = st->vcx;
             vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
             invoke_rc = flat_native_invoke(native_id, &ctx);
         }
@@ -701,15 +707,14 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
 }
 
 static void vm_teardown(VmState *st, int rc) {
-    int i;
     (void)rc;
-    if (st->vars) {
-        for (i = 0; i < st->var_count; i++) {
-            flat_value_release(st->coll, st->pool, &st->vars[i].val);
-        }
-        free(st->vars);
+    if (st->vcx) {
+        flat_vcx_runtime_destroy(st->vcx, st->coll, st->pool, &st->files);
+        st->vcx = NULL;
         st->vars = NULL;
+        st->var_count = 0;
     }
+    flat_vcx_runtime_set_active(NULL);
     flat_io_ctx_destroy(st->io_ctx);
     st->io_ctx = NULL;
     flat_file_table_close_all(&st->files);
@@ -814,6 +819,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
         return 0;
     }
 
+    memset(&ctx, 0, sizeof ctx);
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
         vals[i] = st->vars[i].val;
@@ -831,6 +837,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.bc = st->bc;
     ctx.io_ctx = st->io_ctx;
     ctx.file_tbl = &st->files;
+    ctx.vcx = st->vcx;
     ctx.panic_detail[0] = '\0';
     vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
     ios = FLAT_IO_ERR;
@@ -921,11 +928,19 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     st.bc = bc;
     st.var_slots_max = bc->var_slots;
     scratch_n = st.var_slots_max > 0 ? st.var_slots_max : 1u;
-    st.vars = calloc(scratch_n, sizeof *st.vars);
     st.pool = flat_pool_create();
     st.coll = flat_coll_create();
     flat_mem_stats_init(&st.live);
-    if (!st.vars || !st.pool || !st.coll) {
+    st.vcx = flat_vcx_runtime_create(scratch_n);
+    if (!st.vcx || !st.pool || !st.coll) {
+        return vm_fail_setup(&st, opts);
+    }
+    flat_vcx_runtime_attach_vm(st.vcx,
+                               (FlatVcxVmBind){.vars = (FlatVcxVar **)&st.vars,
+                                               .var_count = &st.var_count,
+                                               .var_slots_max = &st.var_slots_max});
+    flat_vcx_runtime_set_active(st.vcx);
+    if (!st.vars) {
         return vm_fail_setup(&st, opts);
     }
     flat_coll_set_live_stats(st.coll, &st.live);

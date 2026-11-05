@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  s = V.create(5)
+  V.set(1)
+  a = 1
+  b = 2
+  V.set(s)
+  c = 3
+  mem.vars_used() -> u1
+  io.outln(u1)
+  OK

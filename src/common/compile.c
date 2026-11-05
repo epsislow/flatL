@@ -14,88 +14,6 @@
 
 typedef char VarName[64];
 
-static int var_in_list(const char *name, char known[][64], int n) {
-    int i;
-    for (i = 0; i < n; i++) {
-        if (strcmp(known[i], name) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static int assign_record_lhs(const char *text, char known[][64], int *kn) {
-    char buf[FGIR_MAX_LINE];
-    char *bind;
-    char *value;
-    FlatAssignSplitForm form;
-
-    (void)value;
-    snprintf(buf, sizeof buf, "%s", text);
-    if (flat_assign_split_line(buf, &bind, &value, &form) != 0) {
-        return 0;
-    }
-    if (bind[0] == '\0' || strlen(bind) > FLAT_VAR_NAME_MAX) {
-        return 0;
-    }
-    if (*kn >= FLAT_MAX_VARS) {
-        return -1;
-    }
-    if (!var_in_list(bind, known, *kn)) {
-        snprintf(known[*kn], 64, "%.*s", FLAT_VAR_NAME_MAX, bind);
-        (*kn)++;
-    }
-    return 0;
-}
-
-static int validate_free_in_program(const FgirProgram *prog, char *err, size_t err_size) {
-    int bi, ii;
-    VarName *known = malloc((size_t)FLAT_MAX_VARS * sizeof(VarName));
-
-    if (!known) {
-        snprintf(err, err_size, "out of memory");
-        return -1;
-    }
-    for (bi = 0; bi < prog->block_count; bi++) {
-        const FgirBlock *b = &prog->blocks[bi];
-        int kn = 0;
-        for (ii = 0; ii < b->instr_count; ii++) {
-            const FgirInstr *ins = &b->instr[ii];
-            if (ins->kind == FGIR_ASSIGN) {
-                if (assign_record_lhs(ins->text, known, &kn) != 0) {
-                    snprintf(err, err_size, "too many variables in block %s", b->label);
-                    free(known);
-                    return -1;
-                }
-            } else if (ins->kind == FGIR_IO && ins->call_out[0]) {
-                if (!var_in_list(ins->call_out, known, kn)) {
-                    if (kn >= FLAT_MAX_VARS) {
-                        snprintf(err, err_size, "too many variables in block %s", b->label);
-                        free(known);
-                        return -1;
-                    }
-                    snprintf(known[kn], 64, "%s", ins->call_out);
-                    kn++;
-                }
-            } else if (ins->kind == FGIR_FREE) {
-                char var[64];
-                if (flat_parse_free_varname(ins->text, var, sizeof var) != 0) {
-                    snprintf(err, err_size, "invalid free: %s", ins->text);
-                    free(known);
-                    return -1;
-                }
-                if (!var_in_list(var, known, kn)) {
-                    snprintf(err, err_size, "free of undeclared variable %s in %s", var, b->label);
-                    free(known);
-                    return -1;
-                }
-            }
-        }
-    }
-    free(known);
-    return 0;
-}
-
 /* --- var_slots: distinct bind target names across the whole linked program --- */
 
 typedef struct {
@@ -157,6 +75,96 @@ static int varset_add_assign_lhs(VarSet *vs, const char *text) {
         return 0;
     }
     return varset_add(vs, bind);
+}
+
+static int varset_has_name(const VarSet *vs, const char *name) {
+    size_t pos;
+    char key[FLAT_VAR_NAME_MAX + 1];
+
+    if (!vs || !name || !name[0]) {
+        return 0;
+    }
+    snprintf(key, sizeof key, "%s", name);
+    pos = varset_hash(key) & (vs->table_size - 1);
+    while (vs->table[pos] >= 0) {
+        if (strcmp(vs->names[vs->table[pos]], key) == 0) {
+            return 1;
+        }
+        pos = (pos + 1) & (vs->table_size - 1);
+    }
+    return 0;
+}
+
+static int validate_free_in_program(const FgirProgram *prog, char *err, size_t err_size) {
+    VarSet vs;
+    int bi, ii;
+    int rc = 0;
+
+    memset(&vs, 0, sizeof vs);
+    vs.table_size = 65536;
+    vs.names = malloc((size_t)FLAT_MAX_VARS * sizeof *vs.names);
+    vs.table = malloc(vs.table_size * sizeof *vs.table);
+    if (!vs.names || !vs.table) {
+        free(vs.names);
+        free(vs.table);
+        snprintf(err, err_size, "out of memory");
+        return -1;
+    }
+    memset(vs.table, 0xff, vs.table_size * sizeof *vs.table);
+
+    for (bi = 0; bi < prog->block_count && rc == 0; bi++) {
+        const FgirBlock *b = &prog->blocks[bi];
+        for (ii = 0; ii < b->instr_count && rc == 0; ii++) {
+            const FgirInstr *ins = &b->instr[ii];
+            switch (ins->kind) {
+            case FGIR_ASSIGN:
+                rc = varset_add_assign_lhs(&vs, ins->text);
+                break;
+            case FGIR_IO:
+            case FGIR_CALL:
+                if (ins->call_out[0] && !bind_name_forbidden(ins->call_out)) {
+                    rc = varset_add(&vs, ins->call_out);
+                }
+                break;
+            case FGIR_FOREACH:
+            case FGIR_FOR:
+                if (ins->foreach_item[0] && !bind_name_forbidden(ins->foreach_item)) {
+                    rc = varset_add(&vs, ins->foreach_item);
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+    if (rc == 1) {
+        snprintf(err, err_size, "too many distinct variables for free validation");
+        rc = -1;
+    }
+
+    for (bi = 0; bi < prog->block_count && rc == 0; bi++) {
+        const FgirBlock *b = &prog->blocks[bi];
+        for (ii = 0; ii < b->instr_count && rc == 0; ii++) {
+            const FgirInstr *ins = &b->instr[ii];
+            if (ins->kind == FGIR_FREE) {
+                char var[64];
+                if (flat_parse_free_varname(ins->text, var, sizeof var) != 0) {
+                    snprintf(err, err_size, "invalid free: %s", ins->text);
+                    rc = -1;
+                    break;
+                }
+                if (!varset_has_name(&vs, var)) {
+                    snprintf(err, err_size, "free of undeclared variable %s in %s", var,
+                             b->label);
+                    rc = -1;
+                }
+            }
+        }
+    }
+
+    free(vs.names);
+    free(vs.table);
+    return rc;
 }
 
 /* Scans every instruction that can create a variable at runtime:

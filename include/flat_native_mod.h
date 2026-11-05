@@ -161,4 +161,15 @@ int flat_native_date_time_to_sec(FlatNativeCtx *ctx);
 int flat_native_date_sec_to_time(FlatNativeCtx *ctx);
 int flat_native_date_run_offset(FlatNativeCtx *ctx);
 
+int flat_native_vcx_current(FlatNativeCtx *ctx);
+int flat_native_vcx_set(FlatNativeCtx *ctx);
+int flat_native_vcx_create(FlatNativeCtx *ctx);
+int flat_native_vcx_var(FlatNativeCtx *ctx);
+int flat_native_vcx_has_var(FlatNativeCtx *ctx);
+int flat_native_vcx_vars_copy(FlatNativeCtx *ctx);
+int flat_native_vcx_vars_copy_like(FlatNativeCtx *ctx);
+int flat_native_vcx_vars_used(FlatNativeCtx *ctx);
+int flat_native_vcx_vars_avail(FlatNativeCtx *ctx);
+int flat_native_vcx_vars_max(FlatNativeCtx *ctx);
+
 #endif

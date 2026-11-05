@@ -1,0 +1,13 @@
+use native vcx with V
+
+#main
+  a = V.current()
+  b = V.create(5)
+  V.set(1)
+  n = 41
+  V.varsCopy(a, b)
+  V.set(b)
+  n = 99
+  V.set(1)
+  io.outln(n)
+  OK

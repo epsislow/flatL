@@ -166,6 +166,16 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("date", "sec_to_time", "date.sec_to_time(n)"),
     META_SIG("date", "run_offset", "date.run_offset(offset)"),
     META_SIG("mem", "type_of", "mem.type_of(v)"),
+    META_SIG("vcx", "current", "vcx.current()"),
+    META_SIG("vcx", "set", "vcx.set(ctx)"),
+    META_SIG("vcx", "create", "vcx.create(capacity)"),
+    META_SIG("vcx", "var", "vcx.var(srcCtx, name)"),
+    META_SIG("vcx", "hasVar", "vcx.hasVar(ctx, name)"),
+    META_SIG("vcx", "varsCopy", "vcx.varsCopy(srcCtx, dstCtx)"),
+    META_SIG("vcx", "varsCopyLike", "vcx.varsCopyLike(srcCtx, dstCtx, pattern)"),
+    META_SIG("vcx", "varsUsed", "vcx.varsUsed(ctx)"),
+    META_SIG("vcx", "varsAvail", "vcx.varsAvail(ctx)"),
+    META_SIG("vcx", "varsMax", "vcx.varsMax(ctx)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -190,6 +200,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_MATH,
         FLAT_NATIVE_MODULE_LIST,
         FLAT_NATIVE_MODULE_OBJ,
+        FLAT_NATIVE_MODULE_VCX,
         NULL,
     };
     int i;

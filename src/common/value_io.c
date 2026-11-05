@@ -22,7 +22,12 @@ int flat_native_eval_call(FlatNativeCtx *ctx, const char *line, FlatValue *out) 
     if (!flat_native_is_call_line(trimmed)) {
         return -1;
     }
-    if (flat_native_split_call(trimmed, &id, inner, sizeof inner) != 0) {
+    if (ctx->doc_decls && ctx->doc_decl_count > 0) {
+        if (flat_native_split_call_manifest(trimmed, ctx->doc_decls, ctx->doc_decl_count, &id,
+                                            inner, sizeof inner) != 0) {
+            return -1;
+        }
+    } else if (flat_native_split_call(trimmed, &id, inner, sizeof inner) != 0) {
         return -1;
     }
     sub = *ctx;
@@ -31,9 +36,15 @@ int flat_native_eval_call(FlatNativeCtx *ctx, const char *line, FlatValue *out) 
     sub.io_status = &st;
     st = FLAT_IO_ERR;
     if (flat_native_invoke(id, &sub) != 0) {
+        if (sub.panic_detail[0] != '\0') {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", sub.panic_detail);
+        }
         return -1;
     }
     if (st != FLAT_IO_OK) {
+        if (sub.panic_detail[0] != '\0') {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", sub.panic_detail);
+        }
         return -1;
     }
     return 0;

@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  b = V.create(10)
+  V.set(1)
+  x = 1
+  y = 2
+  V.varsCopy(1, b)
+  V.set(b)
+  io.outln(x)
+  io.outln(y)
+  OK
