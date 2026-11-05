@@ -2011,7 +2011,8 @@
     wasmLoadPromise = (async () => {
       if (typeof FlatLModule !== 'function') {
         try {
-          await loadScript('wasm/flatl.js');
+          /* bust browser cache when wasm toolchain is rebuilt */
+          await loadScript('wasm/flatl.js?v=vcx1');
         } catch (_e) {
           showBanner('WASM not built. Run: make -f Makefile.wasm fleditor-wasm');
           return null;

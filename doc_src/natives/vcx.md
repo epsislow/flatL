@@ -19,7 +19,7 @@ use native vcx with V
   scratchCtx = V.create(20)
   V.set(scratchCtx)
   user = 'Alice'
-  V.set(globalCtx)
+  V.set(1)
   io.outln(user)
   OK
 ```
