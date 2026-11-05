@@ -286,6 +286,7 @@
     const editorWrap = document.getElementById('settingsEditorWordWrap');
     const termFont = document.getElementById('settingsTerminalFontSize');
     const termClear = document.getElementById('settingsTerminalClearOnRun');
+    const termProgramInput = document.getElementById('settingsTerminalProgramInput');
     const termMaxJumps = document.getElementById('settingsTerminalMaxJumps');
     const termMaxSteps = document.getElementById('settingsTerminalMaxSteps');
     const termNoJumpLimit = document.getElementById('settingsTerminalNoJumpLimit');
@@ -306,6 +307,10 @@
     }
     if (termClear) {
       termClear.checked = terminalPrefs.clearOnRun;
+    }
+    if (termProgramInput) {
+      termProgramInput.value =
+        terminalPrefs.programInput === 'modal' ? 'modal' : 'terminal';
     }
     if (termMaxJumps) {
       termMaxJumps.value = String(terminalPrefs.maxJumps);
@@ -485,6 +490,7 @@
 
     const termFont = document.getElementById('settingsTerminalFontSize');
     const termClear = document.getElementById('settingsTerminalClearOnRun');
+    const termProgramInput = document.getElementById('settingsTerminalProgramInput');
     if (termFont) {
       termFont.value = String(terminalPrefs.fontSize);
       termFont.addEventListener('change', function () {
@@ -498,6 +504,15 @@
       termClear.checked = terminalPrefs.clearOnRun;
       termClear.addEventListener('change', function () {
         terminalPrefs = T.saveTerminalPrefs(null, { clearOnRun: termClear.checked });
+      });
+    }
+    if (termProgramInput) {
+      termProgramInput.value =
+        terminalPrefs.programInput === 'modal' ? 'modal' : 'terminal';
+      termProgramInput.addEventListener('change', function () {
+        terminalPrefs = T.saveTerminalPrefs(null, {
+          programInput: termProgramInput.value === 'modal' ? 'modal' : 'terminal',
+        });
       });
     }
 

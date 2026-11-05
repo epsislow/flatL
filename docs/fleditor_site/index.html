@@ -252,6 +252,13 @@
               <label for="settingsTerminalClearOnRun">Clear on Run</label>
               <input type="checkbox" id="settingsTerminalClearOnRun" />
             </div>
+            <div class="fleditor-settings-field">
+              <label for="settingsTerminalProgramInput">Program input (<code>io.in*</code>)</label>
+              <select id="settingsTerminalProgramInput" class="fleditor-settings-select">
+                <option value="terminal">Inline in terminal</option>
+                <option value="modal">Dialog modal</option>
+              </select>
+            </div>
             <p class="fleditor-settings-hint">Run limits match <code>flvm</code> (stops infinite <code>jump</code> loops in WASM).</p>
             <div class="fleditor-settings-field">
               <label for="settingsTerminalMaxJumps">Max jumps per run</label>

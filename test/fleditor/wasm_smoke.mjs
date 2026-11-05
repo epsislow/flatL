@@ -58,17 +58,13 @@ if (rFail.rc !== 2 || rFail.err !== '' || rFail.term !== 3 || !rFail.out.include
 }
 
 const inln = "#main\n  io.inln('Name:') -> name\n  io.outln(name)\n  OK\n";
-const r2 = await runSource(null, inln, (_ae, prompt, kind, wake) => {
-  if (typeof prompt === 'function') {
-    prompt('Ada', 0);
-    return;
-  }
-  if (prompt !== 'Name:') {
-    console.error('wasm_smoke: unexpected prompt', JSON.stringify(prompt), 'kind', kind);
-    process.exit(1);
-  }
+const r2 = await runSource(null, inln, (_ae, _prompt, _kind, wake) => {
   wake('Ada', 0);
 });
+if (!r2.out.includes('Name:')) {
+  console.error('wasm_smoke: inln missing prompt on stdout', r2.out);
+  process.exit(1);
+}
 if (r2.rc !== 0 || !r2.out.includes('Ada')) {
   console.error('wasm_smoke: inln failed', r2);
   process.exit(1);

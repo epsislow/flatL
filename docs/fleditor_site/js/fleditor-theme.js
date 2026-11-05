@@ -219,12 +219,18 @@
   const DEFAULT_TERMINAL_PREFS = {
     fontSize: 14,
     clearOnRun: true,
+    /** 'terminal' | 'modal' — where io.in* reads while WASM is running */
+    programInput: 'terminal',
     /** 0 = VM default (1000); see FLAT_VM_DEFAULT_MAX_JUMPS */
     maxJumps: 1000,
     /** 0 = unlimited opcode steps per run */
     maxSteps: 0,
     noJumpLimit: false,
   };
+
+  function normalizeProgramInput(v) {
+    return v === 'modal' ? 'modal' : 'terminal';
+  }
 
   function isBuiltInPresetId(id) {
     return !!id && Object.prototype.hasOwnProperty.call(BUILTIN_PRESETS, id);
@@ -557,6 +563,7 @@
       return {
         fontSize: clampNum(p.fontSize, 10, 24, DEFAULT_TERMINAL_PREFS.fontSize),
         clearOnRun: typeof p.clearOnRun === 'boolean' ? p.clearOnRun : DEFAULT_TERMINAL_PREFS.clearOnRun,
+        programInput: normalizeProgramInput(p.programInput),
         maxJumps: clampNum(p.maxJumps, 0, 100000000, DEFAULT_TERMINAL_PREFS.maxJumps),
         maxSteps: clampNum(p.maxSteps, 0, 100000000, DEFAULT_TERMINAL_PREFS.maxSteps),
         noJumpLimit: typeof p.noJumpLimit === 'boolean' ? p.noJumpLimit : DEFAULT_TERMINAL_PREFS.noJumpLimit,

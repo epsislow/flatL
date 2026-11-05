@@ -91,7 +91,7 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 ## I/O model
 
 - **Stdout** (`io.out*`) → xterm.js terminal.
-- **Stdin** (`io.in*`) → in-page **modal** (`<dialog>`); OK/Cancel via Asyncify polling.
+- **Stdin** (`io.in*`) → **Settings → Terminal → Program input**: **inline in terminal** (default; prompt on stdout, type in xterm, Enter) or **dialog modal** (legacy `<dialog>`). WASM uses Asyncify + `emscripten_sleep` while waiting.
 - Project actions use **`<dialog>`** — no native `prompt` / `confirm` / `alert`.
 - Empty line on `io.inln` / `io.in_num` / `io.in_bool` → cancel (`#panic.any`), same as desktop [IO.md](IO.md).
 
@@ -191,7 +191,7 @@ Layout prefs: `localStorage` key `flatl-fleditor-layout`.
 - Toolbar **⚙ Settings** (right of **Docs**) opens a modal: **Display**, **Editor**, **Terminal** (nav left, content right).
 - **Display:** theme preset (**Dark**, **Light**, **Carbon**, **Turquoise Gray**, **Custom**, plus **My themes** you save). Colors apply live to chrome, **Project panel** (sidebar only), **Fl editor** + **FlatL syntax**, **Text editor**, **Hex editor**, and **Terminal**. Project panel background does not paint the editor area. Any manual color edit switches to **Custom**. **Save as new theme…** / **Delete theme** (user themes only) / **Reset to Dark**.
 - **Editor:** font size, line numbers, tab size, word wrap (`flatl-fleditor-editor-prefs`).
-- **Terminal:** font size, **Clear on Run**, **Max jumps** / **Max VM steps** / **No jump limit** (WASM run uses same limits as `flvm --max-jumps` / `--max-steps`; stored in `flatl-fleditor-terminal-prefs`).
+- **Terminal:** font size, **Clear on Run**, **Program input** (`io.in*` — terminal inline vs dialog modal), **Max jumps** / **Max VM steps** / **No jump limit** (WASM run uses same limits as `flvm --max-jumps` / `--max-steps`; stored in `flatl-fleditor-terminal-prefs`).
 - Theme state: `localStorage` key **`flatl-fleditor-theme`**. Does not change project files or panel layout reset (↺).
 - **About:** fleditor UI version and **flatL WASM** toolchain version (after `make fleditor-wasm`). **Reset all settings** — theme + editor + terminal prefs only (not project or dock layout ↺).
 

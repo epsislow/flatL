@@ -81,6 +81,7 @@
   let ioPendingWake = null;
   let ioAllowEmpty = false;
   let ioCharMode = false;
+  let ioLineBuffer = '';
 
   /** 'flatl' | 'plaintext' | 'binary' */
   let editorViewMode = 'flatl';
@@ -1685,13 +1686,111 @@
     const wake = ioPendingWake;
     ioPendingWake = null;
     ioCharMode = false;
-    ioDialog.close();
+    ioLineBuffer = '';
+    if (ioDialog && ioDialog.open) {
+      ioDialog.close();
+    }
     setStatus('running');
     if (wake) wake(line, status);
   }
 
-  function openIoModal(options) {
-    if (!ioDialog) {
+  function submitTerminalLine() {
+    if (!ioPendingWake || ioCharMode) {
+      return;
+    }
+    if (term) {
+      term.write('\r\n');
+    }
+    const line = ioLineBuffer;
+    ioLineBuffer = '';
+    if (!ioAllowEmpty && line.trim() === '') {
+      finishIoWake('', IO_PANIC_CANCEL);
+      return;
+    }
+    finishIoWake(line, IO_OK);
+  }
+
+  function programInputUsesTerminal() {
+    const prefs = FleditorSettings.getTerminalPrefs();
+    return prefs.programInput !== 'modal';
+  }
+
+  function handleTerminalIoData(data) {
+    if (!programInputUsesTerminal() || !ioPendingWake || !term) {
+      return;
+    }
+
+    if (ioCharMode) {
+      if (data === '\x03') {
+        term.write('^C\r\n');
+        finishIoWake('', IO_PANIC_EOF);
+        return;
+      }
+      if (data === '\r' || data === '\n') {
+        finishIoWake('', IO_PANIC_CANCEL);
+        return;
+      }
+      const ch = data.charAt(0);
+      if (!ch) {
+        return;
+      }
+      term.write(ch);
+      finishIoWake(ch, IO_OK);
+      return;
+    }
+
+    let i = 0;
+    while (i < data.length) {
+      const ch = data[i];
+      if (ch === '\r') {
+        i += 1;
+        if (i < data.length && data[i] === '\n') {
+          i += 1;
+        }
+        submitTerminalLine();
+        return;
+      }
+      if (ch === '\n') {
+        i += 1;
+        submitTerminalLine();
+        return;
+      }
+      if (ch === '\x03') {
+        term.write('^C\r\n');
+        ioLineBuffer = '';
+        finishIoWake('', IO_PANIC_EOF);
+        return;
+      }
+      if (ch === '\x7f' || ch === '\b') {
+        if (ioLineBuffer.length > 0) {
+          ioLineBuffer = ioLineBuffer.slice(0, -1);
+          term.write('\b \b');
+        }
+        i += 1;
+        continue;
+      }
+      if (ch === '\x1b') {
+        i += 1;
+        while (i < data.length && !/[A-Za-z~]/.test(data[i])) {
+          i += 1;
+        }
+        if (i < data.length) {
+          i += 1;
+        }
+        continue;
+      }
+      if (ch.charCodeAt(0) < 32) {
+        i += 1;
+        continue;
+      }
+      ioLineBuffer += ch;
+      term.write(ch);
+      i += 1;
+    }
+  }
+
+  function openTerminalIo(options) {
+    if (!term) {
       options.wake('', IO_PANIC_EOF);
       setStatus('running');
       return;
@@ -1700,7 +1799,32 @@
     ioPendingWake = options.wake;
     ioAllowEmpty = !!options.allowEmpty;
     ioCharMode = !!options.charMode;
-    ioTitle.textContent = options.title;
+    ioLineBuffer = '';
+    setTerminalOpen(true);
+    scheduleLayoutRefresh();
+    term.focus();
+    if (options.charMode) {
+      setStatus('type a character in the terminal');
+    } else if (options.allowEmpty) {
+      setStatus('waiting input in terminal (Enter, empty ok)');
+    } else {
+      setStatus('waiting input in terminal');
+    }
+  }
+
+  function showProgramInputModal(options) {
+    if (!ioDialog || !ioInput) {
+      openTerminalIo(options);
+      return;
+    }
+
+    ioPendingWake = options.wake;
+    ioAllowEmpty = !!options.allowEmpty;
+    ioCharMode = !!options.charMode;
+    ioLineBuffer = '';
+    if (ioTitle) {
+      ioTitle.textContent = options.title || 'Program input';
+    }
     if (ioHint) {
       ioHint.hidden = true;
       ioHint.textContent = '';
@@ -1710,6 +1834,21 @@
     ioDialog.showModal();
     ioInput.focus();
     ioInput.select();
+    if (options.charMode) {
+      setStatus('waiting input (dialog)');
+    } else if (options.allowEmpty) {
+      setStatus('waiting input (dialog, empty ok)');
+    } else {
+      setStatus('waiting input (dialog)');
+    }
+  }
+
+  function openProgramIo(options) {
+    if (programInputUsesTerminal()) {
+      openTerminalIo(options);
+    } else {
+      showProgramInputModal(options);
+    }
   }
 
   async function initEditor() {
@@ -1772,6 +1911,9 @@
     host.addEventListener('mousedown', function () {
       term.focus();
     });
+    term.onData(function (data) {
+      handleTerminalIoData(data);
+    });
     scheduleLayoutRefresh();
   }
 
@@ -1788,8 +1930,7 @@
       },
       flatWasmOnNeedLine: function (allowEmpty, prompt, kind, wake) {
         const io = parseNeedLineHook(allowEmpty, prompt, kind, wake);
-        setStatus(io.allowEmpty ? 'waiting input (line, empty ok)' : 'waiting input (line)');
-        openIoModal({
+        openProgramIo({
           title: formatLineModalTitle(io.prompt, io.kind),
           allowEmpty: io.allowEmpty,
           charMode: false,
@@ -1798,8 +1939,7 @@
       },
       flatWasmOnNeedChar: function (prompt, wake) {
         const io = parseNeedCharHook(prompt, wake);
-        setStatus('waiting input (char)');
-        openIoModal({
+        openProgramIo({
           title: formatCharModalTitle(io.prompt),
           allowEmpty: false,
           charMode: true,
@@ -1950,7 +2090,7 @@
     if (!hasOpenFile()) {
       return;
     }
-    if (ioDialog && ioDialog.open) {
+    if (ioPendingWake || (ioDialog && ioDialog.open)) {
       return;
     }
     if (!wasmModule) {
@@ -1996,9 +2136,7 @@
       running = false;
       updateRunSaveButtons();
       ioPendingWake = null;
-      if (!ioDialog || !ioDialog.open) {
-        setStatus('idle');
-      }
+      setStatus('idle');
     }
   }
 
