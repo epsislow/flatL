@@ -1,0 +1,27 @@
+use native math with M
+use native obj with O
+use native list with L
+
+#main
+  o = { stocks: [] }
+
+  L.push(o.stocks, { productId: 27, qty: 3 }) -> stocks
+  O.set2(o.stocks, stocks) -> o
+
+  L.push(stocks, { productId: 44, qty: 10 }) -> stocks
+  O.set2(o.stocks, stocks) -> o
+
+  [] -> stockProductIds
+  0 -> stockQty
+
+  foreach(o.stocks, oStock, '#eachStock')
+
+  io.out('Stocks quantity: ')
+  io.outln(stockQty)
+  OK
+
+#eachStock
+  M.calc('stockQty + oStock.qty') -> stockQty
+  L.push(stockProductIds, oStock.productId) -> stockProductIds
+  return
+
