@@ -45,3 +45,44 @@ char *flat_str_next(char **cursor, char delim) {
     *cursor = s;
     return start;
 }
+
+int flat_str_split_three(char *inner, char **first, char **second, char **third) {
+    int depth = 0;
+    char quote = 0;
+    char *p;
+    char *c1 = NULL;
+    char *c2 = NULL;
+
+    if (!inner || !first || !second || !third) {
+        return -1;
+    }
+    for (p = inner; *p; p++) {
+        if (!quote && (*p == '\'' || *p == '"')) {
+            quote = *p;
+        } else if (quote && *p == quote) {
+            quote = 0;
+        } else if (!quote && (*p == '[' || *p == '(')) {
+            depth++;
+        } else if (!quote && (*p == ']' || *p == ')')) {
+            if (depth > 0) {
+                depth--;
+            }
+        } else if (!quote && depth == 0 && *p == ',') {
+            if (!c1) {
+                *p = '\0';
+                c1 = p;
+            } else if (!c2) {
+                *p = '\0';
+                c2 = p;
+                break;
+            }
+        }
+    }
+    if (!c1 || !c2) {
+        return -1;
+    }
+    *first = flat_str_trim(inner);
+    *second = flat_str_trim(c1 + 1);
+    *third = flat_str_trim(c2 + 1);
+    return 0;
+}

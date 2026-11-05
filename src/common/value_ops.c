@@ -1,3 +1,4 @@
+#include "flat_obj_path.h"
 #include "flat_str.h"
 #include "flat_value.h"
 
@@ -484,8 +485,13 @@ static int flat_value_parse_at(const char **p, FlatValue *out, FlatStringPool *p
     if (parse_ident(&s, ident, sizeof ident) == 0) {
         vi = find_var_index(ident, var_count, var_names);
         if (vi >= 0) {
+            FlatPathErr perr = FLAT_PATH_OK;
             *p = s;
             *out = vars[vi];
+            if (flat_path_read_suffixes(p, out, pool, coll, vars, var_count, var_names, &perr) !=
+                0) {
+                return -1;
+            }
             return 0;
         }
         if (*s == '(') {

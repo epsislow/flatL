@@ -180,6 +180,9 @@ static FgirInstrKind classify(const char *line) {
     if (strchr(line, '=') != NULL) {
         return FGIR_ASSIGN;
     }
+    if (strstr(line, "->") != NULL) {
+        return FGIR_ASSIGN;
+    }
     return FGIR_ASSIGN;
 }
 
@@ -245,37 +248,41 @@ static void parse_io_bind(FgirInstr *ins) {
     }
 }
 
+static void strip_block_quotes(char *t) {
+    size_t n;
+    if (!t || !t[0]) {
+        return;
+    }
+    if (t[0] == '\'' || t[0] == '"') {
+        n = strlen(t);
+        if (n >= 2 && t[n - 1] == t[0]) {
+            t[n - 1] = '\0';
+            memmove(t, t + 1, n - 1);
+        }
+    }
+}
+
 static void parse_for_extras(FgirInstr *ins) {
     /* for(ntimes, i, '#block') */
     const char *s = ins->text;
     const char *lp = strchr(s, '(');
     const char *rp = strrchr(s, ')');
+    char inner[FGIR_MAX_LINE];
+    char *a;
+    char *b;
+    char *c;
+
     if (!lp || !rp || rp <= lp) {
         return;
     }
-    {
-        char inner[FGIR_MAX_LINE];
-        char *ip;
-        char *tok;
-        int part = 0;
-        snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
-        ip = inner;
-        while ((tok = flat_str_next(&ip, ',')) != NULL) {
-            char *t = trim(tok);
-            if (part == 0) {
-                snprintf(ins->for_limit, sizeof ins->for_limit, "%s", t);
-            } else if (part == 1) {
-                snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", t);
-            } else if (part == 2) {
-                if (t[0] == '\'' || t[0] == '"') {
-                    t[strlen(t) - 1] = '\0';
-                    t++;
-                }
-                snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", t);
-            }
-            part++;
-        }
+    snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
+    if (flat_str_split_three(inner, &a, &b, &c) != 0) {
+        return;
     }
+    snprintf(ins->for_limit, sizeof ins->for_limit, "%s", a);
+    snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", b);
+    strip_block_quotes(c);
+    snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", c);
 }
 
 static void parse_foreach_extras(FgirInstr *ins) {
@@ -283,30 +290,22 @@ static void parse_foreach_extras(FgirInstr *ins) {
     const char *s = ins->text;
     const char *lp = strchr(s, '(');
     const char *rp = strrchr(s, ')');
+    char inner[FGIR_MAX_LINE];
+    char *a;
+    char *b;
+    char *c;
+
     if (!lp || !rp || rp <= lp) {
         return;
     }
-    {
-        char inner[FGIR_MAX_LINE];
-        char *ip;
-        char *tok;
-        int part = 0;
-        snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
-        ip = inner;
-        while ((tok = flat_str_next(&ip, ',')) != NULL) {
-            char *t = trim(tok);
-            if (part == 1) {
-                snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", t);
-            } else if (part == 2) {
-                if (t[0] == '\'' || t[0] == '"') {
-                    t[strlen(t) - 1] = '\0';
-                    t++;
-                }
-                snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", t);
-            }
-            part++;
-        }
+    snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
+    if (flat_str_split_three(inner, &a, &b, &c) != 0) {
+        return;
     }
+    (void)a;
+    snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", b);
+    strip_block_quotes(c);
+    snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", c);
 }
 
 static int line_is_use_directive(const char *p) {

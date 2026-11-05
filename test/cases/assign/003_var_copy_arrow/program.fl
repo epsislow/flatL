@@ -1,0 +1,5 @@
+#main
+  A = 10
+  A -> B
+  io.outln(B)
+  OK

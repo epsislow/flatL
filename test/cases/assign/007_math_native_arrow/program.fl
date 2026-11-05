@@ -1,0 +1,6 @@
+use native math with m
+
+#main
+  m.calc('1 + 2') -> R
+  io.outln(R)
+  OK

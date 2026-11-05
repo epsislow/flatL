@@ -1,0 +1,12 @@
+use native list with L
+use native obj with O
+
+#main
+  myList = [10, 20, 30]
+  idx = 1
+  v = myList[idx]
+  io.outln(v)
+  o = { items: [1, 2, 3] }
+  x = o.items[2]
+  io.outln(x)
+  OK

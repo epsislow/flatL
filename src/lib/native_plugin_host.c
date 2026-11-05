@@ -202,6 +202,7 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_OBJ_REMOVE, flat_native_obj_remove);
         flat_native_plugin_register(FLAT_NATIVE_OBJ_KEYS, flat_native_obj_keys);
         flat_native_plugin_register(FLAT_NATIVE_OBJ_VALUES, flat_native_obj_values);
+        flat_native_plugin_register(FLAT_NATIVE_OBJ_SET2, flat_native_obj_set2);
         g_loaded_obj = 1;
         return 0;
     }

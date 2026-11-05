@@ -1,5 +1,6 @@
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
+#include "flat_obj_path.h"
 #include "flat_value.h"
 
 #include <ctype.h>
@@ -78,89 +79,34 @@ static int split_three_args(char *inner, char **first, char **second, char **thi
     return 0;
 }
 
-static const char *skip_ws(const char *p) {
-    while (*p && isspace((unsigned char)*p)) {
-        p++;
-    }
-    return p;
-}
-
-static int parse_quoted_key_payload(const char *start, char *out, size_t out_max, size_t *out_len) {
-    char q;
-    const char *p;
-    size_t len = 0;
-    if (!start || !out || !out_len) {
-        return -1;
-    }
-    q = start[0];
-    if (q != '\'' && q != '"') {
-        return -1;
-    }
-    p = start + 1;
-    while (*p && *p != q) {
-        if (len + 1 >= out_max) {
-            return -1;
-        }
-        out[len++] = *p++;
-    }
-    if (*p != q) {
-        return -1;
-    }
-    out[len] = '\0';
-    *out_len = len;
-    return 0;
-}
-
-static int parse_ident_key(const char **p, char *out, size_t out_max) {
-    const char *s = *p;
-    size_t n = 0;
-    if (!((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || *s == '_')) {
-        return -1;
-    }
-    while ((*s >= 'a' && *s <= 'z') || (*s >= 'A' && *s <= 'Z') || (*s >= '0' && *s <= '9') ||
-           *s == '_') {
-        if (n + 1 >= out_max) {
-            return -1;
-        }
-        out[n++] = *s++;
-    }
-    out[n] = '\0';
-    *p = s;
-    return n > 0 ? 0 : -1;
-}
-
-static int parse_object_key_fragment(const char *expr, char *key, size_t key_max) {
-    const char *p;
-    size_t len;
-    if (!expr || !key || key_max == 0) {
-        return -1;
-    }
-    p = skip_ws(expr);
-    if (*p == '\'' || *p == '"') {
-        if (parse_quoted_key_payload(p, key, key_max, &len) != 0) {
-            return -1;
-        }
-        p++;
-        while (*p && *p != p[-1]) {
-            p++;
-        }
-        if (*p) {
-            p++;
-        }
-        p = skip_ws(p);
-        return *p == '\0' ? 0 : -1;
-    }
-    if (parse_ident_key(&p, key, key_max) != 0) {
-        return -1;
-    }
-    p = skip_ws(p);
-    return *p == '\0' ? 0 : -1;
-}
-
 static int parse_obj_arg(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
     if (parse_expr(ctx, expr, out) != 0 || out->tag != VAL_OBJECT) {
         return -1;
     }
+    return 0;
+}
+
+static int parse_path_arg(FlatNativeCtx *ctx, const char *expr, FlatObjPathSegs *path,
+                          const char *fn) {
+    FlatValue pv;
+    FlatPathErr err = FLAT_PATH_OK;
+
+    if (!ctx || !expr || !path) {
+        return -1;
+    }
+    if (parse_expr(ctx, expr, &pv) != 0) {
+        flat_path_reason(FLAT_PATH_SYNTAX, fn, ctx->panic_detail, sizeof ctx->panic_detail);
+        return -1;
+    }
+    if (pv.tag != VAL_STR_INLINE && pv.tag != VAL_STR_REF) {
+        flat_path_reason(FLAT_PATH_ARG_TYPE, fn, ctx->panic_detail, sizeof ctx->panic_detail);
+        return -1;
+    }
+    if (flat_obj_path_from_value(&pv, ctx->pool, path) != 0) {
+        flat_path_reason(FLAT_PATH_SYNTAX, fn, ctx->panic_detail, sizeof ctx->panic_detail);
+        return -1;
+    }
+    (void)err;
     return 0;
 }
 
@@ -194,81 +140,90 @@ int flat_native_obj_empty(FlatNativeCtx *ctx) {
 }
 
 int flat_native_obj_get(FlatNativeCtx *ctx) {
-    char inner_buf[512];
+    char inner_buf[2048];
     char *obj_e;
     char *key_e;
     FlatValue obj_v;
-    char key[FLAT_OBJ_KEY_MAX + 1];
+    FlatObjPathSegs path;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
         return -1;
     }
+    ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &obj_e, &key_e) != 0) {
         return io_err(ctx);
     }
     io_ok(ctx);
-    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 ||
-        parse_object_key_fragment(key_e, key, sizeof key) != 0) {
+    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 || parse_path_arg(ctx, key_e, &path, "get") != 0) {
         return io_err(ctx);
     }
-    if (flat_obj_get(ctx->coll, obj_v.u.coll_id, key, ctx->out) != 0) {
+    if (flat_obj_get_path(ctx->coll, obj_v.u.coll_id, &path, ctx->out) != 0) {
+        flat_path_reason(FLAT_PATH_MISSING, "get", ctx->panic_detail, sizeof ctx->panic_detail);
         return io_err(ctx);
     }
     return 0;
 }
 
 int flat_native_obj_set(FlatNativeCtx *ctx) {
-    char inner_buf[512];
+    char inner_buf[2048];
     char *obj_e;
     char *key_e;
     char *val_e;
     FlatValue obj_v;
     FlatValue val;
-    char key[FLAT_OBJ_KEY_MAX + 1];
+    FlatObjPathSegs path;
     uint32_t new_id;
+    int rc;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
         return -1;
     }
+    ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_three_args(inner_buf, &obj_e, &key_e, &val_e) != 0) {
         return io_err(ctx);
     }
     io_ok(ctx);
-    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 ||
-        parse_object_key_fragment(key_e, key, sizeof key) != 0 ||
+    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 || parse_path_arg(ctx, key_e, &path, "set") != 0 ||
         parse_expr(ctx, val_e, &val) != 0) {
         return io_err(ctx);
     }
-    if (flat_obj_set_copy(ctx->coll, ctx->pool, obj_v.u.coll_id, key, &val, &new_id) != 0) {
+    rc = flat_obj_set_path_copy(ctx->coll, ctx->pool, obj_v.u.coll_id, &path, &val, &new_id);
+    if (rc == -2) {
+        flat_path_reason(FLAT_PATH_SET, "set", ctx->panic_detail, sizeof ctx->panic_detail);
+        return io_err(ctx);
+    }
+    if (rc != 0) {
         return io_err(ctx);
     }
     return flat_value_set_object(ctx->out, new_id);
 }
 
 int flat_native_obj_has(FlatNativeCtx *ctx) {
-    char inner_buf[512];
+    char inner_buf[2048];
     char *obj_e;
     char *key_e;
     FlatValue obj_v;
-    char key[FLAT_OBJ_KEY_MAX + 1];
-    FlatValue tmp;
+    FlatObjPathSegs path;
+    int has = 0;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
         return -1;
     }
+    ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &obj_e, &key_e) != 0) {
         return io_err(ctx);
     }
     io_ok(ctx);
-    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 ||
-        parse_object_key_fragment(key_e, key, sizeof key) != 0) {
+    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 || parse_path_arg(ctx, key_e, &path, "has") != 0) {
         return io_err(ctx);
     }
-    return flat_value_set_bool(ctx->out,
-                               flat_obj_get(ctx->coll, obj_v.u.coll_id, key, &tmp) == 0 ? 1 : 0);
+    if (flat_obj_has_path(ctx->coll, obj_v.u.coll_id, &path, &has) != 0) {
+        return io_err(ctx);
+    }
+    return flat_value_set_bool(ctx->out, has ? 1 : 0);
 }
 
 int flat_native_obj_len(FlatNativeCtx *ctx) {
@@ -289,29 +244,64 @@ int flat_native_obj_len(FlatNativeCtx *ctx) {
 }
 
 int flat_native_obj_remove(FlatNativeCtx *ctx) {
-    char inner_buf[512];
+    char inner_buf[2048];
     char *obj_e;
     char *key_e;
     FlatValue obj_v;
-    char key[FLAT_OBJ_KEY_MAX + 1];
+    FlatObjPathSegs path;
     uint32_t new_id;
+    int rc;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
         return -1;
     }
+    ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &obj_e, &key_e) != 0) {
         return io_err(ctx);
     }
     io_ok(ctx);
     if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 ||
-        parse_object_key_fragment(key_e, key, sizeof key) != 0) {
+        parse_path_arg(ctx, key_e, &path, "remove") != 0) {
         return io_err(ctx);
     }
-    if (flat_obj_remove_copy(ctx->coll, ctx->pool, obj_v.u.coll_id, key, &new_id) != 0) {
+    rc = flat_obj_remove_path_copy(ctx->coll, ctx->pool, obj_v.u.coll_id, &path, &new_id);
+    if (rc == -2) {
+        flat_path_reason(FLAT_PATH_TYPE, "remove", ctx->panic_detail, sizeof ctx->panic_detail);
+        return io_err(ctx);
+    }
+    if (rc != 0) {
         return io_err(ctx);
     }
     return flat_value_set_object(ctx->out, new_id);
+}
+
+int flat_native_obj_set2(FlatNativeCtx *ctx) {
+    char inner_buf[2048];
+    char *path_e;
+    char *val_e;
+    FlatValue val;
+    uint32_t root_id;
+    FlatPathErr err = FLAT_PATH_OK;
+
+    if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &path_e, &val_e) != 0) {
+        return io_err(ctx);
+    }
+    io_ok(ctx);
+    if (parse_expr(ctx, val_e, &val) != 0) {
+        return io_err(ctx);
+    }
+    if (flat_path_set2(ctx->coll, ctx->pool, ctx->vars, ctx->var_count, ctx->var_names, path_e,
+                       &val, &root_id, &err) != 0) {
+        flat_path_reason(err, "set2", ctx->panic_detail, sizeof ctx->panic_detail);
+        return io_err(ctx);
+    }
+    return flat_value_set_object(ctx->out, root_id);
 }
 
 static int build_key_value_lists(FlatNativeCtx *ctx, uint32_t obj_id, int keys_not_values,

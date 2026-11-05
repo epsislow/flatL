@@ -26,34 +26,23 @@ static int var_in_list(const char *name, char known[][64], int n) {
 
 static int assign_record_lhs(const char *text, char known[][64], int *kn) {
     char buf[FGIR_MAX_LINE];
-    char *eq;
-    char *lhs;
+    char *bind;
+    char *value;
+    FlatAssignSplitForm form;
 
+    (void)value;
     snprintf(buf, sizeof buf, "%s", text);
-    eq = strchr(buf, '=');
-    if (!eq || eq == buf) {
+    if (flat_assign_split_line(buf, &bind, &value, &form) != 0) {
         return 0;
     }
-    *eq = '\0';
-    lhs = buf;
-    while (*lhs && isspace((unsigned char)*lhs)) {
-        lhs++;
-    }
-    {
-        char *end = lhs + strlen(lhs);
-        while (end > lhs && isspace((unsigned char)end[-1])) {
-            end--;
-        }
-        *end = '\0';
-    }
-    if (lhs[0] == '\0' || strlen(lhs) > FLAT_VAR_NAME_MAX) {
+    if (bind[0] == '\0' || strlen(bind) > FLAT_VAR_NAME_MAX) {
         return 0;
     }
     if (*kn >= FLAT_MAX_VARS) {
         return -1;
     }
-    if (!var_in_list(lhs, known, *kn)) {
-        snprintf(known[*kn], 64, "%.*s", FLAT_VAR_NAME_MAX, lhs);
+    if (!var_in_list(bind, known, *kn)) {
+        snprintf(known[*kn], 64, "%.*s", FLAT_VAR_NAME_MAX, bind);
         (*kn)++;
     }
     return 0;
@@ -155,29 +144,19 @@ static int bind_name_forbidden(const char *n) {
 
 static int varset_add_assign_lhs(VarSet *vs, const char *text) {
     char buf[FGIR_MAX_LINE];
-    char *eq;
-    char *lhs;
-    char *end;
+    char *bind;
+    char *value;
+    FlatAssignSplitForm form;
 
+    (void)value;
     snprintf(buf, sizeof buf, "%s", text);
-    eq = strchr(buf, '=');
-    if (!eq || eq == buf) {
+    if (flat_assign_split_line(buf, &bind, &value, &form) != 0) {
         return 0;
     }
-    *eq = '\0';
-    lhs = buf;
-    while (*lhs && isspace((unsigned char)*lhs)) {
-        lhs++;
-    }
-    end = lhs + strlen(lhs);
-    while (end > lhs && isspace((unsigned char)end[-1])) {
-        end--;
-    }
-    *end = '\0';
-    if (lhs[0] == '\0' || bind_name_forbidden(lhs)) {
+    if (bind[0] == '\0' || bind_name_forbidden(bind)) {
         return 0;
     }
-    return varset_add(vs, lhs);
+    return varset_add(vs, bind);
 }
 
 /* Scans every instruction that can create a variable at runtime:
@@ -397,7 +376,16 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             uint32_t or_off = 0;
             size_t tlen = strlen(ins->text) + 1;
             uint8_t plen;
+            char assign_chk[FGIR_MAX_LINE];
+            char *bind;
+            char *value;
+            FlatAssignSplitForm form;
 
+            snprintf(assign_chk, sizeof assign_chk, "%s", ins->text);
+            if (flat_assign_split_line(assign_chk, &bind, &value, &form) != 0) {
+                snprintf(err, err_size, "invalid assignment: %s", ins->text);
+                return -1;
+            }
             if (tlen + 1 > sizeof payload) {
                 snprintf(err, err_size, "assign too long");
                 return -1;

@@ -53,24 +53,60 @@ Prints **`42`** — **`sentinel`** was not updated.
 | Call | Returns | Panic (no modifier) |
 |------|---------|---------------------|
 | `empty()` | OBJECT | **`obj.empty`** — pool / allocation failure |
-| `get(obj, key)` | any | **`obj.get`** — bad types, bad object id, or **missing key** |
-| `set(obj, key, val)` | OBJECT | **`obj.set`** — bad types, unknown object, pool full |
-| `has(obj, key)` | BOOL | **`obj.has`** — bad types or unknown object |
+| `get(obj, pathString)` | any | **`obj.get.missing`**, **`obj.path.syntax`**, **`obj.get.arg`** — see sub-reasons below |
+| `set(obj, pathString, val)` | OBJECT | **`obj.set.path`**, **`obj.set.arg`**, pool errors |
+| `has(obj, pathString)` | BOOL | **`obj.has.arg`** — missing path → **`false`** |
 | `len(obj)` | NUMBER | **`obj.len`** — bad types or unknown object |
-| `remove(obj, key)` | OBJECT | **`obj.remove`** — bad types or unknown object (missing key → copy, no panic) |
-| `keys(obj)` | LIST | **`obj.keys`** — bad types or unknown object |
-| `values(obj)` | LIST | **`obj.values`** — bad types or unknown object |
+| `remove(obj, pathString)` | OBJECT | **`obj.remove.path`** — missing leaf → copy, no panic |
+| `keys(obj)` | LIST | **`obj.keys`** — root object only (no path) |
+| `values(obj)` | LIST | **`obj.values`** — root object only |
+| `set2(pathExpr, val)` | OBJECT | **`obj.set2.root`**, **`obj.set2.path`** — COW on OBJECT root |
 
-### Key argument
+### Path argument (STRING) — `get` / `set` / `has` / `remove`
 
-These calls accept the same key forms as object literals:
+Argument 2 is always a **STRING value** (literal or variable), then parsed as a **path DSL**:
+
+- Segments separated by **`.`** outside quotes: `'user.contact'`
+- One segment: **`ident`** or **quoted** key name: `'stocks'`, `'user."contact.name"'`
+- **No trim** — spaces inside the path string → **`obj.path.syntax`**
+- **No `[index]`** in path strings — use **`set2`** or expression paths for lists
 
 ```text
-obj.get(o, 'qty')
-obj.get(o, qty)
+O.get(o, 'qty')
+path = 'user."contact.name"'
+O.set(o, path, 'Bob') -> o
+O.get(o, path) -> x
 ```
 
-Both refer to the field named **`qty`**, not a variable **`qty`**, when the second form is a bare identifier.
+**Bare identifier** as arg 2 (`O.get(o, stocks)`) means the **variable** `stocks` (must hold STRING path), **not** a field named `stocks`. Field → **`O.get(o, 'stocks')`**.
+
+### Expression paths (read / `set2`)
+
+In assign RHS and native arguments:
+
+```text
+o.qty
+o.stocks[2].qty
+myList[idx]
+accounts.user."contact.name"
+```
+
+- **OBJECT** → **`.segment`** (ident or quoted key)
+- **LIST** → **`[index]`** only (0-based; index **NUMBER**, fractional → **floor**)
+- **`O.set2(o.stocks[2].qty, 9) -> o`** — root must be **OBJECT** (`obj.set2.root` if root is LIST)
+
+### Example — nested path STRING
+
+```text
+use native obj with O
+
+#main
+  o = {}
+  O.set(o, 'user."contact.name"', 'Bob') -> o
+  O.get(o, 'user."contact.name"') -> name
+  io.outln(name)
+  OK
+```
 
 ### Example — COW and fields
 
@@ -132,9 +168,24 @@ Plugin: **`bin/libflat_obj.so`** (module id **`obj`**). Search path: [natives/RE
 |------|------|
 | `src/lib/mod_obj.c` | Handlers |
 | `src/lib/plugin_obj_entry.c` | Plugin entry |
-| `src/common/value_collection.c` | `flat_obj_*`, **`flat_obj_remove_copy`** |
+| `src/common/value_collection.c` | `flat_obj_*`, COW |
+| `src/common/flat_obj_path.c` | Path STRING parse, suffix read, **`set2`** |
+
+## PANIC sub-reasons (path)
+
+| Sub-reason | Typical cause |
+|------------|----------------|
+| `obj.path.syntax` | Path STRING gol / invalid |
+| `obj.get.arg` / `obj.set.arg` / `obj.has.arg` | Arg path not STRING |
+| `obj.get.missing` | Missing segment on **`get`** (without `?`/`~`) |
+| `obj.path.type` | `.` on LIST, `[` on OBJECT, etc. |
+| `obj.set.path` | Wrong type on **`set`** / **`set2`** write |
+| `obj.set2.root` | **`set2`** primary not OBJECT |
+| `obj.remove.path` | Wrong type on **`remove`** path |
+
+With **`?`** / **`~`**, missing **`get`** behaves like before (silent / `#or`).
 
 ## Tests
 
-**`test/cases/obj/`** — empty, set/get, has/remove, keys/values, silent **`get`**.  
-**`test/cases/values/005_object_literal`** — literal + **`obj`** COW.
+**`test/cases/obj/`** — paths, **`set2`**, expression suffix, **`foreach(o.field, …)`**, literal list **`foreach`**.  
+**`test/cases/math/030_calc_obj_path`** — **`math.calc`** with object paths.

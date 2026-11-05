@@ -1,0 +1,8 @@
+use native obj with O
+use native list with L
+
+#main
+  myList = [ { x: 1 } ]
+  O.set2(myList[0].x, 2) -> o
+  io.outln('no')
+  OK

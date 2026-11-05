@@ -1,0 +1,8 @@
+use native obj with O
+
+#main
+  o = { x: 1 }
+  path = 'x'
+  O.get(o, path) -> v
+  io.outln(v)
+  OK

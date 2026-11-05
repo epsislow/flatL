@@ -14,5 +14,6 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_OBJ_REMOVE, flat_native_obj_remove);
     reg(FLAT_NATIVE_OBJ_KEYS, flat_native_obj_keys);
     reg(FLAT_NATIVE_OBJ_VALUES, flat_native_obj_values);
+    reg(FLAT_NATIVE_OBJ_SET2, flat_native_obj_set2);
     return 0;
 }

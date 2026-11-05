@@ -780,8 +780,8 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
     return 0;
 }
 
-static int obj_clone_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
-                          uint32_t *out_id) {
+int flat_obj_clone_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
+                        uint32_t *out_id) {
     const ObjBody *src;
     ObjBody *dst;
     int i;
@@ -822,7 +822,7 @@ int flat_obj_remove_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uin
     src = &pool->objects[obj_id];
     ix = obj_find(src, key);
     if (ix < 0) {
-        return obj_clone_copy(pool, str_pool, obj_id, out_id);
+        return flat_obj_clone_copy(pool, str_pool, obj_id, out_id);
     }
     if (flat_obj_empty(pool, str_pool, out_id) != 0) {
         return -1;

@@ -452,7 +452,8 @@ int flat_native_math_calc(FlatNativeCtx *ctx) {
     if (expr[0] == '\0') {
         return calc_set_panic_arg(ctx);
     }
-    err = flat_math_calc_eval(expr, ctx->vars, ctx->var_count, ctx->var_names, &result);
+    err = flat_math_calc_eval(expr, ctx->vars, ctx->var_count, ctx->var_names, ctx->pool,
+                              ctx->coll, &result);
     if (err != FLAT_MATH_CALC_OK) {
         *ctx->io_status = FLAT_IO_ERR;
         calc_set_panic(ctx, err);

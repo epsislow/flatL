@@ -103,6 +103,7 @@ int flat_native_obj_len(FlatNativeCtx *ctx);
 int flat_native_obj_remove(FlatNativeCtx *ctx);
 int flat_native_obj_keys(FlatNativeCtx *ctx);
 int flat_native_obj_values(FlatNativeCtx *ctx);
+int flat_native_obj_set2(FlatNativeCtx *ctx);
 
 int flat_native_mem_vars_max(FlatNativeCtx *ctx);
 int flat_native_mem_vars_used(FlatNativeCtx *ctx);

@@ -1,0 +1,4 @@
+#main
+  'hi' -> S
+  io.outln(S)
+  OK

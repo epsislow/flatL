@@ -1,5 +1,6 @@
 #include "flat_math_calc.h"
 #include "flat_native_util.h"
+#include "flat_obj_path.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -12,6 +13,8 @@ typedef struct {
     const FlatValue *vars;
     int var_count;
     const char (*var_names)[64];
+    FlatStringPool *pool;
+    FlatCollectionPool *coll;
     FlatMathCalcErr err;
 } CalcParser;
 
@@ -121,6 +124,17 @@ static double parse_atom(CalcParser *cp) {
         if (vi < 0) {
             set_err(cp, FLAT_MATH_CALC_UNKNOWN_VAR);
             return 0.0;
+        }
+        skip_ws(cp);
+        if (*cp->p == '.' || *cp->p == '[') {
+            FlatPathErr pe = FLAT_PATH_OK;
+            double v = flat_path_resolve_number(name, &cp->p, cp->coll, cp->pool, cp->vars,
+                                                cp->var_count, cp->var_names, &pe);
+            if (pe != FLAT_PATH_OK) {
+                set_err(cp, FLAT_MATH_CALC_TYPE);
+                return 0.0;
+            }
+            return v;
         }
         if (cp->vars[vi].tag != VAL_NUMBER) {
             set_err(cp, FLAT_MATH_CALC_TYPE);
@@ -296,7 +310,8 @@ const char *flat_math_calc_reason(FlatMathCalcErr err, char *buf, size_t buf_sz)
 }
 
 FlatMathCalcErr flat_math_calc_eval(const char *expr, const FlatValue *vars, int var_count,
-                                    const char (*var_names)[64], double *out) {
+                                    const char (*var_names)[64], FlatStringPool *pool,
+                                    FlatCollectionPool *coll, double *out) {
     CalcParser cp;
     double r;
 
@@ -307,6 +322,8 @@ FlatMathCalcErr flat_math_calc_eval(const char *expr, const FlatValue *vars, int
     cp.vars = vars;
     cp.var_count = var_count;
     cp.var_names = var_names;
+    cp.pool = pool;
+    cp.coll = coll;
     cp.err = FLAT_MATH_CALC_OK;
     r = parse_expr(&cp);
     if (cp.err != FLAT_MATH_CALC_OK) {

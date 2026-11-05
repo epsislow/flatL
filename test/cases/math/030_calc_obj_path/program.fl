@@ -1,0 +1,9 @@
+use native math with M
+use native obj with O
+
+#main
+  o = { qty: 5, stocks: [{ qty: 2 }, { qty: 3 }] }
+  idx = 1
+  M.calc('o.qty + o.stocks[1].qty + idx') -> total
+  io.outln(total)
+  OK

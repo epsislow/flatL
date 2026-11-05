@@ -48,7 +48,18 @@ Explicit **`jump #block`** transfers control at compile-time-resolved block entr
 
 - `#block`, `call`, `jump`, `return`, `foreach`, `for`, `OK`, `FAIL`, `->` (call result binding)
 - **`free(var)`** — release pool-backed value held by **`var`**; **`var`** becomes **`null`** (see [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) §5)
-- Guards and assignment lines (`=`, `==`) map to `OP_ASSIGN` / `OP_GUARD`
+- Guards and assignment lines (`=`, `==`, value **`->`** bind) map to `OP_ASSIGN` / `OP_GUARD`
+
+**Assignment / bind** (same RHS rules — one literal, variable, list/object literal, `mem.ref_from(...)`, etc.; **no** infix such as `A * 2`):
+
+| Form | Example |
+|------|---------|
+| Equals | `n = 6`, `s = 'hi'`, `B = A` |
+| Arrow (value first) | `6 -> n`, `'hi' -> s`, `A -> B` |
+| Native + arrow | `str.to_num(raw) -> n` ( **`FGIR_IO`** , not assign) |
+| Native + equals | `n = str.to_num(raw)` |
+
+**`?` / `~`** apply only to **native** lines (including `n = str.to_num(x)`); not to plain value binds like `6 -> n` or `n = 6`. Mixing **`=`** and **`->`** on one line is a **compile error**.
 
 **Native libraries** (dotted calls such as `io.outln`, `str.to_num`, `json.parse`):
 
@@ -122,7 +133,8 @@ Rules:
 
 - At most **one** of **`?`** or **`~`**; **`?~`** / **`~?`** → compile error.
 - Allowed only on lines that call a **native** (`io.outln(…)`, `str.to_num(…) -> n`, `n = json.parse_list(…)`, …). **`? OK`**, **`? x = 1`**, **`? call …`**, guards, **`jump`**, etc. → compile error.
-- **`? n = str.to_num(x)`** and **`? str.to_num(x) -> n`** are equivalent.
+- **`? n = str.to_num(x)`** and **`? str.to_num(x) -> n`** are equivalent (native only).
+- Value binds **`6 -> n`** and **`n = 6`** are equivalent at runtime; modifiers do **not** apply to those forms.
 - Scope is the **whole line**: any outcome that would be PANIC without a modifier is covered (parse fail, EOF on `? io.in_num`, stale I/O context, …).
 - **Bind** is atomic: on failure the assignment target is unchanged. **I/O** already performed on that line is not rolled back.
 
@@ -211,9 +223,12 @@ Example:
 
 `foreach(collection, key_var, '#loop_body')`:
 
-1. Bind an iterator over `collection`.
+1. **`collection`** is evaluated **once** at loop entry as a **FlatL expression** that must yield a **LIST** (variable, path such as `o.tags`, or literal `[1, 2, 3]`). Not a CSV string — use a LIST value.
 2. For each element, jump to `#loop_body` with `key_var` set.
 3. When the loop block finishes, resume the foreach cursor; when the collection is exhausted, execution continues on the line below `foreach`.
+4. If the expression is not a LIST → **PANIC** **`foreach.collection`**.
+
+Commas inside **`[ … ]`** in the first argument are **not** argument separators (same bracket-aware splitting as native calls).
 
 An **empty** `#or` handler block for a guard inside the loop body means **continue** to the next collection item.
 

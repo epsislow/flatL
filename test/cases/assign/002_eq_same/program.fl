@@ -1,0 +1,4 @@
+#main
+  N = 6
+  io.outln(N)
+  OK

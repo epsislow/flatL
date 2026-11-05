@@ -1,5 +1,5 @@
 #main
-  keys = ''
+  keys = []
   foreach(keys, k, '#loop')
   call #sub
   io.outln('once')

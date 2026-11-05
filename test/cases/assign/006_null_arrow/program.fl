@@ -1,0 +1,4 @@
+#main
+  null -> Z
+  io.outln(Z)
+  OK

@@ -1,0 +1,8 @@
+use native obj with O
+
+#main
+  o = {}
+  O.set(o, 'user."contact.name"', 'Bob') -> o
+  O.get(o, 'user."contact.name"') -> name
+  io.outln(name)
+  OK

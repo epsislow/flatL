@@ -60,6 +60,14 @@ Evaluate a **STRING** expression and return a **NUMBER**. Use this when you need
 
 **Argument `expr`:** a **STRING** (literal `'…'` / `"…"`, or a variable holding STRING / REF). The string body is the expression text (no surrounding quotes).
 
+**Variables** in the expression must evaluate to **NUMBER**, including **object paths** (same rules as expression suffixes elsewhere):
+
+```text
+M.calc('o.qty + o.stocks[1].qty + idx')
+```
+
+Path tokens: `ident` + ( `.segment` | `[index]` )*; leaf must be **NUMBER** or **`math.calc.type`**.
+
 ### Operators (precedence, high → low)
 
 | Level | Operators | Notes |

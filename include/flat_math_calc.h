@@ -23,6 +23,7 @@ const char *flat_math_calc_reason(FlatMathCalcErr err, char *buf, size_t buf_sz)
  * On success writes result to *out and returns FLAT_MATH_CALC_OK.
  */
 FlatMathCalcErr flat_math_calc_eval(const char *expr, const FlatValue *vars, int var_count,
-                                    const char (*var_names)[64], double *out);
+                                    const char (*var_names)[64], FlatStringPool *pool,
+                                    FlatCollectionPool *coll, double *out);
 
 #endif

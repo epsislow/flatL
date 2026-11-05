@@ -1,0 +1,11 @@
+use native math with M
+
+#main
+  M.calc('0') -> sum
+  foreach([1, 2, 3], x, '#loop')
+  io.outln(sum)
+  OK
+
+#loop
+  M.calc('sum + x') -> sum
+  return

@@ -1,0 +1,11 @@
+use native obj with O
+
+#main
+  o = { tags: ['x', 'y'] }
+  foreach(o.tags, t, '#each')
+  io.outln('done')
+  OK
+
+#each
+  io.out(t)
+  return

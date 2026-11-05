@@ -132,6 +132,8 @@ int flat_obj_set_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32
                       const char *key, const FlatValue *val, uint32_t *out_id);
 int flat_obj_remove_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
                          const char *key, uint32_t *out_id);
+int flat_obj_clone_copy(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t obj_id,
+                        uint32_t *out_id);
 int flat_obj_build(FlatCollectionPool *pool, FlatStringPool *str_pool,
                    const char (*keys)[FLAT_OBJ_KEY_MAX + 1], const FlatValue *vals, int count,
                    uint32_t *out_id);
@@ -146,6 +148,15 @@ int flat_value_str_equal_cstr(const FlatValue *v, const FlatStringPool *pool, co
 int flat_value_parse_assign_rhs(const char *rhs, FlatValue *out, FlatStringPool *pool,
                                 FlatCollectionPool *coll, FlatValue *vars, int var_count,
                                 const char (*var_names)[64]);
+
+typedef enum {
+    FLAT_ASSIGN_SPLIT_EQ = 0,
+    FLAT_ASSIGN_SPLIT_ARROW
+} FlatAssignSplitForm;
+
+/* Mutates line_buf. On success *bind_out / *value_out point into line_buf. */
+int flat_assign_split_line(char *line_buf, char **bind_out, char **value_out,
+                           FlatAssignSplitForm *form_out);
 
 int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count,
                           const char (*names)[64], const FlatStringPool *pool);

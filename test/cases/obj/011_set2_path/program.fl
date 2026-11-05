@@ -1,0 +1,7 @@
+use native obj with O
+
+#main
+  o = { user: { name: 'Ann' } }
+  O.set2(o.user.name, 'Bob') -> o
+  io.outln(o.user.name)
+  OK

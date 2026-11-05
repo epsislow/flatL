@@ -1,5 +1,5 @@
 #main
-  keys = 'a,b'
+  keys = ['a', 'b']
   foreach(keys, k, '#loop')
   io.outln('done')
   OK
