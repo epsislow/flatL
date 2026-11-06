@@ -9,9 +9,20 @@
 
 #include <dirent.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+/* MinGW-w64 (MSYS2 UCRT64, etc.) has popen/pclose but no <sys/wait.h>. */
+#if defined(__MINGW32__)
+#ifndef WIFEXITED
+#define WIFEXITED(st) (((st) & 0xFF) == 0)
+#endif
+#ifndef WEXITSTATUS
+#define WEXITSTATUS(st) (((st) >> 8) & 0xFF)
+#endif
+#else
+#include <sys/wait.h>
+#endif
 
 #define TEMP_SUFFIX "flatl_caseXXXXXX"
 
@@ -168,11 +179,22 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
         if (st == -1) {
             return -1;
         }
+#ifdef __MINGW32__
+        /* Some MinGW runtimes return a raw 0–255 exit code; others use Unix wait encoding. */
+        if ((unsigned)st <= 0xFFu) {
+            *exit_code = st;
+        } else if (WIFEXITED(st)) {
+            *exit_code = WEXITSTATUS(st);
+        } else {
+            *exit_code = 1;
+        }
+#else
         if (WIFEXITED(st)) {
             *exit_code = WEXITSTATUS(st);
         } else {
             *exit_code = 1;
         }
+#endif
     }
     return 0;
 }
