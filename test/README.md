@@ -99,5 +99,5 @@ Optional: `test/cases/io/gen_cases.sh` — thin Bash wrapper that execs `bin/io_
 ### Windows note
 
 - **Regenerate stubs:** only a C compiler + `make io_generate_tests` (or compile `io_generate_tests` yourself).
-- **Run the full suite:** `run_tests` executes shell snippets in `run = "printf … | flvm …"` — use **WSL** or see [TOOLCHAIN.md — Portability](../doc_src/TOOLCHAIN.md#portability-windows-shell-and-io-tests).
+- **Run the full suite:** `run_tests` executes shell snippets in `run = "printf … | flvm …"`. On **MSYS2** (**UCRT64** / **MINGW64**), build from that shell so the Makefile picks **`flat_port_posix.c`** (`MSYSTEM` is set) and **`VAR=value cmd`** works. From **cmd.exe** without MSYS, `run_tests` uses **`cmd /c`** and assignment syntax in `run =` may be ignored — use **WSL** or see [TOOLCHAIN.md — Portability](../doc_src/TOOLCHAIN.md#portability-windows-shell-and-io-tests).
 - **Run programs:** `flc` / `flvm` work like any native binaries; redirect stdin manually if you skip `run_tests`.

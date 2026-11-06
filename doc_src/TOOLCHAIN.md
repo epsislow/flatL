@@ -112,7 +112,7 @@ pacman -S --needed mingw-w64-ucrt-x86_64-gcc make
 make tools
 ```
 
-Uses **`flat_port_posix.c`** in that environment (POSIX API available in MSYS).
+The Makefile sets **`PORT_SRC=src/port/flat_port_posix.c`** when **`MSYSTEM`** is set (UCRT64, MINGW64, …) so **`bin/run_tests`** uses **`popen`/`sh`**-style execution. Pipeline `run = "VAR=value …"` lines then match Linux/WSL. If **`MSYSTEM`** is unset (e.g. **`cmd.exe`** with **`OS=Windows_NT`**), **`run_tests`** uses **`flat_port_win.c`** (`cmd /c`) and those assignments are **not** applied — date tests that need **`FLAT_DATE_NOW_SEC`** will fail until you build from an MSYS shell or use WSL.
 
 ### Option C — Native `cmd` + MSVC (`cl`)
 
@@ -337,7 +337,8 @@ Pipeline cases may set `stdout_contains` / `stderr_contains`. The runner merges 
 | Compiler / OS | `PORT_SRC` (Makefile) |
 |---------------|------------------------|
 | GCC, Clang (Linux, WSL, Termux) | `flat_port_posix.c` |
-| MSVC (`OS=Windows_NT`) | `flat_port_win.c` |
+| Windows: **`OS=Windows_NT`** and **`MSYSTEM`** set (MSYS2 UCRT64 / MINGW64 shell) | `flat_port_posix.c` |
+| Windows: **`OS=Windows_NT`** without **`MSYSTEM`** (cmd, some MinGW-only setups) | `flat_port_win.c` |
 
 **`bin/port_check`** — small self-test for `flat_str`; case **`port/001_str_util`**.
 
@@ -345,7 +346,7 @@ Pipeline cases may set `stdout_contains` / `stderr_contains`. The runner merges 
 
 | Component | Dependency | Why |
 |-----------|------------|-----|
-| **`bin/run_tests`** | Shell in `run = "…"` | Pipeline cases use `flat_port_shell_capture` (`popen` / `_popen` + `cmd /c` on Windows) |
+| **`bin/run_tests`** | Shell in `run = "…"` | Pipeline cases use `flat_port_shell_capture` (`popen` on Unix/MSYS2; `cmd /c` on native Windows when `MSYSTEM` is unset) |
 | **`bin/run_tests`** | Writable temp | `flat_port_make_temp_dir` — **`TMPDIR`**, **`TMP`**, **`TEMP`**, **`$PREFIX/tmp`** (Termux), **`$HOME/tmp`**, `/tmp`, **`{repo}/.flatl_run_tmp`** |
 | **`make test`** | **make** + C compiler | Dev loop; use **WSL** or native MSVC build of the same sources |
 
