@@ -12,6 +12,11 @@
 #include <time.h>
 #include <unistd.h>
 
+/* MinGW exposes MSVC-style _mkdir (one arg); POSIX has mkdir(path, mode). */
+#if defined(__MINGW32__)
+#include <direct.h>
+#endif
+
 /* MinGW-w64 (MSYS2 UCRT64, etc.) has popen/pclose but no <sys/wait.h>. */
 #if defined(__MINGW32__)
 #ifndef WIFEXITED
@@ -25,6 +30,21 @@
 #endif
 
 #define TEMP_SUFFIX "flatl_caseXXXXXX"
+
+static int port_mkdir(const char *path, int mode) {
+#ifdef __MINGW32__
+    (void)mode;
+    if (_mkdir(path) != 0 && errno != EEXIST) {
+        return -1;
+    }
+    return 0;
+#else
+    if (mkdir(path, (mode_t)mode) != 0 && errno != EEXIST) {
+        return -1;
+    }
+    return 0;
+#endif
+}
 
 static int dir_writable(const char *dir) {
     return dir && dir[0] != '\0' && access(dir, W_OK) == 0;
@@ -71,7 +91,7 @@ int flat_port_temp_parent(char *parent, size_t parent_sz, const char *repo_root)
     }
     if (repo_root && repo_root[0] != '\0') {
         snprintf(derived, sizeof derived, "%s/.flatl_run_tmp", repo_root);
-        if (mkdir(derived, 0700) != 0 && errno != EEXIST) {
+        if (port_mkdir(derived, 0700) != 0) {
             return -1;
         }
         if (dir_writable(derived)) {
@@ -105,10 +125,7 @@ int flat_port_mkdir(const char *path, int mode) {
     if (!path) {
         return -1;
     }
-    if (mkdir(path, (mode_t)mode) != 0 && errno != EEXIST) {
-        return -1;
-    }
-    return 0;
+    return port_mkdir(path, mode);
 }
 
 int flat_port_make_temp_dir(char *out, size_t out_size, const char *repo_root) {
