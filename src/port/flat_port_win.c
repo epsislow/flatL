@@ -356,10 +356,21 @@ static void replace_token(char *cmd, size_t cap, const char *from, const char *t
 }
 
 void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
+    char *p;
     if (!cmd || cmd_cap == 0) {
         return;
     }
-    flat_port_path_to_native(cmd);
+    /*
+     * flat_port_shell_capture runs commands via MSYS2 sh -c '…'. Backslashes in
+     * Windows paths are treated as shell escapes (e.g. D:\w\...\bin\flc.exe
+     * becomes D:w...binflc.exe and exits 127). Forward slashes work for Win32
+     * APIs and our tools, so normalize the command line for the POSIX shell.
+     */
+    for (p = cmd; *p; p++) {
+        if (*p == '\\') {
+            *p = '/';
+        }
+    }
     replace_token(cmd, cmd_cap, "\\bin\\flc ", "\\bin\\flc.exe ");
     replace_token(cmd, cmd_cap, "\\bin\\flvm ", "\\bin\\flvm.exe ");
     replace_token(cmd, cmd_cap, "/bin/flc ", "/bin/flc.exe ");

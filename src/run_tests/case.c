@@ -287,6 +287,7 @@ int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char 
         int code = -1;
 
         expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
+        flat_port_prepare_shell_cmd(cmd, sizeof cmd);
         if (flat_port_shell_capture(cmd, &code, out, sizeof out) != 0) {
             snprintf(err, (size_t)err_size, "failed to run: %s", cmd);
             return -1;
