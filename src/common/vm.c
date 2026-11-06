@@ -14,6 +14,8 @@
 #include "flat_wasm_io.h"
 #endif
 
+#include "flat_port.h"
+
 #include <ctype.h>
 #include <limits.h>
 #include <math.h>
@@ -840,7 +842,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.vcx = st->vcx;
     ctx.panic_detail[0] = '\0';
     vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
-    ios = FLAT_IO_ERR;
+    ios = FLAT_IO_OK;
     {
         int invoke_rc = flat_native_invoke(native_id, &ctx);
         rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios,
@@ -920,6 +922,9 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         }
         return 1;
     }
+#ifndef FLAT_WASM_BUILD
+    flat_port_stdio_setup();
+#endif
     flat_native_runtime_reset();
     flat_date_run_begin(flat_date_global_state());
     flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);

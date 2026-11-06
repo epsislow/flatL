@@ -2,6 +2,7 @@
 
 #include <direct.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <io.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +17,12 @@
 #ifndef F_OK
 #define F_OK 0
 #endif
+
+void flat_port_stdio_setup(void) {
+    (void)_setmode(_fileno(stdin), _O_TEXT);
+    (void)_setmode(_fileno(stdout), _O_TEXT);
+    (void)_setmode(_fileno(stderr), _O_TEXT);
+}
 
 static int dir_writable(const char *dir) {
     return dir && dir[0] != '\0' && _access(dir, 0) == 0 && _access(dir, 2) == 0;
@@ -186,7 +193,7 @@ static int escape_sh_single_quoted(const char *cmd, char *out, size_t out_sz) {
     return 0;
 }
 
-static int run_create_process_capture(const char *cmdline_mut, char *out_buf, int out_buf_size,
+static int run_create_process_capture(char *cmdline_mut, char *out_buf, int out_buf_size,
                                       int *exit_code) {
     HANDLE rd = NULL;
     HANDLE wr = NULL;

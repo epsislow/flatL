@@ -23,5 +23,7 @@ int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx);
 /* In-place: native path separators; on Windows also flc.exe / flvm.exe in bin/ paths. */
 void flat_port_path_to_native(char *path);
 void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap);
+/* MinGW/MSVC: set stdio text mode so piped stdin has LF line ends (matches POSIX tests). */
+void flat_port_stdio_setup(void);
 
 #endif

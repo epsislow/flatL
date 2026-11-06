@@ -220,6 +220,9 @@ void flat_port_path_to_native(char *path) {
     (void)path;
 }
 
+void flat_port_stdio_setup(void) {
+}
+
 void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
     (void)cmd;
     (void)cmd_cap;
