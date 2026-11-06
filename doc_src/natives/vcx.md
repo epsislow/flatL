@@ -26,24 +26,36 @@ use native vcx with V
 
 Output: **`John`**.
 
-## API
+## Syntax
 
-| Call | Returns | Notes |
-|------|---------|--------|
-| `current()` | NUMBER | Active context ID (global starts at **1**) |
+| Form | Example |
+|------|---------|
+| Arrow binding | `V.current() -> activeId` |
+| Assign | `scratch = V.create(20)` |
+| `set` with literal context | `V.set(1)` (global) |
 
-Context IDs stored in variables exist only in the **context where that variable was bound**. After **`set`**, use a numeric literal (e.g. **`1`** for the global context) or **`vcx.var(otherCtx, 'name')`** to recover a value from another storage.
-| `set(ctx)` | — | Switch active storage; invalid ID → PANIC **`vcx.set.invalid`** |
-| `create(capacity)` | NUMBER | New empty context; does not become active |
-| `var(srcCtx, name)` | value | Read from **`srcCtx`**; missing → **`vcx.var.missing`**; use **`=` / `->`** to bind in active context |
-| `hasVar(ctx, name)` | BOOL | No panic if name absent |
-| `varsCopy(src, dst)` | — | Deep copy all vars; atomic; **`src == dst`** no-op |
-| `varsCopyLike(src, dst, pattern)` | — | Glob on **variable names** only (`*`, `?`) |
-| `varsUsed(ctx)` | NUMBER | Bound variables in that context |
-| `varsAvail(ctx)` | NUMBER | `capacity - used` |
-| `varsMax(ctx)` | NUMBER | **Capacity** of that context (see below) |
+**Context IDs** in arguments are **NUMBER** expressions: literals (**`1`** = global), variables holding an ID returned by **`create`**, or **`current()`**. Splitting on **top-level commas** matches other natives (commas inside quoted strings do not split).
 
-Wildcards match the **whole** variable name (case-sensitive). Pattern `*` selects all names (similar to full **`varsCopy`** source set).
+With **`use native vcx with V`**, examples use the alias **`V.*`**; the full names are **`vcx.*`** (e.g. **`vcx.varsCopy`**, **`vcx.hasVar`**).
+
+**IDs in variables:** a value stored as **`scratchCtx`** exists in whatever context was **active when that variable was bound**. After **`V.set`**, use a **literal** such as **`1`** or **`V.var(otherCtx, 'name')`** to read from another storage without guessing which slot holds the ID.
+
+## Function reference
+
+| Call | Arguments | Returns | Panic (no modifier) |
+|------|-----------|---------|---------------------|
+| **`V.current()`** | — | NUMBER — active context ID (global is **1**) | **`vcx.current`** — no VCX runtime |
+| **`V.set(ctx)`** | **`ctx`** — context ID | — | **`vcx.set.arg`**, **`vcx.set.invalid`** |
+| **`V.create(capacity)`** | **`capacity`** — positive **whole** NUMBER (≥ 1) | NUMBER — new context ID (does **not** switch active) | **`vcx.create.arg`**, **`vcx.create`**, **`vcx.create.limit`** |
+| **`V.var(srcCtx, name)`** | **`srcCtx`** — ID; **`name`** — STRING (literal or variable holding name) | any value (deep copy from **`srcCtx`**) | **`vcx.var.arg`**, **`vcx.var.missing`**, **`vcx.var.copy`** |
+| **`V.hasVar(ctx, name)`** | **`ctx`** — ID; **`name`** — STRING | BOOL | **`vcx.hasVar.arg`**, **`vcx.hasVar.ctx`** |
+| **`V.varsCopy(src, dst)`** | two context IDs | — | **`vcx.varsCopy.arg`**, **`vcx.varsCopy`** (e.g. capacity / copy) |
+| **`V.varsCopyLike(src, dst, pattern)`** | two IDs; **`pattern`** — STRING glob | — | **`vcx.varsCopyLike.arg`**, **`vcx.varsCopyLike.pattern`**, **`vcx.varsCopyLike`** |
+| **`V.varsUsed(ctx)`** | context ID | NUMBER — bound names in that context | **`vcx.varsUsed.arg`**, **`vcx.varsUsed.ctx`** |
+| **`V.varsAvail(ctx)`** | context ID | NUMBER — **`varsMax − varsUsed`** | **`vcx.varsAvail.arg`**, **`vcx.varsAvail.ctx`** |
+| **`V.varsMax(ctx)`** | context ID | NUMBER — **capacity** of that context | **`vcx.varsMax.arg`**, **`vcx.varsMax.ctx`** |
+
+**`varsCopy` / `varsCopyLike`:** deep copy of **values** into **`dst`** (atomic for the operation). **`src == dst`** is a no-op for **`varsCopy`**. **`varsCopyLike`** applies a **glob** to **variable names** only (`*`, `?`), case-sensitive, **whole** name match.
 
 ## `var_slots` (compile) vs context **capacity** (runtime)
 
@@ -84,15 +96,17 @@ With **VCX off**, **`mem.vars_max()`** is always program **`var_slots`** (single
 
 Restore **`tout`** / **`terr`** when you need terminal output again; captured text is in the REF until you print it (e.g. `io.outln(buf)`).
 
-## PANIC sub-reasons
+## PANIC sub-reasons (summary)
 
-| Situation | Reason |
-|-----------|--------|
+| Situation | Typical reason string |
+|-----------|------------------------|
 | Bad context ID on **`set`** | **`vcx.set.invalid`** |
-| Bad args / alloc | **`vcx.create`**, **`vcx.create.limit`**, **`vcx.create.arg`** |
+| Bad args / alloc for **`create`** | **`vcx.create.arg`**, **`vcx.create.limit`**, **`vcx.create`** |
 | Missing var on **`var`** | **`vcx.var.missing`** |
-| Copy capacity / failure | **`vcx.varsCopy.capacity`**, **`vcx.varsCopy.copy`** |
-| Bad pattern | **`vcx.varsCopyLike.pattern`** |
-| Bad ctx on introspection | **`vcx.varsUsed.ctx`** (same family for **`varsAvail`**, **`varsMax`**, **`hasVar`**) |
+| Deep copy failure on **`var`** | **`vcx.var.copy`** |
+| Bad **`ctx`** on **`hasVar` / `varsUsed` / …** | **`vcx.<fn>.ctx`** (e.g. **`vcx.varsMax.ctx`**) |
+| Bad / missing arg on **`vars*`** stats | **`vcx.<fn>.arg`** |
+| Copy capacity / failure | **`vcx.varsCopy.capacity`**, **`vcx.varsCopy.copy`** (and same for **`varsCopyLike`**) |
+| Empty or bad glob pattern | **`vcx.varsCopyLike.pattern`** |
 
 Line modifiers **`?`** / **`~`** follow the usual native rules ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).
