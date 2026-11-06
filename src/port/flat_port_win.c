@@ -146,10 +146,46 @@ int flat_port_make_temp_fb_path(char *out, size_t out_size, const char *repo_roo
     return 0;
 }
 
+static int path_is_msys2_usr_sh(const char *p) {
+    /* Prefer MSYS2 usr/bin/sh over Git Bash when both are on PATH. */
+    return p && strstr(p, "msys64\\usr\\bin\\sh.exe") != NULL;
+}
+
 static int sh_exe_path(char *out, size_t out_sz) {
     char *unused;
-    /* MSYS2 / Git Bash: sh.exe on PATH. */
-    if (SearchPathA(NULL, "sh.exe", NULL, (DWORD)out_sz, out, &unused) > 0) {
+    char found[FLAT_PORT_PATH_MAX];
+    static const char *known[] = {
+        "D:\\msys64\\usr\\bin\\sh.exe",
+        "C:\\msys64\\usr\\bin\\sh.exe",
+        "D:\\msys32\\usr\\bin\\sh.exe",
+        "C:\\msys32\\usr\\bin\\sh.exe",
+    };
+    size_t k;
+
+    for (k = 0; k < sizeof known / sizeof known[0]; k++) {
+        if (flat_port_path_exists(known[k])) {
+            if (snprintf(out, out_sz, "%s", known[k]) >= (int)out_sz) {
+                return -1;
+            }
+            return 0;
+        }
+    }
+
+    if (SearchPathA(NULL, "sh.exe", NULL, (DWORD)sizeof found, found, &unused) > 0) {
+        /* Prefer MSYS2 path if we also found Git Bash via PATH. */
+        if (!path_is_msys2_usr_sh(found) && strstr(found, "Git") != NULL) {
+            for (k = 0; k < sizeof known / sizeof known[0]; k++) {
+                if (flat_port_path_exists(known[k])) {
+                    if (snprintf(out, out_sz, "%s", known[k]) >= (int)out_sz) {
+                        return -1;
+                    }
+                    return 0;
+                }
+            }
+        }
+        if (snprintf(out, out_sz, "%s", found) >= (int)out_sz) {
+            return -1;
+        }
         return 0;
     }
     if (SearchPathA(NULL, "sh", ".exe", (DWORD)out_sz, out, &unused) > 0) {
@@ -197,6 +233,9 @@ static int run_create_process_capture(char *cmdline_mut, char *out_buf, int out_
                                       int *exit_code) {
     HANDLE rd = NULL;
     HANDLE wr = NULL;
+    HANDLE stdin_inherited = NULL;
+    HANDLE null_rd = NULL;
+    HANDLE null_wr = NULL;
     SECURITY_ATTRIBUTES sa;
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;
@@ -215,17 +254,40 @@ static int run_create_process_capture(char *cmdline_mut, char *out_buf, int out_
         goto fail;
     }
 
+    stdin_inherited = GetStdHandle(STD_INPUT_HANDLE);
+    if (stdin_inherited == INVALID_HANDLE_VALUE || stdin_inherited == NULL ||
+        GetFileType(stdin_inherited) == FILE_TYPE_UNKNOWN) {
+        if (!CreatePipe(&null_rd, &null_wr, &sa, 0)) {
+            goto fail;
+        }
+        /* Child reads inherited read end; write end stays in parent (closed after create). */
+        if (!SetHandleInformation(null_rd, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT)) {
+            goto fail;
+        }
+        if (!SetHandleInformation(null_wr, HANDLE_FLAG_INHERIT, 0)) {
+            goto fail;
+        }
+        CloseHandle(null_wr);
+        null_wr = NULL;
+        stdin_inherited = null_rd;
+    }
+
     memset(&si, 0, sizeof si);
     si.cb = sizeof si;
     si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
     si.wShowWindow = SW_HIDE;
-    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdInput = stdin_inherited;
     si.hStdOutput = wr;
     si.hStdError = wr;
 
     if (!CreateProcessA(NULL, cmdline_mut, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si,
                         &pi)) {
         goto fail;
+    }
+
+    if (null_rd) {
+        CloseHandle(null_rd);
+        null_rd = NULL;
     }
 
     CloseHandle(wr);
@@ -283,6 +345,12 @@ static int run_create_process_capture(char *cmdline_mut, char *out_buf, int out_
     ok = 0;
 
 fail:
+    if (null_wr) {
+        CloseHandle(null_wr);
+    }
+    if (null_rd) {
+        CloseHandle(null_rd);
+    }
     if (wr) {
         CloseHandle(wr);
     }
@@ -300,6 +368,7 @@ fail:
 
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size) {
     char shpath[FLAT_PORT_PATH_MAX];
+    char prefixed[16576];
     char quoted[16384];
     char *cmdline = NULL;
     size_t cap;
@@ -314,7 +383,12 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
         return -1;
     }
 
-    if (escape_sh_single_quoted(cmd, quoted, sizeof quoted) != 0) {
+    /* Ensure printf(1) / shell and child parse numbers with '.' regardless of host locale. */
+    if (snprintf(prefixed, sizeof prefixed, "export LC_ALL=C; %s", cmd) >= (int)sizeof prefixed) {
+        return -1;
+    }
+
+    if (escape_sh_single_quoted(prefixed, quoted, sizeof quoted) != 0) {
         return -1;
     }
 
@@ -362,8 +436,22 @@ static void replace_token(char *cmd, size_t cap, const char *from, const char *t
     }
 }
 
-void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
+/* Turn Windows path backslashes into '/' for sh, but not inside '…' (e.g. printf '3.5\n'). */
+static void win_paths_to_posix_slashes_outside_quotes(char *cmd) {
+    int in_sq = 0;
     char *p;
+    for (p = cmd; *p; p++) {
+        if (*p == '\'') {
+            in_sq = !in_sq;
+            continue;
+        }
+        if (!in_sq && *p == '\\') {
+            *p = '/';
+        }
+    }
+}
+
+void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
     if (!cmd || cmd_cap == 0) {
         return;
     }
@@ -371,13 +459,10 @@ void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
      * flat_port_shell_capture runs commands via MSYS2 sh -c '…'. Backslashes in
      * Windows paths are treated as shell escapes (e.g. D:\w\...\bin\flc.exe
      * becomes D:w...binflc.exe and exits 127). Forward slashes work for Win32
-     * APIs and our tools, so normalize the command line for the POSIX shell.
+     * APIs and our tools, so normalize path segments for the POSIX shell.
+     * Do not rewrite '\' inside single-quoted literals (printf '...\n').
      */
-    for (p = cmd; *p; p++) {
-        if (*p == '\\') {
-            *p = '/';
-        }
-    }
+    win_paths_to_posix_slashes_outside_quotes(cmd);
     replace_token(cmd, cmd_cap, "\\bin\\flc ", "\\bin\\flc.exe ");
     replace_token(cmd, cmd_cap, "\\bin\\flvm ", "\\bin\\flvm.exe ");
     replace_token(cmd, cmd_cap, "/bin/flc ", "/bin/flc.exe ");

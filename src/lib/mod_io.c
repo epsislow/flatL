@@ -40,9 +40,10 @@ static int read_line_with_prompt(char *buf, size_t buf_size, int allow_empty, co
     }
 #endif
     {
+        /* Chomp CRLF/LF (binary stdin on Windows pipes leaves \\r before \\n). */
         size_t n = strlen(buf);
-        if (n > 0 && buf[n - 1] == '\n') {
-            buf[n - 1] = '\0';
+        while (n > 0 && (buf[n - 1] == '\n' || buf[n - 1] == '\r')) {
+            buf[--n] = '\0';
         }
     }
     flat_native_trim(buf);

@@ -18,6 +18,7 @@
 
 #include <ctype.h>
 #include <limits.h>
+#include <locale.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -923,6 +924,11 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         return 1;
     }
 #ifndef FLAT_WASM_BUILD
+    /*
+     * Host locale can use ',' as decimal separator; strtod then rejects '.' from
+     * piped test input → io.parse / json parse failures on Windows.
+     */
+    (void)setlocale(LC_ALL, "C");
     flat_port_stdio_setup();
 #endif
     flat_native_runtime_reset();
