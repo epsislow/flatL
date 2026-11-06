@@ -7,9 +7,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <string.h>
-
 #include <windows.h>
+
+#ifndef CREATE_NO_WINDOW
+#define CREATE_NO_WINDOW 0x08000000
+#endif
 
 #ifndef F_OK
 #define F_OK 0
@@ -137,38 +139,191 @@ int flat_port_make_temp_fb_path(char *out, size_t out_size, const char *repo_roo
     return 0;
 }
 
+static int sh_exe_path(char *out, size_t out_sz) {
+    char *unused;
+    /* MSYS2 / Git Bash: sh.exe on PATH. */
+    if (SearchPathA(NULL, "sh.exe", NULL, (DWORD)out_sz, out, &unused) > 0) {
+        return 0;
+    }
+    if (SearchPathA(NULL, "sh", ".exe", (DWORD)out_sz, out, &unused) > 0) {
+        return 0;
+    }
+    return -1;
+}
+
+/* sh -c '…' with standard single-quote escaping ('\"'\"''). */
+static int escape_sh_single_quoted(const char *cmd, char *out, size_t out_sz) {
+    const char *s;
+    char *d = out;
+    size_t left = out_sz > 0 ? out_sz - 1 : 0;
+
+    *d++ = '\'';
+    left--;
+    for (s = cmd; *s && left > 0; s++) {
+        if (*s == '\'') {
+            const char ins[] = "'\"'\"'";
+            size_t k;
+            for (k = 0; k < sizeof ins - 1 && left > 0; k++) {
+                *d++ = ins[k];
+                left--;
+            }
+            if (k < sizeof ins - 1) {
+                return -1;
+            }
+        } else {
+            *d++ = *s;
+            left--;
+        }
+    }
+    if (*s) {
+        return -1;
+    }
+    if (left < 1) {
+        return -1;
+    }
+    *d++ = '\'';
+    *d = '\0';
+    return 0;
+}
+
+static int run_create_process_capture(const char *cmdline_mut, char *out_buf, int out_buf_size,
+                                      int *exit_code) {
+    HANDLE rd = NULL;
+    HANDLE wr = NULL;
+    SECURITY_ATTRIBUTES sa;
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+    DWORD nread;
+    char buf[4096];
+    int ok = -1;
+
+    memset(&pi, 0, sizeof pi);
+    memset(&sa, 0, sizeof sa);
+    sa.nLength = sizeof sa;
+    sa.bInheritHandle = TRUE;
+    if (!CreatePipe(&rd, &wr, &sa, 0)) {
+        return -1;
+    }
+    if (!SetHandleInformation(rd, HANDLE_FLAG_INHERIT, 0)) {
+        goto fail;
+    }
+
+    memset(&si, 0, sizeof si);
+    si.cb = sizeof si;
+    si.dwFlags = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = wr;
+    si.hStdError = wr;
+
+    if (!CreateProcessA(NULL, cmdline_mut, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, NULL, &si,
+                        &pi)) {
+        goto fail;
+    }
+
+    CloseHandle(wr);
+    wr = NULL;
+
+    if (out_buf && out_buf_size > 0) {
+        int total = 0;
+        out_buf[0] = '\0';
+        for (;;) {
+            if (!ReadFile(rd, buf, sizeof buf, &nread, NULL)) {
+                DWORD e = GetLastError();
+                if (e == ERROR_BROKEN_PIPE) {
+                    break;
+                }
+                goto fail;
+            }
+            if (nread == 0) {
+                break;
+            }
+            {
+                int add = (int)nread;
+                if (total + add >= out_buf_size) {
+                    add = out_buf_size - 1 - total;
+                }
+                if (add > 0) {
+                    memcpy(out_buf + total, buf, (size_t)add);
+                    total += add;
+                    out_buf[total] = '\0';
+                }
+            }
+        }
+    } else {
+        for (;;) {
+            if (!ReadFile(rd, buf, sizeof buf, &nread, NULL)) {
+                DWORD e = GetLastError();
+                if (e == ERROR_BROKEN_PIPE) {
+                    break;
+                }
+                goto fail;
+            }
+            if (nread == 0) {
+                break;
+            }
+        }
+    }
+
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    {
+        DWORD ec = 1;
+        if (!GetExitCodeProcess(pi.hProcess, &ec)) {
+            ec = 1;
+        }
+        *exit_code = (int)ec;
+    }
+    ok = 0;
+
+fail:
+    if (wr) {
+        CloseHandle(wr);
+    }
+    if (rd) {
+        CloseHandle(rd);
+    }
+    if (pi.hThread) {
+        CloseHandle(pi.hThread);
+    }
+    if (pi.hProcess) {
+        CloseHandle(pi.hProcess);
+    }
+    return ok;
+}
+
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size) {
-    char shell_cmd[4096];
-    FILE *fp;
+    char shpath[FLAT_PORT_PATH_MAX];
+    char quoted[16384];
+    char *cmdline = NULL;
+    size_t cap;
+    int rc;
 
     if (!cmd || !exit_code) {
         return -1;
     }
-    snprintf(shell_cmd, sizeof shell_cmd, "cmd /c \"%s\" 2>&1", cmd);
-    fp = _popen(shell_cmd, "rt");
-    if (!fp) {
+
+    if (sh_exe_path(shpath, sizeof shpath) != 0) {
+        /* Pipeline run lines require POSIX shell (VAR=value, </dev/null, pipes). */
         return -1;
     }
-    if (out_buf && out_buf_size > 0) {
-        int n = 0;
-        int c;
-        out_buf[0] = '\0';
-        while (n < out_buf_size - 1 && (c = fgetc(fp)) != EOF) {
-            out_buf[n++] = (char)c;
-        }
-        out_buf[n] = '\0';
-    } else {
-        while (fgetc(fp) != EOF) {
-        }
+
+    if (escape_sh_single_quoted(cmd, quoted, sizeof quoted) != 0) {
+        return -1;
     }
-    {
-        int st = _pclose(fp);
-        if (st == -1) {
-            return -1;
-        }
-        *exit_code = st;
+
+    cap = strlen(shpath) + strlen(quoted) + 32;
+    cmdline = malloc(cap);
+    if (!cmdline) {
+        return -1;
     }
-    return 0;
+    if (snprintf(cmdline, cap, "\"%s\" -c %s", shpath, quoted) >= (int)cap) {
+        free(cmdline);
+        return -1;
+    }
+
+    rc = run_create_process_capture(cmdline, out_buf, out_buf_size, exit_code);
+    free(cmdline);
+    return rc;
 }
 
 void flat_port_path_to_native(char *path) {

@@ -6,16 +6,9 @@ LDFLAGS ?=
 FLC_LDFLAGS ?=
 
 BINDIR  = bin
-# MSYS2 / MinGW shells set MSYSTEM (UCRT64, MINGW64, …). Use POSIX popen/sh there so
-# pipeline run lines keep Bourne syntax (VAR=value cmd, printf | flvm). Native cmd.exe
-# builds (no MSYSTEM) keep flat_port_win.c (cmd /c).
 ifeq ($(OS),Windows_NT)
 EXEEXT = .exe
-ifdef MSYSTEM
-PORT_SRC = src/port/flat_port_posix.c
-else
 PORT_SRC = src/port/flat_port_win.c
-endif
 else
 EXEEXT =
 PORT_SRC = src/port/flat_port_posix.c
