@@ -75,6 +75,15 @@ With **VCX off**, **`mem.vars_max()`** is always program **`var_slots`** (single
 
 **`vcx.set`** is **not** restored on **`return`** from a `#sub`. Save **`V.current()`**, restore explicitly after **`call`** if needed.
 
+## `io.ctx*` (capture) and **`V.set`**
+
+**`io.ctxout`**, **`io.ctxerr`**, and **`io.ctxin`** bind to a variable **by name** and **`STR_REF` id** (see [IO_CONTEXTS.md](../IO_CONTEXTS.md) § `io.ctx_stale`). When you **`V.set(otherCtx)`**, the **active** storage changes: a name such as **`buf`** may refer to **nothing** or a **different** ref in that context.
+
+- **Safe:** capture to **`buf`** in global, **`V.set(scratch)`**, then **`V.set(1)`** back — global **`buf`** still holds the same ref; output continues to append to that buffer.
+- **Unsafe without fixing the binding:** capture in global, switch to scratch, then **`io.out`** / **`io.err`** while **`buf`** is not the same ref in scratch — **PANIC** **`io.ctx_stale`**.
+
+Restore **`tout`** / **`terr`** when you need terminal output again; captured text is in the REF until you print it (e.g. `io.outln(buf)`).
+
 ## PANIC sub-reasons
 
 | Situation | Reason |

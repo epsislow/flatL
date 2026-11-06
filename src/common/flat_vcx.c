@@ -181,7 +181,6 @@ int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectio
     uint32_t new_list;
     uint32_t new_obj;
     FlatValue item;
-    FlatValue elem;
 
     if (!src || !dst || !coll || !pool) {
         return -1;
@@ -201,12 +200,22 @@ int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectio
     case VAL_STR_REF: {
         size_t slen = 0;
         const uint8_t *data = flat_pool_read(pool, src->u.ref_id, &slen);
-        if (!data) {
+        uint32_t rid;
+
+        if (!flat_pool_slot_in_use(pool, src->u.ref_id)) {
             return -1;
         }
-        uint32_t rid;
-        if (flat_pool_alloc_copy(pool, data, slen, &rid) != 0) {
-            return -1;
+        if (slen == 0) {
+            if (flat_pool_alloc_empty(pool, &rid) != 0) {
+                return -1;
+            }
+        } else {
+            if (!data) {
+                return -1;
+            }
+            if (flat_pool_alloc_copy(pool, data, slen, &rid) != 0) {
+                return -1;
+            }
         }
         return flat_value_set_str_ref(dst, rid);
     }
@@ -214,7 +223,7 @@ int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectio
         if (!files) {
             return -1;
         }
-        flat_file_retain(files, src->u.file_id);
+        /* File refcount: binder (e.g. ctx_set_var) retains once; do not retain here. */
         dst->tag = VAL_FILE;
         dst->u.file_id = src->u.file_id;
         return 0;
@@ -254,32 +263,66 @@ int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectio
             free(items);
             return -1;
         }
+        /* list_build takes ownership via elem_bind; do not release items[] again */
         free(items);
         return flat_value_set_list(dst, new_list);
     }
     case VAL_OBJECT: {
         int olen = 0;
         const char *key;
+        char(*keys)[FLAT_OBJ_KEY_MAX + 1];
+        FlatValue *ovals;
 
-        if (flat_obj_empty(coll, pool, &new_obj) != 0) {
-            return -1;
-        }
         if (flat_obj_len(coll, src->u.coll_id, &olen) != 0) {
             return -1;
         }
-        for (i = 0; i < olen; i++) {
-            if (flat_obj_entry_at(coll, src->u.coll_id, i, &key, &item) != 0) {
+        if (olen == 0) {
+            if (flat_obj_empty(coll, pool, &new_obj) != 0) {
                 return -1;
             }
-            if (flat_vcx_deep_copy_value(&item, &elem, coll, pool, files) != 0) {
-                return -1;
-            }
-            if (flat_obj_set_copy(coll, pool, new_obj, key, &elem, &new_obj) != 0) {
-                flat_value_release(coll, pool, &elem);
-                return -1;
-            }
-            flat_value_release(coll, pool, &elem);
+            return flat_value_set_object(dst, new_obj);
         }
+        if (olen > FLAT_OBJ_MAX_KEYS) {
+            return -1;
+        }
+        keys = malloc((size_t)olen * sizeof *keys);
+        ovals = malloc((size_t)olen * sizeof *ovals);
+        if (!keys || !ovals) {
+            free(keys);
+            free(ovals);
+            return -1;
+        }
+        for (i = 0; i < olen; i++) {
+            if (flat_obj_entry_at(coll, src->u.coll_id, i, &key, &item) != 0 || !key) {
+                while (--i >= 0) {
+                    flat_value_release(coll, pool, &ovals[i]);
+                }
+                free(keys);
+                free(ovals);
+                return -1;
+            }
+            snprintf(keys[i], sizeof keys[i], "%s", key);
+            if (flat_vcx_deep_copy_value(&item, &ovals[i], coll, pool, files) != 0) {
+                while (i >= 0) {
+                    flat_value_release(coll, pool, &ovals[i]);
+                    i--;
+                }
+                free(keys);
+                free(ovals);
+                return -1;
+            }
+        }
+        if (flat_obj_build(coll, pool, keys, ovals, olen, &new_obj) != 0) {
+            for (i = 0; i < olen; i++) {
+                flat_value_release(coll, pool, &ovals[i]);
+            }
+            free(keys);
+            free(ovals);
+            return -1;
+        }
+        /* obj_build binds entries; stack copies must not be released again */
+        free(keys);
+        free(ovals);
         return flat_value_set_object(dst, new_obj);
     }
     default:
@@ -639,12 +682,18 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
     for (i = 0; i < stage_n; i++) {
         if (ctx_set_var(dst, stage[i].name, &stage[i].val, coll, pool, files, live) != 0) {
             ctx_restore(dst, coll, pool, files, live, bak, bak_n);
+            bak = NULL;
             snprintf(panic_detail, panic_sz, "%s.copy", panic_prefix);
             goto fail;
         }
     }
-    free(bak);
-    bak = NULL;
+    if (bak) {
+        for (i = 0; i < bak_n; i++) {
+            flat_value_release(coll, pool, &bak[i].val);
+        }
+        free(bak);
+        bak = NULL;
+    }
     if (stage) {
         free(stage);
         stage = NULL;

@@ -69,11 +69,22 @@ static const uint8_t *pool_resolve(const FlatStringPool *pool, int id, size_t *o
     if (out_len) {
         *out_len = s->len;
     }
+    /* Owned empty slot: data may be NULL with len 0 (mem.ref_empty). Still readable. */
+    if (!s->data && s->len == 0) {
+        return (const uint8_t *)"";
+    }
+    if (!s->data) {
+        return NULL;
+    }
     return s->data;
 }
 
 const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *out_len) {
     return pool_resolve(pool, (int)id, out_len);
+}
+
+int flat_pool_slot_in_use(const FlatStringPool *pool, uint32_t id) {
+    return pool_slot_active(pool, (int)id) ? 1 : 0;
 }
 
 static void pool_slot_free(FlatStringPool *pool, int id);

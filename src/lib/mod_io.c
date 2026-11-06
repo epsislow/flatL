@@ -273,7 +273,7 @@ int flat_native_io_outln(FlatNativeCtx *ctx) {
         return -1;
     }
     if (ctx->io_ctx) {
-        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
         return flat_io_ctx_write(ctx->io_ctx, ctx, 1, &v, 1);
     }
 #ifdef FLAT_WASM_BUILD
@@ -296,7 +296,7 @@ int flat_native_io_out(FlatNativeCtx *ctx) {
         return -1;
     }
     if (ctx->io_ctx) {
-        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
         return flat_io_ctx_write(ctx->io_ctx, ctx, 1, &v, 0);
     }
 #ifdef FLAT_WASM_BUILD
@@ -323,7 +323,7 @@ int flat_native_io_outvar(FlatNativeCtx *ctx) {
         return -1;
     }
     if (ctx->io_ctx) {
-        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
         return flat_io_ctx_write(ctx->io_ctx, ctx, 1, &ctx->vars[vi], 1);
     }
 #ifdef FLAT_WASM_BUILD
@@ -347,7 +347,7 @@ int flat_native_io_in(FlatNativeCtx *ctx) {
         return -1;
     }
     if (ctx->io_ctx) {
-        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
         emit_prompt(prompt);
         flat_io_ctx_read_char(ctx->io_ctx, ctx, ch, ctx->io_status);
         if (*ctx->io_status != FLAT_IO_OK) {
@@ -368,7 +368,7 @@ static int io_read_stdin_line(FlatNativeCtx *ctx, char *linebuf, size_t linebuf_
         return -1;
     }
     if (ctx->io_ctx) {
-        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
         emit_prompt(prompt);
         flat_io_ctx_read_line(ctx->io_ctx, ctx, linebuf, linebuf_size, allow_empty, input_kind,
                               ctx->io_status);
@@ -474,7 +474,7 @@ int flat_native_io_ctxin(FlatNativeCtx *ctx) {
     if (!ctx->io_ctx || !ctx->io_status) {
         return -1;
     }
-    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
     flat_io_ctx_set_in(ctx->io_ctx, ctx, &st);
     *ctx->io_status = st;
     return 0;
@@ -485,7 +485,7 @@ int flat_native_io_ctxout(FlatNativeCtx *ctx) {
     if (!ctx->io_ctx || !ctx->io_status) {
         return -1;
     }
-    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
     flat_io_ctx_set_out(ctx->io_ctx, ctx, &st);
     *ctx->io_status = st;
     return 0;
@@ -496,7 +496,7 @@ int flat_native_io_ctxerr(FlatNativeCtx *ctx) {
     if (!ctx->io_ctx || !ctx->io_status) {
         return -1;
     }
-    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+    flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
     flat_io_ctx_set_err(ctx->io_ctx, ctx, &st);
     *ctx->io_status = st;
     return 0;
@@ -511,7 +511,7 @@ int flat_native_io_err(FlatNativeCtx *ctx) {
         return -1;
     }
     if (ctx->io_ctx) {
-        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
         return flat_io_ctx_write(ctx->io_ctx, ctx, 2, &v, 0);
     }
     flat_value_fprint_io(stderr, &v, ctx->pool, ctx->coll);
@@ -529,7 +529,7 @@ int flat_native_io_errln(FlatNativeCtx *ctx) {
         return -1;
     }
     if (ctx->io_ctx) {
-        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count);
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
         return flat_io_ctx_write(ctx->io_ctx, ctx, 2, &v, 1);
     }
     flat_value_fprint_io_ln(stderr, &v, ctx->pool, ctx->coll);

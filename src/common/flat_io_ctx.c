@@ -1,6 +1,7 @@
 #include "flat_io_ctx.h"
 #include "flat_memstream.h"
 #include "flat_native_util.h"
+#include "flat_value.h"
 #include "flat_wasm_io.h"
 
 #include <stdio.h>
@@ -23,6 +24,7 @@ typedef struct {
     size_t len;
     size_t pos;
     int var_idx;
+    char ref_var_name[FLAT_VAR_NAME_MAX + 1];
     uint32_t ref_id;
     uint32_t file_id;
 } IoEndpoint;
@@ -31,6 +33,7 @@ struct FlatIOContext {
     FlatFileTable *files;
     FlatValue *vars;
     int var_count;
+    FlatVcxRuntime *vcx;
     char panic_reason[64];
     IoEndpoint in;
     IoEndpoint out;
@@ -69,10 +72,19 @@ void flat_io_ctx_destroy(FlatIOContext *io) {
     free(io);
 }
 
-void flat_io_ctx_bind_vars(FlatIOContext *io, FlatValue *vars, int var_count) {
+void flat_io_ctx_set_vcx(FlatIOContext *io, FlatVcxRuntime *vcx) {
+    if (io) {
+        io->vcx = vcx;
+    }
+}
+
+void flat_io_ctx_bind_vars(FlatIOContext *io, FlatValue *vars, int var_count, FlatVcxRuntime *vcx) {
     if (io) {
         io->vars = vars;
         io->var_count = var_count;
+        if (vcx) {
+            io->vcx = vcx;
+        }
     }
 }
 
@@ -118,15 +130,33 @@ static int eval_arg_value(FlatNativeCtx *ctx, FlatValue *out) {
                                        ctx->var_count, ctx->var_names);
 }
 
-static int ref_still_bound(FlatIOContext *io, IoEndpoint *ep) {
+static int ref_still_bound(FlatIOContext *io, IoEndpoint *ep, FlatStringPool *pool,
+                           const FlatNativeCtx *ctx) {
     FlatValue *v;
-    if (ep->kind != EP_REF || ep->var_idx < 0) {
+    int vi;
+
+    if (ep->kind != EP_REF) {
         return 1;
     }
-    if (!io->vars || ep->var_idx >= io->var_count) {
+    if (pool && !flat_pool_slot_in_use(pool, ep->ref_id)) {
         return 0;
     }
-    v = &io->vars[ep->var_idx];
+    if (!io->vars || !ctx || !ctx->var_names) {
+        return 0;
+    }
+    if (ep->ref_var_name[0] != '\0') {
+        vi = flat_native_find_var(ep->ref_var_name, io->var_count, ctx->var_names);
+    } else {
+        vi = ep->var_idx;
+    }
+    if (vi < 0) {
+        /* Name no longer in current var table (e.g. variable table replaced). */
+        return 0;
+    }
+    if (vi >= io->var_count) {
+        return 0;
+    }
+    v = &io->vars[vi];
     return v->tag == VAL_STR_REF && v->u.ref_id == ep->ref_id;
 }
 
@@ -154,7 +184,7 @@ static int value_to_bytes(FlatNativeCtx *ctx, const FlatValue *v, int with_nl, c
 
 static int write_bytes_to_ep(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint *ep,
                              const char *data, size_t len, FlatIoStatus *st) {
-    if (ep->kind == EP_REF && !ref_still_bound(io, ep)) {
+    if (ep->kind == EP_REF && !ref_still_bound(io, ep, ctx->pool, ctx)) {
         ctx_panic(io, "io.ctx_stale");
         *st = FLAT_IO_PANIC_CTX;
         return -1;
@@ -293,6 +323,7 @@ static int ep_bind_from_value(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint 
             ep->kind = EP_REF;
             ep->ref_id = v->u.ref_id;
             ep->var_idx = vi;
+            snprintf(ep->ref_var_name, sizeof ep->ref_var_name, "%s", name);
         }
         return 0;
     }
@@ -414,7 +445,7 @@ int flat_io_ctx_read_line(FlatIOContext *io, FlatNativeCtx *ctx, char *buf, size
         return 0;
     }
     if (ep->kind == EP_REF) {
-        if (!ref_still_bound(io, ep)) {
+        if (!ref_still_bound(io, ep, ctx->pool, ctx)) {
             ctx_panic(io, "io.ctx_stale");
             *st = FLAT_IO_PANIC_CTX;
             return 0;

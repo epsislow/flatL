@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  scratch = V.create(16)
+  errbuf = mem.ref_empty()
+  io.ctxerr(errbuf)
+  V.set(scratch)
+  V.set(1)
+  io.err('e')
+  io.ctxerr(terr)
+  io.outln(errbuf)
+  OK

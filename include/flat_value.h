@@ -63,6 +63,7 @@ int flat_pool_append(FlatStringPool *pool, uint32_t id, const void *data, size_t
 int flat_pool_slice(FlatStringPool *pool, uint32_t parent_id, size_t offset, size_t len,
                     uint32_t *out_id);
 const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *out_len);
+int flat_pool_slot_in_use(const FlatStringPool *pool, uint32_t id);
 /* refcnt = number of binds (variables, list/object elements) + slice pins on the slot.
  * alloc_copy/slice start at 0; the first bind is flat_value_retain. release to 0 frees the slot
  * (owned bytes returned to the pool, slice views unpin their parent) and recycles the id. */
@@ -179,13 +180,15 @@ int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool
                       FlatValue *out_result, FlatIoStatus *out_status);
 struct FlatIOContext;
 struct FlatFileTable;
+struct FlatVcxRuntime;
 
 int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                                FlatValue *vars, int var_count, const char (*var_names)[64],
                                FlatValue *out_result, FlatIoStatus *out_status,
                                const FlatOptionalNativeDecl *decls, int decl_count,
                                FlatMemLiveStats *mem_live, uint32_t vars_max,
-                               struct FlatIOContext *io_ctx, struct FlatFileTable *file_tbl);
+                               struct FlatIOContext *io_ctx, struct FlatFileTable *file_tbl,
+                               struct FlatVcxRuntime *vcx);
 
 int flat_json_parse(const char *s, FlatValue *out, FlatStringPool *pool, FlatCollectionPool *coll);
 int flat_json_parse_list(const char *s, FlatValue *out, FlatStringPool *pool,

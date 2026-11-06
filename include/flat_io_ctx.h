@@ -5,11 +5,14 @@
 #include "flat_native.h"
 
 typedef struct FlatIOContext FlatIOContext;
+typedef struct FlatVcxRuntime FlatVcxRuntime;
 
 FlatIOContext *flat_io_ctx_create(FlatFileTable *files);
 void flat_io_ctx_destroy(FlatIOContext *io);
 
-void flat_io_ctx_bind_vars(FlatIOContext *io, FlatValue *vars, int var_count);
+void flat_io_ctx_set_vcx(FlatIOContext *io, FlatVcxRuntime *vcx);
+void flat_io_ctx_bind_vars(FlatIOContext *io, FlatValue *vars, int var_count,
+                           FlatVcxRuntime *vcx);
 
 int flat_io_ctx_set_in(FlatIOContext *io, FlatNativeCtx *ctx, FlatIoStatus *st);
 int flat_io_ctx_set_out(FlatIOContext *io, FlatNativeCtx *ctx, FlatIoStatus *st);

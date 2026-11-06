@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  scratch = V.create(16)
+  buf = mem.ref_empty()
+  io.ctxout(buf)
+  V.set(scratch)
+  V.set(1)
+  io.out('ok')
+  io.ctxout(tout)
+  io.outln(buf)
+  OK

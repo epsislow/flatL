@@ -34,8 +34,20 @@ Three **independent** redirects:
 | **`file`** handle | `file.readln` / byte read via `io.inln` | write formatted bytes to file |
 | **`tin` / `tout` / `terr`** | reset to terminal | reset to terminal |
 
-Invalid pairing (e.g. `io.ctxin(tout)`) → **PANIC** `io.context`.  
-If a **REF** variable bound to `ctxout` / `ctxerr` is **`free`d** or reassigned while active → **PANIC** `io.ctx_stale` (context resets before handler runs).
+Invalid pairing (e.g. `io.ctxin(tout)`) → **PANIC** `io.context`.
+
+### `io.ctx_stale`
+
+The VM records **which variable name** and **which pool `ref_id`** were passed to `io.ctxout` / `io.ctxerr`. Before each write (or read, for `ctxin`), it checks that the **same name** in the **current active variable table** still holds a **STRING REF** with that **same** `ref_id`.
+
+**PANIC** **`io.ctx_stale`** when that binding is no longer valid, for example:
+
+- The REF variable was **`free`d** or **reassigned** to a *different* ref (or non-REF) while `ctxout` / `ctxerr` still points at it — see `test/cases/io_ctx/010_reassign_ctxout_stale/`.
+- **`vcx.set`** switched to another storage where that **name** is missing or the **REF id** does not match — while a capture to global `buf` is still active, writing from scratch without **`V.set(1)`** (or copying `buf` into scratch) is unsafe — see `test/cases/vcx/013_ctxout_stale_wrong_vcx/`.
+
+**Not stale:** after **`V.set`** away and **`V.set(1)`** back to global, the same **`buf`** name again holds the original REF; capture can continue — see `test/cases/vcx/011_io_ctxout_after_set/` and `test/cases/vcx/012_ctxerr_after_vcx_set_ok/`.
+
+On panic, the I/O context resets to terminals before the `#panic.any` handler runs (if present).
 
 ## 3. Examples
 
@@ -65,6 +77,7 @@ file.close(fp)
 | Suite | Path |
 |-------|------|
 | I/O contexts | `test/cases/io_ctx/` |
+| VCX + `io.ctx*` | `test/cases/vcx/` (e.g. `011_*`, `012_*`, `013_*`) |
 | File + `io.ctx*` | `test/cases/file/` |
 | `mem.ref_*` | `test/cases/memory/006_mem_ref_empty/` |
 

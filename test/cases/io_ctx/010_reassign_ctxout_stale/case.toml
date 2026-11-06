@@ -1,0 +1,9 @@
+suite = "io_ctx"
+id = 10
+desc = "PANIC io.ctx_stale when ctxout ref var is reassigned to another ref while active"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "io.ctx_stale"

@@ -3,9 +3,21 @@
 #include "flat_vcx.h"
 #include "flat_value.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+
+static int vcx_number_to_uint32_strict(double d, uint32_t *out) {
+    if (!out || d != d || d < 0.0 || d > (double)UINT32_MAX) {
+        return -1;
+    }
+    if (floor(d) != d) {
+        return -1;
+    }
+    *out = (uint32_t)d;
+    return 0;
+}
 
 static int vcx_out_num(FlatNativeCtx *ctx, double n) {
     if (!ctx || !ctx->out || !ctx->io_status) {
@@ -62,10 +74,12 @@ static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) 
     if (v.tag != VAL_NUMBER) {
         return -1;
     }
-    if (v.u.number < 1.0 || v.u.number > (double)UINT32_MAX) {
+    if (vcx_number_to_uint32_strict(v.u.number, out_id) != 0) {
         return -1;
     }
-    *out_id = (uint32_t)v.u.number;
+    if (*out_id < 1u) {
+        return -1;
+    }
     return 0;
 }
 
@@ -199,7 +213,9 @@ int flat_native_vcx_create(FlatNativeCtx *ctx) {
     if (inner[0] == '\0' || parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
         return vcx_fail(ctx, "vcx.create.arg");
     }
-    cap = (uint32_t)capv.u.number;
+    if (vcx_number_to_uint32_strict(capv.u.number, &cap) != 0 || cap < 1u) {
+        return vcx_fail(ctx, "vcx.create.arg");
+    }
     if (flat_vcx_create(rt, cap, &new_id, ctx->panic_detail, sizeof ctx->panic_detail) != 0) {
         return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.create");
     }

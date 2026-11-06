@@ -949,6 +949,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     if (!st.io_ctx) {
         return vm_fail_setup(&st, opts);
     }
+    flat_io_ctx_set_vcx(st.io_ctx, st.vcx);
     guard_names = calloc(scratch_n, 64);
     guard_vals = calloc(scratch_n, sizeof *guard_vals);
     if (!guard_names || !guard_vals) {

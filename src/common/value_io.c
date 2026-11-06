@@ -55,7 +55,7 @@ int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool
                       FlatValue *vars, int var_count, const char (*var_names)[64],
                       FlatValue *out_result, FlatIoStatus *out_status) {
     return flat_io_exec_line_manifest(line, pool, coll, vars, var_count, var_names, out_result,
-                                      out_status, NULL, 0, NULL, 0, NULL, NULL);
+                                      out_status, NULL, 0, NULL, 0, NULL, NULL, NULL);
 }
 
 int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
@@ -63,7 +63,8 @@ int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatColle
                                FlatValue *out_result, FlatIoStatus *out_status,
                                const FlatOptionalNativeDecl *decls, int decl_count,
                                FlatMemLiveStats *mem_live, uint32_t vars_max,
-                               FlatIOContext *io_ctx, FlatFileTable *file_tbl) {
+                               FlatIOContext *io_ctx, FlatFileTable *file_tbl,
+                               struct FlatVcxRuntime *vcx) {
     uint16_t id;
     char inner[4096];
     FlatNativeCtx ctx;
@@ -95,7 +96,7 @@ int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatColle
     ctx.io_ctx = io_ctx;
     ctx.file_tbl = file_tbl;
     if (io_ctx) {
-        flat_io_ctx_bind_vars(io_ctx, vars, var_count);
+        flat_io_ctx_bind_vars(io_ctx, vars, var_count, vcx);
     }
     return flat_native_invoke(id, &ctx);
 }

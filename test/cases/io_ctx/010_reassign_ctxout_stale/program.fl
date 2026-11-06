@@ -1,0 +1,6 @@
+#main
+  buf = mem.ref_empty()
+  io.ctxout(buf)
+  buf = mem.ref_empty()
+  io.out('broken')
+  OK
