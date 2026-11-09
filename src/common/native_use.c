@@ -477,9 +477,18 @@ static int validate_optional_native_call(const FgirProgram *prog,
                                       sizeof inner) != 0) {
         return 0;
     }
-    snprintf(qual, sizeof qual, "%s.%s", mod, func);
-    if (prog && flat_func_find(prog, qual)) {
-        return 0;
+    {
+        size_t lm = strlen(mod);
+        size_t lf = strlen(func);
+
+        if (lm + 1 + lf + 1 <= sizeof qual) {
+            memcpy(qual, mod, lm);
+            qual[lm] = '.';
+            memcpy(qual + lm + 1, func, lf + 1);
+            if (prog && flat_func_find(prog, qual)) {
+                return 0;
+            }
+        }
     }
     if (canonical_forbidden(mod, decls, decl_count, err, err_size) != 0) {
         return -1;

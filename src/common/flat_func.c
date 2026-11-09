@@ -8,6 +8,24 @@
 #include <stdlib.h>
 #include <string.h>
 
+static int join_strings(char *out, size_t out_sz, const char *a, const char *mid, const char *b) {
+    size_t la = strlen(a);
+    size_t lm = strlen(mid);
+    size_t lb = strlen(b);
+
+    if (la + lm + lb + 1 > out_sz) {
+        return -1;
+    }
+    memcpy(out, a, la);
+    memcpy(out + la, mid, lm);
+    memcpy(out + la + lm, b, lb + 1);
+    return 0;
+}
+
+static int concat2(char *out, size_t out_sz, const char *a, const char *b) {
+    return join_strings(out, out_sz, a, "", b);
+}
+
 static int is_ident_char(int c) {
     return isalnum((unsigned char)c) || c == '_';
 }
@@ -394,13 +412,11 @@ static int parse_call_inner(const char *line, char *name_out, size_t name_sz, ch
     if (!lp) {
         return -1;
     }
-    if (lp) {
-        const char *dot = NULL;
+    {
         const char *q;
         int dot_count = 0;
         for (q = line; q < lp; q++) {
             if (*q == '.') {
-                dot = q;
                 dot_count++;
             }
         }
@@ -566,11 +582,23 @@ int flat_func_prepare_fmod_unit(FgirProgram *mod, const char *import_as, char *e
         char slug[FGIR_MAX_FUNC_NAME];
 
         snprintf(orig, sizeof orig, "%s", fn->name);
-        snprintf(slug, sizeof slug, "%s_%s", mod->mod_id, orig);
+        if (join_strings(slug, sizeof slug, mod->mod_id, "_", orig) != 0) {
+            snprintf(err, err_size, "fmod: symbol name too long");
+            return -1;
+        }
         if (export_has(mod, orig)) {
-            snprintf(fn->name, sizeof fn->name, "%s.%s", import_as, orig);
+            if (join_strings(fn->name, sizeof fn->name, import_as, ".", orig) != 0) {
+                snprintf(err, err_size, "fmod: exported name too long");
+                return -1;
+            }
         } else {
-            snprintf(fn->name, sizeof fn->name, "__%s_%s", mod->mod_id, orig);
+            char suffix[FGIR_MAX_FUNC_NAME];
+
+            if (join_strings(suffix, sizeof suffix, mod->mod_id, "_", orig) != 0 ||
+                join_strings(fn->name, sizeof fn->name, "__", suffix, "") != 0) {
+                snprintf(err, err_size, "fmod: internal name too long");
+                return -1;
+            }
         }
         snprintf(old_impl, sizeof old_impl, "%s", fn->impl_label);
         snprintf(fn->impl_label, sizeof fn->impl_label, "%s%s", FLAT_FUNC_IMPL_PREFIX, slug);
@@ -702,7 +730,17 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     ins_init_assign(&expanded[n++], line);
 
     for (i = 0; i < arg_count; i++) {
-        snprintf(line, sizeof line, "__fl_tmp_%d = %s", i, arg_parts[i]);
+        char pfx[40];
+
+        {
+            int pn = snprintf(pfx, sizeof pfx, "__fl_tmp_%d = ", i);
+
+            if (pn < 0 || (size_t)pn >= sizeof pfx ||
+                concat2(line, sizeof line, pfx, arg_parts[i]) != 0) {
+                snprintf(err, err_size, "lowered tmp assign too long");
+                return -1;
+            }
+        }
         ins_init_assign(&expanded[n++], line);
     }
 
@@ -710,11 +748,14 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     ins_init_assign(&expanded[n++], line);
     snprintf(line, sizeof line, "__fl_calleVcx = %s", FLAT_FUNC_RESERVED_CALLE_VAR);
     ins_init_assign(&expanded[n++], line);
-    if (build_param_name_list(fn, plist, sizeof plist) != 0) {
+    if (build_param_name_list(fn, plist, sizeof plist - 24) != 0) {
         snprintf(err, err_size, "param list too long");
         return -1;
     }
-    snprintf(line, sizeof line, "__fl_funcParamNames = %s", plist);
+    if (concat2(line, sizeof line, "__fl_funcParamNames = ", plist) != 0) {
+        snprintf(err, err_size, "param list too long");
+        return -1;
+    }
     ins_init_assign(&expanded[n++], line);
     snprintf(line, sizeof line, "__fl_returnVar = '%s'", fn->return_name);
     ins_init_assign(&expanded[n++], line);
@@ -722,11 +763,14 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     ins_init_assign(&expanded[n++], line);
     snprintf(line, sizeof line, "__fl_funcVcxSlots = %u", (unsigned)fn->func_vcx_slots);
     ins_init_assign(&expanded[n++], line);
-    if (build_param_in_names_list(fn->param_count, pin_list, sizeof pin_list) != 0) {
+    if (build_param_in_names_list(fn->param_count, pin_list, sizeof pin_list - 23) != 0) {
         snprintf(err, err_size, "param_in list too long");
         return -1;
     }
-    snprintf(line, sizeof line, "__fl_paramSrcNames = %s", pin_list);
+    if (concat2(line, sizeof line, "__fl_paramSrcNames = ", pin_list) != 0) {
+        snprintf(err, err_size, "param_in list too long");
+        return -1;
+    }
     ins_init_assign(&expanded[n++], line);
     for (i = 0; i < arg_count; i++) {
         snprintf(line, sizeof line, "param_in_%d = __fl_tmp_%d", i, i);
@@ -761,8 +805,36 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
                             i);
         }
         pos += snprintf(dst_list + pos, sizeof dst_list - (size_t)pos, "]");
-        snprintf(line, sizeof line, "V.varsCopyByNames(%s, %s, %s, %s)", FLAT_FUNC_RESERVED_CALLE_VAR,
-                 FLAT_FUNC_RESERVED_INSTR_VAR, src_list, dst_list);
+        {
+            char tail[320];
+            char pfx[128];
+            int hlen;
+
+            if (join_strings(tail, sizeof tail, src_list, ", ", dst_list) != 0) {
+                snprintf(err, err_size, "lowered copy list too long");
+                return -1;
+            }
+            hlen = snprintf(pfx, sizeof pfx, "V.varsCopyByNames(%s, %s, ", FLAT_FUNC_RESERVED_CALLE_VAR,
+                            FLAT_FUNC_RESERVED_INSTR_VAR);
+            if (hlen < 0 || (size_t)hlen >= sizeof pfx) {
+                snprintf(err, err_size, "lowered copy prefix too long");
+                return -1;
+            }
+            if (concat2(line, sizeof line, pfx, tail) != 0) {
+                snprintf(err, err_size, "lowered copy line too long");
+                return -1;
+            }
+            {
+                size_t ll = strlen(line);
+
+                if (ll + 2 >= sizeof line) {
+                    snprintf(err, err_size, "lowered copy line too long");
+                    return -1;
+                }
+                line[ll] = ')';
+                line[ll + 1] = '\0';
+            }
+        }
         ins_init_assign(&expanded[n++], line);
     }
     ins_init_call(&expanded[n++], fn->executor_label);
