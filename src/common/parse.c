@@ -1,4 +1,6 @@
 #include "fgir.h"
+#include "flat_value.h"
+#include "flat_func.h"
 #include "flat_line_label.h"
 #include "flat_link.h"
 #include "flat_native.h"
@@ -99,16 +101,15 @@ static int is_free_line(const char *line) {
 
 static int assign_rhs_is_native_call(const char *line) {
     char buf[FGIR_MAX_LINE];
-    char *eq;
-    char *rhs;
+    char *bind;
+    char *value;
+    FlatAssignSplitForm form;
 
     snprintf(buf, sizeof buf, "%s", line);
-    eq = strchr(buf, '=');
-    if (!eq || strstr(buf, "==") != NULL) {
+    if (flat_assign_split_line(buf, &bind, &value, &form) != 0) {
         return 0;
     }
-    rhs = trim(eq + 1);
-    return flat_native_is_call_line(rhs);
+    return flat_native_is_call_line(value);
 }
 
 static int parse_line_modifier(char *line, FgirLineMod *mod_out, const char *path, int line_no,
@@ -171,6 +172,9 @@ static FgirInstrKind classify(const char *line) {
     if (starts_with_kw(line, "jump")) {
         return FGIR_JUMP;
     }
+    if (strstr(line, "->") != NULL) {
+        return FGIR_ASSIGN;
+    }
     if (flat_native_is_call_line(line)) {
         return FGIR_IO;
     }
@@ -181,9 +185,6 @@ static FgirInstrKind classify(const char *line) {
         return FGIR_GUARD;
     }
     if (strchr(line, '=') != NULL) {
-        return FGIR_ASSIGN;
-    }
-    if (strstr(line, "->") != NULL) {
         return FGIR_ASSIGN;
     }
     return FGIR_ASSIGN;
@@ -336,6 +337,29 @@ static int line_is_use_directive(const char *p) {
     return starts_with_kw(p, "use");
 }
 
+static int finish_open_def(FgirProgram *out, int open_fn_idx, const char *path, int line_no,
+                           char *err, size_t err_size) {
+    FgirFunction *fn;
+    const FgirBlock *impl = NULL;
+    int bi;
+
+    if (open_fn_idx < 0 || open_fn_idx >= out->function_count) {
+        return 0;
+    }
+    fn = &out->functions[open_fn_idx];
+    for (bi = 0; bi < out->block_count; bi++) {
+        if (strcmp(out->blocks[bi].label, fn->impl_label) == 0) {
+            impl = &out->blocks[bi];
+            break;
+        }
+    }
+    if (!impl) {
+        snprintf(err, err_size, "%s:%d: missing body for def %s", path, line_no, fn->name);
+        return -1;
+    }
+    return flat_func_finish_def(fn, impl, out->func_var_slots_manual, err, err_size);
+}
+
 int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *err, size_t err_size) {
     FILE *f;
     char line[FGIR_MAX_LINE + 8];
@@ -343,12 +367,15 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
     int cur = -1;
     int in_block_comment = 0;
     int in_header = 1;
+    int open_fn_idx = -1;
+    int hdr;
 
     if (!path || !out) {
         return -1;
     }
     memset(out, 0, sizeof *out);
     out->main_index = -1;
+    flat_func_meta_init(out);
 
     f = fopen(path, "r");
     if (!f) {
@@ -386,18 +413,76 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             if (line_is_use_directive(p)) {
                 continue;
             }
-            if (*p != '#') {
-                snprintf(err, err_size, "%s:%d: expected use directive or block", path, line_no);
+            if (strncmp(p, "mod(", 4) == 0 || strncmp(p, "export", 6) == 0 ||
+                strncmp(p, "func:", 5) == 0) {
+                if (flat_func_parse_header_line(p, out, path, line_no, err, err_size) < 0) {
+                    fclose(f);
+                    return -1;
+                }
+                continue;
+            }
+            hdr = flat_func_parse_header_line(p, out, path, line_no, err, err_size);
+            if (hdr < 0) {
                 fclose(f);
                 return -1;
             }
-            in_header = 0;
+            if (hdr == 0) {
+                continue;
+            }
+            if (starts_with_kw(p, "def")) {
+                in_header = 0;
+            } else if (*p != '#') {
+                snprintf(err, err_size, "%s:%d: expected use, func header, def, or block", path,
+                         line_no);
+                fclose(f);
+                return -1;
+            } else {
+                in_header = 0;
+            }
         } else if (line_is_use_directive(p)) {
             snprintf(err, err_size, "%s:%d: use must appear before any block", path, line_no);
             fclose(f);
             return -1;
         }
+        if (starts_with_kw(p, "def")) {
+            FgirFunction *fn;
+
+            if (finish_open_def(out, open_fn_idx, path, line_no, err, err_size) != 0) {
+                fclose(f);
+                return -1;
+            }
+            open_fn_idx = -1;
+            if (out->function_count >= FGIR_MAX_FUNCTIONS) {
+                snprintf(err, err_size, "%s:%d: too many functions", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            fn = &out->functions[out->function_count];
+            if (flat_func_parse_def_header(p, fn, out, err, err_size) != 0) {
+                char detail[FGIR_MAX_LINE];
+
+                snprintf(detail, sizeof detail, "%s", err);
+                snprintf(err, err_size, "%s:%d: %s", path, line_no, detail);
+                fclose(f);
+                return -1;
+            }
+            open_fn_idx = out->function_count++;
+            if (out->block_count >= FGIR_MAX_BLOCKS) {
+                snprintf(err, err_size, "%s:%d: too many blocks", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            cur = out->block_count++;
+            memset(&out->blocks[cur], 0, sizeof out->blocks[cur]);
+            snprintf(out->blocks[cur].label, FGIR_MAX_LABEL, "%s", fn->impl_label);
+            continue;
+        }
         if (*p == '#') {
+            if (finish_open_def(out, open_fn_idx, path, line_no, err, err_size) != 0) {
+                fclose(f);
+                return -1;
+            }
+            open_fn_idx = -1;
             if (out->block_count >= FGIR_MAX_BLOCKS) {
                 snprintf(err, err_size, "%s:%d: too many blocks", path, line_no);
                 fclose(f);
@@ -459,6 +544,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 memcpy(ins->text, work, strlen(work) + 1);
             }
             ins->kind = classify(ins->text);
+            (void)flat_func_try_classify_call(ins->text, out, ins);
             if (ins->line_mod != FGIR_LINE_MOD_NONE && !line_mod_allowed(ins->kind, ins->text)) {
                 snprintf(err, err_size,
                          "%s:%d: line modifier (? or ~) requires a native call on this line", path,
@@ -498,6 +584,9 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
         return -1;
     }
 
+    if (finish_open_def(out, open_fn_idx, path, line_no, err, err_size) != 0) {
+        return -1;
+    }
     if (allow_main && out->main_index < 0) {
         snprintf(err, err_size, "%s: missing #main", path);
         return -1;

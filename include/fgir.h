@@ -3,8 +3,12 @@
 
 #include <stddef.h>
 #include <stdio.h>
+#include <stdint.h>
 
 #define FGIR_MAX_LABEL 128
+#define FGIR_MAX_FUNCTIONS 256
+#define FGIR_MAX_FUNC_PARAMS 16
+#define FGIR_MAX_FUNC_NAME 64
 #define FGIR_MAX_LINE 512
 #define FGIR_MAX_BLOCKS 1024
 #define FGIR_MAX_INSTR 128
@@ -32,7 +36,8 @@ typedef enum {
     FGIR_RAISE_PANIC,
     FGIR_IO,
     FGIR_FREE,
-    FGIR_JUMP
+    FGIR_JUMP,
+    FGIR_FUNC_CALL
 } FgirInstrKind;
 
 typedef enum {
@@ -52,6 +57,9 @@ typedef struct {
     char foreach_block[FGIR_MAX_LABEL];
     char for_limit[64];
     char line_label[64];
+    char func_name[FGIR_MAX_FUNC_NAME];
+    char func_args[FGIR_MAX_LINE];
+    char func_ret[64];
 } FgirInstr;
 
 typedef struct {
@@ -69,6 +77,17 @@ typedef struct {
 } FgirBlock;
 
 typedef struct {
+    char name[FGIR_MAX_FUNC_NAME];
+    char impl_label[FGIR_MAX_LABEL];
+    char return_name[64];
+    char params[FGIR_MAX_FUNC_PARAMS][64];
+    int param_count;
+    char executor_label[FGIR_MAX_LABEL];
+    uint32_t func_vcx_slots;
+    int is_global_executor;
+} FgirFunction;
+
+typedef struct {
     FgirBlock blocks[FGIR_MAX_BLOCKS];
     int block_count;
     int main_index;
@@ -76,6 +95,14 @@ typedef struct {
     int native_unit_count;
     FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
     int optional_native_count;
+    FgirFunction functions[FGIR_MAX_FUNCTIONS];
+    int function_count;
+    char default_executor[FGIR_MAX_LABEL];
+    int func_var_slots_manual; /* -1 = auto */
+    int mod_id_set;
+    char mod_id[64];
+    int export_count;
+    char exports[FGIR_MAX_FUNCTIONS][FGIR_MAX_FUNC_NAME];
 } FgirProgram;
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);

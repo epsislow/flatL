@@ -3,6 +3,7 @@
 #endif
 
 #include "flat_guard.h"
+#include "flat_func.h"
 #include "flat_link.h"
 #include "flat_native_use.h"
 #include "flat_port.h"
@@ -32,6 +33,12 @@ typedef struct {
     char prefix[FGIR_MAX_LABEL];
     char source_display[FLAT_PORT_PATH_MAX];
 } FlatModEntry;
+
+typedef struct {
+    char quoted[FLAT_PORT_PATH_MAX];
+    char ident[64];
+    int line_no;
+} FlatFmodUse;
 
 static char *trim_local(char *s) {
     while (*s && isspace((unsigned char)*s)) {
@@ -165,6 +172,210 @@ static int starts_with_use(const char *s) {
     return strncmp(s, "use", 3) == 0 && (s[3] == '\0' || isspace((unsigned char)s[3]));
 }
 
+static int starts_with_use_fmod(const char *s) {
+    const char *p;
+    if (!starts_with_use(s)) {
+        return 0;
+    }
+    p = s + 3;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    return strncmp(p, "fmod", 4) == 0 &&
+           (p[4] == '\0' || isspace((unsigned char)p[4]));
+}
+
+static int validate_fmod_ident(const char *ident, char *err, size_t err_size) {
+    size_t i;
+    if (!ident || !ident[0]) {
+        snprintf(err, err_size, "use fmod: missing import name");
+        return -1;
+    }
+    if (!(isalpha((unsigned char)ident[0]) || ident[0] == '_')) {
+        snprintf(err, err_size, "use fmod: import name must start with letter or _");
+        return -1;
+    }
+    for (i = 1; ident[i]; i++) {
+        unsigned char c = (unsigned char)ident[i];
+        if (!isalnum(c) && c != '_') {
+            snprintf(err, err_size, "use fmod: invalid import name");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int parse_use_fmod_line(const char *line, FlatFmodUse *out, char *err, size_t err_size) {
+    char buf[FGIR_MAX_LINE];
+    char *p;
+    char *qstart;
+    char *qend;
+
+    snprintf(buf, sizeof buf, "%s", line);
+    p = trim_local(buf);
+    if (!starts_with_use_fmod(p)) {
+        return -1;
+    }
+    p += 3;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (strncmp(p, "fmod", 4) != 0) {
+        return -1;
+    }
+    p += 4;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '"') {
+        snprintf(err, err_size, "use fmod: expected quoted path");
+        return -1;
+    }
+    qstart = p + 1;
+    qend = strchr(qstart, '"');
+    if (!qend) {
+        snprintf(err, err_size, "use fmod: unterminated string");
+        return -1;
+    }
+    *qend = '\0';
+    snprintf(out->quoted, sizeof out->quoted, "%s", qstart);
+    p = qend + 1;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (strncmp(p, "as", 2) != 0 || (p[2] != '\0' && !isspace((unsigned char)p[2]))) {
+        snprintf(err, err_size, "use fmod: missing as name");
+        return -1;
+    }
+    p += 2;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p == '\0' || isspace((unsigned char)*p)) {
+        snprintf(err, err_size, "use fmod: missing import name");
+        return -1;
+    }
+    {
+        char *e = p;
+        while (*e && !isspace((unsigned char)*e)) {
+            e++;
+        }
+        if (*e) {
+            *e = '\0';
+        }
+        snprintf(out->ident, sizeof out->ident, "%s", p);
+    }
+    return validate_fmod_ident(out->ident, err, err_size);
+}
+
+static int scan_header_fmod_uses(const char *path, const FlatLinkOptions *opts, FlatFmodUse *uses,
+                                 int max_uses, int *out_count, char *err, size_t err_size) {
+    FILE *f;
+    char line[FGIR_MAX_LINE + 8];
+    int line_no = 0;
+    int in_block = 0;
+    int n = 0;
+    int in_header = 1;
+
+    *out_count = 0;
+    f = fopen(path, "r");
+    if (!f) {
+        snprintf(err, err_size, "cannot open %s", path);
+        return -1;
+    }
+    while (fgets(line, sizeof line, f)) {
+        char *p;
+        line_no++;
+        p = trim_local(line);
+        if (in_block) {
+            if (strncmp(p, "-->", 3) == 0) {
+                in_block = 0;
+            }
+            continue;
+        }
+        if (strncmp(p, "--<", 3) == 0) {
+            in_block = 1;
+            continue;
+        }
+        if (line_is_comment_or_blank(p)) {
+            continue;
+        }
+        if (in_header && starts_with_use_fmod(p)) {
+            if (n >= max_uses) {
+                snprintf(err, err_size, "%s:%d: too many use fmod directives", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            uses[n].line_no = line_no;
+            if (parse_use_fmod_line(p, &uses[n], err, err_size) != 0) {
+                char msg[256];
+                snprintf(msg, sizeof msg, "%s", err);
+                snprintf(err, err_size, "%s:%d: %s", path, line_no, msg);
+                fclose(f);
+                return -1;
+            }
+            n++;
+            continue;
+        }
+        if (*p == '#') {
+            in_header = 0;
+            break;
+        }
+        if (in_header) {
+            if (strncmp(p, "def ", 4) == 0) {
+                in_header = 0;
+                break;
+            }
+            if (strncmp(p, "func:", 5) == 0 || strncmp(p, "mod(", 4) == 0 || strncmp(p, "export", 6) == 0) {
+                continue;
+            }
+        }
+    }
+    if (in_block) {
+        snprintf(err, err_size, "%s: unclosed block comment", path);
+        fclose(f);
+        return -1;
+    }
+    fclose(f);
+
+    {
+        int i, j;
+        for (i = 0; i < n; i++) {
+            char canon_i[FLAT_PORT_PATH_MAX];
+            char try_i[FLAT_PORT_PATH_MAX];
+            char e2[256];
+            if (resolve_use_path(path, uses[i].quoted, canon_i, try_i, sizeof try_i, e2, sizeof e2) != 0) {
+                snprintf(err, err_size, "%s:%d: use fmod: %s", path, uses[i].line_no, e2);
+                if (opts && opts->verbose) {
+                    fprintf(stderr, "flc: verbose: tried absolute path %s\n", try_i);
+                }
+                return -1;
+            }
+            for (j = i + 1; j < n; j++) {
+                char canon_j[FLAT_PORT_PATH_MAX];
+                char try_j[FLAT_PORT_PATH_MAX];
+                if (resolve_use_path(path, uses[j].quoted, canon_j, try_j, sizeof try_j, e2, sizeof e2) != 0) {
+                    snprintf(err, err_size, "%s:%d: use fmod: %s", path, uses[j].line_no, e2);
+                    return -1;
+                }
+                if (strcmp(canon_i, canon_j) == 0) {
+                    snprintf(err, err_size, "%s:%d: duplicate use fmod for \"%s\"", path, uses[j].line_no,
+                             uses[j].quoted);
+                    return -1;
+                }
+                if (strcmp(uses[i].ident, uses[j].ident) == 0) {
+                    snprintf(err, err_size, "%s:%d: duplicate fmod import name \"%s\"", path, uses[j].line_no,
+                             uses[j].ident);
+                    return -1;
+                }
+            }
+        }
+    }
+
+    *out_count = n;
+    return 0;
+}
+
 static int starts_with_use_native(const char *s) {
     const char *p;
     if (!starts_with_use(s)) {
@@ -269,6 +480,9 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
             if (starts_with_use_native(p)) {
                 continue;
             }
+            if (starts_with_use_fmod(p)) {
+                continue;
+            }
             if (n >= max_uses) {
                 snprintf(err, err_size, "%s:%d: too many use directives", path, line_no);
                 fclose(f);
@@ -290,6 +504,13 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
             break;
         }
         if (in_header) {
+            if (strncmp(p, "def ", 4) == 0) {
+                in_header = 0;
+                break;
+            }
+            if (strncmp(p, "func:", 5) == 0 || strncmp(p, "mod(", 4) == 0 || strncmp(p, "export", 6) == 0) {
+                continue;
+            }
             snprintf(err, err_size, "%s:%d: expected use directive or block", path, line_no);
             fclose(f);
             return -1;
@@ -584,8 +805,34 @@ static int merge_module(FgirProgram *out, const FgirProgram *mod, const char *as
     return rc;
 }
 
+static int merge_fmod_unit(FgirProgram *out, const FgirProgram *mod, char *err, size_t err_size) {
+    int i;
+
+    for (i = 0; i < mod->function_count; i++) {
+        if (out->function_count >= FGIR_MAX_FUNCTIONS) {
+            snprintf(err, err_size, "too many functions after fmod link");
+            return -1;
+        }
+        out->functions[out->function_count++] = mod->functions[i];
+    }
+    for (i = 0; i < mod->block_count; i++) {
+        FgirBlock b = mod->blocks[i];
+        if (append_block(out, &b, err, err_size) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int merge_entry(FgirProgram *out, const FgirProgram *entry, char *err, size_t err_size) {
     int i;
+    for (i = 0; i < entry->function_count; i++) {
+        if (out->function_count >= FGIR_MAX_FUNCTIONS) {
+            snprintf(err, err_size, "too many functions after link");
+            return -1;
+        }
+        out->functions[out->function_count++] = entry->functions[i];
+    }
     for (i = 0; i < entry->block_count; i++) {
         FgirBlock b = entry->blocks[i];
         if (append_block(out, &b, err, err_size) != 0) {
@@ -614,9 +861,6 @@ static int prepare_unit_decls(FgirProgram *mod, const char *path, int *unit_inde
     for (i = 0; i < mod->block_count; i++) {
         mod->blocks[i].native_unit_index = 0;
     }
-    if (flat_native_use_validate_program(mod, err, err_size) != 0) {
-        return -1;
-    }
     *unit_index_out = 0;
     return 0;
 }
@@ -643,6 +887,70 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
 
     if (discover_modules(entry_path, opts, mods, &mod_count, err, err_size) != 0) {
         return -1;
+    }
+
+    {
+        FlatFmodUse fmods[32];
+        int fmod_count = 0;
+        int fi;
+
+        if (scan_header_fmod_uses(entry_path, opts, fmods, 32, &fmod_count, err, err_size) != 0) {
+            return -1;
+        }
+        mod = calloc(1, sizeof(FgirProgram));
+        if (!mod) {
+            snprintf(err, err_size, "out of memory");
+            return -1;
+        }
+        for (fi = 0; fi < fmod_count; fi++) {
+            char canonical[FLAT_PORT_PATH_MAX];
+            char try_rel[FLAT_PORT_PATH_MAX];
+            char e2[256];
+            int local_ui;
+            int out_ui;
+
+            memset(mod, 0, sizeof *mod);
+            mod->main_index = -1;
+            if (resolve_use_path(entry_path, fmods[fi].quoted, canonical, try_rel, sizeof try_rel, e2,
+                                 sizeof e2) != 0) {
+                snprintf(err, err_size, "%s:%d: use fmod: %s", entry_path, fmods[fi].line_no, e2);
+                free(mod);
+                return -1;
+            }
+            if (flat_parse_unit(canonical, 0, mod, err, err_size) != 0) {
+                free(mod);
+                return -1;
+            }
+            if (!mod->mod_id_set) {
+                snprintf(err, err_size, "%s: mod('id') missing in fmod unit", canonical);
+                free(mod);
+                return -1;
+            }
+            if (flat_func_prepare_fmod_unit(mod, fmods[fi].ident, err, err_size) != 0) {
+                char detail[512];
+                snprintf(detail, sizeof detail, "%s", err);
+                snprintf(err, err_size, "%s: %s", canonical, detail);
+                free(mod);
+                return -1;
+            }
+            if (prepare_unit_decls(mod, canonical, &local_ui, err, err_size) != 0) {
+                free(mod);
+                return -1;
+            }
+            if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) {
+                free(mod);
+                return -1;
+            }
+            for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
+                mod->blocks[local_ui].native_unit_index = out_ui;
+            }
+            if (merge_fmod_unit(out, mod, err, err_size) != 0) {
+                free(mod);
+                return -1;
+            }
+        }
+        free(mod);
+        mod = NULL;
     }
 
     mod = calloc(1, sizeof(FgirProgram));
@@ -715,7 +1023,14 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         snprintf(err, err_size, "too many optional native modules in program");
         return -1;
     }
+    flat_func_reclassify_program(out);
     if (flat_native_use_validate_program(out, err, err_size) != 0) {
+        return -1;
+    }
+    if (flat_func_lower_program(out, err, err_size) != 0) {
+        return -1;
+    }
+    if (flat_func_validate_program(out, err, err_size) != 0) {
         return -1;
     }
 

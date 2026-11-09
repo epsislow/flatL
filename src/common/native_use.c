@@ -1,3 +1,5 @@
+#include "flat_value.h"
+#include "flat_func.h"
 #include "flat_native_use.h"
 #include "flat_native.h"
 #include "flat_native_util.h"
@@ -461,16 +463,22 @@ int flat_native_split_call_prog(const char *line, const FgirProgram *prog, int n
                                         err_size);
 }
 
-static int validate_optional_native_call(const FlatOptionalNativeDecl *decls, int decl_count,
+static int validate_optional_native_call(const FgirProgram *prog,
+                                         const FlatOptionalNativeDecl *decls, int decl_count,
                                          const char *call_line, char *err, size_t err_size) {
     char mod[64];
     char func[32];
     char inner[64];
     char resolved[FGIR_NATIVE_MODULE_LEN];
+    char qual[FGIR_MAX_FUNC_NAME];
     uint16_t id;
 
     if (flat_native_parse_dotted_call(call_line, mod, sizeof mod, func, sizeof func, inner,
                                       sizeof inner) != 0) {
+        return 0;
+    }
+    snprintf(qual, sizeof qual, "%s.%s", mod, func);
+    if (prog && flat_func_find(prog, qual)) {
         return 0;
     }
     if (canonical_forbidden(mod, decls, decl_count, err, err_size) != 0) {
@@ -508,26 +516,22 @@ int flat_native_use_validate_program(const FgirProgram *prog, char *err, size_t 
         for (ii = 0; ii < b->instr_count; ii++) {
             const FgirInstr *ins = &b->instr[ii];
             if (ins->kind == FGIR_IO) {
-                if (validate_optional_native_call(decls, decl_count, ins->text, err, err_size) !=
-                    0) {
+                if (validate_optional_native_call(prog, decls, decl_count, ins->text, err,
+                                                  err_size) != 0) {
                     return -1;
                 }
             } else if (ins->kind == FGIR_ASSIGN) {
                 char buf[FGIR_MAX_LINE];
-                char *eq;
-                char *rhs;
+                char *bind;
+                char *value;
+                FlatAssignSplitForm form;
 
                 snprintf(buf, sizeof buf, "%s", ins->text);
-                eq = strchr(buf, '=');
-                if (!eq) {
+                if (flat_assign_split_line(buf, &bind, &value, &form) != 0) {
                     continue;
                 }
-                *eq = '\0';
-                rhs = eq + 1;
-                while (*rhs && (*rhs == ' ' || *rhs == '\t')) {
-                    rhs++;
-                }
-                if (validate_optional_native_call(decls, decl_count, rhs, err, err_size) != 0) {
+                if (validate_optional_native_call(prog, decls, decl_count, value, err, err_size) !=
+                    0) {
                     return -1;
                 }
             }

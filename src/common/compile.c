@@ -1,4 +1,5 @@
 #include "fgir.h"
+#include "flat_func.h"
 #include "flat.h"
 #include "flat_value.h"
 #include "fb_format.h"
@@ -658,6 +659,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     if (flat_native_use_validate_program(prog, err, err_size) != 0) {
         return -1;
     }
+    if (flat_func_validate_program(prog, err, err_size) != 0) {
+        return -1;
+    }
     if (count_var_slots(prog, &var_slots, err, err_size) != 0) {
         return -1;
     }
@@ -705,8 +709,11 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         uint16_t count = (uint16_t)prog->block_count;
         uint32_t labels_off = (uint32_t)(stream_base + code.len);
         uint32_t fnun_off = 0;
+        uint32_t ffun_off = 0;
         uint32_t native_off = 0;
         size_t label_sec = 6;
+        size_t fnun_sz = 0;
+        size_t ffun_sz = 0;
         int li;
 
         for (li = 0; li < prog->block_count; li++) {
@@ -717,7 +724,6 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         }
         if (fnun_off != 0) {
             FlatFbNativeUnit *units_tmp = NULL;
-            size_t fnun_sz;
 
             units_tmp = calloc((size_t)prog->native_unit_count, sizeof(FlatFbNativeUnit));
             if (units_tmp) {
@@ -729,12 +735,48 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                 }
                 fnun_sz = flat_fb_fnun_section_size(prog->native_unit_count, units_tmp, count);
                 free(units_tmp);
-                if (prog->optional_native_count > 0) {
-                    native_off = (uint32_t)(fnun_off + fnun_sz);
-                }
             }
-        } else if (prog->optional_native_count > 0) {
-            native_off = (uint32_t)(labels_off + label_sec);
+        }
+        ffun_sz = flat_fb_ffun_section_size((uint16_t)prog->function_count, NULL);
+        if (prog->function_count > 0) {
+            FlatFbFunctionEntry *ftab = NULL;
+            int fi;
+
+            ftab = calloc((size_t)prog->function_count, sizeof(FlatFbFunctionEntry));
+            if (ftab) {
+                for (fi = 0; fi < prog->function_count; fi++) {
+                    const FgirFunction *fn = &prog->functions[fi];
+                    int bi;
+
+                    snprintf(ftab[fi].name, sizeof ftab[fi].name, "%s", fn->name);
+                    snprintf(ftab[fi].return_name, sizeof ftab[fi].return_name, "%s",
+                             fn->return_name);
+                    ftab[fi].param_count = (uint8_t)fn->param_count;
+                    ftab[fi].func_vcx_slots = fn->func_vcx_slots;
+                    for (bi = 0; bi < prog->block_count; bi++) {
+                        if (strcmp(prog->blocks[bi].label, fn->impl_label) == 0) {
+                            ftab[fi].impl_block_id = block_ids[bi];
+                            break;
+                        }
+                    }
+                    for (bi = 0; bi < prog->block_count; bi++) {
+                        if (strcmp(prog->blocks[bi].label, fn->executor_label) == 0) {
+                            ftab[fi].executor_block_id = block_ids[bi];
+                            break;
+                        }
+                    }
+                }
+                ffun_sz = flat_fb_ffun_section_size((uint16_t)prog->function_count, ftab);
+                free(ftab);
+            }
+        }
+        if (fnun_off != 0) {
+            ffun_off = (uint32_t)(fnun_off + fnun_sz);
+        } else {
+            ffun_off = (uint32_t)(labels_off + label_sec);
+        }
+        if (prog->optional_native_count > 0) {
+            native_off = (uint32_t)(ffun_off + ffun_sz);
         }
         fwrite(magic, 1, 4, f);
         fwrite(&sentinel, 1, 1, f);
@@ -744,6 +786,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         fwrite(&var_slots, 1, 4, f);
         fwrite(&labels_off, 1, 4, f);
         fwrite(&fnun_off, 1, 4, f);
+        fwrite(&ffun_off, 1, 4, f);
         for (i = 0; i < prog->block_count; i++) {
             uint32_t id = block_ids[i];
             uint32_t off = (uint32_t)offs[i].abs_offset;
@@ -818,6 +861,47 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
             }
             free(units);
             free(block_unit);
+        }
+        {
+            FlatFbFunctionEntry *ftab = NULL;
+            int fi;
+
+            ftab = calloc((size_t)prog->function_count, sizeof(FlatFbFunctionEntry));
+            if (!ftab && prog->function_count > 0) {
+                fclose(f);
+                snprintf(err, err_size, "out of memory");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            for (fi = 0; fi < prog->function_count; fi++) {
+                const FgirFunction *fn = &prog->functions[fi];
+                int bi;
+
+                snprintf(ftab[fi].name, sizeof ftab[fi].name, "%s", fn->name);
+                snprintf(ftab[fi].return_name, sizeof ftab[fi].return_name, "%s", fn->return_name);
+                ftab[fi].param_count = (uint8_t)fn->param_count;
+                ftab[fi].func_vcx_slots = fn->func_vcx_slots;
+                for (bi = 0; bi < prog->block_count; bi++) {
+                    if (strcmp(prog->blocks[bi].label, fn->impl_label) == 0) {
+                        ftab[fi].impl_block_id = block_ids[bi];
+                    }
+                    if (strcmp(prog->blocks[bi].label, fn->executor_label) == 0) {
+                        ftab[fi].executor_block_id = block_ids[bi];
+                    }
+                }
+            }
+            if (flat_fb_write_ffun_section(f, (uint16_t)prog->function_count, ftab) != 0) {
+                free(ftab);
+                fclose(f);
+                snprintf(err, err_size, "failed to write FFUN");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            free(ftab);
         }
         if (native_off != 0 && prog->optional_native_count > 0) {
             if (flat_fb_write_native_section(f, prog->optional_native_count,

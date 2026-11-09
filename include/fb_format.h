@@ -9,9 +9,11 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 4u
-#define FLAT_FB_HEADER_SIZE 24 /* v4: + fnun_off4 at 20 */
+#define FLAT_FB_FORMAT_VERSION 5u
+#define FLAT_FB_HEADER_SIZE 28 /* v5: + ffun_off at 24 */
+#define FLAT_FB_HEADER_SIZE_V4 24
 #define FLAT_FB_HEADER_SIZE_V3 20
+#define FLAT_FB_FFUN_MAGIC 0x4e554646u /* 'FFUN' LE */
 #define FLAT_FB_LABEL_MAGIC 0x424c424cu /* 'BLBL' LE */
 #define FLAT_FB_FNUN_MAGIC 0x4e554e46u /* 'FNUN' LE */
 #define FLAT_FB_TAIL_MAGIC 0x54414e46u /* "FNAT" little-endian */
@@ -27,6 +29,15 @@ typedef struct {
 } FlatBlockEntry;
 
 typedef struct {
+    char name[FGIR_MAX_FUNC_NAME];
+    uint32_t impl_block_id;
+    uint32_t executor_block_id;
+    uint8_t param_count;
+    char return_name[64];
+    uint32_t func_vcx_slots;
+} FlatFbFunctionEntry;
+
+typedef struct {
     uint8_t *data;
     size_t size;
     size_t code_size; /* bytecode stream only (excludes BLBL / FNAT tail) */
@@ -40,6 +51,8 @@ typedef struct {
     FlatFbNativeUnit *native_units;
     int native_unit_count;
     uint8_t *block_native_unit; /* heap; length block_count; FNUN section */
+    FlatFbFunctionEntry *functions;
+    uint16_t function_count;
 } FlatBytecode;
 
 size_t flat_fb_native_section_size(int decl_count, const FlatOptionalNativeDecl *decls);
@@ -59,5 +72,7 @@ int flat_fb_load_buffer(const uint8_t *data, size_t len, FlatBytecode *out);
 void flat_fb_free(FlatBytecode *bc);
 
 int flat_fb_write_min_ok(const char *path);
+size_t flat_fb_ffun_section_size(uint16_t count, const FlatFbFunctionEntry *entries);
+int flat_fb_write_ffun_section(FILE *f, uint16_t count, const FlatFbFunctionEntry *entries);
 
 #endif
