@@ -1,4 +1,6 @@
-CC      ?= gcc
+ifeq ($(origin CC),default)
+CC      = gcc
+endif
 CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude -D_GNU_SOURCE
 LDFLAGS ?=
 
