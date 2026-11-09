@@ -90,7 +90,7 @@ server.on('error', (err) => {
   if (err && err.code === 'EADDRINUSE') {
     process.stderr.write(
       `fleditor: port ${port} already in use (another serve.js running?).\n` +
-        `  Stop it: fuser -k ${port}/tcp   or use another port: node serve.js 8766\n`
+        `  Stop it: make fleditor-stop   or another port: node serve.js 8766\n`
     );
     process.exit(1);
   }

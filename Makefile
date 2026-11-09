@@ -231,10 +231,26 @@ test-flatl: all
 	./$(BINDIR)/run_tests$(EXEEXT) --flatl
 	@echo "OK: make test-flatl finished"
 
-# WSL: make uses /bin/sh — Windows node.exe on PATH often fails (Permission denied).
-# Override: make fleditor-serve NODE=/usr/bin/node
-NODE ?= $(shell if [ -x /usr/bin/node ]; then echo /usr/bin/node; elif command -v node >/dev/null 2>&1; then command -v node; else echo node; fi)
+# Fleditor needs a Linux Node (not a WSL shim to Windows node.exe — breaks on UNC paths).
+# Override: make fleditor-serve NODE=/path/to/linux/node
+_FLEDITOR_LINUX_NODE := $(shell sh scripts/fleditor_linux_node.sh 2>/dev/null || true)
+ifeq ($(origin NODE),command)
+# keep NODE from: make NODE=/usr/bin/node fleditor-serve
+else
+override NODE := $(_FLEDITOR_LINUX_NODE)
+endif
 FLEDITOR_PORT ?= 8765
+
+define FLEDITOR_NODE_HINT
+No Linux Node for fleditor-serve. On WSL, ~/.local/bin/node often wraps Windows node.exe
+and fails with ERR_INVALID_PACKAGE_CONFIG / UNC wsl$$ paths.
+
+  make fleditor-node-check
+  # apt nodejs 12.x is old; for smokes prefer: nvm install --lts
+  make fleditor-serve-forced NODE=/usr/bin/node
+
+endef
+export FLEDITOR_NODE_HINT
 
 fleditor-wasm:
 	$(MAKE) -f Makefile.wasm fleditor-wasm
@@ -242,12 +258,26 @@ fleditor-wasm:
 fleditor-rebuild: rebuild
 	@echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R)."
 
-fleditor-serve:
-	$(NODE) docs/fleditor_site/node/serve.js $(FLEDITOR_PORT)
+fleditor-node-check:
+	@echo "=== uname ==="
+	@uname -a
+	@echo "=== /usr/bin/node (apt) ==="
+	@/usr/bin/node --version 2>&1 || echo "FAIL: apt node does not run (common on WSL1 → Exec format error)"
+	@echo "=== Linux picker ==="
+	@sh "$(CURDIR)/scripts/fleditor_linux_node.sh" 2>/dev/null || echo "(none)"
+	@echo "=== Windows node.exe ==="
+	@ls "/mnt/c/Program Files/nodejs/node.exe" 2>/dev/null && \
+	  "/mnt/c/Program Files/nodejs/node.exe" --version 2>&1 || echo "(not found)"
+	@echo "OK: make fleditor-serve-forced (Linux node, else Windows node.exe + wslpath)"
 
-fleditor-serve-forced:
-	fuser -k $(FLEDITOR_PORT)/tcp 2>/dev/null || true
-	$(NODE) docs/fleditor_site/node/serve.js $(FLEDITOR_PORT)
+fleditor-serve:
+	sh "$(CURDIR)/scripts/fleditor_run_serve.sh" $(FLEDITOR_PORT)
+
+fleditor-stop:
+	sh "$(CURDIR)/scripts/fleditor_stop.sh" $(FLEDITOR_PORT)
+
+fleditor-serve-forced: fleditor-stop
+	sh "$(CURDIR)/scripts/fleditor_run_serve.sh" $(FLEDITOR_PORT)
 
 fleditor-smoke:
 	$(NODE) test/fleditor/serve_smoke.js
