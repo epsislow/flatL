@@ -1,0 +1,8 @@
+#sub
+  msg = 'static'
+  return
+
+#main
+  call #sub
+  io.outln(msg)
+  OK

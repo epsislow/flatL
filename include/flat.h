@@ -17,7 +17,8 @@ typedef enum {
     OP_NATIVE  = 0x0A, /* uint16 id + inner\\0 + bind\\0 */
     OP_FREE    = 0x0B, /* var name\\0 */
     OP_FOR     = 0x0C, /* uint32 loop block IP + original for(...) line NUL-terminated */
-    OP_JUMP    = 0x0D  /* uint32 target block IP */
+    OP_JUMP          = 0x0D, /* uint32 target block IP */
+    OP_CALL_BLOCK    = 0x0E  /* block id expr NUL + bind name NUL (may be empty) */
 } OpCode;
 
 /* Line modifiers on native / assign-native lines (see SPECIFICATION.md). */

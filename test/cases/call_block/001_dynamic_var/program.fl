@@ -1,0 +1,9 @@
+#worker
+  result = 'from_worker'
+  return
+
+#main
+  wid = 2812593762
+  call block wid
+  io.outln(result)
+  OK

@@ -1,0 +1,3 @@
+#main
+  call block 'nope'
+  OK

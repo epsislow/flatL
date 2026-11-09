@@ -1,0 +1,8 @@
+#worker
+  result = 'lit'
+  return
+
+#main
+  call block 2812593762
+  io.outln(result)
+  OK

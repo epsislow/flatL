@@ -25,7 +25,7 @@ flat_port / OS — toolchain & native backends
 
 ## VM primitives (today)
 
-- **Bytecode** opcodes: control flow, assign, natives, `call #block`, `return`, `for` / `foreach`, etc.
+- **Bytecode** opcodes: control flow, assign, natives, `call #block`, **`call block` *expr*** (`OP_CALL_BLOCK`), `return`, `for` / `foreach`, etc. — see [CALL_BLOCK.md](./CALL_BLOCK.md).
 - **VCX** (`use native vcx`): multiple variable storages; **`create`**, **`set`**, **`destroy`**, copy helpers including **`varsCopyByNames`** — see [natives/vcx.md](./natives/vcx.md).
 - **Natives**: registered in `src/lib/native_registry.c`; core implementations in `src/lib/mod_*.c` and `src/common/flat_vcx.c`.
 - **`var_slots`**: compile-time count of distinct bind names for the linked program; global VCX capacity follows this value.

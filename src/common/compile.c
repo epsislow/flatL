@@ -122,6 +122,7 @@ static int validate_free_in_program(const FgirProgram *prog, char *err, size_t e
                 break;
             case FGIR_IO:
             case FGIR_CALL:
+            case FGIR_CALL_BLOCK:
                 if (ins->call_out[0] && !bind_name_forbidden(ins->call_out)) {
                     rc = varset_add(&vs, ins->call_out);
                 }
@@ -197,6 +198,7 @@ static int count_var_slots(const FgirProgram *prog, uint32_t *out_slots, char *e
                 break;
             case FGIR_IO:
             case FGIR_CALL:
+            case FGIR_CALL_BLOCK:
                 if (ins->call_out[0] && !bind_name_forbidden(ins->call_out)) {
                     rc = varset_add(&vs, ins->call_out);
                 }
@@ -464,6 +466,23 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             memcpy(payload + 4, ins->call_out, strlen(ins->call_out) + 1);
             plen = (uint8_t)(4 + strlen(ins->call_out) + 1);
             if (emit_instr(code, OP_CALL, payload, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case FGIR_CALL_BLOCK: {
+            uint8_t payload[FGIR_MAX_LABEL + 64];
+            size_t elen = strlen(ins->call_target) + 1;
+            size_t blen = strlen(ins->call_out) + 1;
+            uint8_t plen;
+            if (elen + blen > sizeof payload) {
+                snprintf(err, err_size, "call block expression too long");
+                return -1;
+            }
+            memcpy(payload, ins->call_target, elen);
+            memcpy(payload + elen, ins->call_out, blen);
+            plen = (uint8_t)(elen + blen);
+            if (emit_instr(code, OP_CALL_BLOCK, payload, plen) != 0) {
                 return -1;
             }
             break;

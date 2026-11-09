@@ -376,6 +376,7 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 | `OP_FREE` | `0x0B` | Variable name **NUL-terminated** — unbind pool value; **`var = null`** |
 | `OP_GUARD` | `0x02` | `uint32` absolute IP of `#or.<block>.<index>` handler + guard expr **NUL-terminated** |
 | `OP_CALL` | `0x03` | `uint32` target block IP + output var name **NUL-terminated** (may be empty) |
+| `OP_CALL_BLOCK` | `0x0E` | Block id expression **NUL-terminated** + bind name **NUL-terminated** (may be empty; bind reserved) |
 | `OP_JUMP` | `0x0D` | `uint32` target block IP |
 | `OP_RETURN` | `0x04` | Empty — pops call or advances `foreach` |
 | `OP_FOREACH` | `0x05` | `uint32` loop block IP + original `foreach(...)` line **NUL-terminated** |
@@ -421,7 +422,7 @@ Conceptual bytecode for `#main`:
 
 - Block headers: `#name` or `#name(a, b)`; exactly one `#main`.
 - Lines under a block are instructions; full-line `--` comments and `--<` … `-->` blocks skipped.
-- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `for(...)`, `call #…`, `jump #…`, lines with `==` (guard), else `assign`.
+- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `for(...)`, `call #…`, **`call block` *expr***, `jump #…`, lines with `==` (guard), else `assign`.
 
 **Compile-time linking:**
 
@@ -439,6 +440,7 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 | **Variables** | v0.2: tagged **BOOL**, **NUMBER**, **STRING** (INLINE ≤127 B or REF pool + slice views). Details: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md). |
 | **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to `#or` handler IP or exit 2 if unmapped. |
 | **Call** | Push return IP, jump to target block; clears “entered via jump” flag. |
+| **Call block** | Source line **`call block` *expr*** — *expr* is evaluated at run time to a **whole NUMBER** **block id** (see block directory); same call/return stack as **`call #…`**. PANIC: **`call.block.arg`**, **`call.block.id`**, **`call.block.notfound`**, **`call.block.limit`**. Details: [CALL_BLOCK.md](./CALL_BLOCK.md). |
 | **Jump** | Set IP to target block; **clear** active `for`/`foreach` frames; mark entry as via jump (no call frame). |
 | **Return** | Pop **call** frame first if any; else if inside `foreach` / `for` body: next iteration or resume after the loop; else exit 0 (complete). |
 | **Foreach** | Reads collection variable as comma-separated list; binds item var; enters loop block; `return` advances iterator. |

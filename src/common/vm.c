@@ -733,6 +733,8 @@ static const char *opcode_name(uint8_t opcode) {
         return "GUARD";
     case OP_CALL:
         return "CALL";
+    case OP_CALL_BLOCK:
+        return "CALL_BLOCK";
     case OP_RETURN:
         return "RETURN";
     case OP_FOREACH:
@@ -799,6 +801,69 @@ static int vm_block_index(const FlatBytecode *bc, uint32_t ip) {
         }
     }
     return -1;
+}
+
+static int vm_number_to_u32_block_id(double d, uint32_t *out) {
+    if (!out || d != d || d < 0.0 || d > (double)UINT32_MAX) {
+        return -1;
+    }
+    if (floor(d) != d) {
+        return -1;
+    }
+    *out = (uint32_t)d;
+    return 0;
+}
+
+static int vm_ip_for_block_id(const FlatBytecode *bc, uint32_t block_id, uint32_t *out_ip) {
+    size_t i;
+
+    if (!bc || !bc->blocks || !out_ip) {
+        return -1;
+    }
+    for (i = 0; i < bc->block_count; i++) {
+        if (bc->blocks[i].block_id == block_id) {
+            *out_ip = bc->blocks[i].offset;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static int vm_eval_block_id_expr(VmState *st, const char *expr, uint32_t *out_id) {
+    FlatValue v;
+    char (*names)[64] = NULL;
+    FlatValue *vals = NULL;
+    int i;
+    int rc = -1;
+
+    if (!st || !expr || !out_id) {
+        return -1;
+    }
+    names = calloc(st->var_slots_max > 0 ? st->var_slots_max : 1u, 64);
+    vals = calloc(st->var_slots_max > 0 ? st->var_slots_max : 1u, sizeof *vals);
+    if (!names || !vals) {
+        goto done;
+    }
+    var_names_table(st, names);
+    for (i = 0; i < st->var_count; i++) {
+        vals[i] = st->vars[i].val;
+    }
+    if (flat_value_parse_assign_rhs(expr, &v, st->pool, st->coll, vals, st->var_count, names) != 0) {
+        goto done;
+    }
+    if (v.tag != VAL_NUMBER) {
+        rc = -2;
+        goto done;
+    }
+    if (vm_number_to_u32_block_id(v.u.number, out_id) != 0) {
+        rc = -3;
+        goto done;
+    }
+    rc = 0;
+done:
+    free(vals);
+    free(names);
+    return rc;
 }
 
 static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, uint16_t native_id,
@@ -1137,6 +1202,55 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             memcpy(&target, payload, 4);
             if (st.call_sp >= VM_MAX_CALL) {
                 return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
+            }
+            st.via_jump = 0;
+            st.calls[st.call_sp++].return_ip = ip + 2u + payload_size;
+            ip = target;
+            continue;
+        }
+        case OP_CALL_BLOCK: {
+            const char *expr;
+            uint32_t block_id = 0;
+            uint32_t target = 0;
+            int er;
+
+            if (payload_size < 2 || payload[0] == '\0') {
+                if (vm_jump_panic_any(&st, bc, &ip, "call.block.arg", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
+            expr = (const char *)payload;
+            er = vm_eval_block_id_expr(&st, expr, &block_id);
+            if (er == -2) {
+                if (vm_jump_panic_any(&st, bc, &ip, "call.block.arg", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
+            if (er == -3) {
+                if (vm_jump_panic_any(&st, bc, &ip, "call.block.id", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
+            if (er != 0) {
+                if (vm_jump_panic_any(&st, bc, &ip, "call.block.arg", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
+            if (vm_ip_for_block_id(bc, block_id, &target) != 0) {
+                if (vm_jump_panic_any(&st, bc, &ip, "call.block.notfound", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
+            if (st.call_sp >= VM_MAX_CALL) {
+                if (vm_jump_panic_any(&st, bc, &ip, "call.block.limit", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
             }
             st.via_jump = 0;
             st.calls[st.call_sp++].return_ip = ip + 2u + payload_size;

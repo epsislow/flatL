@@ -162,6 +162,9 @@ static FgirInstrKind classify(const char *line) {
     if (starts_with_kw(line, "for")) {
         return FGIR_FOR;
     }
+    if (starts_with_kw(line, "call block")) {
+        return FGIR_CALL_BLOCK;
+    }
     if (starts_with_kw(line, "call")) {
         return FGIR_CALL;
     }
@@ -215,6 +218,27 @@ static int parse_block_header(char *line, FgirBlock *b) {
         snprintf(b->label, sizeof b->label, "#%s", trim(p));
     }
     return 0;
+}
+
+static void parse_call_block_extras(FgirInstr *ins) {
+    char buf[FGIR_MAX_LINE];
+    char *expr;
+    char *arrow;
+
+    snprintf(buf, sizeof buf, "%s", ins->text);
+    expr = buf + strlen("call block");
+    while (*expr == ' ' || *expr == '\t') {
+        expr++;
+    }
+    arrow = strstr(expr, "->");
+    if (arrow) {
+        snprintf(ins->call_out, sizeof ins->call_out, "%s", trim(arrow + 2));
+        *arrow = '\0';
+        trim(expr);
+    } else {
+        ins->call_out[0] = '\0';
+    }
+    snprintf(ins->call_target, sizeof ins->call_target, "%s", expr);
 }
 
 static void parse_call_extras(FgirInstr *ins) {
@@ -443,6 +467,15 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 return -1;
             }
             ins->index = b->instr_count + 1;
+            if (ins->kind == FGIR_CALL_BLOCK) {
+                parse_call_block_extras(ins);
+                if (ins->call_target[0] == '\0') {
+                    snprintf(err, err_size, "%s:%d: call block requires a block id expression",
+                             path, line_no);
+                    fclose(f);
+                    return -1;
+                }
+            }
             if (ins->kind == FGIR_CALL || ins->kind == FGIR_JUMP) {
                 parse_call_extras(ins);
             }

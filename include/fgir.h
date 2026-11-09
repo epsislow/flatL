@@ -26,6 +26,7 @@ typedef enum {
     FGIR_ASSIGN,
     FGIR_GUARD,
     FGIR_CALL,
+    FGIR_CALL_BLOCK,
     FGIR_FOREACH,
     FGIR_FOR,
     FGIR_RAISE_PANIC,
