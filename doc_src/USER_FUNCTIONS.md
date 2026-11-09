@@ -46,6 +46,6 @@ Lines of the form `native(...) -> var` are compiled as **ASSIGN**, not I/O.
 
 `flc` emits an optional **FFUN** section in v5 bytecode; `flvm` does not consume it at run time (toolchain metadata).
 
-## Modules (phase H — partial)
+## Modules (`.fmod`, v0.4)
 
-`mod(` / `export` are parsed in headers; `use fmod` linking is not implemented yet.
+For compile-time libraries with **`export`** and `use fmod "path" as alias`, see **[FMOD_MODULES.md](./FMOD_MODULES.md)**.

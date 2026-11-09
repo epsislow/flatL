@@ -197,7 +197,7 @@ Builds **`docs/doc_site/`** (GitHub Pages bundle): static HTML + JS viewer over 
 
 | Input | Role |
 |-------|------|
-| `doc_src/index.json` | Table of contents (`id`, `label`, `file` relative to `doc_src/`) |
+| `doc_src/index.json` | Table of contents (`id`, `label`, `file` relative to `doc_src/`) — includes **User functions**, **Modules (.fmod)**, **fleditor** |
 | `doc_src/**/*.md` | Section bodies |
 | `src/gen_doc_site/templates/` | Copied shell (`index.html`, CSS, `doc-viewer.js`) |
 

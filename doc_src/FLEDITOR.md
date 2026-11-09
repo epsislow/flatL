@@ -23,21 +23,23 @@
    # without emcc: make rebuild-native, then make fleditor-wasm when emsdk is available
    ```
 
-2. Build offline docs (optional, for **Docs** link in the editor):
+2. Build offline docs (required for the **Docs** toolbar link — TOC from `doc_src/index.json`, including **Modules (.fmod)** and **User functions**):
 
    ```bash
    make docs
    ```
 
+   Without `make docs`, `docs/doc_site/js/doc-data.js` is stale and new sections will not appear in the sidebar.
+
 3. Serve the **Pages layout** (`docs/` root):
 
    ```bash
-   make fleditor-serve
-   # Port in use: make fleditor-serve-forced
-   # or: node docs/fleditor_site/node/serve.js 8765
+   make fleditor-serve-forced
+   make fleditor-stop    # free port 8765
+   make fleditor-node-check   # WSL1: apt node may fail; launcher uses Windows node.exe
    ```
 
-   **WSL:** if `make fleditor-serve` says `node: Permission denied`, use `make fleditor-serve NODE=/usr/bin/node`.
+   See [docs/fleditor_site/node/README.md](../docs/fleditor_site/node/README.md) for WSL1 / Node details.
 
 4. Open `http://127.0.0.1:8765/` (redirects to **fleditor**) or `http://127.0.0.1:8765/fleditor_site/` and click **Run**.
 
