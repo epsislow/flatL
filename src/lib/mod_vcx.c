@@ -3,6 +3,8 @@
 #include "flat_vcx.h"
 #include "flat_value.h"
 
+#define VCX_NAME_LIST_MAX 64
+
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -160,6 +162,106 @@ static int split_three_args(char *inner, char **first, char **second, char **thi
     return 0;
 }
 
+static int split_four_args(char *inner, char **a, char **b, char **c, char **d) {
+    int depth = 0;
+    char quote = 0;
+    char *p;
+    char *c1 = NULL;
+    char *c2 = NULL;
+    char *c3 = NULL;
+    for (p = inner; *p; p++) {
+        if (!quote && (*p == '\'' || *p == '"')) {
+            quote = *p;
+        } else if (quote && *p == quote) {
+            quote = 0;
+        } else if (!quote && (*p == '[' || *p == '(')) {
+            depth++;
+        } else if (!quote && (*p == ']' || *p == ')')) {
+            if (depth > 0) {
+                depth--;
+            }
+        } else if (!quote && depth == 0 && *p == ',') {
+            if (!c1) {
+                *p = '\0';
+                c1 = p;
+            } else if (!c2) {
+                *p = '\0';
+                c2 = p;
+            } else if (!c3) {
+                *p = '\0';
+                c3 = p;
+                break;
+            }
+        }
+    }
+    if (!c1 || !c2 || !c3) {
+        return -1;
+    }
+    *a = flat_native_trim(inner);
+    *b = flat_native_trim(c1 + 1);
+    *c = flat_native_trim(c2 + 1);
+    *d = flat_native_trim(c3 + 1);
+    return 0;
+}
+
+static int value_to_name_string(FlatNativeCtx *ctx, const FlatValue *v, char *name, size_t name_sz) {
+    if (!v || !name) {
+        return -1;
+    }
+    if (v->tag == VAL_STR_INLINE) {
+        if (v->u.ins.len == 0) {
+            return -1;
+        }
+        snprintf(name, name_sz, "%s", v->u.ins.bytes);
+        return 0;
+    }
+    if (v->tag == VAL_STR_REF && ctx->pool) {
+        if (flat_value_get_cstr(v, ctx->pool, name, name_sz) != 0) {
+            return -1;
+        }
+        if (name[0] == '\0') {
+            return -1;
+        }
+        return 0;
+    }
+    return -1;
+}
+
+static int parse_name_list_expr(FlatNativeCtx *ctx, const char *expr,
+                                char names[VCX_NAME_LIST_MAX][FLAT_VAR_NAME_MAX + 1], int *out_n) {
+    FlatValue v;
+    int len;
+    int i;
+    FlatValue item;
+
+    if (!out_n) {
+        return -1;
+    }
+    *out_n = 0;
+    if (parse_expr(ctx, expr, &v) != 0) {
+        return -1;
+    }
+    if (v.tag != VAL_LIST) {
+        return -1;
+    }
+    if (flat_list_len(ctx->coll, v.u.coll_id, &len) != 0 || len < 0) {
+        return -1;
+    }
+    if (len > VCX_NAME_LIST_MAX) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        if (flat_list_get(ctx->coll, v.u.coll_id, i, &item) != 0) {
+            return -1;
+        }
+        if (value_to_name_string(ctx, &item, names[i], sizeof names[i]) != 0) {
+            return -1;
+        }
+    }
+    *out_n = len;
+    return 0;
+}
+
 static FlatVcxRuntime *rt_from(FlatNativeCtx *ctx) {
     if (ctx && ctx->vcx) {
         return ctx->vcx;
@@ -174,6 +276,26 @@ int flat_native_vcx_current(FlatNativeCtx *ctx) {
     }
     ctx->panic_detail[0] = '\0';
     return vcx_out_num(ctx, (double)flat_vcx_current_id(rt));
+}
+
+int flat_native_vcx_isactive(FlatNativeCtx *ctx) {
+    FlatVcxRuntime *rt = rt_from(ctx);
+    uint32_t id;
+    int active = 0;
+    char inner[512];
+
+    if (!rt) {
+        return vcx_fail(ctx, "vcx.isactive");
+    }
+    ctx->panic_detail[0] = '\0';
+    snprintf(inner, sizeof inner, "%s", ctx->inner ? ctx->inner : "");
+    if (inner[0] == '\0' || parse_ctx_id(ctx, inner, &id) != 0) {
+        return vcx_fail(ctx, "vcx.isactive.arg");
+    }
+    if (flat_vcx_is_active(rt, id, &active, ctx->panic_detail, sizeof ctx->panic_detail) != 0) {
+        return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.isactive.ctx");
+    }
+    return vcx_out_bool(ctx, active);
 }
 
 int flat_native_vcx_set(FlatNativeCtx *ctx) {
@@ -376,4 +498,77 @@ int flat_native_vcx_vars_avail(FlatNativeCtx *ctx) {
 
 int flat_native_vcx_vars_max(FlatNativeCtx *ctx) {
     return vcx_ctx_stat(ctx, "vcx.varsMax", flat_vcx_vars_max);
+}
+
+int flat_native_vcx_destroy(FlatNativeCtx *ctx) {
+    FlatVcxRuntime *rt = rt_from(ctx);
+    uint32_t id;
+    char inner[512];
+
+    if (!rt) {
+        return vcx_fail(ctx, "vcx.destroy");
+    }
+    ctx->panic_detail[0] = '\0';
+    snprintf(inner, sizeof inner, "%s", ctx->inner ? ctx->inner : "");
+    if (inner[0] == '\0' || parse_ctx_id(ctx, inner, &id) != 0) {
+        return vcx_fail(ctx, "vcx.destroy.arg");
+    }
+    if (flat_vcx_destroy_ctx(rt, id, ctx->coll, ctx->pool, ctx->file_tbl, ctx->panic_detail,
+                             sizeof ctx->panic_detail) != 0) {
+        return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.destroy");
+    }
+    if (ctx->io_status) {
+        *ctx->io_status = FLAT_IO_OK;
+    }
+    return 0;
+}
+
+int flat_native_vcx_vars_copy_by_names(FlatNativeCtx *ctx) {
+    FlatVcxRuntime *rt = rt_from(ctx);
+    char inner[2048];
+    char *a;
+    char *b;
+    char *c;
+    char *d;
+    uint32_t src;
+    uint32_t dst;
+    char src_names[VCX_NAME_LIST_MAX][FLAT_VAR_NAME_MAX + 1];
+    char dst_names[VCX_NAME_LIST_MAX][FLAT_VAR_NAME_MAX + 1];
+    int src_n = 0;
+    int dst_n = 0;
+    const char *src_ptrs[VCX_NAME_LIST_MAX];
+    const char *dst_ptrs[VCX_NAME_LIST_MAX];
+    int i;
+
+    if (!rt) {
+        return vcx_fail(ctx, "vcx.varsCopyByNames");
+    }
+    ctx->panic_detail[0] = '\0';
+    snprintf(inner, sizeof inner, "%s", ctx->inner ? ctx->inner : "");
+    if (split_four_args(inner, &a, &b, &c, &d) != 0) {
+        return vcx_fail(ctx, "vcx.varsCopyByNames.arg");
+    }
+    if (parse_ctx_id(ctx, a, &src) != 0 || parse_ctx_id(ctx, b, &dst) != 0) {
+        return vcx_fail(ctx, "vcx.varsCopyByNames.arg");
+    }
+    if (parse_name_list_expr(ctx, c, src_names, &src_n) != 0 ||
+        parse_name_list_expr(ctx, d, dst_names, &dst_n) != 0) {
+        return vcx_fail(ctx, "vcx.varsCopyByNames.list");
+    }
+    if (src_n != dst_n) {
+        return vcx_fail(ctx, "vcx.varsCopyByNames.length");
+    }
+    for (i = 0; i < src_n; i++) {
+        src_ptrs[i] = src_names[i];
+        dst_ptrs[i] = dst_names[i];
+    }
+    if (flat_vcx_vars_copy_by_names(rt, src, dst, src_ptrs, dst_ptrs, src_n, ctx->coll, ctx->pool,
+                                    ctx->file_tbl, ctx->mem_live, ctx->panic_detail,
+                                    sizeof ctx->panic_detail) != 0) {
+        return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.varsCopyByNames");
+    }
+    if (ctx->io_status) {
+        *ctx->io_status = FLAT_IO_OK;
+    }
+    return 0;
 }

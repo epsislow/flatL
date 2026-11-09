@@ -1,0 +1,7 @@
+use native vcx with V
+
+#main
+  a = V.create(5)
+  b = V.create(5)
+  V.varsCopyByNames(a, b, ['missing'], ['y'])
+  OK

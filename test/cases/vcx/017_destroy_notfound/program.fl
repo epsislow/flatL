@@ -1,0 +1,8 @@
+use native vcx with V
+
+#main
+  scratch = V.create(5)
+  V.set(1)
+  V.destroy(scratch)
+  V.destroy(scratch)
+  OK

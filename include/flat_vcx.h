@@ -6,7 +6,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define FLAT_VCX_MAX_CONTEXTS 32
+#define FLAT_VCX_MAX_CONTEXTS 64
 
 typedef struct FlatVcxVar {
     char name[FLAT_VAR_NAME_MAX + 1];
@@ -35,6 +35,9 @@ FlatVcxRuntime *flat_vcx_runtime_active(void);
 
 uint32_t flat_vcx_current_id(const FlatVcxRuntime *rt);
 
+int flat_vcx_is_active(const FlatVcxRuntime *rt, uint32_t ctx_id, int *out_active,
+                       char *panic_detail, size_t panic_sz);
+
 int flat_vcx_set(FlatVcxRuntime *rt, uint32_t ctx_id, char *panic_detail, size_t panic_sz);
 int flat_vcx_create(FlatVcxRuntime *rt, uint32_t capacity, uint32_t *out_id, char *panic_detail,
                     size_t panic_sz);
@@ -59,6 +62,16 @@ int flat_vcx_vars_copy_like(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id
                             const char *pattern, FlatCollectionPool *coll, FlatStringPool *pool,
                             FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
                             size_t panic_sz);
+
+int flat_vcx_destroy_ctx(FlatVcxRuntime *rt, uint32_t ctx_id, FlatCollectionPool *coll,
+                         FlatStringPool *pool, FlatFileTable *files, char *panic_detail,
+                         size_t panic_sz);
+
+int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
+                                const char *const *src_names, const char *const *dst_names, int n,
+                                FlatCollectionPool *coll, FlatStringPool *pool,
+                                FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
+                                size_t panic_sz);
 
 int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectionPool *coll,
                              FlatStringPool *pool, FlatFileTable *files);

@@ -8,6 +8,8 @@ use native vcx with V
 
 Compile-time variable **names** remain program-wide (no lexical scope). VCX duplicates **values** per context ID, not names.
 
+**Concurrent contexts:** at most **`FLAT_VCX_MAX_CONTEXTS` (64)** including global (ID **1**). Further **`V.create`** → PANIC **`vcx.create.limit`**. **`V.destroy(ctx)`** frees a non-global context and its values so the slot can be reused by a later **`create`**.
+
 ## Quick example
 
 ```text
@@ -45,6 +47,7 @@ With **`use native vcx with V`**, examples use the alias **`V.*`**; the full nam
 | Call | Arguments | Returns | Panic (no modifier) |
 |------|-----------|---------|---------------------|
 | **`V.current()`** | — | NUMBER — active context ID (global is **1**) | **`vcx.current`** — no VCX runtime |
+| **`V.isactive(ctx)`** | **`ctx`** — context ID (usually an **id you already hold**, not **`current()`**) | BOOL — **`true`** iff **`ctx`** equals the active context | **`vcx.isactive.arg`**, **`vcx.isactive.ctx`** |
 | **`V.set(ctx)`** | **`ctx`** — context ID | — | **`vcx.set.arg`**, **`vcx.set.invalid`** |
 | **`V.create(capacity)`** | **`capacity`** — positive **whole** NUMBER (≥ 1) | NUMBER — new context ID (does **not** switch active) | **`vcx.create.arg`**, **`vcx.create`**, **`vcx.create.limit`** |
 | **`V.var(srcCtx, name)`** | **`srcCtx`** — ID; **`name`** — STRING (literal or variable holding name) | any value (deep copy from **`srcCtx`**) | **`vcx.var.arg`**, **`vcx.var.missing`**, **`vcx.var.copy`** |
@@ -54,8 +57,36 @@ With **`use native vcx with V`**, examples use the alias **`V.*`**; the full nam
 | **`V.varsUsed(ctx)`** | context ID | NUMBER — bound names in that context | **`vcx.varsUsed.arg`**, **`vcx.varsUsed.ctx`** |
 | **`V.varsAvail(ctx)`** | context ID | NUMBER — **`varsMax − varsUsed`** | **`vcx.varsAvail.arg`**, **`vcx.varsAvail.ctx`** |
 | **`V.varsMax(ctx)`** | context ID | NUMBER — **capacity** of that context | **`vcx.varsMax.arg`**, **`vcx.varsMax.ctx`** |
+| **`V.destroy(ctx)`** | context ID (not global) | — | **`vcx.destroy.arg`**, **`vcx.destroy.global`**, **`vcx.destroy.isactive`**, **`vcx.destroy.notfound`** |
+| **`V.varsCopyByNames(src, dst, srcNames, dstNames)`** | two IDs; two **LIST**s of **STRING** names | — | **`vcx.varsCopyByNames.arg`**, **`.list`**, **`.length`**, **`.name`**, **`.ctx`**, **`.missing`**, **`.capacity`**, **`.copy`** |
 
 **`varsCopy` / `varsCopyLike`:** deep copy of **values** into **`dst`** (atomic for the operation). **`src == dst`** is a no-op for **`varsCopy`**. **`varsCopyLike`** applies a **glob** to **variable names** only (`*`, `?`), case-sensitive, **whole** name match.
+
+**`varsCopyByNames`:** for each index `i`, copies **`src[srcNames[i]]`** → **`dst[dstNames[i]]`** (deep copy, same rules as **`varsCopy`**). **`srcNames`** and **`dstNames`** must be **LIST** values of the **same length**; every element must be a non-empty **STRING** that is a valid variable name (not `null` / `true` / `false`). Missing source name → PANIC. Destination capacity is checked before any write; failure rolls back **`dst`** (atomic). **`n == 0`** (empty lists) is a no-op.
+
+**`destroy`:** releases all values in the context, frees its storage, and removes it from the runtime. **Global (ID 1)** cannot be destroyed. The **active** context cannot be destroyed — **`V.set`** elsewhere first (e.g. back to global). Unknown or already destroyed ID → **`vcx.destroy.notfound`**. Destroy does not change **`V.current()`** unless you destroyed a context that was not active (active unchanged).
+
+**`isactive` vs `current`:** **`V.current()`** returns the active context ID — that id is active **by definition**. Use **`isactive`** when you have **another** id (saved from **`create`**, global **`1`**, **`calleVcx`**, …) and want **`true`/`false`** without comparing numbers yourself. **`V.isactive(V.current())`** is always **`true`** when the runtime exists; do not use it in executors — pass the **foreign** id instead.
+
+Typical checks: **`V.isactive(1)`** while running inside a scratch context (expect **`false`**); **`V.isactive(savedScratch)`** while still on global (expect **`false`**) before **`V.set(savedScratch)`**. The id expression must be readable in the **current** storage (see **`set`** / **`destroy`**): a name bound only in global is not visible after **`V.set(scratch)`**.
+
+### `destroy` + `varsCopyByNames` example
+
+```text
+use native vcx with V
+
+#main
+  user = 'Ada'
+  scratch = V.create(10)
+  V.varsCopyByNames(1, scratch, ['user'], ['who'])
+  V.set(scratch)
+  io.outln(who)
+  V.set(1)
+  V.destroy(scratch)
+  OK
+```
+
+Call **`varsCopyByNames`** from a context where context **ID variables** (e.g. `src`, `dst`) are bound — typically **global (1)** after **`V.set(1)`**, not from inside an isolated scratch context that does not hold those IDs.
 
 ## `var_slots` (compile) vs context **capacity** (runtime)
 
@@ -101,6 +132,7 @@ Restore **`tout`** / **`terr`** when you need terminal output again; captured te
 | Situation | Typical reason string |
 |-----------|------------------------|
 | Bad context ID on **`set`** | **`vcx.set.invalid`** |
+| Bad **`ctx`** on **`isactive`** | **`vcx.isactive.ctx`** |
 | Bad args / alloc for **`create`** | **`vcx.create.arg`**, **`vcx.create.limit`**, **`vcx.create`** |
 | Missing var on **`var`** | **`vcx.var.missing`** |
 | Deep copy failure on **`var`** | **`vcx.var.copy`** |
@@ -108,5 +140,8 @@ Restore **`tout`** / **`terr`** when you need terminal output again; captured te
 | Bad / missing arg on **`vars*`** stats | **`vcx.<fn>.arg`** |
 | Copy capacity / failure | **`vcx.varsCopy.capacity`**, **`vcx.varsCopy.copy`** (and same for **`varsCopyLike`**) |
 | Empty or bad glob pattern | **`vcx.varsCopyLike.pattern`** |
+| **`destroy`** on global / active / unknown | **`vcx.destroy.global`**, **`vcx.destroy.isactive`**, **`vcx.destroy.notfound`** |
+| **`varsCopyByNames`** bad lists / length / names | **`vcx.varsCopyByNames.list`**, **`.length`**, **`.name`** |
+| **`varsCopyByNames`** missing source / capacity / copy | **`vcx.varsCopyByNames.missing`**, **`.capacity`**, **`.copy`** |
 
 Line modifiers **`?`** / **`~`** follow the usual native rules ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).

@@ -67,6 +67,7 @@ static void register_embedded_date(void) {
 
 static void register_embedded_vcx(void) {
     flat_native_plugin_register(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
     flat_native_plugin_register(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
     flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
     flat_native_plugin_register(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
@@ -76,6 +77,8 @@ static void register_embedded_vcx(void) {
     flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_USED, flat_native_vcx_vars_used);
     flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_AVAIL, flat_native_vcx_vars_avail);
     flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_MAX, flat_native_vcx_vars_max);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_DESTROY, flat_native_vcx_destroy);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY_BY_NAMES, flat_native_vcx_vars_copy_by_names);
     g_loaded_vcx = 1;
 }
 
@@ -226,6 +229,7 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
             return 0;
         }
         flat_native_plugin_register(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
         flat_native_plugin_register(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
         flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
         flat_native_plugin_register(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
@@ -235,6 +239,8 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_USED, flat_native_vcx_vars_used);
         flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_AVAIL, flat_native_vcx_vars_avail);
         flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_MAX, flat_native_vcx_vars_max);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_DESTROY, flat_native_vcx_destroy);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY_BY_NAMES, flat_native_vcx_vars_copy_by_names);
         g_loaded_vcx = 1;
         return 0;
     }

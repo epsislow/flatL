@@ -477,6 +477,21 @@ static int panic_ctx(char *panic_detail, size_t panic_sz, const char *fn) {
     return -1;
 }
 
+int flat_vcx_is_active(const FlatVcxRuntime *rt, uint32_t ctx_id, int *out_active,
+                       char *panic_detail, size_t panic_sz) {
+    int ix;
+
+    if (!rt || !out_active) {
+        return -1;
+    }
+    ix = ctx_index_by_id(rt, ctx_id);
+    if (ix < 0) {
+        return panic_ctx(panic_detail, panic_sz, "vcx.isactive");
+    }
+    *out_active = (rt->active_ix == ix) ? 1 : 0;
+    return 0;
+}
+
 int flat_vcx_get_var(const FlatVcxRuntime *rt, uint32_t ctx_id, const char *name, FlatValue *out,
                      FlatCollectionPool *coll, FlatStringPool *pool, FlatFileTable *files,
                      char *panic_detail, size_t panic_sz) {
@@ -758,4 +773,168 @@ int flat_vcx_vars_copy_like(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id
     ud.pattern = pattern;
     return copy_selected(rt, src_id, dst_id, select_pattern, &ud, coll, pool, files, live,
                          panic_detail, panic_sz, "vcx.varsCopyLike");
+}
+
+int flat_vcx_destroy_ctx(FlatVcxRuntime *rt, uint32_t ctx_id, FlatCollectionPool *coll,
+                         FlatStringPool *pool, FlatFileTable *files, char *panic_detail,
+                         size_t panic_sz) {
+    int ix;
+    int last;
+
+    if (!rt) {
+        return -1;
+    }
+    if (ctx_id == 1u) {
+        snprintf(panic_detail, panic_sz, "vcx.destroy.global");
+        return -1;
+    }
+    ix = ctx_index_by_id(rt, ctx_id);
+    if (ix < 0) {
+        snprintf(panic_detail, panic_sz, "vcx.destroy.notfound");
+        return -1;
+    }
+    if (rt->active_ix == ix) {
+        snprintf(panic_detail, panic_sz, "vcx.destroy.isactive");
+        return -1;
+    }
+    sync_bind_var_count_to_active(rt);
+    release_context_vars(&rt->contexts[ix], coll, pool, files);
+    free(rt->contexts[ix].vars);
+    rt->contexts[ix].vars = NULL;
+    last = rt->context_count - 1;
+    if (ix != last) {
+        rt->contexts[ix] = rt->contexts[last];
+        if (rt->active_ix == last) {
+            rt->active_ix = ix;
+        }
+    }
+    rt->context_count--;
+    return 0;
+}
+
+int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
+                                const char *const *src_names, const char *const *dst_names, int n,
+                                FlatCollectionPool *coll, FlatStringPool *pool,
+                                FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
+                                size_t panic_sz) {
+    int src_ix;
+    int dst_ix;
+    FlatVcxContext *src;
+    FlatVcxContext *dst;
+    VcxCopyStage *stage = NULL;
+    int stage_n = 0;
+    int i;
+    int new_names = 0;
+    int src_vi;
+    FlatVcxVar *bak = NULL;
+    int bak_n = 0;
+    int rc = -1;
+    const char *prefix = "vcx.varsCopyByNames";
+
+    if (!rt || !src_names || !dst_names) {
+        return -1;
+    }
+    if (n < 0) {
+        return -1;
+    }
+    if (n == 0) {
+        return 0;
+    }
+    sync_bind_var_count_to_active(rt);
+    src_ix = ctx_index_by_id(rt, src_id);
+    dst_ix = ctx_index_by_id(rt, dst_id);
+    if (src_ix < 0 || dst_ix < 0) {
+        snprintf(panic_detail, panic_sz, "%s.ctx", prefix);
+        return -1;
+    }
+    src = &rt->contexts[src_ix];
+    dst = &rt->contexts[dst_ix];
+
+    for (i = 0; i < n; i++) {
+        const char *sn = src_names[i];
+        const char *dn = dst_names[i];
+        if (!sn || !dn || sn[0] == '\0' || dn[0] == '\0') {
+            snprintf(panic_detail, panic_sz, "%s.name", prefix);
+            return -1;
+        }
+        if (var_name_forbidden(sn) || var_name_forbidden(dn)) {
+            snprintf(panic_detail, panic_sz, "%s.name", prefix);
+            return -1;
+        }
+        src_vi = ctx_find_var(src, sn);
+        if (src_vi < 0) {
+            snprintf(panic_detail, panic_sz, "%s.missing", prefix);
+            return -1;
+        }
+        if (ctx_find_var(dst, dn) < 0) {
+            new_names++;
+        }
+    }
+    if (dst->var_count + new_names > (int)dst->capacity) {
+        snprintf(panic_detail, panic_sz, "%s.capacity", prefix);
+        return -1;
+    }
+
+    stage = malloc((size_t)n * sizeof *stage);
+    if (!stage) {
+        snprintf(panic_detail, panic_sz, "%s.copy", prefix);
+        return -1;
+    }
+    memset(stage, 0, (size_t)n * sizeof *stage);
+
+    for (i = 0; i < n; i++) {
+        src_vi = ctx_find_var(src, src_names[i]);
+        snprintf(stage[i].name, sizeof stage[i].name, "%s", dst_names[i]);
+        if (flat_vcx_deep_copy_value(&src->vars[src_vi].val, &stage[i].val, coll, pool, files) !=
+            0) {
+            snprintf(panic_detail, panic_sz, "%s.copy", prefix);
+            goto fail;
+        }
+        stage[i].valid = 1;
+        stage_n++;
+    }
+
+    if (ctx_backup(dst, coll, pool, &bak, &bak_n) != 0) {
+        snprintf(panic_detail, panic_sz, "%s.copy", prefix);
+        goto fail;
+    }
+
+    for (i = 0; i < stage_n; i++) {
+        if (ctx_set_var(dst, stage[i].name, &stage[i].val, coll, pool, files, live) != 0) {
+            ctx_restore(dst, coll, pool, files, live, bak, bak_n);
+            bak = NULL;
+            snprintf(panic_detail, panic_sz, "%s.copy", prefix);
+            goto fail;
+        }
+    }
+    if (bak) {
+        for (i = 0; i < bak_n; i++) {
+            flat_value_release(coll, pool, &bak[i].val);
+        }
+        free(bak);
+        bak = NULL;
+    }
+    free(stage);
+    stage = NULL;
+    if (rt->active_ix == dst_ix && rt->bind_attached) {
+        refresh_bind_from_active(rt);
+    }
+    return 0;
+
+fail:
+    if (stage) {
+        for (i = 0; i < stage_n; i++) {
+            if (stage[i].valid) {
+                flat_value_release(coll, pool, &stage[i].val);
+            }
+        }
+        free(stage);
+    }
+    if (bak) {
+        for (i = 0; i < bak_n; i++) {
+            flat_value_release(coll, pool, &bak[i].val);
+        }
+        free(bak);
+    }
+    return rc;
 }

@@ -1,0 +1,10 @@
+suite = "vcx"
+id = 20
+desc = "varsCopyByNames list length mismatch"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "vcx.varsCopyByNames.length"
+stdout_contains = "unhandled PANIC"

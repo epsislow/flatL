@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  srcCtx = V.create(10)
+  dstCtx = V.create(1)
+  V.set(srcCtx)
+  a = 1
+  b = 2
+  c = 3
+  V.set(1)
+  V.varsCopyByNames(srcCtx, dstCtx, ['a', 'b', 'c'], ['x', 'y', 'z'])
+  OK

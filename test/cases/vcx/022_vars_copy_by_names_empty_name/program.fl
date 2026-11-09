@@ -1,0 +1,10 @@
+use native vcx with V
+
+#main
+  a = V.create(5)
+  b = V.create(5)
+  V.set(a)
+  x = 1
+  V.set(1)
+  V.varsCopyByNames(a, b, ['x'], ['null'])
+  OK

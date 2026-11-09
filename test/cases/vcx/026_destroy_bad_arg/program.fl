@@ -1,0 +1,5 @@
+use native vcx with V
+
+#main
+  V.destroy()
+  OK

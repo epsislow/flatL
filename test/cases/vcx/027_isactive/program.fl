@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  scratch = V.create(10)
+  io.outln(V.isactive(1))
+  io.outln(V.isactive(scratch))
+  V.set(scratch)
+  io.outln(V.isactive(1))
+  V.set(1)
+  io.outln(V.isactive(1))
+  io.outln(V.isactive(scratch))
+  OK

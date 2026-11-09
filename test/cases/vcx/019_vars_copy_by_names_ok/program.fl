@@ -1,0 +1,14 @@
+use native vcx with V
+
+#main
+  srcCtx = V.create(10)
+  dstCtx = V.create(10)
+  V.set(srcCtx)
+  foo = 1
+  bar = 2
+  V.set(1)
+  V.varsCopyByNames(srcCtx, dstCtx, ['foo', 'bar'], ['x', 'y'])
+  V.set(dstCtx)
+  io.outln(x)
+  io.outln(y)
+  OK

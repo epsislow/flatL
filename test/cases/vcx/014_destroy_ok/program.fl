@@ -1,0 +1,12 @@
+use native vcx with V
+
+#main
+  scratch = V.create(10)
+  V.set(1)
+  gx = 11
+  V.destroy(scratch)
+  scratch = V.create(10)
+  V.varsCopyByNames(1, scratch, ['gx'], ['lx'])
+  V.set(scratch)
+  io.outln(lx)
+  OK

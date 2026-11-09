@@ -7,6 +7,7 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
         return -1;
     }
     reg(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
+    reg(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
     reg(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
     reg(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
     reg(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
@@ -16,5 +17,7 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_VCX_VARS_USED, flat_native_vcx_vars_used);
     reg(FLAT_NATIVE_VCX_VARS_AVAIL, flat_native_vcx_vars_avail);
     reg(FLAT_NATIVE_VCX_VARS_MAX, flat_native_vcx_vars_max);
+    reg(FLAT_NATIVE_VCX_DESTROY, flat_native_vcx_destroy);
+    reg(FLAT_NATIVE_VCX_VARS_COPY_BY_NAMES, flat_native_vcx_vars_copy_by_names);
     return 0;
 }
