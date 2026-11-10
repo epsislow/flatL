@@ -1,0 +1,13 @@
+#main
+  for(5, i, '#step')
+  io.outln('after')
+  OK
+
+#step
+  io.outln(i)
+  i == 1
+  return
+  next
+
+#or.#step.2
+  next

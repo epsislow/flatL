@@ -257,7 +257,8 @@ Work plan: [`.cursor/plans/jump-or-handlers.plan.md`](../.cursor/plans/jump-or-h
 | `ntimes ≤ 0` | **0 iterations**; execution continues on the line below `for` |
 | Fractional `ntimes` | **Not an error** — effective bound is **`floor(ntimes)`** (same as comparing `i < ntimes` with integer `i`) |
 | `i` | Loop index variable; bound to `0`, `1`, …, `floor(ntimes) - 1` on each entry to `#loop_body` |
-| Body exit | **`return`** from `#loop_body` (no outer `call` frame) advances to the next `i`; when done, resume after `for` |
+| Body exit | **`next`** advances to the next `i` / collection item; **`return`** exits the loop (resume after `for` / `foreach`) |
+| Loop block arg | Third argument: quoted `'#block'`, unquoted `#block`, or a **STRING** variable (e.g. `lbl = '#step'; for(n, i, lbl)`) |
 | Guards in body | Same `#or` / empty-handler **continue** convention as `foreach` (when implemented in VM) |
 
 Example:
@@ -442,7 +443,8 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 | **Call** | Push return IP, jump to target block; clears “entered via jump” flag. |
 | **Call block** | Source line **`call block` *expr*** — *expr* is evaluated at run time to a **whole NUMBER** **block id** (see block directory); same call/return stack as **`call #…`**. PANIC: **`call.block.arg`**, **`call.block.id`**, **`call.block.notfound`**, **`call.block.limit`**. Details: [CALL_BLOCK.md](./CALL_BLOCK.md). |
 | **Jump** | Set IP to target block; **clear** active `for`/`foreach` frames; mark entry as via jump (no call frame). |
-| **Return** | Pop **call** frame first if any; else if inside `foreach` / `for` body: next iteration or resume after the loop; else exit 0 (complete). |
+| **Return** | Pop **call** frame first if any; else if inside `foreach` / `for` body: **exit the loop** (resume after the loop); else exit 0 (complete). |
+| **Next** | Pop **call** frame if any (like `return`); else if inside a loop body: **next iteration**; else complete (exit 0). |
 | **Foreach** | Reads collection variable as comma-separated list; binds item var; enters loop block; `return` advances iterator. |
 | **PANIC** | Keyword in source emits `OP_PANIC`; jumps to handler block (handler may end with `OK`). |
 

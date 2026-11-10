@@ -5,4 +5,4 @@
 
 #step
   io.outln(i)
-  return
+  next

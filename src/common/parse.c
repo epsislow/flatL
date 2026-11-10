@@ -154,6 +154,9 @@ static FgirInstrKind classify(const char *line) {
     if (strcmp(line, "PANIC") == 0) {
         return FGIR_RAISE_PANIC;
     }
+    if (strcmp(line, "next") == 0) {
+        return FGIR_NEXT;
+    }
     if (starts_with_kw(line, "return")) {
         return FGIR_RETURN;
     }
@@ -287,6 +290,25 @@ static void strip_block_quotes(char *t) {
     }
 }
 
+static void parse_loop_third_arg(const char *raw, char *dest, size_t dest_sz) {
+    char buf[FGIR_MAX_LABEL];
+
+    if (!raw || !dest || dest_sz == 0) {
+        if (dest && dest_sz > 0) {
+            dest[0] = '\0';
+        }
+        return;
+    }
+    snprintf(buf, sizeof buf, "%s", raw);
+    trim(buf);
+    strip_block_quotes(buf);
+    if (buf[0] == '#') {
+        snprintf(dest, dest_sz, "%s", buf);
+        return;
+    }
+    snprintf(dest, dest_sz, "%s", buf);
+}
+
 static void parse_for_extras(FgirInstr *ins) {
     /* for(ntimes, i, '#block') */
     const char *s = ins->text;
@@ -306,8 +328,7 @@ static void parse_for_extras(FgirInstr *ins) {
     }
     snprintf(ins->for_limit, sizeof ins->for_limit, "%s", a);
     snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", b);
-    strip_block_quotes(c);
-    snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", c);
+    parse_loop_third_arg(c, ins->foreach_block, sizeof ins->foreach_block);
 }
 
 static void parse_foreach_extras(FgirInstr *ins) {
@@ -329,8 +350,7 @@ static void parse_foreach_extras(FgirInstr *ins) {
     }
     (void)a;
     snprintf(ins->foreach_item, sizeof ins->foreach_item, "%s", b);
-    strip_block_quotes(c);
-    snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", c);
+    parse_loop_third_arg(c, ins->foreach_block, sizeof ins->foreach_block);
 }
 
 static int line_is_use_directive(const char *p) {

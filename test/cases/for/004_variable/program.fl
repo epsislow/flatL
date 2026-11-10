@@ -6,4 +6,4 @@
 
 #step
   io.outln(j)
-  return
+  next

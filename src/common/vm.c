@@ -1,4 +1,5 @@
 #include "vm.h"
+#include "fgir.h"
 #include "flat_date.h"
 #include "flat_file.h"
 #include "flat_io_ctx.h"
@@ -565,16 +566,23 @@ static int eval_for_ntimes(VmState *st, const char *token, int *out_iters) {
     return 0;
 }
 
+static int vm_resolve_loop_block_ip(VmState *st, const FlatBytecode *bc, const char *third_tok,
+                                    uint32_t *out_ip);
+static int vm_loop_line_third_block(const char *line, char *out_tok, size_t out_sz);
+
 /* Returns: 1 = loop pushed; 2 = routed to #panic.any (ip updated); 0 = unhandled panic. */
 static int setup_for(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *line,
                      uint32_t resume_ip, uint32_t block_off, int trace) {
     char limit_tok[64] = "";
     char item[64] = "";
+    char block_tok[FGIR_MAX_LABEL] = "";
     const char *lp = strchr(line, '(');
     const char *rp = strrchr(line, ')');
     ForeachFrame *fr;
     int iters = 0;
     int ev;
+    uint32_t loop_ip = block_off;
+    int br;
 
     if (lp && rp && rp > lp) {
         char inner[256];
@@ -592,6 +600,15 @@ static int setup_for(VmState *st, const FlatBytecode *bc, uint32_t *ip, const ch
             part++;
         }
     }
+    if (vm_loop_line_third_block(line, block_tok, sizeof block_tok) == 0) {
+        br = vm_resolve_loop_block_ip(st, bc, block_tok, &loop_ip);
+        if (br != 0) {
+            if (vm_jump_panic_any(st, bc, ip, "for.loop.block", trace) == 0) {
+                return 2;
+            }
+            return 0;
+        }
+    }
     ev = eval_for_ntimes(st, limit_tok, &iters);
     if (ev != 0) {
         if (vm_jump_panic_any(st, bc, ip, "for.ntimes_type", trace) == 0) {
@@ -604,7 +621,7 @@ static int setup_for(VmState *st, const FlatBytecode *bc, uint32_t *ip, const ch
     }
     fr = &st->loops[st->loop_sp++];
     fr->resume_ip = resume_ip;
-    fr->loop_block_ip = block_off;
+    fr->loop_block_ip = loop_ip;
     snprintf(fr->item_var, sizeof fr->item_var, "%s", item);
     fr->is_for = 1;
     fr->list_id = 0;
@@ -633,6 +650,7 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
                           uint32_t resume_ip, uint32_t block_off, int trace) {
     char coll_expr[512] = "";
     char item[64] = "";
+    char block_tok[FGIR_MAX_LABEL] = "";
     const char *lp = strchr(line, '(');
     const char *rp = strrchr(line, ')');
     ForeachFrame *fr;
@@ -640,6 +658,8 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
     FlatValue *vals = NULL;
     char (*names)[64] = NULL;
     int i;
+    uint32_t loop_ip = block_off;
+    int br;
 
     if (lp && rp && rp > lp) {
         char inner[768];
@@ -650,6 +670,15 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
         if (flat_str_split_three(inner, &coll_t, &item_t, &block_t) == 0) {
             snprintf(coll_expr, sizeof coll_expr, "%s", trim(coll_t));
             snprintf(item, sizeof item, "%s", trim(item_t));
+        }
+    }
+    if (vm_loop_line_third_block(line, block_tok, sizeof block_tok) == 0) {
+        br = vm_resolve_loop_block_ip(st, bc, block_tok, &loop_ip);
+        if (br != 0) {
+            if (vm_jump_panic_any(st, bc, ip, "foreach.loop.block", trace) == 0) {
+                return 2;
+            }
+            return 0;
         }
     }
     if (st->loop_sp >= VM_MAX_FOREACH) {
@@ -681,7 +710,7 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
 
     fr = &st->loops[st->loop_sp++];
     fr->resume_ip = resume_ip;
-    fr->loop_block_ip = block_off;
+    fr->loop_block_ip = loop_ip;
     snprintf(fr->item_var, sizeof fr->item_var, "%s", item);
     fr->is_for = 0;
     fr->list_id = cv.u.coll_id;
@@ -737,6 +766,8 @@ static const char *opcode_name(uint8_t opcode) {
         return "CALL_BLOCK";
     case OP_RETURN:
         return "RETURN";
+    case OP_NEXT:
+        return "NEXT";
     case OP_FOREACH:
         return "FOREACH";
     case OP_FOR:
@@ -827,6 +858,145 @@ static int vm_ip_for_block_id(const FlatBytecode *bc, uint32_t block_id, uint32_
         }
     }
     return -1;
+}
+
+static void vm_strip_block_quotes(char *t) {
+    size_t n;
+
+    if (!t || !t[0]) {
+        return;
+    }
+    if (t[0] == '\'' || t[0] == '"') {
+        n = strlen(t);
+        if (n >= 2 && t[n - 1] == t[0]) {
+            t[n - 1] = '\0';
+            memmove(t, t + 1, n - 1);
+        }
+    }
+}
+
+static int vm_ip_for_block_label(const FlatBytecode *bc, const char *label, uint32_t *out_ip) {
+    size_t i;
+    char norm[FGIR_MAX_LABEL];
+
+    if (!bc || !label || !out_ip) {
+        return -1;
+    }
+    snprintf(norm, sizeof norm, "%s", label);
+    while (norm[0] == ' ' || norm[0] == '\t') {
+        memmove(norm, norm + 1, strlen(norm));
+    }
+    if (norm[0] != '#') {
+        char tmp[FGIR_MAX_LABEL];
+        snprintf(tmp, sizeof tmp, "#%s", norm);
+        snprintf(norm, sizeof norm, "%s", tmp);
+    }
+    if (bc->block_labels) {
+        for (i = 0; i < bc->block_count; i++) {
+            if (strcmp(bc->block_labels[i], norm) == 0) {
+                *out_ip = bc->blocks[i].offset;
+                return 0;
+            }
+        }
+    }
+    {
+        uint32_t want = flat_label_hash(norm);
+        for (i = 0; i < bc->block_count; i++) {
+            if (bc->blocks[i].block_id == want) {
+                *out_ip = bc->blocks[i].offset;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
+/* -2 = bad arg; -3 = bad block id number; 0 = ok */
+static int vm_resolve_loop_block_ip(VmState *st, const FlatBytecode *bc, const char *third_tok,
+                                    uint32_t *out_ip) {
+    char tokbuf[FGIR_MAX_LABEL];
+    char label[FGIR_MAX_LABEL];
+    FlatValue v;
+    char (*names)[64] = NULL;
+    FlatValue *vals = NULL;
+    int i;
+    int rc = -1;
+
+    if (!st || !bc || !third_tok || !out_ip) {
+        return -1;
+    }
+    snprintf(tokbuf, sizeof tokbuf, "%s", third_tok);
+    vm_strip_block_quotes(tokbuf);
+    if (tokbuf[0] == '#') {
+        if (vm_ip_for_block_label(bc, tokbuf, out_ip) == 0) {
+            return 0;
+        }
+        return -1;
+    }
+    names = calloc(st->var_slots_max > 0 ? st->var_slots_max : 1u, 64);
+    vals = calloc(st->var_slots_max > 0 ? st->var_slots_max : 1u, sizeof *vals);
+    if (!names || !vals) {
+        goto done;
+    }
+    var_names_table(st, names);
+    for (i = 0; i < st->var_count; i++) {
+        vals[i] = st->vars[i].val;
+    }
+    if (flat_value_parse_assign_rhs(tokbuf, &v, st->pool, st->coll, vals, st->var_count, names) !=
+        0) {
+        rc = -2;
+        goto done;
+    }
+    if (v.tag == VAL_NUMBER) {
+        uint32_t bid = 0;
+        if (vm_number_to_u32_block_id(v.u.number, &bid) != 0) {
+            rc = -3;
+            goto done;
+        }
+        if (vm_ip_for_block_id(bc, bid, out_ip) == 0) {
+            rc = 0;
+        }
+        goto done;
+    }
+    if (flat_value_get_cstr(&v, st->pool, label, sizeof label) != 0) {
+        rc = -2;
+        goto done;
+    }
+    vm_strip_block_quotes(label);
+    if (vm_ip_for_block_label(bc, label, out_ip) == 0) {
+        rc = 0;
+    }
+done:
+    free(vals);
+    free(names);
+    return rc;
+}
+
+static int vm_loop_line_third_block(const char *line, char *out_tok, size_t out_sz) {
+    const char *lp;
+    const char *rp;
+    char inner[768];
+    char *a;
+    char *b;
+    char *c;
+
+    if (!line || !out_tok || out_sz == 0) {
+        return -1;
+    }
+    out_tok[0] = '\0';
+    lp = strchr(line, '(');
+    rp = strrchr(line, ')');
+    if (!lp || !rp || rp <= lp) {
+        return -1;
+    }
+    snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
+    if (flat_str_split_three(inner, &a, &b, &c) != 0) {
+        return -1;
+    }
+    (void)a;
+    (void)b;
+    snprintf(out_tok, out_sz, "%s", trim(c));
+    return 0;
 }
 
 static int vm_eval_block_id_expr(VmState *st, const char *expr, uint32_t *out_id) {
@@ -1104,7 +1274,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_OK, opts);
         case OP_FAIL:
             return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL, opts);
-        case OP_RETURN:
+        case OP_NEXT:
             if (st.call_sp > 0) {
                 ip = st.calls[--st.call_sp].return_ip;
                 continue;
@@ -1124,6 +1294,19 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                     ip = fr->loop_block_ip;
                     continue;
                 }
+                foreach_frame_end(&st, fr);
+                st.loop_sp--;
+                ip = fr->resume_ip;
+                continue;
+            }
+            return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE, opts);
+        case OP_RETURN:
+            if (st.call_sp > 0) {
+                ip = st.calls[--st.call_sp].return_ip;
+                continue;
+            }
+            if (st.loop_sp > 0) {
+                ForeachFrame *fr = &st.loops[st.loop_sp - 1];
                 foreach_frame_end(&st, fr);
                 st.loop_sp--;
                 ip = fr->resume_ip;
@@ -1290,7 +1473,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 continue;
             }
             if (st.loop_sp > 0 && st.loops[st.loop_sp - 1].item_count > 0) {
-                ip = target;
+                ip = st.loops[st.loop_sp - 1].loop_block_ip;
             } else {
                 ip += 2u + payload_size;
             }
@@ -1309,7 +1492,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 continue;
             }
             if (st.loop_sp > 0 && st.loops[st.loop_sp - 1].item_count > 0) {
-                ip = target;
+                ip = st.loops[st.loop_sp - 1].loop_block_ip;
             } else {
                 ip += 2u + payload_size;
             }

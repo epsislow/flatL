@@ -23,5 +23,5 @@ use native list with L
 #eachStock
   M.calc('stockQty + oStock.qty') -> stockQty
   L.push(stockProductIds, oStock.productId) -> stockProductIds
-  return
+  next
 

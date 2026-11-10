@@ -4,4 +4,4 @@
   OK
 #loop
   io.out(k)
-  return
+  next

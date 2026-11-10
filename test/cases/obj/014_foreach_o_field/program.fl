@@ -8,4 +8,4 @@ use native obj with O
 
 #each
   io.out(t)
-  return
+  next

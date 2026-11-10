@@ -8,4 +8,4 @@ use native math with M
 
 #loop
   M.calc('sum + x') -> sum
-  return
+  next

@@ -359,6 +359,19 @@ typedef struct {
     size_t abs_offset;
 } BlockOff;
 
+static int loop_block_compile_idx(const FgirProgram *prog, const char *tok) {
+    char label[FGIR_MAX_LABEL];
+
+    if (!tok || !tok[0]) {
+        return -1;
+    }
+    if (tok[0] == '#') {
+        return find_block_idx(prog, tok);
+    }
+    snprintf(label, sizeof label, "#%s", tok);
+    return find_block_idx(prog, label);
+}
+
 static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                            const BlockOff *offs, size_t stream_base, char *err, size_t err_size) {
     const FgirBlock *b = &prog->blocks[bi];
@@ -379,6 +392,11 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             break;
         case FGIR_RETURN:
             if (emit_instr(code, OP_RETURN, NULL, 0) != 0) {
+                return -1;
+            }
+            break;
+        case FGIR_NEXT:
+            if (emit_instr(code, OP_NEXT, NULL, 0) != 0) {
                 return -1;
             }
             break;
@@ -509,14 +527,18 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
         }
         case FGIR_FOREACH: {
             uint8_t payload[4 + FGIR_MAX_LINE];
-            int tgt = find_block_idx(prog, ins->foreach_block);
+            int tgt = loop_block_compile_idx(prog, ins->foreach_block);
             uint32_t off32 = 0;
             uint8_t plen = (uint8_t)(4 + strlen(ins->text) + 1);
-            if (tgt < 0) {
-                snprintf(err, err_size, "unknown foreach block %s", ins->foreach_block);
+            if (ins->foreach_item[0] == '\0' || ins->foreach_block[0] == '\0') {
+                snprintf(err, err_size, "invalid foreach: %s", ins->text);
                 return -1;
             }
-            off32 = (uint32_t)offs[tgt].abs_offset;
+            if (tgt < 0) {
+                off32 = 0;
+            } else {
+                off32 = (uint32_t)offs[tgt].abs_offset;
+            }
             memcpy(payload, &off32, 4);
             memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
             if (emit_instr(code, OP_FOREACH, payload, plen) != 0) {
@@ -526,19 +548,19 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
         }
         case FGIR_FOR: {
             uint8_t payload[4 + FGIR_MAX_LINE];
-            int tgt = find_block_idx(prog, ins->foreach_block);
+            int tgt = loop_block_compile_idx(prog, ins->foreach_block);
             uint32_t off32 = 0;
             uint8_t plen = (uint8_t)(4 + strlen(ins->text) + 1);
-            if (tgt < 0) {
-                snprintf(err, err_size, "unknown for block %s", ins->foreach_block);
-                return -1;
-            }
             if (ins->for_limit[0] == '\0' || ins->foreach_item[0] == '\0' ||
                 ins->foreach_block[0] == '\0') {
                 snprintf(err, err_size, "invalid for: %s", ins->text);
                 return -1;
             }
-            off32 = (uint32_t)offs[tgt].abs_offset;
+            if (tgt < 0) {
+                off32 = 0;
+            } else {
+                off32 = (uint32_t)offs[tgt].abs_offset;
+            }
             memcpy(payload, &off32, 4);
             memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
             if (emit_instr(code, OP_FOR, payload, plen) != 0) {

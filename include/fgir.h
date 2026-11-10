@@ -27,6 +27,7 @@ typedef enum {
     FGIR_OK,
     FGIR_FAIL,
     FGIR_RETURN,
+    FGIR_NEXT,
     FGIR_ASSIGN,
     FGIR_GUARD,
     FGIR_CALL,

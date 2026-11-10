@@ -1,0 +1,10 @@
+suite = "for"
+id = 8
+desc = "for third arg as #label without quotes"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "done"

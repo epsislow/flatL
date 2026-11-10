@@ -7,7 +7,7 @@
 #loop
   call #sub
   io.outln(k)
-  return
+  next
 
 #sub
   return

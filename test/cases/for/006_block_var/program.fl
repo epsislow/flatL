@@ -1,0 +1,9 @@
+#main
+  loop_lbl = '#step'
+  for(2, i, loop_lbl)
+  io.outln('done')
+  OK
+
+#step
+  io.outln(i)
+  next
