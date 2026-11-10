@@ -1,3 +1,5 @@
+use native math with m
+
 #main
   io.in_num("Val of A:") -> A
   io.out("A = ")
@@ -5,13 +7,13 @@
   A == 2 #.Anot2
   io.outln('A is 2. in main')
   call #common
-  z
+
 #common
-  B = A * 2
+  B = m.calc('A * 2')
   io.out('B = ')
   io.outln(B)
   io.outln('----')
-  OK 
+  OK
 
 #or.#main.Anot2
   A == 3 #.Anot2or3
@@ -21,6 +23,3 @@
 #or.#Anot2or3
   io.outln('A is not 2 nor 3!')
   call #common
-  
-
-
