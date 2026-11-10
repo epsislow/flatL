@@ -234,7 +234,12 @@ static int split_param_list(char *inner, char out[][64], int max_out, int *out_c
                         *e = '\0';
                     }
                     if (*t) {
-                        snprintf(out[count], 64, "%s", t);
+                        size_t tl = strlen(t);
+
+                        if (tl >= 64) {
+                            return -1;
+                        }
+                        memcpy(out[count], t, tl + 1);
                         count++;
                     }
                 }
