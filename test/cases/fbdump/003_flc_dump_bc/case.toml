@@ -1,0 +1,8 @@
+suite = "fbdump"
+id = 3
+desc = "flc --dump-bc on e2e hello shows OP_OK"
+kind = "exec"
+
+cmd = "{root}/bin/flc --dump-bc {root}/test/cases/e2e/001_hello_ok/program.fl"
+expect_exit = 0
+stdout_contains = "OK(0x06)"

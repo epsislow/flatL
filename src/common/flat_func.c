@@ -48,6 +48,7 @@ int flat_func_meta_init(FgirProgram *prog) {
     snprintf(prog->default_executor, sizeof prog->default_executor, "%s",
              FLAT_FUNC_DEFAULT_EXECUTOR);
     prog->func_var_slots_manual = -1;
+    prog->func_call_vm = 0;
     return 0;
 }
 
@@ -178,6 +179,26 @@ int flat_func_parse_header_line(const char *line, FgirProgram *prog, const char 
             return -1;
         }
         prog->func_var_slots_manual = (v == 0) ? -1 : (int)v;
+        return 0;
+    }
+    if (line_starts_with(p, "func:callVM")) {
+        const char *n = p + 11;
+        char *end = NULL;
+        long v;
+
+        while (*n && isspace((unsigned char)*n)) {
+            n++;
+        }
+        v = strtol(n, &end, 10);
+        if (end == n || (end && *end && !isspace((unsigned char)*end))) {
+            snprintf(err, err_size, "func:callVM requires 0 or 1");
+            return -1;
+        }
+        if (v != 0 && v != 1) {
+            snprintf(err, err_size, "func:callVM must be 0 (desugar) or 1 (VM); see USER_FUNCTIONS.md");
+            return -1;
+        }
+        prog->func_call_vm = (v != 0) ? 1 : 0;
         return 0;
     }
     if (strncmp(p, "mod(", 4) == 0) {
@@ -323,6 +344,7 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
     snprintf(fn->executor_label, sizeof fn->executor_label, "%s", prog->default_executor);
     snprintf(fn->impl_label, sizeof fn->impl_label, "%s%s", FLAT_FUNC_IMPL_PREFIX, fn->name);
     fn->is_global_executor = (strstr(fn->executor_label, "global.scope") != NULL) ? 1 : 0;
+    fn->call_via_vm = prog->func_call_vm;
     return 0;
 }
 
@@ -403,6 +425,19 @@ const FgirFunction *flat_func_find(const FgirProgram *prog, const char *name) {
         }
     }
     return NULL;
+}
+
+int flat_func_index(const FgirProgram *prog, const char *name) {
+    int i;
+    if (!prog || !name) {
+        return -1;
+    }
+    for (i = 0; i < prog->function_count; i++) {
+        if (strcmp(prog->functions[i].name, name) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }
 
 static int parse_call_inner(const char *line, char *name_out, size_t name_sz, char *args_out,
@@ -684,6 +719,71 @@ static int build_param_in_names_list(int pcount, char *out, size_t out_sz) {
     return (pos >= (int)out_sz) ? -1 : 0;
 }
 
+static int lower_one_call_vm(FgirProgram *prog, FgirBlock *b, int at, const FgirInstr *call,
+                               char *err, size_t err_size) {
+    const FgirFunction *fn = flat_func_find(prog, call->func_name);
+    FgirInstr expanded[24];
+    int n = 0;
+    char arg_parts[FGIR_MAX_FUNC_PARAMS][FGIR_MAX_LINE];
+    char arg_tokens[FGIR_MAX_FUNC_PARAMS][64];
+    int arg_count = 0;
+    char args_buf[FGIR_MAX_LINE];
+    char line[FGIR_MAX_LINE];
+    int i;
+
+    if (!fn) {
+        snprintf(err, err_size, "unknown function %s", call->func_name);
+        return -1;
+    }
+    snprintf(args_buf, sizeof args_buf, "%s", call->func_args);
+    if ((args_buf[0] == '\0' || strchr(args_buf, ',') == NULL) && call->text[0] != '\0' &&
+        fn->param_count > 1) {
+        char name[FGIR_MAX_FUNC_NAME];
+        char ret[64];
+        int arrow = 0;
+        if (parse_call_inner(call->text, name, sizeof name, args_buf, sizeof args_buf, ret,
+                             sizeof ret, &arrow) != 0) {
+            snprintf(err, err_size, "call.function.arg %s", fn->name);
+            return -1;
+        }
+    }
+    if (split_param_list(args_buf, arg_tokens, FGIR_MAX_FUNC_PARAMS, &arg_count) != 0) {
+        snprintf(err, err_size, "too many arguments to %s", fn->name);
+        return -1;
+    }
+    for (i = 0; i < arg_count; i++) {
+        snprintf(arg_parts[i], FGIR_MAX_LINE, "%s", arg_tokens[i]);
+    }
+    if (arg_count != fn->param_count) {
+        snprintf(err, err_size, "call.function.argcount %s", fn->name);
+        return -1;
+    }
+    ins_init_assign(&expanded[n++], FLAT_FUNC_RESERVED_CALLE_VAR " = V.current()");
+    for (i = 0; i < arg_count; i++) {
+        snprintf(line, sizeof line, "__fl_tmp_%d = %s", i, arg_parts[i]);
+        ins_init_assign(&expanded[n++], line);
+    }
+    memcpy(&expanded[n], call, sizeof *call);
+    expanded[n].kind = FGIR_FUNC_CALL_VM;
+    n++;
+    ins_init_assign(&expanded[n++], "V.set(1)");
+    if (fn->is_global_executor) {
+        snprintf(line, sizeof line, "%s = %s", call->func_ret, fn->return_name);
+        ins_init_assign(&expanded[n++], line);
+    }
+    if (b->instr_count - 1 - at + n > FGIR_MAX_INSTR) {
+        snprintf(err, err_size, "lowered call too large");
+        return -1;
+    }
+    memmove(&b->instr[at + n], &b->instr[at + 1], (size_t)(b->instr_count - at - 1) * sizeof *b->instr);
+    memcpy(&b->instr[at], expanded, (size_t)n * sizeof *b->instr);
+    b->instr_count = b->instr_count - 1 + n;
+    for (i = 0; i < b->instr_count; i++) {
+        b->instr[i].index = i + 1;
+    }
+    return 0;
+}
+
 static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirInstr *call,
                           char *err, size_t err_size) {
     const FgirFunction *fn = flat_func_find(prog, call->func_name);
@@ -705,6 +805,9 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     if (!fn) {
         snprintf(err, err_size, "unknown function %s", call->func_name);
         return -1;
+    }
+    if (fn->call_via_vm) {
+        return lower_one_call_vm(prog, b, at, call, err, err_size);
     }
     snprintf(args_buf, sizeof args_buf, "%s", call->func_args);
     if ((args_buf[0] == '\0' || strchr(args_buf, ',') == NULL) && call->text[0] != '\0' &&

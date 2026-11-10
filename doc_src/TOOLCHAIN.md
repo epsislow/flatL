@@ -11,7 +11,7 @@ Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make*
 ```bash
 make help         # list all make targets (recommended first run)
 make              # compile only: flc, flvm, mkfb, run_tests + fixtures (no tests run)
-make tools        # flc, flvm, mkfb only
+make tools        # flc, flvm, mkfb only (+ fbdump when AM-1.0 lands)
 make test         # compile, then ./bin/run_tests (flc + flvm)
 make test-flatl   # same cases via [flatl] in case.toml (see run_tests --flatl)
 make clean        # remove bin/ and generated min_ok.fb copies
@@ -34,6 +34,7 @@ make clean        # remove bin/ and generated min_ok.fb copies
 | `bin/flatl` | Driver: `compile`, `run` (`.fb` only), `crun` (`.fl` → compile + run) |
 | `bin/run_tests` | Discovers and runs tests under `test/cases/` |
 | `bin/mkfb` | Emits minimal `.fb` fixtures (`--min-ok`) |
+| `bin/fbdump` | Static disassembler for an existing `.fb` (see [Bytecode inspection](#bytecode-inspection-fbdump--flc---dump-bc)) |
 | `bin/io_generate_tests` | Regenerates I/O test stubs under `test/cases/io/` (portable C; no Bash) |
 
 ## `use` (multi-file compile)
@@ -186,16 +187,77 @@ Value types (STRING REF, NUMBER, BOOL): [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md)
 
 ```bash
 bin/flc --version
-bin/flc --dump-ir program.fl    # print FGIR after link (includes use modules)
-bin/flc -o out.fb program.fl    # compile to bytecode
+bin/flc --dump-ir program.fl      # FGIR after link (includes use modules)
+bin/flc --dump-bc program.fl      # compile + disassemble bytecode to stdout
+bin/flc -o out.fb program.fl      # compile to bytecode
+bin/flc -o out.fb --dump-bc program.fl   # write .fb and print disassembly
 ```
 
 Parse/compile errors print to stderr and exit **1**.
 
 | Flag | Effect |
 |------|--------|
+| `--dump-ir` | Human-readable FGIR after link; no `.fb` write |
+| `--dump-bc` | After successful compile, print `.fb` disassembly to **stdout** (same output as **`fbdump`** on the result). Without **`-o`**, only disassembly is emitted. With **`-o path.fb`**, writes the file **and** prints disassembly. Shares implementation with **`fbdump`** (`flat_disasm`). |
 | `--time` | One line on **stderr**: `flc: time_ms link=… compile=… total=… units=N fmod=M` (durations &lt; 60 s as integer ms; ≥ 60 s as `M:SS,mmm`) |
 | `FLAT_TIME=1` | Same as `--time` if the flag is omitted |
+
+Paired workflow: **`--dump-ir`** inspects structure before bytecode; **`--dump-bc`** inspects what the VM will run. See [Bytecode inspection](#bytecode-inspection-fbdump--flc---dump-bc).
+
+## Bytecode inspection (`fbdump` / `flc --dump-bc`)
+
+Both commands use one C engine (**`flat_disasm`**) on top of **`flat_fb_load_file`**. They decode the full `.fb` image the way **`flvm`** loads it — not a separate format. Build: **`make fbdump`** (also included in **`make all`**).
+
+| Tool | Input | When to use |
+|------|--------|-------------|
+| **`bin/fbdump`** | **`.fb` only** | Inspect an artifact on disk: test fixtures, `mkfb` output, compare **`func:callVM 0`** vs **`1`** builds (`a.fb` / `b.fb`) without recompiling |
+| **`flc --dump-bc`** | **`.fl`** | Same as compile, but print disassembly to stdout (optionally still **`-o`**). Mirrors **`flc --dump-ir`** for bytecode |
+
+```bash
+# From an existing binary
+bin/fbdump program.fb
+bin/fbdump --summary program.fb
+bin/fbdump --block '#main' program.fb
+
+# From source (link + compile, then disasm)
+bin/flc --dump-bc examples/order_flow.fl
+bin/flc -o /tmp/x.fb --dump-bc examples/order_flow.fl
+```
+
+### What gets printed
+
+1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**).  
+2. **Block directory** — block id, code offset, resolved **BLBL** name when present (`#main` = id 0).  
+3. **Per-block bytecode** — for each instruction: IP, opcode name (`0xNN`), payload size, decoded payload per [SPECIFICATION.md §3](./SPECIFICATION.md#3-fb-binary-layout-v12).  
+4. **Optional native manifest** — FNUN units + FNAT (same as `flvm` lazy load metadata).  
+5. **FFUN** (v5) — user `def` table: name, impl/executor block ids, params, return slot, `func_vcx_slots` (metadata for tools and future **`func:callVM 1`**).
+
+Unknown or future opcodes (e.g. **`OP_CALL_FUNCTION`** in AM-1) print as hex with a clear label.
+
+### `fbdump` flags
+
+These apply to **`fbdump`**; **`flc --dump-bc`** accepts the same flags **after** `--` (forwarded to `flat_disasm`).
+
+| Flag | Effect |
+|------|--------|
+| *(default)* | Full text: sections + disassembly (all blocks, or `#main` first) |
+| **`--summary`** | Code size, instruction count, **opcode histogram** (global; optional per-block) — used for AM-1 “smaller / fewer dispatches” checks |
+| **`--block`** *id or `#label`* | Single block only |
+| **`--sections-only`** | Header + BLBL / FNUN / FFUN, no instruction decode |
+| **`--no-ffun`** / **`--no-natives`** | Skip those sections in the listing |
+| **`-h`** | Help |
+
+Exit **0** on success; **1** on invalid or truncated `.fb`.
+
+### Relation to other tools
+
+| Tool | Role |
+|------|------|
+| **`flc --dump-ir`** | FGIR / linked blocks — **before** bytecode emit |
+| **`fbdump` / `flc --dump-bc`** | **Static** bytecode — no execution |
+| **`flvm --trace`** | **Runtime** one opcode at a time on stderr |
+
+Normative opcode payloads: [SPECIFICATION.md §3.3](./SPECIFICATION.md#33-opcode-table). Roadmap detail: repository plan **§5.2.2 AM-1.0**.
 
 ## Diagnostics: `--time` (toolchain + `run_tests`)
 

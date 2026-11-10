@@ -1,0 +1,8 @@
+suite = "fbdump"
+id = 1
+desc = "fbdump --summary on min_ok.fb lists OK opcode"
+kind = "exec"
+
+cmd = "{root}/bin/fbdump --summary {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 0
+stdout_contains = "OK(0x06)"

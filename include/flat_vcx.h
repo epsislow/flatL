@@ -76,4 +76,10 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
 int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectionPool *coll,
                              FlatStringPool *pool, FlatFileTable *files);
 
+/* Toolchain / VM: set a variable on a VCX context (AM-1 call path). */
+int flat_vcx_set_named_var(FlatVcxRuntime *rt, uint32_t ctx_id, const char *name,
+                            const FlatValue *val, FlatCollectionPool *coll, FlatStringPool *pool,
+                            FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
+                            size_t panic_sz);
+
 #endif

@@ -938,3 +938,29 @@ fail:
     }
     return rc;
 }
+
+int flat_vcx_set_named_var(FlatVcxRuntime *rt, uint32_t ctx_id, const char *name,
+                            const FlatValue *val, FlatCollectionPool *coll, FlatStringPool *pool,
+                            FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
+                            size_t panic_sz) {
+    int ix;
+    FlatVcxContext *ctx;
+
+    (void)panic_detail;
+    (void)panic_sz;
+    if (!rt || !name || !val) {
+        return -1;
+    }
+    ix = ctx_index_by_id(rt, ctx_id);
+    if (ix < 0) {
+        return -1;
+    }
+    ctx = &rt->contexts[ix];
+    if (ctx_set_var(ctx, name, val, coll, pool, files, live) != 0) {
+        return -1;
+    }
+    if (rt->contexts[rt->active_ix].id == ctx_id) {
+        refresh_bind_from_active(rt);
+    }
+    return 0;
+}

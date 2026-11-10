@@ -1,5 +1,6 @@
 #include "vm.h"
 #include "fgir.h"
+#include "flat_func.h"
 #include "flat_date.h"
 #include "flat_file.h"
 #include "flat_io_ctx.h"
@@ -29,6 +30,7 @@
 #define VM_MAX_FOREACH 8
 
 static int vm_block_index(const FlatBytecode *bc, uint32_t ip);
+static int vm_ip_for_block_id(const FlatBytecode *bc, uint32_t block_id, uint32_t *out_ip);
 static void vm_native_decls_at_ip(const FlatBytecode *bc, uint32_t ip,
                                     const FlatOptionalNativeDecl **decls_out, int *count_out);
 
@@ -786,9 +788,173 @@ static const char *opcode_name(uint8_t opcode) {
         return "FREE";
     case OP_JUMP:
         return "JUMP";
+    case OP_CALL_FUNCTION:
+        return "CALL_FUNCTION";
     default:
         return "?";
     }
+}
+
+static int vm_get_var_copy(VmState *st, const char *name, FlatValue *out) {
+    int i = find_var(st, name);
+    if (i < 0) {
+        return -1;
+    }
+    *out = st->vars[i].val;
+    flat_value_retain(st->coll, st->pool, out);
+    return 0;
+}
+
+static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uint8_t *payload,
+                                    uint8_t psz, uint32_t *ip, int trace) {
+    uint16_t fi;
+    uint8_t argc;
+    uint8_t is_global;
+    const char *callee_ret;
+    const char *formal;
+    size_t pos = 0;
+    const FlatFbFunctionEntry *fn;
+    uint32_t calle_id;
+    uint32_t instr_id;
+    uint32_t exec_ip;
+    char panic[64];
+    FlatValue nv;
+    int i;
+
+    (void)trace;
+    if (!st->vcx || !bc->functions || bc->function_count == 0) {
+        return -1;
+    }
+    if (psz < 4) {
+        return -1;
+    }
+    fi = (uint16_t)payload[0] | ((uint16_t)payload[1] << 8);
+    argc = payload[2];
+    is_global = payload[3];
+    pos = 4;
+    if (fi >= bc->function_count) {
+        return -1;
+    }
+    fn = &bc->functions[fi];
+    if (argc != fn->param_count) {
+        return -1;
+    }
+    callee_ret = (const char *)(payload + pos);
+    pos += strlen(callee_ret) + 1;
+    if (pos >= psz) {
+        return -1;
+    }
+    (void)is_global;
+
+    calle_id = flat_vcx_current_id(st->vcx);
+    if (flat_vcx_create(st->vcx, FLAT_FUNC_INSTR_VCX_FIXED + (uint32_t)argc, &instr_id, panic,
+                        sizeof panic) != 0) {
+        return -1;
+    }
+    flat_value_set_number(&nv, (double)instr_id);
+    if (set_var_value(st, FLAT_FUNC_RESERVED_INSTR_VAR, &nv) != 0) {
+        flat_value_release(st->coll, st->pool, &nv);
+        return -1;
+    }
+    flat_value_release(st->coll, st->pool, &nv);
+    flat_value_set_number(&nv, (double)calle_id);
+    if (set_var_value(st, FLAT_FUNC_RESERVED_CALLE_VAR, &nv) != 0) {
+        flat_value_release(st->coll, st->pool, &nv);
+        return -1;
+    }
+    flat_value_release(st->coll, st->pool, &nv);
+
+    flat_value_set_number(&nv, (double)fn->impl_block_id);
+    if (flat_vcx_set_named_var(st->vcx, instr_id, "targetBlock", &nv, st->coll, st->pool,
+                                  &st->files, &st->live, panic, sizeof panic) != 0) {
+        flat_value_release(st->coll, st->pool, &nv);
+        return -1;
+    }
+    flat_value_release(st->coll, st->pool, &nv);
+    flat_value_set_number(&nv, (double)calle_id);
+    if (flat_vcx_set_named_var(st->vcx, instr_id, "calleVcx", &nv, st->coll, st->pool, &st->files,
+                                  &st->live, panic, sizeof panic) != 0) {
+        flat_value_release(st->coll, st->pool, &nv);
+        return -1;
+    }
+    flat_value_release(st->coll, st->pool, &nv);
+    flat_value_set_str_inline(&nv, fn->return_name, strlen(fn->return_name));
+    if (flat_vcx_set_named_var(st->vcx, instr_id, "returnVar", &nv, st->coll, st->pool, &st->files,
+                                  &st->live, panic, sizeof panic) != 0) {
+        return -1;
+    }
+    flat_value_set_str_inline(&nv, callee_ret, strlen(callee_ret));
+    if (flat_vcx_set_named_var(st->vcx, instr_id, "calleReturnVar", &nv, st->coll, st->pool,
+                                  &st->files, &st->live, panic, sizeof panic) != 0) {
+        return -1;
+    }
+    flat_value_set_number(&nv, (double)fn->func_vcx_slots);
+    if (flat_vcx_set_named_var(st->vcx, instr_id, "funcVcxSlots", &nv, st->coll, st->pool,
+                                  &st->files, &st->live, panic, sizeof panic) != 0) {
+        flat_value_release(st->coll, st->pool, &nv);
+        return -1;
+    }
+    flat_value_release(st->coll, st->pool, &nv);
+
+    {
+        FlatValue items[FGIR_MAX_FUNC_PARAMS * 2];
+        FlatValue listv;
+        uint32_t list_id;
+        int nformal = fn->param_count;
+        formal = (const char *)(payload + pos);
+        for (i = 0; i < nformal; i++) {
+            flat_value_set_str_inline(&items[i], formal, strlen(formal));
+            formal += strlen(formal) + 1;
+        }
+        if (flat_list_build(st->coll, st->pool, items, nformal, &list_id) != 0) {
+            return -1;
+        }
+        flat_value_set_list(&listv, list_id);
+        if (flat_vcx_set_named_var(st->vcx, instr_id, "funcParamNames", &listv, st->coll, st->pool,
+                                      &st->files, &st->live, panic, sizeof panic) != 0) {
+            return -1;
+        }
+        for (i = 0; i < nformal; i++) {
+            char pin[24];
+            snprintf(pin, sizeof pin, "param_in_%d", i);
+            flat_value_set_str_inline(&items[i], pin, strlen(pin));
+        }
+        if (flat_list_build(st->coll, st->pool, items, nformal, &list_id) != 0) {
+            return -1;
+        }
+        flat_value_set_list(&listv, list_id);
+        if (flat_vcx_set_named_var(st->vcx, instr_id, "paramSrcNames", &listv, st->coll, st->pool,
+                                      &st->files, &st->live, panic, sizeof panic) != 0) {
+            return -1;
+        }
+    }
+
+    for (i = 0; i < (int)argc; i++) {
+        char tmp[24];
+        char pin[24];
+        FlatValue argv;
+        snprintf(tmp, sizeof tmp, "__fl_tmp_%d", i);
+        snprintf(pin, sizeof pin, "param_in_%d", i);
+        if (vm_get_var_copy(st, tmp, &argv) != 0) {
+            return -1;
+        }
+        if (flat_vcx_set_named_var(st->vcx, instr_id, pin, &argv, st->coll, st->pool, &st->files,
+                                      &st->live, panic, sizeof panic) != 0) {
+            flat_value_release(st->coll, st->pool, &argv);
+            return -1;
+        }
+        flat_value_release(st->coll, st->pool, &argv);
+    }
+
+    if (vm_ip_for_block_id(bc, fn->executor_block_id, &exec_ip) != 0) {
+        return -1;
+    }
+    if (st->call_sp >= VM_MAX_CALL) {
+        return -1;
+    }
+    st->calls[st->call_sp++].return_ip = *ip + 2u + psz;
+    *ip = exec_ip;
+    return 0;
 }
 
 static void trace_vars_dump(const VmState *st) {
@@ -1510,6 +1676,15 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
             }
             ip = target;
+            continue;
+        }
+        case OP_CALL_FUNCTION: {
+            if (vm_apply_call_function(&st, bc, payload, payload_size, &ip, trace) != 0) {
+                if (vm_jump_panic_any(&st, bc, &ip, "call.function.vm", trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
             continue;
         }
         default:

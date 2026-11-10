@@ -385,6 +385,8 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 | `OP_OK` | `0x06` | Empty — process exit **0** |
 | `OP_FAIL` | `0x07` | Empty — process exit **2** |
 | `OP_PANIC` | `0x08` | `uint32` handler IP (`#panic.<block>.<index>` or `#panic.any`) |
+| `OP_NEXT` | `0x0F` | Empty — `for` / `foreach` continue |
+| `OP_CALL_FUNCTION` | `0x10` | **`func:callVM 1`:** `u16` FFUN index + `u8` argc + `u8` global + callee return name **NUL** + formal param names each **NUL-terminated** (see [USER_FUNCTIONS.md](./USER_FUNCTIONS.md)) |
 
 Block directory **block id**: `0` for `#main`; other blocks use a stable hash of the label string.
 

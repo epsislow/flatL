@@ -28,10 +28,22 @@ Same body rules as a `.fl` library, plus header lines:
 | `export sym1, sym2, …` | Yes (≥1) | `def` names visible to importers |
 | `func:executor #…` | Yes | Executor block for calls inside the module (v0.3) |
 | `func:varSlots N` | Optional | Unique executor VCX size hint |
+| `func:callVM 0\|1` | Optional | **`0`** = desugar (default); **`1`** = **`OP_CALL_FUNCTION`** (AM-1). See [USER_FUNCTIONS.md](./USER_FUNCTIONS.md). |
 | `use native …` | Optional | Same as entry/module `.fl` |
 | `use "…" as #…` | Optional (parsed only) | **Not** linked into the consumer binary from the `.fmod` alone |
 
 **Forbidden in `.fmod`:** `#main` (entry only).
+
+### Tests (`func:callVM` + `.fmod`)
+
+| Case | What it checks |
+|------|----------------|
+| `fmod/001` | Baseline `use fmod`, desugar (A) |
+| `fmod/002` | `func:callVM 1` inside `.fmod` |
+| `fmod/003` | FMOD B + entry B (`bump`), sequential calls |
+| `fmod/004` | Two exported `def`s, both B, chained from `#main` |
+| `fmod/005` | `fbdump` shows `CALL_FUNCTION` after link |
+| `fmod/006` | FMOD A + entry B (mixed) |
 
 ### Minimal module (repo test)
 

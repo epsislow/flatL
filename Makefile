@@ -18,6 +18,8 @@ endif
 STR_SRC = src/common/flat_str.c
 PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
+DISASM_SRC = src/common/flat_disasm.c
+FBDUMP_SRCS = src/fbdump/main.c $(DISASM_SRC) $(FB_SRC) $(NATIVE_FLC_SRC)
 NATIVE_VM_PLUGIN = src/lib/native_plugin_host.c
 ifeq ($(OS),Windows_NT)
 NATIVE_VM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math.c \
@@ -67,7 +69,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -75,7 +77,8 @@ help:
 	@echo "Build (compile only, no tests executed):"
 	@echo "  make              same as make all"
 	@echo "  make all          bin/flc, bin/flvm, bin/flatl, bin/run_tests, bin/port_check, … + fixtures"
-	@echo "  make tools        bin/flc, bin/flvm, bin/flatl, bin/mkfb only"
+	@echo "  make tools        bin/flc, bin/flvm, bin/flatl, bin/mkfb, bin/fbdump"
+	@echo "  make fbdump       bytecode disassembler only"
 	@echo "  make flvm         rebuild VM only"
 	@echo "  make flc          rebuild compiler only"
 	@echo "  make flatl        rebuild driver (compile/run/crun) only"
@@ -124,11 +127,11 @@ help:
 	@echo "Docs: doc_src/TOOLCHAIN.md  doc_src/FMOD_MODULES.md  |  Pages: docs/"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
-all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/gen_doc_site$(EXEEXT) $(PLUGIN_TARGET) fixtures
-	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/gen_doc_site bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
+all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/fbdump$(EXEEXT) $(BINDIR)/gen_doc_site$(EXEEXT) $(PLUGIN_TARGET) fixtures
+	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/fbdump bin/gen_doc_site bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
 
-tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(PLUGIN_TARGET)
-	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb"
+tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/fbdump$(EXEEXT) $(PLUGIN_TARGET)
+	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/fbdump"
 
 flvm: $(BINDIR)/flvm$(EXEEXT)
 	@echo "OK: bin/flvm"
@@ -141,6 +144,9 @@ flatl: $(BINDIR)/flatl$(EXEEXT)
 
 mkfb: $(BINDIR)/mkfb$(EXEEXT)
 	@echo "OK: bin/mkfb"
+
+fbdump: $(BINDIR)/fbdump$(EXEEXT)
+	@echo "OK: bin/fbdump"
 
 run_tests: $(BINDIR)/run_tests$(EXEEXT)
 	@echo "OK: bin/run_tests"
@@ -191,8 +197,11 @@ $(BINDIR)/libflat_list.so: $(PLUGIN_LIST_SRCS) | $(BINDIR)
 $(BINDIR)/libflat_obj.so: $(PLUGIN_OBJ_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_OBJ_SRCS) $(LDFLAGS)
 
-$(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
+$(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(DISASM_SRC) $(PORT_SRC) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(DISASM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS)
+
+$(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ $(FBDUMP_SRCS) $(LDFLAGS)
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) -lm

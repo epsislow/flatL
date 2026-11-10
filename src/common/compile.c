@@ -634,6 +634,58 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             break;
         }
+        case FGIR_FUNC_CALL_VM: {
+            const FgirFunction *fn = flat_func_find(prog, ins->func_name);
+            uint8_t payload[255];
+            size_t pos = 0;
+            uint16_t fi;
+            int pi;
+            uint8_t plen;
+
+            if (!fn) {
+                snprintf(err, err_size, "call vm: unknown function %s", ins->func_name);
+                return -1;
+            }
+            fi = (uint16_t)flat_func_index(prog, ins->func_name);
+            if (fi >= (uint16_t)prog->function_count) {
+                snprintf(err, err_size, "call vm: bad function index");
+                return -1;
+            }
+            if (pos + 4 >= sizeof payload) {
+                return -1;
+            }
+            memcpy(payload + pos, &fi, 2);
+            pos += 2;
+            payload[pos++] = (uint8_t)fn->param_count;
+            payload[pos++] = (uint8_t)(fn->is_global_executor ? 1 : 0);
+            {
+                size_t rl = strlen(ins->func_ret) + 1;
+                if (pos + rl > sizeof payload) {
+                    snprintf(err, err_size, "call vm payload too long");
+                    return -1;
+                }
+                memcpy(payload + pos, ins->func_ret, rl);
+                pos += rl;
+            }
+            for (pi = 0; pi < fn->param_count; pi++) {
+                size_t nl = strlen(fn->params[pi]) + 1;
+                if (pos + nl > sizeof payload) {
+                    snprintf(err, err_size, "call vm payload too long");
+                    return -1;
+                }
+                memcpy(payload + pos, fn->params[pi], nl);
+                pos += nl;
+            }
+            if (pos > 255) {
+                snprintf(err, err_size, "call vm payload too long");
+                return -1;
+            }
+            plen = (uint8_t)pos;
+            if (emit_instr(code, OP_CALL_FUNCTION, payload, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
         default:
             snprintf(err, err_size, "unsupported instruction");
             return -1;

@@ -1,0 +1,8 @@
+suite = "func"
+id = 11
+desc = "func:callVM 1 emits CALL_FUNCTION opcode"
+kind = "exec"
+
+cmd = "sh -c '{root}/bin/flc -o {tmp}/f.fb {root}/test/cases/func/009_add_callvm/program.fl && {root}/bin/fbdump --summary {tmp}/f.fb'"
+expect_exit = 0
+stdout_contains = "CALL_FUNCTION(0x10)"

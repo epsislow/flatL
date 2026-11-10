@@ -124,6 +124,7 @@ See [doc_src/TOOLCHAIN.md — flatl](doc_src/TOOLCHAIN.md#flatl-driver-optional-
 | `OP_GUARD` | `0x02` | Conditional; jump on false |
 | `OP_CALL` | `0x03` | Call block; push return address |
 | `OP_CALL_BLOCK` | `0x0E` | Call block by runtime id (`call block expr` in source) |
+| `OP_CALL_FUNCTION` | `0x10` | User `def` call via VM (`func:callVM 1`; see USER_FUNCTIONS.md) |
 | `OP_JUMP` | `0x0D` | Jump to block; no call frame; clears loop frames |
 | `OP_RETURN` | `0x04` | Pop call stack |
 | `OP_FOREACH` | `0x05` | Collection iteration |

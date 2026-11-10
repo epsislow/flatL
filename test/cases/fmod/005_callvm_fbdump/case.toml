@@ -1,0 +1,8 @@
+suite = "fmod"
+id = 5
+desc = "linked fmod callVM 1 bytecode contains CALL_FUNCTION"
+kind = "exec"
+
+cmd = "sh -c '{root}/bin/flc -o {tmp}/f.fb {root}/test/cases/fmod/002_mul2_callvm/program.fl && {root}/bin/fbdump --summary {tmp}/f.fb'"
+expect_exit = 0
+stdout_contains = "CALL_FUNCTION(0x10)"

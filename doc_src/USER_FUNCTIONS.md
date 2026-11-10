@@ -16,7 +16,28 @@ def add(a, b) -> sum
 
 - `func:executor` selects isolation mode (see `blocks/executor.fl`).
 - Optional `func:varSlots N` sets the unique executor scratch VCX capacity; otherwise it is inferred from the body.
+- Optional `func:callVM N` selects **how** user calls are lowered (see below). Omitted = same as **`0`**.
 - The name after `->` on `def` is the formal return slot (here `sum`).
+
+### `func:callVM` — call lowering (A vs B)
+
+Header directive (like `func:executor`): applies to every **`def` below** until the next `func:callVM` line.
+
+| Value | Name | Status | Meaning |
+|-------|------|--------|---------|
+| **`0`** | **Strategy A** (desugar) | **Default, implemented** | `flc` expands each call into bytecode + natives (`vcx.*`) and `call #…executor…`. Same contract `instrVcx` as in [RUNTIME_ARCHITECTURE.md](./RUNTIME_ARCHITECTURE.md). |
+| **`1`** | **Strategy B** (VM) | **Implemented (AM-1)** | `flc` emits **`OP_CALL_FUNCTION` (`0x10`)**; **`flvm`** builds `instrVcx` in C, then **`call`s the executor** block (same as **`0`**). Semantics must match **`0`**. Use **`fbdump --summary`** to compare opcode counts vs **`func:callVM 0`**. |
+
+```flat
+func:callVM 0
+func:executor #fl_executor.global.scope
+def add(a, b) -> sum
+  ...
+```
+
+**Coexistence:** one program may mix zones (`func:callVM 0` then later `func:callVM 1`). Default **`0`** if the header line is omitted. Old `.fb` files without **`0x10`** remain strategy A only.
+
+**Toolchain:** WASM `flc` in fleditor follows the same rules after AM-1. To compare call lowering size (A vs B), use static disassembly: **`fbdump`** on `.fb` or **`flc --dump-bc`** on `.fl` — see [TOOLCHAIN.md § Bytecode inspection](./TOOLCHAIN.md#bytecode-inspection-fbdump--flc---dump-bc).
 
 ## Call site
 

@@ -19,7 +19,8 @@ typedef enum {
     OP_FOR     = 0x0C, /* uint32 loop block IP + original for(...) line NUL-terminated */
     OP_JUMP          = 0x0D, /* uint32 target block IP */
     OP_CALL_BLOCK    = 0x0E, /* block id expr NUL + bind name NUL (may be empty) */
-    OP_NEXT          = 0x0F  /* next for/for-each iteration (was OP_RETURN in loop body) */
+    OP_NEXT          = 0x0F, /* next for/for-each iteration (was OP_RETURN in loop body) */
+    OP_CALL_FUNCTION = 0x10  /* u16 func_index + u8 argc + u8 global + ret\\0 + formal names\\0… */
 } OpCode;
 
 /* Line modifiers on native / assign-native lines (see SPECIFICATION.md). */

@@ -255,6 +255,80 @@ int flat_fb_write_fnun_section(FILE *f, int unit_count, const FlatFbNativeUnit *
     return 0;
 }
 
+static int parse_ffun_section(const uint8_t *sec, size_t sec_len, FlatFbFunctionEntry **out_funs,
+                               uint16_t *out_count) {
+    size_t pos = 0;
+    uint32_t magic;
+    uint16_t count;
+    FlatFbFunctionEntry *funs = NULL;
+    int i;
+
+    if (!sec || !out_funs || !out_count) {
+        return -1;
+    }
+    *out_funs = NULL;
+    *out_count = 0;
+    if (sec_len < 6) {
+        return -1;
+    }
+    magic = read_u32_le(sec);
+    if (magic != FLAT_FB_FFUN_MAGIC) {
+        return -1;
+    }
+    count = read_u16_le(sec + 4);
+    pos = 6;
+    if (count == 0) {
+        return pos == sec_len ? 0 : -1;
+    }
+    funs = calloc(count, sizeof(FlatFbFunctionEntry));
+    if (!funs) {
+        return -1;
+    }
+    for (i = 0; i < (int)count; i++) {
+        uint16_t nl;
+        uint16_t rl;
+        if (pos + 2 > sec_len) {
+            goto fail;
+        }
+        nl = read_u16_le(sec + pos);
+        pos += 2;
+        if (nl == 0 || nl >= sizeof funs[i].name || pos + nl + 4 + 4 + 1 + 2 > sec_len) {
+            goto fail;
+        }
+        memcpy(funs[i].name, sec + pos, nl);
+        funs[i].name[nl] = '\0';
+        pos += nl;
+        funs[i].impl_block_id = read_u32_le(sec + pos);
+        pos += 4;
+        funs[i].executor_block_id = read_u32_le(sec + pos);
+        pos += 4;
+        funs[i].param_count = sec[pos];
+        pos += 1;
+        if (pos + 2 > sec_len) {
+            goto fail;
+        }
+        rl = read_u16_le(sec + pos);
+        pos += 2;
+        if (rl >= sizeof funs[i].return_name || pos + rl + 4 > sec_len) {
+            goto fail;
+        }
+        memcpy(funs[i].return_name, sec + pos, rl);
+        funs[i].return_name[rl] = '\0';
+        pos += rl;
+        funs[i].func_vcx_slots = read_u32_le(sec + pos);
+        pos += 4;
+    }
+    if (pos != sec_len) {
+        goto fail;
+    }
+    *out_funs = funs;
+    *out_count = count;
+    return 0;
+fail:
+    free(funs);
+    return -1;
+}
+
 static int parse_fnun_section(const uint8_t *sec, size_t sec_len, uint16_t expect_blocks,
                               FlatFbNativeUnit **out_units, int *out_unit_count,
                               uint8_t **out_block_unit) {
@@ -468,8 +542,18 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
             }
         }
         if (ffun_off != 0 && ffun_off < fsize) {
-            (void)ffun_off;
-            /* FFUN parsed for tools; VM dispatch unchanged in v0.3 (F2). */
+            size_t ffun_len;
+            if (native_off != 0 && native_off > ffun_off) {
+                ffun_len = (size_t)(native_off - ffun_off);
+            } else {
+                ffun_len = (size_t)(fsize - ffun_off);
+            }
+            if (parse_ffun_section(buf + ffun_off, ffun_len, &out->functions, &out->function_count) !=
+                0) {
+                free(buf);
+                fprintf(stderr, "flvm: invalid FFUN section\n");
+                return -1;
+            }
         }
     }
     if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
@@ -620,6 +704,8 @@ void flat_fb_free(FlatBytecode *bc) {
     free(bc->native_units);
     free(bc->block_native_unit);
     free(bc->functions);
+    bc->functions = NULL;
+    bc->function_count = 0;
     memset(bc, 0, sizeof *bc);
 }
 

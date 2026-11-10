@@ -24,5 +24,6 @@ int flat_func_prepare_fmod_unit(FgirProgram *mod, const char *import_as, char *e
 int flat_func_lower_program(FgirProgram *prog, char *err, size_t err_size);
 int flat_func_validate_program(const FgirProgram *prog, char *err, size_t err_size);
 const FgirFunction *flat_func_find(const FgirProgram *prog, const char *name);
+int flat_func_index(const FgirProgram *prog, const char *name);
 
 #endif

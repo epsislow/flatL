@@ -1,0 +1,15 @@
+mod('mul2')
+use "../../../../../blocks/executor.fl" as #fl_
+use native math with m
+
+func:executor #fl_executor.global.scope
+func:callVM 1
+export mul2, mul3
+
+def mul2(a) -> r
+  m.calc('a * 2') -> r
+  return
+
+def mul3(a) -> r
+  m.calc('a * 3') -> r
+  return

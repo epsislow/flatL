@@ -1,0 +1,8 @@
+suite = "fbdump"
+id = 4
+desc = "FFUN section lists user def after compile"
+kind = "exec"
+
+cmd = "sh -c '{root}/bin/flc -o {tmp}/t.fb {root}/test/cases/func/001_add/program.fl && {root}/bin/fbdump --sections-only {tmp}/t.fb'"
+expect_exit = 0
+stdout_contains = "FFUN"

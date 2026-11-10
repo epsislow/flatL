@@ -38,7 +38,8 @@ typedef enum {
     FGIR_IO,
     FGIR_FREE,
     FGIR_JUMP,
-    FGIR_FUNC_CALL
+    FGIR_FUNC_CALL,
+    FGIR_FUNC_CALL_VM
 } FgirInstrKind;
 
 typedef enum {
@@ -86,6 +87,7 @@ typedef struct {
     char executor_label[FGIR_MAX_LABEL];
     uint32_t func_vcx_slots;
     int is_global_executor;
+    int call_via_vm; /* 1 = OP_CALL_FUNCTION at call sites (func:callVM 1 zone) */
 } FgirFunction;
 
 typedef struct {
@@ -100,6 +102,7 @@ typedef struct {
     int function_count;
     char default_executor[FGIR_MAX_LABEL];
     int func_var_slots_manual; /* -1 = auto */
+    int func_call_vm; /* header func:callVM for following defs */
     int mod_id_set;
     char mod_id[64];
     int export_count;
