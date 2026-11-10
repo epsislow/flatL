@@ -281,7 +281,7 @@ Progress prints `.` / `F` in ANSI color (flushed after each character so dots ap
 | Flag | Effect |
 |------|--------|
 | `-v` | Failure messages after each `F` |
-| `-e` | Per suite: `#id/N desc` + `.` / `F` (`N` = selected case count); yellow suite header |
+| `-e` | Per suite: `#id (k/N) desc` + `.` / `F` (`id` = case id in manifest; `k`/`N` = position among selected in that suite); yellow suite header |
 | `-t` / `--time` | With **`-e`**: ` time_ms …`; footer **Total tests time:** always |
 | `--list` | List each suite, case count, id range; exit without running |
 | `-w N` | Max `.` / `F` characters per line before wrapping (compact mode, no **`-e`**) |

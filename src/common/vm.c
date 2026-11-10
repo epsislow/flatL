@@ -887,9 +887,12 @@ static int vm_ip_for_block_label(const FlatBytecode *bc, const char *label, uint
         memmove(norm, norm + 1, strlen(norm));
     }
     if (norm[0] != '#') {
-        char tmp[FGIR_MAX_LABEL];
-        snprintf(tmp, sizeof tmp, "#%s", norm);
-        snprintf(norm, sizeof norm, "%s", tmp);
+        size_t n = strlen(norm);
+        if (n + 1 >= sizeof norm) {
+            return -1;
+        }
+        memmove(norm + 1, norm, n + 1);
+        norm[0] = '#';
     }
     if (bc->block_labels) {
         for (i = 0; i < bc->block_count; i++) {

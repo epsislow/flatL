@@ -47,7 +47,7 @@ static void print_help(const char *prog) {
     printf("Options:\n");
     printf("  -h, --help                 show help\n");
     printf("  -v, --verbose              print failure details\n");
-    printf("  -e, --each                 per suite: #id/N desc + . / F (N = selected count)\n");
+    printf("  -e, --each                 per suite: #id (k/N) desc + . / F (N = selected in suite)\n");
     printf("  -t, --time                 per-case timings (use with -e; injects --time in toolchain)\n");
     printf("  -w, --progress-width N     max . / F characters per line (default: %d)\n",
            DEFAULT_PROGRESS_WIDTH);
@@ -86,13 +86,13 @@ static void progress_on_fail(Progress *p, const FlatCase *c, int verbose, const 
 }
 
 static void progress_on_result(Progress *p, int ok, const FlatCase *c, int verbose, int each,
-                                 int show_time, int use_flatl, int run_selected_total,
-                                 const FlatCaseTiming *timing, const char *err) {
+                                 int show_time, int use_flatl, const FlatCaseTiming *timing,
+                                 const char *err) {
     char suffix[512];
 
     p->run++;
     if (each) {
-        printf("  #%d/%d %s\n  ", c->id, run_selected_total, c->desc);
+        printf("  #%d (%d/%d) %s\n  ", c->id, p->run, p->total, c->desc);
     }
     if (ok) {
         printf("%s.%s", ANSI_GREEN, ANSI_RESET);
@@ -450,10 +450,9 @@ int main(int argc, char **argv) {
                 failed++;
             }
             if (each && show_time) {
-                progress_on_result(&progress, ok, c, verbose, each, 1, use_flatl, run_total, &timing,
-                                     err);
+                progress_on_result(&progress, ok, c, verbose, each, 1, use_flatl, &timing, err);
             } else {
-                progress_on_result(&progress, ok, c, verbose, each, 0, use_flatl, run_total, NULL, err);
+                progress_on_result(&progress, ok, c, verbose, each, 0, use_flatl, NULL, err);
             }
         }
         progress_finish_line(&progress);
