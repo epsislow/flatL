@@ -15,7 +15,7 @@ Traditional block nesting (`if`, `try/catch`, deep indentation) hides where succ
 
 ## Examples (`.fl`)
 
-### Runnable today (toolchain v0.2)
+### Runnable today (toolchain v0.4)
 
 Parses, compiles, and runs with current `flc` / `flvm` (see `make test`):
 
