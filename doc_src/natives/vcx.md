@@ -59,6 +59,7 @@ With **`use native vcx with V`**, examples use the alias **`V.*`**; the full nam
 | **`V.varsMax(ctx)`** | context ID | NUMBER — **capacity** of that context | **`vcx.varsMax.arg`**, **`vcx.varsMax.ctx`** |
 | **`V.destroy(ctx)`** | context ID (not global) | — | **`vcx.destroy.arg`**, **`vcx.destroy.global`**, **`vcx.destroy.isactive`**, **`vcx.destroy.notfound`** |
 | **`V.varsCopyByNames(src, dst, srcNames, dstNames)`** | two IDs; two **LIST**s of **STRING** names | — | **`vcx.varsCopyByNames.arg`**, **`.list`**, **`.length`**, **`.name`**, **`.ctx`**, **`.missing`**, **`.capacity`**, **`.copy`** |
+| **`V.callInstr()`** | — | NUMBER — **instr VCX** for the innermost pending **`OP_CALL_FUNCTION`** frame (used by `blocks/executor.fl`; strategy A falls back to **`__call_instr_vcx`**) | **`vcx.callInstr`** |
 
 **`varsCopy` / `varsCopyLike`:** deep copy of **values** into **`dst`** (atomic for the operation). **`src == dst`** is a no-op for **`varsCopy`**. **`varsCopyLike`** applies a **glob** to **variable names** only (`*`, `?`), case-sensitive, **whole** name match.
 

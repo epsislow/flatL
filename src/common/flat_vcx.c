@@ -23,9 +23,21 @@ struct FlatVcxRuntime {
 };
 
 static FlatVcxRuntime *g_vcx_active;
+static FlatVcxCallInstrResolver g_call_instr_resolver;
 
 void flat_vcx_runtime_set_active(FlatVcxRuntime *rt) {
     g_vcx_active = rt;
+}
+
+void flat_vcx_set_call_instr_resolver(FlatVcxCallInstrResolver fn) {
+    g_call_instr_resolver = fn;
+}
+
+uint32_t flat_vcx_call_instr_ctx(void) {
+    if (g_call_instr_resolver) {
+        return g_call_instr_resolver();
+    }
+    return 0u;
 }
 
 FlatVcxRuntime *flat_vcx_runtime_active(void) {

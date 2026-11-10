@@ -1,0 +1,9 @@
+suite = "fmod"
+id = 10
+desc = "nested B in A: entry callVM 0, fmod B, def calls m.mul2"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "6"

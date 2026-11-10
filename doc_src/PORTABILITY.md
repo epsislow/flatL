@@ -41,6 +41,8 @@ char *t2 = flat_str_next(&p, ',');  /* "b", p → "c" */
 
 For **`__list_push__(var, expr)`**: one `flat_str_next` for the variable name; the expression is **`flat_str_trim(p)`** (remainder of the line).
 
+**Bounded joins** (toolchain / `FGIR_MAX_LINE` buffers): prefer **`flat_str_join`**, **`flat_str_assign_line`**, **`flat_str_assign_fl_tmp`** over `snprintf(buf, sizeof buf, "lhs = %s", rhs)` — GCC **`-Wformat-truncation`** treats long `%s` into fixed caps as possibly truncated even when `snprintf` would clip safely. The helpers use explicit length checks + `memcpy`.
+
 ## 4. `flat_port` API (summary)
 
 | Function | Role |

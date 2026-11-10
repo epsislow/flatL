@@ -179,6 +179,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("vcx", "varsMax", "vcx.varsMax(ctx)"),
     META_SIG("vcx", "destroy", "vcx.destroy(ctx)"),
     META_SIG("vcx", "varsCopyByNames", "vcx.varsCopyByNames(srcCtx, dstCtx, srcNames, dstNames)"),
+    META_SIG("vcx", "callInstr", "vcx.callInstr()"),
 };
 
 int flat_native_is_core_module(const char *mod) {

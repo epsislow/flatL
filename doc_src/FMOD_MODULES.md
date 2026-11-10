@@ -44,6 +44,18 @@ Same body rules as a `.fl` library, plus header lines:
 | `fmod/004` | Two exported `def`s, both B, chained from `#main` |
 | `fmod/005` | `fbdump` shows `CALL_FUNCTION` after link |
 | `fmod/006` | FMOD A + entry B (mixed) |
+| `fmod/007` | nested B+B: `def` → `m.mul2` (global executor) |
+| `fmod/008` | nested B+B: `def` → `m.mul2` (unique executor) |
+| `fmod/009` | nested A+A (entry A, fmod A) |
+| `fmod/010` | nested B in A (entry A, fmod B) |
+| `fmod/011` | nested A in B (entry B, fmod A) |
+| `fmod/012` | nested A+A (**unique** executor; .fmod A) |
+| `fmod/013` | nested B in A (**unique** executor) |
+| `fmod/014` | nested A in B (**unique** executor; entry B, .fmod A) |
+| `fmod/015` | two `m.mul2` in one `def` (global executor; sequential B/B) |
+| `fmod/016` | 3-level chain `bump→mid→leaf→m.mul2` |
+| `fmod/017` | `func:varSlots 24` + nested A/A unique |
+| `fmod/018` | `.fmod` with **unique** executor, entry nested B |
 
 ### Minimal module (repo test)
 

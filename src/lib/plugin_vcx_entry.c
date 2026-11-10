@@ -19,5 +19,6 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_VCX_VARS_MAX, flat_native_vcx_vars_max);
     reg(FLAT_NATIVE_VCX_DESTROY, flat_native_vcx_destroy);
     reg(FLAT_NATIVE_VCX_VARS_COPY_BY_NAMES, flat_native_vcx_vars_copy_by_names);
+    reg(FLAT_NATIVE_VCX_CALL_INSTR, flat_native_vcx_call_instr);
     return 0;
 }

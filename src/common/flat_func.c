@@ -36,6 +36,9 @@ static int starts_with_kw(const char *s, const char *kw) {
            (s[n] == '\0' || isspace((unsigned char)s[n]) || s[n] == '(' || s[n] == ':');
 }
 
+static int parse_call_inner(const char *line, char *name_out, size_t name_sz, char *args_out,
+                            size_t args_sz, char *ret_out, size_t ret_sz, int *arrow_form);
+
 static int line_starts_with(const char *s, const char *pfx) {
     size_t n = strlen(pfx);
     return strncmp(s, pfx, n) == 0 && (s[n] == '\0' || isspace((unsigned char)s[n]));
@@ -409,7 +412,32 @@ int flat_func_finish_def(FgirFunction *fn, const FgirBlock *impl, int manual_slo
         fn->func_vcx_slots = (uint32_t)(scan > 0 ? scan : 4);
     }
     if (!fn->is_global_executor) {
+        int nested_calls = 0;
+        for (pi = 0; pi < impl->instr_count; pi++) {
+            const FgirInstr *ins = &impl->instr[pi];
+            char cname[FGIR_MAX_FUNC_NAME];
+            char carg[FGIR_MAX_LINE];
+            char cret[64];
+            int arrow = 0;
+
+            if (ins->kind == FGIR_FUNC_CALL || ins->kind == FGIR_FUNC_CALL_VM) {
+                nested_calls++;
+                continue;
+            }
+            if (ins->kind == FGIR_ASSIGN &&
+                parse_call_inner(ins->text, cname, sizeof cname, carg, sizeof carg, cret,
+                                 sizeof cret, &arrow) == 0 &&
+                arrow) {
+                nested_calls++;
+            }
+        }
         fn->func_vcx_slots += 2u; /* executor: __run_block, __calle_id */
+        if (nested_calls > 0) {
+            fn->func_vcx_slots +=
+                (uint32_t)nested_calls * (uint32_t)FLAT_FUNC_NESTED_CALL_VCX_EXTRA;
+            fn->func_vcx_slots +=
+                (uint32_t)nested_calls * (uint32_t)FLAT_FUNC_NESTED_GLOBAL_EXEC_EXTRA;
+        }
     }
     return 0;
 }
@@ -719,6 +747,47 @@ static int build_param_in_names_list(int pcount, char *out, size_t out_sz) {
     return (pos >= (int)out_sz) ? -1 : 0;
 }
 
+static const FgirFunction *flat_func_for_impl_label(const FgirProgram *prog, const char *label) {
+    int i;
+
+    if (!prog || !label || !label[0]) {
+        return NULL;
+    }
+    for (i = 0; i < prog->function_count; i++) {
+        if (strcmp(prog->functions[i].impl_label, label) == 0) {
+            return &prog->functions[i];
+        }
+    }
+    return NULL;
+}
+
+static int caller_body_needs_global_vcx(const FgirProgram *prog, const FgirBlock *caller_block) {
+    const FgirFunction *caller;
+
+    if (!prog || !caller_block || !caller_block->label[0]) {
+        return 1;
+    }
+    caller = flat_func_for_impl_label(prog, caller_block->label);
+    if (caller == NULL) {
+        return 1;
+    }
+    return caller->is_global_executor ? 1 : 0;
+}
+
+static int call_site_uses_vm(const FgirProgram *prog, const FgirBlock *caller_block,
+                             const FgirFunction *callee) {
+    const FgirFunction *caller;
+
+    if (callee && callee->call_via_vm) {
+        return 1;
+    }
+    if (!prog || !caller_block) {
+        return 0;
+    }
+    caller = flat_func_for_impl_label(prog, caller_block->label);
+    return (caller != NULL && caller->call_via_vm) ? 1 : 0;
+}
+
 static int lower_one_call_vm(FgirProgram *prog, FgirBlock *b, int at, const FgirInstr *call,
                                char *err, size_t err_size) {
     const FgirFunction *fn = flat_func_find(prog, call->func_name);
@@ -758,17 +827,24 @@ static int lower_one_call_vm(FgirProgram *prog, FgirBlock *b, int at, const Fgir
         snprintf(err, err_size, "call.function.argcount %s", fn->name);
         return -1;
     }
-    ins_init_assign(&expanded[n++], FLAT_FUNC_RESERVED_CALLE_VAR " = V.current()");
     for (i = 0; i < arg_count; i++) {
-        snprintf(line, sizeof line, "__fl_tmp_%d = %s", i, arg_parts[i]);
+        if (flat_str_assign_fl_tmp(line, sizeof line, i, arg_parts[i]) != 0) {
+            snprintf(err, err_size, "lowered tmp assign too long");
+            return -1;
+        }
         ins_init_assign(&expanded[n++], line);
     }
     memcpy(&expanded[n], call, sizeof *call);
     expanded[n].kind = FGIR_FUNC_CALL_VM;
     n++;
-    ins_init_assign(&expanded[n++], "V.set(1)");
+    if (caller_body_needs_global_vcx(prog, b)) {
+        ins_init_assign(&expanded[n++], "V.set(1)");
+    }
     if (fn->is_global_executor) {
-        snprintf(line, sizeof line, "%s = %s", call->func_ret, fn->return_name);
+        if (flat_str_assign_line(line, sizeof line, call->func_ret, fn->return_name) != 0) {
+            snprintf(err, err_size, "lowered return assign too long");
+            return -1;
+        }
         ins_init_assign(&expanded[n++], line);
     }
     if (b->instr_count - 1 - at + n > FGIR_MAX_INSTR) {
@@ -806,7 +882,7 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
         snprintf(err, err_size, "unknown function %s", call->func_name);
         return -1;
     }
-    if (fn->call_via_vm) {
+    if (call_site_uses_vm(prog, b, fn)) {
         return lower_one_call_vm(prog, b, at, call, err, err_size);
     }
     snprintf(args_buf, sizeof args_buf, "%s", call->func_args);
@@ -838,16 +914,9 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     ins_init_assign(&expanded[n++], line);
 
     for (i = 0; i < arg_count; i++) {
-        char pfx[40];
-
-        {
-            int pn = snprintf(pfx, sizeof pfx, "__fl_tmp_%d = ", i);
-
-            if (pn < 0 || (size_t)pn >= sizeof pfx ||
-                concat2(line, sizeof line, pfx, arg_parts[i]) != 0) {
-                snprintf(err, err_size, "lowered tmp assign too long");
-                return -1;
-            }
+        if (flat_str_assign_fl_tmp(line, sizeof line, i, arg_parts[i]) != 0) {
+            snprintf(err, err_size, "lowered tmp assign too long");
+            return -1;
         }
         ins_init_assign(&expanded[n++], line);
     }
@@ -946,9 +1015,14 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
         ins_init_assign(&expanded[n++], line);
     }
     ins_init_call(&expanded[n++], fn->executor_label);
-    ins_init_assign(&expanded[n++], "V.set(1)");
+    if (caller_body_needs_global_vcx(prog, b)) {
+        ins_init_assign(&expanded[n++], "V.set(1)");
+    }
     if (fn->is_global_executor) {
-        snprintf(line, sizeof line, "%s = %s", call->func_ret, fn->return_name);
+        if (flat_str_assign_line(line, sizeof line, call->func_ret, fn->return_name) != 0) {
+            snprintf(err, err_size, "lowered return assign too long");
+            return -1;
+        }
         ins_init_assign(&expanded[n++], line);
     }
 

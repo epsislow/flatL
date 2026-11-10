@@ -1,7 +1,67 @@
 #include "flat_str.h"
 
 #include <ctype.h>
+#include <stdio.h>
 #include <string.h>
+
+int flat_str_join(char *out, size_t out_sz, const char *a, const char *b) {
+    size_t la;
+    size_t lb;
+
+    if (!out || out_sz == 0) {
+        return -1;
+    }
+    if (!a) {
+        a = "";
+    }
+    if (!b) {
+        b = "";
+    }
+    la = strlen(a);
+    lb = strlen(b);
+    if (la + lb + 1 > out_sz) {
+        return -1;
+    }
+    if (la > 0) {
+        memcpy(out, a, la);
+    }
+    if (lb > 0) {
+        memcpy(out + la, b, lb + 1);
+    } else {
+        out[la] = '\0';
+    }
+    return 0;
+}
+
+int flat_str_assign_line(char *out, size_t cap, const char *lhs, const char *rhs) {
+    static const char mid[] = " = ";
+    size_t ll;
+    size_t lr;
+
+    if (!out || cap == 0 || !lhs || !rhs) {
+        return -1;
+    }
+    ll = strlen(lhs);
+    lr = strlen(rhs);
+    if (ll + sizeof mid - 1u + lr + 1 > cap) {
+        return -1;
+    }
+    memcpy(out, lhs, ll);
+    memcpy(out + ll, mid, sizeof mid - 1u);
+    memcpy(out + ll + (sizeof mid - 1u), rhs, lr + 1);
+    return 0;
+}
+
+int flat_str_assign_fl_tmp(char *out, size_t cap, int tmp_index, const char *rhs) {
+    char lhs[40];
+    int n;
+
+    n = snprintf(lhs, sizeof lhs, "__fl_tmp_%d", tmp_index);
+    if (n < 0 || (size_t)n >= sizeof lhs) {
+        return -1;
+    }
+    return flat_str_assign_line(out, cap, lhs, rhs);
+}
 
 char *flat_str_trim(char *s) {
     char *p = s;

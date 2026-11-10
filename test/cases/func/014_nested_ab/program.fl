@@ -1,0 +1,21 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+use native math with m
+
+func:executor #fl_executor.global.scope
+func:callVM 1
+
+def double(a) -> r
+  m.calc('a * 2') -> r
+  return
+
+func:callVM 0
+
+def bump(a) -> r
+  double(a) -> r
+  return
+
+#main
+  bump(3) -> x
+  io.outln(x)
+  OK

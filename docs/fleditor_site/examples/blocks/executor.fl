@@ -1,7 +1,7 @@
 use native vcx with V
 use native list with L
 #executor.unique.scope
-  instrId = V.var(V.current(), '__call_instr_vcx')
+  instrId = V.callInstr()
   calleVcx = V.var(instrId, 'calleVcx')
   funcVcxSlots = V.var(instrId, 'funcVcxSlots')
   paramSrc = V.var(instrId, 'paramSrcNames')
@@ -12,20 +12,20 @@ use native list with L
   V.varsCopyByNames(instrId, funcVcx, ['calleVcx'], ['__calle_id'])
   V.set(funcVcx)
   call block __run_block
-  V.set(__calle_id)
-  retSrcN = V.var(instrId, 'returnVar')
-  retDstN = V.var(instrId, 'calleReturnVar')
+  V.set(V.var(V.callInstr(), 'calleVcx'))
+  retSrcN = V.var(V.callInstr(), 'returnVar')
+  retDstN = V.var(V.callInstr(), 'calleReturnVar')
   retSrcL = L.pack(retSrcN)
   retDstL = L.pack(retDstN)
-  V.varsCopyByNames(funcVcx, calleVcx, retSrcL, retDstL)
-  V.set(calleVcx)
+  V.varsCopyByNames(funcVcx, V.var(V.callInstr(), 'calleVcx'), retSrcL, retDstL)
+  V.set(V.var(V.callInstr(), 'calleVcx'))
   V.destroy(funcVcx)
-  V.set(calleVcx)
-  V.destroy(instrId)
+  V.set(V.var(V.callInstr(), 'calleVcx'))
+  V.destroy(V.callInstr())
   return
 
 #executor.global.scope
-  instrId = V.var(V.current(), '__call_instr_vcx')
+  instrId = V.callInstr()
   calleVcx = V.var(instrId, 'calleVcx')
   paramSrc = V.var(instrId, 'paramSrcNames')
   paramDst = V.var(instrId, 'funcParamNames')
@@ -33,5 +33,5 @@ use native list with L
   runId = V.var(instrId, 'targetBlock')
   call block runId
   V.set(calleVcx)
-  V.destroy(instrId)
+  V.destroy(V.callInstr())
   return

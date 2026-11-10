@@ -464,6 +464,18 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             fclose(f);
             return -1;
         }
+        if (strncmp(p, "func:", 5) == 0) {
+            if (finish_open_def(out, open_fn_idx, path, line_no, err, err_size) != 0) {
+                fclose(f);
+                return -1;
+            }
+            open_fn_idx = -1;
+            if (flat_func_parse_header_line(p, out, path, line_no, err, err_size) < 0) {
+                fclose(f);
+                return -1;
+            }
+            continue;
+        }
         if (starts_with_kw(p, "def")) {
             FgirFunction *fn;
 

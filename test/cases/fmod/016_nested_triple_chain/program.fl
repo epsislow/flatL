@@ -1,0 +1,24 @@
+use fmod "../002_mul2_callvm/lib/mul2.fmod" as m
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+use native math with m
+
+func:executor #fl_executor.global.scope
+func:callVM 1
+
+def leaf(a) -> r
+  m.mul2(a) -> r
+  return
+
+def mid(a) -> r
+  leaf(a) -> r
+  return
+
+def bump(a) -> r
+  mid(a) -> r
+  return
+
+#main
+  bump(3) -> x
+  io.outln(x)
+  OK

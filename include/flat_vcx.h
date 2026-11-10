@@ -82,4 +82,15 @@ int flat_vcx_set_named_var(FlatVcxRuntime *rt, uint32_t ctx_id, const char *name
                             FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
                             size_t panic_sz);
 
+typedef uint32_t (*FlatVcxCallInstrResolver)(void);
+
+void flat_vcx_set_call_instr_resolver(FlatVcxCallInstrResolver fn);
+uint32_t flat_vcx_call_instr_ctx(void);
+
+/* Strategy A nested calls: stack of instr VCX ids when __call_instr_vcx is assigned. */
+void flat_vm_instr_stack_push(uint32_t id);
+int flat_vm_instr_stack_pop(uint32_t id);
+uint32_t flat_vm_instr_stack_peek(void);
+void flat_vm_instr_stack_clear(void);
+
 #endif

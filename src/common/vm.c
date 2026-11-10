@@ -41,6 +41,7 @@ typedef struct {
 
 typedef struct {
     uint32_t return_ip;
+    uint32_t func_instr_ctx; /* OP_CALL_FUNCTION: instr VCX id; 0 otherwise */
 } CallFrame;
 
 typedef struct {
@@ -76,6 +77,41 @@ typedef struct {
     const FlatVmOptions *run_opts;
     FlatVcxRuntime *vcx;
 } VmState;
+
+static VmState *g_vm_call_instr;
+static uint32_t g_instr_stack[VM_MAX_CALL];
+static int g_instr_stack_sp;
+static int g_instr_push_call_sp[VM_MAX_CALL];
+static int g_last_call_function_sp;
+
+void flat_vm_instr_stack_push(uint32_t id) {
+    if (id < 1u || g_instr_stack_sp >= VM_MAX_CALL) {
+        return;
+    }
+    g_instr_push_call_sp[g_instr_stack_sp] =
+        g_vm_call_instr ? g_vm_call_instr->call_sp : 0;
+    g_instr_stack[g_instr_stack_sp++] = id;
+}
+
+int flat_vm_instr_stack_pop(uint32_t id) {
+    if (g_instr_stack_sp <= 0 || g_instr_stack[g_instr_stack_sp - 1] != id) {
+        return 0;
+    }
+    g_instr_stack_sp--;
+    return 1;
+}
+
+uint32_t flat_vm_instr_stack_peek(void) {
+    if (g_instr_stack_sp <= 0) {
+        return 0u;
+    }
+    return g_instr_stack[g_instr_stack_sp - 1];
+}
+
+void flat_vm_instr_stack_clear(void) {
+    g_instr_stack_sp = 0;
+    g_last_call_function_sp = 0;
+}
 
 static void vm_write_stderr(const char *s) {
     size_t n;
@@ -283,6 +319,73 @@ static int find_var(VmState *st, const char *name) {
     return -1;
 }
 
+static uint32_t vm_number_to_u32(double d) {
+    if (d != d || d < 0.0 || d > (double)UINT32_MAX || floor(d) != d) {
+        return 0u;
+    }
+    return (uint32_t)d;
+}
+
+static uint32_t vm_resolve_call_instr_ctx(void) {
+    int i;
+
+    if (!g_vm_call_instr) {
+        return 0u;
+    }
+    {
+        uint32_t stack_id = flat_vm_instr_stack_peek();
+        uint32_t frame_id = 0u;
+        int push_sp = 0;
+
+        for (i = g_vm_call_instr->call_sp - 1; i >= 0; i--) {
+            if (g_vm_call_instr->calls[i].func_instr_ctx != 0u) {
+                frame_id = g_vm_call_instr->calls[i].func_instr_ctx;
+                break;
+            }
+        }
+        if (g_instr_stack_sp > 0) {
+            push_sp = g_instr_push_call_sp[g_instr_stack_sp - 1];
+        }
+        if (stack_id >= 1u && frame_id >= 1u && stack_id != frame_id) {
+            if (push_sp >= g_last_call_function_sp) {
+                return stack_id;
+            }
+            return frame_id;
+        }
+        if (frame_id >= 1u) {
+            return frame_id;
+        }
+        if (stack_id >= 1u) {
+            return stack_id;
+        }
+    }
+    {
+        int vi = find_var(g_vm_call_instr, FLAT_FUNC_RESERVED_INSTR_VAR);
+        if (vi >= 0 && g_vm_call_instr->vars[vi].val.tag == VAL_NUMBER) {
+            uint32_t id = vm_number_to_u32(g_vm_call_instr->vars[vi].val.u.number);
+            if (id >= 1u) {
+                return id;
+            }
+        }
+    }
+    if (g_vm_call_instr->vcx) {
+        FlatValue v;
+        char panic[32];
+
+        if (flat_vcx_get_var(g_vm_call_instr->vcx, 1u, FLAT_FUNC_RESERVED_INSTR_VAR, &v,
+                             g_vm_call_instr->coll, g_vm_call_instr->pool, &g_vm_call_instr->files,
+                             panic, sizeof panic) == 0 &&
+            v.tag == VAL_NUMBER) {
+            uint32_t id = vm_number_to_u32(v.u.number);
+            flat_value_release(g_vm_call_instr->coll, g_vm_call_instr->pool, &v);
+            if (id >= 1u) {
+                return id;
+            }
+        }
+    }
+    return 0u;
+}
+
 static int var_name_forbidden(const char *name) {
     return strcmp(name, "null") == 0 || strcmp(name, "true") == 0 || strcmp(name, "false") == 0;
 }
@@ -331,6 +434,12 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
         if (st->io_ctx) {
             flat_io_ctx_var_updated(st->io_ctx, i, val);
         }
+        if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && val->tag == VAL_NUMBER) {
+            uint32_t iid = vm_number_to_u32(val->u.number);
+            if (iid >= 1u) {
+                flat_vm_instr_stack_push(iid);
+            }
+        }
         return 0;
     }
     if ((uint32_t)st->var_count >= st->var_slots_max) {
@@ -350,6 +459,12 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
         flat_io_ctx_var_updated(st->io_ctx, st->var_count, val);
     }
     st->var_count++;
+    if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && val->tag == VAL_NUMBER) {
+        uint32_t iid = vm_number_to_u32(val->u.number);
+        if (iid >= 1u) {
+            flat_vm_instr_stack_push(iid);
+        }
+    }
     if (st->vcx) {
         flat_vcx_runtime_sync_bind_var_count(st->vcx);
     }
@@ -742,6 +857,11 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
 
 static void vm_teardown(VmState *st, int rc) {
     (void)rc;
+    if (g_vm_call_instr == st) {
+        g_vm_call_instr = NULL;
+        flat_vcx_set_call_instr_resolver(NULL);
+        flat_vm_instr_stack_clear();
+    }
     if (st->vcx) {
         flat_vcx_runtime_destroy(st->vcx, st->coll, st->pool, &st->files);
         st->vcx = NULL;
@@ -851,19 +971,6 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
                         sizeof panic) != 0) {
         return -1;
     }
-    flat_value_set_number(&nv, (double)instr_id);
-    if (set_var_value(st, FLAT_FUNC_RESERVED_INSTR_VAR, &nv) != 0) {
-        flat_value_release(st->coll, st->pool, &nv);
-        return -1;
-    }
-    flat_value_release(st->coll, st->pool, &nv);
-    flat_value_set_number(&nv, (double)calle_id);
-    if (set_var_value(st, FLAT_FUNC_RESERVED_CALLE_VAR, &nv) != 0) {
-        flat_value_release(st->coll, st->pool, &nv);
-        return -1;
-    }
-    flat_value_release(st->coll, st->pool, &nv);
-
     flat_value_set_number(&nv, (double)fn->impl_block_id);
     if (flat_vcx_set_named_var(st->vcx, instr_id, "targetBlock", &nv, st->coll, st->pool,
                                   &st->files, &st->live, panic, sizeof panic) != 0) {
@@ -952,7 +1059,10 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
     if (st->call_sp >= VM_MAX_CALL) {
         return -1;
     }
-    st->calls[st->call_sp++].return_ip = *ip + 2u + psz;
+    st->calls[st->call_sp].return_ip = *ip + 2u + psz;
+    st->calls[st->call_sp].func_instr_ctx = instr_id;
+    st->call_sp++;
+    g_last_call_function_sp = st->call_sp;
     *ip = exec_ip;
     return 0;
 }
@@ -1355,6 +1465,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                                                .var_count = &st.var_count,
                                                .var_slots_max = &st.var_slots_max});
     flat_vcx_runtime_set_active(st.vcx);
+    g_vm_call_instr = &st;
+    flat_vcx_set_call_instr_resolver(vm_resolve_call_instr_ctx);
     if (!st.vars) {
         return vm_fail_setup(&st, opts);
     }
@@ -1556,7 +1668,9 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
             }
             st.via_jump = 0;
-            st.calls[st.call_sp++].return_ip = ip + 2u + payload_size;
+            st.calls[st.call_sp].return_ip = ip + 2u + payload_size;
+            st.calls[st.call_sp].func_instr_ctx = 0u;
+            st.call_sp++;
             ip = target;
             continue;
         }
@@ -1605,7 +1719,9 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 continue;
             }
             st.via_jump = 0;
-            st.calls[st.call_sp++].return_ip = ip + 2u + payload_size;
+            st.calls[st.call_sp].return_ip = ip + 2u + payload_size;
+            st.calls[st.call_sp].func_instr_ctx = 0u;
+            st.call_sp++;
             ip = target;
             continue;
         }

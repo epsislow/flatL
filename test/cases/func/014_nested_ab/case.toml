@@ -1,0 +1,9 @@
+suite = "func"
+id = 14
+desc = "nested A in B: bump (callVM 0) calls double (callVM 1)"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "6"

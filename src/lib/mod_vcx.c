@@ -269,6 +269,15 @@ static FlatVcxRuntime *rt_from(FlatNativeCtx *ctx) {
     return flat_vcx_runtime_active();
 }
 
+int flat_native_vcx_call_instr(FlatNativeCtx *ctx) {
+    uint32_t id = flat_vcx_call_instr_ctx();
+
+    if (id < 1u) {
+        return vcx_fail(ctx, "vcx.callInstr");
+    }
+    return vcx_out_num(ctx, (double)id);
+}
+
 int flat_native_vcx_current(FlatNativeCtx *ctx) {
     FlatVcxRuntime *rt = rt_from(ctx);
     if (!rt) {
@@ -517,6 +526,7 @@ int flat_native_vcx_destroy(FlatNativeCtx *ctx) {
                              sizeof ctx->panic_detail) != 0) {
         return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.destroy");
     }
+    (void)flat_vm_instr_stack_pop(id);
     if (ctx->io_status) {
         *ctx->io_status = FLAT_IO_OK;
     }
