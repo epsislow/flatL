@@ -6,18 +6,39 @@
 
 1. Build WASM (Linux/WSL/macOS with [Emscripten](https://emscripten.org/) on `PATH`):
 
-   One-time Emscripten (example):
+   One-time Emscripten (recommended: **system path**, not `$HOME`):
 
    ```bash
-   git clone https://github.com/emscripten-core/emsdk.git ~/emsdk
-   cd ~/emsdk && ./emsdk install latest && ./emsdk activate latest
-   echo 'source "$HOME/emsdk/emsdk_env.sh"' >> ~/.bashrc
+   sudo apt install -y git python3 cmake   # if cmake/git missing
+   sudo mkdir -p /opt
+   sudo git clone https://github.com/emscripten-core/emsdk.git /opt/emsdk
+   cd /opt/emsdk && sudo ./emsdk install latest && sudo ./emsdk activate latest
+   # optional: sudo chown -R "$(whoami)" /opt/emsdk   # so later installs need no sudo
    ```
+
+   Add to `~/.bashrc` (no startup spam — `EMSDK_QUIET=1` is supported by emsdk):
+
+   ```bash
+   if [ -f /opt/emsdk/emsdk_env.sh ]; then
+     EMSDK_QUIET=1 . /opt/emsdk/emsdk_env.sh
+     # WSL1: bundled node may not run — point emcc at apt node
+     [ -x /usr/bin/node ] && export EMSDK_NODE=/usr/bin/node
+   fi
+   ```
+
+   If `emcc` still errors on `Exec format error` for `/opt/emsdk/node/...`, set **`/opt/emsdk/.emscripten`**:
+
+   ```text
+   NODE_JS = '/usr/bin/node'
+   ```
+
+   (Keep `LLVM_ROOT`, `EMSCRIPTEN_ROOT`, etc. unchanged.)
+
+   Or only for one shell: `EMSDK_QUIET=1 source /opt/emsdk/emsdk_env.sh`
 
    Then from the repo:
 
    ```bash
-   source ~/emsdk/emsdk_env.sh   # if not in .bashrc yet
    make rebuild                  # clean + bin/* + fleditor WASM (recommended after compiler changes)
    # or: make fleditor-rebuild (same as rebuild) / make fleditor-wasm (WASM only)
    # without emcc: make rebuild-native, then make fleditor-wasm when emsdk is available
@@ -200,6 +221,7 @@ Layout prefs: `localStorage` key `flatl-fleditor-layout`.
 ## Limits
 
 - Optional natives static-linked in WASM when declared with `use native`.
+- **`def`**, **`func:executor`**, and linked **`blocks/executor.fl`** require a current **`flatl.wasm`** (includes `flat_func.c` in `Makefile.wasm`). If Run reports `expected use directive or block` on a `func:` line, rebuild WASM below and hard-refresh the browser.
 - No Git/cloud sync in v1.
 
 ## Spck Editor (phone)
@@ -210,7 +232,10 @@ Copy **`docs/fleditor_site/`** into a Spck project; keep relative `wasm/`, `ext/
 
 ```bash
 make -f Makefile.wasm fleditor-wasm-clean
-make -f Makefile.wasm fleditor-wasm
+make fleditor-wasm
+# or: make rebuild  (when emcc is on PATH)
 ```
+
+Smoke after rebuild: `make fleditor-wasm-order-flow-smoke`.
 
 Output: **`docs/fleditor_site/wasm/`**. See `Makefile.wasm` (`-DFLAT_WASM_BUILD`, `-s ASYNCIFY=1`).

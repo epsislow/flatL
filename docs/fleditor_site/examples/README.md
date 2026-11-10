@@ -8,6 +8,7 @@ Curated `.fl` samples shipped with the browser playground. Paths in the editor p
 | `io_inln.fl` | `io.inln` prompt (modal stdin) |
 | `use/main.fl` + `use/lib/helper.fl` | Multi-file `use "…" as #Prefix` |
 | `native_list.fl` | `use native list` (static-linked in WASM) |
+| `order_flow.fl` + `blocks/executor.fl` | User `def`, executors, `math`/`str`, guards + `#or` (v0.4) |
 
 **Reset project** reloads `main.fl` plus all files listed in `manifest.json`.
 

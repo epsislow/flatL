@@ -108,6 +108,7 @@ help:
 	@echo "  make fleditor-examples-smoke       examples picker smoke (Node)"
 	@echo "  make fleditor-wasm-smoke           WASM smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-multifile-smoke WASM multifile smoke (needs fleditor-wasm)"
+	@echo "  make fleditor-wasm-order-flow-smoke   WASM user def (order_flow; needs fleditor-wasm)"
 	@echo ""
 	@echo "Note: if sources unchanged, make skips compile (up to date)."
 	@echo "      Targets still print 'OK: …' so you know nothing failed."
@@ -321,6 +322,9 @@ fleditor-wasm-smoke: fleditor-wasm
 
 fleditor-wasm-multifile-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_multifile_smoke.mjs
+
+fleditor-wasm-order-flow-smoke: fleditor-wasm
+	$(NODE) test/fleditor/wasm_order_flow_smoke.mjs
 
 clean:
 	rm -rf $(BINDIR)

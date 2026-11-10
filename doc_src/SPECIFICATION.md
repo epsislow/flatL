@@ -512,6 +512,8 @@ Command reference for `flc`, `flvm`, `mkfb`, and `run_tests`: [TOOLCHAIN.md](./T
 
 ## 8. Document status
 
-**v0.1** — `flc`/`flvm` implement the opcodes above; conformance coverage in `test/cases/` (`smoke`, `flvm`, `flc`, `e2e`). Native dotted calls (`kv.get`, …) and full expression evaluation are **not** implemented yet.
+**v0.1** — baseline opcodes and `test/cases/` smoke suites.
 
-**v0.2:** runtime value model — [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (limits, refs, slice views).
+**v0.2** — runtime value model — [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (limits, refs, slice views).
+
+**v0.4 (toolchain)** — user **`def`** and executors ([USER_FUNCTIONS.md](./USER_FUNCTIONS.md)); **`use fmod`** ([FMOD_MODULES.md](./FMOD_MODULES.md)); broad **native** catalog (`io`, `str`, `math`, `json`, `file`, `vcx`, `list`, `obj`, …). Examples in §1 that use **`form.*`**, **`kv.*`**, **`end.*`**, or **`call #block(args) -> var`** on plain blocks are **illustrative** (target application shape), not shipped APIs. Parameterized calls that work today use **`def`**; plain **`#block(param)`** headers are parsed but not bound at run time; **`return expr`** on blocks is not supported (bare **`return`** only). See the capability table in the root [README.md](../README.md).

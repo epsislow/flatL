@@ -2,7 +2,8 @@
 
 **flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards (`#or` handlers), `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
 
-> FGIR (Flat Graph Intermediate Representation) spec v1.0 · Binary & VM spec v1.1  
+> **Toolchain v0.4.0** (`FLAT_TOOLCHAIN_VERSION` in `include/flat.h`)  
+> FGIR spec v1.0 · Binary & VM spec v1.1 (`.fb` v5 with optional FFUN metadata)  
 > **Documentation is in English** — index: [doc_src/README.md](doc_src/README.md) · offline site: **`make docs`** + **`make fleditor-serve`** → [docs/doc_site/](docs/doc_site/index.html)
 
 ## Why flatL?
@@ -37,45 +38,45 @@ Parses, compiles, and runs with current `flc` / `flvm` (see `make test`):
 ```
 
 Types: `true` / `false`, numbers, quoted strings; `call #block`; guards with `==` (and `>=`, etc. on numbers).  
-**I/O:** `io.out` / `io.outln` / `io.inln` / `io.in_num` / `io.in_bool`, binding `->` — see [doc_src/IO.md](doc_src/IO.md). **Strings:** core **`str.*`** (`len`, `slice`, `concat`, `split`, …) — [doc_src/natives/str.md](doc_src/natives/str.md); parsing **`str.to_num`** / **`str.to_bool`** in [IO.md](doc_src/IO.md). Test helper **`__ref__`**; LIST/OBJECT literals ([LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md)).
+**I/O:** `io.out` / `io.outln` / `io.inln` / `io.in_num` / `io.in_bool`, binding `->` — see [doc_src/IO.md](doc_src/IO.md). **Strings:** **`str.*`** — [doc_src/natives/str.md](doc_src/natives/str.md); **`math.*`** / **`m.calc('…')`** — [doc_src/natives/math.md](doc_src/natives/math.md); **JSON / LIST / OBJECT** — [doc_src/IO_COLLECTIONS.md](doc_src/IO_COLLECTIONS.md). Test helper **`__ref__`**; literals — [LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md).
 
-Minimal sample: [examples/hello.fl](examples/hello.fl).
+**Also in v0.4:** `use "…"`, `use native …`, **`use fmod`** ([FMOD_MODULES.md](doc_src/FMOD_MODULES.md)); user **`def`** + executors ([USER_FUNCTIONS.md](doc_src/USER_FUNCTIONS.md)); dynamic **`call block expr`** ([CALL_BLOCK.md](doc_src/CALL_BLOCK.md)); toolchain **`--time`** ([TOOLCHAIN.md](doc_src/TOOLCHAIN.md)).
 
-### Target syntax (illustrative — not all implemented yet)
+Minimal sample: [examples/hello.fl](examples/hello.fl). Payment-style flow with **`def`** (no `form.*` / `kv.*`): [examples/order_flow.fl](examples/order_flow.fl).
 
-Shows the **intended** shape once native libraries and full expressions land (`form.*`, `str.*`, `kv.*`, `end.*`, call arguments, block parameters):
+**User function with parameters** (runs today — see `test/cases/func/`):
 
 ```text
+use "blocks/executor.fl" as #fl_
+func:executor #fl_executor.global.scope
+use native math with m
+
+def add(a, b) -> sum
+  m.calc('a + b') -> sum
+  return
+
 #main
-  uid = form.userId
-  amount = form.amount
-  call #check_balance(uid, amount) -> has_funds
-  has_funds == true
-  call #process_payment(uid, amount) -> payment_status
-  payment_status == 'SUCCESS'
-  end.msg('Order completed')
+  add(2, 3) -> r
+  io.outln(r)
   OK
-
-#or.#main.4
-  end.err('Insufficient funds')
-  FAIL
-
-#check_balance(userId, amount)
-  u_key = str.concat('user:wallet:', userId)
-  balance = kv.get(u_key)
-  result = calc(balance >= amount)
-  return result
 ```
 
-| Feature in example | v0.2 status |
-|--------------------|-------------|
-| `#main`, `#or…`, `OK` / `FAIL` | Yes |
-| Guards `==`, `>=` on vars | Yes |
-| `call #block` (no args) | Yes |
-| `call #block(a, b) -> out` | Parsed; **args / return binding not executed** |
-| `#block(param, …)` headers | Parsed; **params not bound at runtime** |
-| `form.userId`, `str.*`, `kv.*`, `end.*`, `calc(...)` | **No** — planned via native libs |
-| `return expr` | `return` only (no value) |
+### Capability snapshot (toolchain v0.4)
+
+| Area | v0.4 |
+|------|------|
+| Flat graph: `#main`, `#or…`, `OK` / `FAIL`, guards, panic handlers | Yes |
+| `call #block` / `return` (no arguments) | Yes |
+| `use` / `use native` / `use fmod`, link compile | Yes |
+| User **`def …`**, calls `f(a, b) -> x`, executors | Yes |
+| Natives: `io`, `str`, `math`, `json`, `file`, `vcx`, `list`, `obj`, … | Yes (`make test`) |
+| `foreach`, `for`, `jump #block`, `call block <expr>` | Yes |
+| **`call #block(a, b) -> out`** (plain blocks, not `def`) | **Not yet** — parser sees `(` on the call line but the VM does not pass arguments; use **`def`** for parameterized calls |
+| **`#block(param, …)`** headers | Parsed into FGIR; **no runtime parameter binding** for plain blocks |
+| **`return expr`** from a block | **`return` only** (no value expression) |
+| Illustrative app APIs in [SPECIFICATION.md](doc_src/SPECIFICATION.md) (`form.*`, `kv.*`, `end.*`) | **Not in the toolchain** — long-term sketch of a web/order flow, not shipped modules |
+
+The old payment-style snippet in the spec shows how guards and `#or` would wrap a business process; in v0.4 you would model **`check_balance`** as a **`def`** (or separate blocks plus shared variables / VCX), not as `call #check_balance(uid, amount) -> has_funds`.
 
 Lexical rules (summary):
 
@@ -154,13 +155,14 @@ bin/run_tests -h
 ## Roadmap
 
 - [x] Toolchain skeleton + C test runner (`run_tests`)
-- [x] `flvm` — opcodes v0.1 (OK/FAIL/GUARD/ASSIGN/CALL/RETURN/FOREACH/PANIC)
-- [x] `flc` — parse `.fl` → FGIR, `--dump-ir`, emit `.fb`
-- [x] E2E tests (`make test`)
-- [x] Runtime values v0.2 — STRING REF pool, NUMBER, BOOL ([LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md))
-- [ ] Native std libraries (`str`, `kv`, …) — no VM built-in functions
-- [ ] Full expression language + infrastructure panic from natives
-- [ ] Optional dynamic modules (`.so`)
+- [x] `flvm` / `flc` — FGIR, `.fb`, opcodes through `OP_CALL_BLOCK`, `OP_JUMP`, `OP_FOR`
+- [x] E2E suite (`make test`, 390+ cases)
+- [x] Runtime values — STRING REF pool, NUMBER, BOOL, LIST, OBJECT ([LANGUAGE_TYPES.md](doc_src/LANGUAGE_TYPES.md))
+- [x] Native modules (`io`, `str`, `math`, `json`, `file`, `vcx`, `list`, `obj`, …) + optional `.so` plugins on Unix
+- [x] **v0.4** — user functions + executors, `.fmod`, `flatl`, diagnostics `--time`
+- [ ] Block calls with arguments / `return expr` on plain `#block` graphs
+- [ ] Multi-return user functions (`a, b = f(x)`)
+- [ ] Runtime `module.load` / richer `.fmod` packaging (see [FMOD_MODULES.md](doc_src/FMOD_MODULES.md) §7)
 
 ## License
 

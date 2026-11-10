@@ -1,0 +1,37 @@
+use native vcx with V
+use native list with L
+#executor.unique.scope
+  instrId = V.var(V.current(), '__call_instr_vcx')
+  calleVcx = V.var(instrId, 'calleVcx')
+  funcVcxSlots = V.var(instrId, 'funcVcxSlots')
+  paramSrc = V.var(instrId, 'paramSrcNames')
+  paramDst = V.var(instrId, 'funcParamNames')
+  funcVcx = V.create(funcVcxSlots)
+  V.varsCopyByNames(instrId, funcVcx, paramSrc, paramDst)
+  V.varsCopyByNames(instrId, funcVcx, ['targetBlock'], ['__run_block'])
+  V.varsCopyByNames(instrId, funcVcx, ['calleVcx'], ['__calle_id'])
+  V.set(funcVcx)
+  call block __run_block
+  V.set(__calle_id)
+  retSrcN = V.var(instrId, 'returnVar')
+  retDstN = V.var(instrId, 'calleReturnVar')
+  retSrcL = L.pack(retSrcN)
+  retDstL = L.pack(retDstN)
+  V.varsCopyByNames(funcVcx, calleVcx, retSrcL, retDstL)
+  V.set(calleVcx)
+  V.destroy(funcVcx)
+  V.set(calleVcx)
+  V.destroy(instrId)
+  return
+
+#executor.global.scope
+  instrId = V.var(V.current(), '__call_instr_vcx')
+  calleVcx = V.var(instrId, 'calleVcx')
+  paramSrc = V.var(instrId, 'paramSrcNames')
+  paramDst = V.var(instrId, 'funcParamNames')
+  V.varsCopyByNames(instrId, calleVcx, paramSrc, paramDst)
+  runId = V.var(instrId, 'targetBlock')
+  call block runId
+  V.set(calleVcx)
+  V.destroy(instrId)
+  return

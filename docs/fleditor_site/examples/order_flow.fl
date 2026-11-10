@@ -1,0 +1,39 @@
+-- Order flow (v0.4): `def` + guards + `#or` (no fictional form/kv modules).
+-- Needs current WASM (`make fleditor-wasm` after v0.4); otherwise `func:executor` fails to compile.
+-- Open this file, Run — or try `wallet_balance = 10` for the decline path.
+
+use "blocks/executor.fl" as #fl_
+use native vcx with V
+use native math with m
+use native str with s
+
+func:executor #fl_executor.global.scope
+
+def check_balance(bal, amount) -> diff
+  m.calc('bal - amount') -> diff
+  return
+
+def format_decline(reason) -> line
+  s.concat('DECLINE: ', reason) -> line
+  return
+
+#main
+  uid = 'user-42'
+  amount = 75
+  wallet_balance = 100
+
+  io.outln('order flow demo')
+  io.outln(uid)
+  io.outln(amount)
+
+  check_balance(wallet_balance, amount) -> diff
+  wallet_balance == 100
+  amount == 75
+  io.outln('payment_status=SUCCESS')
+  io.outln('Order completed')
+  OK
+
+#or.#main.26
+  format_decline('Insufficient funds') -> msg
+  io.outln(msg)
+  FAIL
