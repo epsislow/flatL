@@ -1,0 +1,8 @@
+suite = "time"
+id = 1
+desc = "flc --time prints flc: time_ms on stderr"
+kind = "exec"
+
+cmd = "{root}/bin/flc --time -o {case}/out.fb {case}/program.fl"
+expect_exit = 0
+stderr_contains = "flc: time_ms"

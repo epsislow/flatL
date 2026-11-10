@@ -121,7 +121,7 @@ static int compile_linked_entry(const char *entry_path, uint8_t **out_fb, size_t
         return -1;
     }
 
-    if (flat_link_program(entry_path, &link_opts, prog, err, err_sz) != 0) {
+    if (flat_link_program(entry_path, &link_opts, prog, NULL, err, err_sz) != 0) {
         goto done;
     }
     if (flat_compile_fgir(prog, FLAT_WASM_FB_PATH, err, err_sz) != 0) {

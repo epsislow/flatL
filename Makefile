@@ -44,17 +44,19 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_d
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
                 $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
-VM_SRC  = src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
+VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
           src/common/value_ops.c src/common/flat_obj_path.c src/common/flat_vcx.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/value_json.c src/common/flat_file.c src/common/flat_io_ctx.c \
           src/common/flat_memstream.c \
           $(STR_SRC) $(NATIVE_VM_SRC)
+FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
                src/common/flat_assign.c \
                src/common/line_label.c \
            src/common/native_use.c \
+           $(FLAT_TIME_SRC) \
            $(STR_SRC) $(NATIVE_FLC_SRC)
 FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \
            src/common/flat_func.c src/common/line_label.c \
@@ -65,33 +67,47 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-serve fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
+.PHONY: all help clean test test-flatl fixtures tools flvm flc flatl mkfb run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
 	@echo ""
 	@echo "Build (compile only, no tests executed):"
 	@echo "  make              same as make all"
-	@echo "  make all          bin/flc, bin/flvm, bin/flatl, bin/run_tests + fixtures"
+	@echo "  make all          bin/flc, bin/flvm, bin/flatl, bin/run_tests, bin/port_check, … + fixtures"
 	@echo "  make tools        bin/flc, bin/flvm, bin/flatl, bin/mkfb only"
 	@echo "  make flvm         rebuild VM only"
 	@echo "  make flc          rebuild compiler only"
 	@echo "  make flatl        rebuild driver (compile/run/crun) only"
 	@echo "  make mkfb         rebuild fixture helper only"
 	@echo "  make run_tests    rebuild test runner only"
-	@echo "  make io_generate_tests   rebuild bin/io_generate_tests and regenerate test/cases/io/*"
-	@echo "  make json_generate_tests rebuild bin/json_generate_tests and regenerate test/cases/json/*"
-	@echo "  make date_generate_tests regenerate test/cases/date/* (scripts/gen_date_tests.py)"
 	@echo "  make fixtures     regenerate min_ok.fb examples"
-	@echo "  make docs         bin/gen_doc_site → docs/doc_site/ (offline HTML docs)"
-	@echo "  make fleditor-wasm   Emscripten → docs/fleditor_site/wasm/ (needs emcc)"
-	@echo "  make fleditor-serve  serve docs/ (GitHub Pages layout) on port 8765"
-	@echo "  make fleditor-serve-forced  kill port 8765 then serve (fuser)"
-	@echo "  make fleditor-smoke  HTTP smoke test for fleditor static server"
-	@echo "  make fleditor-wasm-smoke / fleditor-wasm-multifile-smoke  headless WASM tests"
 	@echo "  make rebuild      clean + all; fleditor-wasm if emcc on PATH"
 	@echo "  make rebuild-native  clean + all only (never runs emcc)"
-	@echo "  make fleditor-rebuild  alias for make rebuild (+ browser refresh hint)"
+	@echo ""
+	@echo "Test generators (rewrite committed cases under test/cases/):"
+	@echo "  make io_generate_tests    bin/io_generate_tests → test/cases/io/*"
+	@echo "  make json_generate_tests  bin/json_generate_tests → test/cases/json/*"
+	@echo "  make date_generate_tests  scripts/gen_date_tests.py → test/cases/date/*"
+	@echo ""
+	@echo "Docs site (doc_src/index.json → docs/doc_site/, incl. fleditor Docs link):"
+	@echo "  make docs | make gen_doc_site   run bin/gen_doc_site"
+	@echo ""
+	@echo "Fleditor (browser playground under docs/fleditor_site/):"
+	@echo "  make fleditor-wasm                 Emscripten → docs/fleditor_site/wasm/ (needs emcc)"
+	@echo "  make fleditor-rebuild              same as make rebuild (+ refresh browser tip)"
+	@echo "  make fleditor-node-check           diagnose Node (WSL1 / Windows node.exe fallback)"
+	@echo "  make fleditor-serve                static server 127.0.0.1:8765 (env FLEDITOR_PORT)"
+	@echo "  make fleditor-stop                 stop serve.js on that port"
+	@echo "  make fleditor-serve-forced         fleditor-stop, then serve"
+	@echo "  make fleditor-smoke                HTTP smoke (serve)"
+	@echo "  make fleditor-layout-smoke         layout smoke (Node)"
+	@echo "  make fleditor-theme-smoke          theme smoke (Node)"
+	@echo "  make fleditor-project-smoke        project UI smoke (Node)"
+	@echo "  make fleditor-hex-smoke            hex editor smokes (Node)"
+	@echo "  make fleditor-examples-smoke       examples picker smoke (Node)"
+	@echo "  make fleditor-wasm-smoke           WASM smoke (needs fleditor-wasm)"
+	@echo "  make fleditor-wasm-multifile-smoke WASM multifile smoke (needs fleditor-wasm)"
 	@echo ""
 	@echo "Note: if sources unchanged, make skips compile (up to date)."
 	@echo "      Targets still print 'OK: …' so you know nothing failed."
@@ -99,12 +115,12 @@ help:
 	@echo "Test:"
 	@echo "  make test         make all, then ./bin/run_tests (flc + flvm pipelines)"
 	@echo "  make test-flatl   make all, then ./bin/run_tests --flatl"
-	@echo "  bin/run_tests -h  filters, -v, -e, -w, --flatl (see doc_src/TOOLCHAIN.md)"
+	@echo "  bin/run_tests -h  filters, -v, -e, -t, --list, -w, --flatl (see doc_src/TOOLCHAIN.md)"
 	@echo ""
 	@echo "Clean:"
 	@echo "  make clean        remove bin/ and generated min_ok.fb"
 	@echo ""
-	@echo "Docs: doc_src/TOOLCHAIN.md  doc_src/LANGUAGE_TYPES.md  |  Pages: docs/"
+	@echo "Docs: doc_src/TOOLCHAIN.md  doc_src/FMOD_MODULES.md  |  Pages: docs/"
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
 all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/gen_doc_site$(EXEEXT) $(PLUGIN_TARGET) fixtures
@@ -195,10 +211,11 @@ RUN_TESTS_SRCS = \
 	src/run_tests/discover.c \
 	src/run_tests/case.c \
 	src/common/repo.c \
+	$(FLAT_TIME_SRC) \
 	$(PORT_LIB)
 
 $(BINDIR)/run_tests$(EXEEXT): $(RUN_TESTS_SRCS) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ $(RUN_TESTS_SRCS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $(RUN_TESTS_SRCS) $(LDFLAGS) -lm
 
 $(BINDIR)/port_check$(EXEEXT): src/port_check/main.c $(STR_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/port_check/main.c $(STR_SRC) $(LDFLAGS)

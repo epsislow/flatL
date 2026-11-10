@@ -1,0 +1,8 @@
+suite = "time"
+id = 3
+desc = "run_tests prints Total tests time footer"
+kind = "exec"
+
+cmd = "{root}/bin/run_tests smoke[1]"
+expect_exit = 0
+stdout_contains = "Total tests time:"

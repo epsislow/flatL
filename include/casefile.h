@@ -1,6 +1,8 @@
 #ifndef FLAT_CASEFILE_H
 #define FLAT_CASEFILE_H
 
+#include <stddef.h>
+
 #define FLAT_CASE_MAX_PATH 512
 #define FLAT_CASE_MAX_CMD 1024
 #define FLAT_CASE_MAX_CHECKS 16
@@ -38,7 +40,36 @@ typedef struct {
     char flatl_run[FLAT_CASE_MAX_CMD];
 } FlatCase;
 
+typedef struct {
+    int valid;
+    double prep_ms;
+    double total_ms;
+    double flc_ms;
+    double flvm_ms;
+    double compile_ms;
+    double run_ms;
+    double exec_ms;
+    int have_flc;
+    int have_flvm;
+    int have_compile;
+    int have_run;
+    int have_exec;
+    int have_units;
+    int units;
+    int have_fmod;
+    int fmod;
+} FlatCaseTiming;
+
+typedef struct {
+    int inject_tool_time;
+    int measure;
+} FlatCaseRunOptions;
+
 int flat_case_load(const char *case_toml_path, FlatCase *out);
 int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char *err, int err_size);
+int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
+                     const FlatCaseRunOptions *opts, FlatCaseTiming *timing, char *err, int err_size);
+void flat_case_format_time_suffix(const FlatCase *c, int use_flatl, const FlatCaseTiming *t,
+                                  char *buf, size_t buf_sz);
 
 #endif

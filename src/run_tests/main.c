@@ -1,6 +1,7 @@
 #include "casefile.h"
 #include "discover.h"
 #include "flat_str.h"
+#include "flat_time.h"
 #include "repo.h"
 
 #include <ctype.h>
@@ -46,10 +47,13 @@ static void print_help(const char *prog) {
     printf("Options:\n");
     printf("  -h, --help                 show help\n");
     printf("  -v, --verbose              print failure details\n");
-    printf("  -e, --each                 progress grouped per suite\n");
+    printf("  -e, --each                 per suite: #id/N desc + . / F (N = selected count)\n");
+    printf("  -t, --time                 per-case timings (use with -e; injects --time in toolchain)\n");
     printf("  -w, --progress-width N     max . / F characters per line (default: %d)\n",
            DEFAULT_PROGRESS_WIDTH);
     printf("  --flatl                    pipeline: [flatl] in case.toml, else compile+run fallback\n");
+    printf("  --list                     list suite names and case counts (no tests run)\n");
+    printf("\nSession footer Total tests time: is always printed on stdout after the summary.\n");
 }
 
 static void progress_flush(void) {
@@ -81,20 +85,43 @@ static void progress_on_fail(Progress *p, const FlatCase *c, int verbose, const 
     progress_flush();
 }
 
-static void progress_on_result(Progress *p, int ok, const FlatCase *c, int verbose,
-                               const char *err) {
+static void progress_on_result(Progress *p, int ok, const FlatCase *c, int verbose, int each,
+                                 int show_time, int use_flatl, int run_selected_total,
+                                 const FlatCaseTiming *timing, const char *err) {
+    char suffix[512];
+
     p->run++;
+    if (each) {
+        printf("  #%d/%d %s\n  ", c->id, run_selected_total, c->desc);
+    }
     if (ok) {
         printf("%s.%s", ANSI_GREEN, ANSI_RESET);
+    } else {
+        printf("%sF%s", ANSI_RED, ANSI_RESET);
+    }
+    if (show_time && timing && timing->valid) {
+        flat_case_format_time_suffix(c, use_flatl, timing, suffix, sizeof suffix);
+        flat_time_print_runner_suffix(suffix);
+    }
+    if (each || show_time) {
+        printf("\n");
+        p->chars_on_line = 0;
+    } else if (ok) {
         p->chars_on_line++;
-        progress_flush();
         if (p->chars_on_line >= p->width) {
             progress_finish_line(p);
         }
     } else {
-        printf("%sF%s", ANSI_RED, ANSI_RESET);
-        progress_flush();
         progress_on_fail(p, c, verbose, err);
+        return;
+    }
+    progress_flush();
+    if (!ok && !each && !show_time) {
+        progress_on_fail(p, c, verbose, err);
+    } else if (!ok && (each || show_time)) {
+        if (verbose) {
+            printf("    %s\n", err);
+        }
     }
 }
 
@@ -182,16 +209,20 @@ static int filter_push(FilterList *fl, const char *suite, const char *spec) {
 }
 
 static int parse_args(int argc, char **argv, FilterList *fl, int *verbose, int *each, int *help,
-                      int *progress_width, int *use_flatl) {
+                      int *progress_width, int *use_flatl, int *show_time, int *list_only) {
     int i;
     for (i = 1; i < argc; i++) {
         const char *arg = argv[i];
         if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             *help = 1;
+        } else if (strcmp(arg, "--list") == 0) {
+            *list_only = 1;
         } else if (strcmp(arg, "-v") == 0 || strcmp(arg, "--verbose") == 0) {
             *verbose = 1;
         } else if (strcmp(arg, "-e") == 0 || strcmp(arg, "--each") == 0) {
             *each = 1;
+        } else if (strcmp(arg, "-t") == 0 || strcmp(arg, "--time") == 0) {
+            *show_time = 1;
         } else if (strcmp(arg, "--flatl") == 0) {
             *use_flatl = 1;
         } else if (strcmp(arg, "-w") == 0 || strcmp(arg, "--progress-width") == 0) {
@@ -284,6 +315,44 @@ static void filters_free(FilterList *fl) {
     memset(fl, 0, sizeof *fl);
 }
 
+static void print_suite_catalog(const FlatCase *cases, int ncases) {
+    int i = 0;
+    int suite_count = 0;
+    int case_total = 0;
+
+    if (ncases <= 0) {
+        printf("(no cases)\n");
+        return;
+    }
+    while (i < ncases) {
+        const char *suite = cases[i].suite;
+        int count = 0;
+        int min_id = cases[i].id;
+        int max_id = cases[i].id;
+
+        while (i < ncases && strcmp(cases[i].suite, suite) == 0) {
+            if (cases[i].id < min_id) {
+                min_id = cases[i].id;
+            }
+            if (cases[i].id > max_id) {
+                max_id = cases[i].id;
+            }
+            count++;
+            i++;
+        }
+        suite_count++;
+        case_total += count;
+        if (count == 1) {
+            printf("%-24s  %d case   (id %d)\n", suite, count, min_id);
+        } else if (min_id == max_id) {
+            printf("%-24s  %d cases  (id %d)\n", suite, count, min_id);
+        } else {
+            printf("%-24s  %d cases  (ids %d–%d)\n", suite, count, min_id, max_id);
+        }
+    }
+    printf("\nTotal: %d cases in %d suite(s)\n", case_total, suite_count);
+}
+
 int main(int argc, char **argv) {
     char repo[512];
     FlatCase *cases = NULL;
@@ -291,17 +360,21 @@ int main(int argc, char **argv) {
     FilterList filters = {0};
     int verbose = 0;
     int each = 0;
+    int show_time = 0;
     int help = 0;
     int progress_width = DEFAULT_PROGRESS_WIDTH;
     int use_flatl = 0;
+    int list_only = 0;
     Progress progress;
     int run_total = 0;
     int passed = 0;
     int failed = 0;
     int i;
+    double session_t0;
+    FlatCaseRunOptions run_opts = {0};
 
-    if (parse_args(argc, argv, &filters, &verbose, &each, &help, &progress_width, &use_flatl) !=
-        0) {
+    if (parse_args(argc, argv, &filters, &verbose, &each, &help, &progress_width, &use_flatl,
+                   &show_time, &list_only) != 0) {
         return 2;
     }
     if (help) {
@@ -322,10 +395,24 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    if (list_only) {
+        print_suite_catalog(cases, ncases);
+        flat_discover_free(cases);
+        filters_free(&filters);
+        return 0;
+    }
+
     run_total = count_filtered(cases, ncases, &filters, NULL);
     progress_init(&progress, run_total, progress_width);
+    session_t0 = flat_time_monotonic_ms();
+    run_opts.measure = 1;
+    run_opts.inject_tool_time = each && show_time;
 
-    printf("Running (%d discovered)", ncases);
+    printf("Running (%d selected", run_total);
+    if (run_total != ncases) {
+        printf(", %d discovered", ncases);
+    }
+    printf(")");
     if (use_flatl) {
         printf("  %s[driver: flatl]%s", ANSI_YELLOW, ANSI_RESET);
     }
@@ -339,6 +426,7 @@ int main(int argc, char **argv) {
         for (i = 0; i < ncases; i++) {
             FlatCase *c = &cases[i];
             char err[512];
+            FlatCaseTiming timing = {0};
             int ok;
 
             if (!filter_match(&filters, c)) {
@@ -355,13 +443,18 @@ int main(int argc, char **argv) {
                 printf("%s%s:%s\n", ANSI_YELLOW, c->suite, ANSI_RESET);
             }
 
-            ok = flat_case_run(c, repo, use_flatl, err, sizeof err) == 0;
+            ok = flat_case_run_ex(c, repo, use_flatl, &run_opts, &timing, err, sizeof err) == 0;
             if (ok) {
                 passed++;
             } else {
                 failed++;
             }
-            progress_on_result(&progress, ok, c, verbose, err);
+            if (each && show_time) {
+                progress_on_result(&progress, ok, c, verbose, each, 1, use_flatl, run_total, &timing,
+                                     err);
+            } else {
+                progress_on_result(&progress, ok, c, verbose, each, 0, use_flatl, run_total, NULL, err);
+            }
         }
         progress_finish_line(&progress);
         if (progress.run == 0) {
@@ -372,6 +465,7 @@ int main(int argc, char **argv) {
 
     printf("Passed: %s%d%s Failed: %s%d%s Total: %s%d%s\n", ANSI_YELLOW, passed, ANSI_RESET,
            ANSI_YELLOW, failed, ANSI_RESET, ANSI_YELLOW, passed + failed, ANSI_RESET);
+    flat_time_print_tests_footer(flat_time_monotonic_ms() - session_t0);
 
     flat_discover_free(cases);
     filters_free(&filters);

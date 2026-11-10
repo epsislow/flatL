@@ -872,9 +872,10 @@ static int attach_unit_to_out(FgirProgram *out, const FgirProgram *mod, int *out
 }
 
 int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirProgram *out,
-                      char *err, size_t err_size) {
+                      FlatLinkReport *report, char *err, size_t err_size) {
     FlatModEntry mods[FLAT_LINK_MAX_MODULES];
     int mod_count = 0;
+    int fmod_linked = 0;
     FgirProgram *entry_prog = NULL;
     FgirProgram *mod = NULL;
     int i;
@@ -897,6 +898,7 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         if (scan_header_fmod_uses(entry_path, opts, fmods, 32, &fmod_count, err, err_size) != 0) {
             return -1;
         }
+        fmod_linked = fmod_count;
         mod = calloc(1, sizeof(FgirProgram));
         if (!mod) {
             snprintf(err, err_size, "out of memory");
@@ -1037,6 +1039,12 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     if (out->main_index < 0) {
         snprintf(err, err_size, "%s: missing #main", entry_path);
         return -1;
+    }
+
+    if (report) {
+        memset(report, 0, sizeof *report);
+        report->units = out->native_unit_count;
+        report->fmod = fmod_linked;
     }
 
     return 0;

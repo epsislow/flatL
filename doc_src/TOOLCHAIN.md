@@ -53,9 +53,9 @@ Tests: `test/cases/use/` (suite `use`). Normative rules: [SPECIFICATION.md §1.2
 `flc` and `flvm` remain the low-level tools. **`flatl`** wraps the same library code in-process (no extra shell for these subcommands).
 
 ```bash
-flatl compile [--verbose] -o out.fb program.fl
-flatl run [--trace] [--trace-vars] program.fb
-flatl crun [--trace] [-o out.fb] program.fl
+flatl compile [--verbose] [--time] -o out.fb program.fl
+flatl run [--trace] [--trace-vars] [--time] program.fb
+flatl crun [--trace] [--trace-vars] [--time] [-o out.fb] program.fl
 ```
 
 | Subcommand | Input | Behavior |
@@ -166,6 +166,7 @@ Use forward slashes or escaped backslashes; link **`src\port\flat_port_win.c`** 
 bin/flvm --version
 bin/flvm program.fb
 bin/flvm --trace program.fb
+bin/flvm --time program.fb
 bin/flvm --max-steps 1000000 program.fb          # opcode log → stderr
 bin/flvm --trace-vars program.fb     # opcode + variables → stderr
 ```
@@ -190,6 +191,33 @@ bin/flc -o out.fb program.fl    # compile to bytecode
 ```
 
 Parse/compile errors print to stderr and exit **1**.
+
+| Flag | Effect |
+|------|--------|
+| `--time` | One line on **stderr**: `flc: time_ms link=… compile=… total=… units=N fmod=M` (durations &lt; 60 s as integer ms; ≥ 60 s as `M:SS,mmm`) |
+| `FLAT_TIME=1` | Same as `--time` if the flag is omitted |
+
+## Diagnostics: `--time` (toolchain + `run_tests`)
+
+Wall-clock phase timings (not opcode profiling). Shared formatting via `flat_time.c` (§ plan AM-22).
+
+| Binary | Flag | stderr line |
+|--------|------|----------------|
+| `flc` | `--time` | `flc: time_ms link=… compile=… total=… units=… fmod=…` |
+| `flvm` | `--time` | `flvm: time_ms load=… run=… exit=… total=…` |
+| `flatl compile` | `--time` | `flatl: time_ms link=… compile=… total=… units=… fmod=…` |
+| `flatl run` | `--time` | `flatl: time_ms load=… run=… exit=… total=…` |
+| `flatl crun` | `--time` | `flatl: time_ms compile=… run=… total=… units=… fmod=… exit=…` |
+
+`run_tests`:
+
+| Option | Effect |
+|--------|--------|
+| *(default)* | After `Passed: … Failed: …`, prints **`Total tests time: …`** on **stdout** (always) |
+| `-e` + `-t` / `--time` | Per case: suite header, `#id`, `.` or `F`, then ` time_ms prep=…` (keys depend on driver — `flc`/`flvm` vs `flatl` `compile`/`run`) |
+| `-t` without `-e` | Footer only (no per-case `time_ms` line) |
+
+`FLAT_TIME=1` applies to `flc`, `flvm`, and `flatl` the same way as `--time`.
 
 ## `gen_doc_site` / `make docs`
 
@@ -235,6 +263,7 @@ C runner — no Node.js. Scans `test/cases/<suite>/<id>_*/case.toml`.
 ```bash
 bin/run_tests
 bin/run_tests -h
+bin/run_tests --list         # suite names + case counts (no run)
 bin/run_tests flatl -v
 bin/run_tests e2e[1-7] flc -v -e
 bin/run_tests -w 20          # wrap progress dots (default: 40 per line)
@@ -252,8 +281,10 @@ Progress prints `.` / `F` in ANSI color (flushed after each character so dots ap
 | Flag | Effect |
 |------|--------|
 | `-v` | Failure messages after each `F` |
-| `-e` | Yellow suite header; progress **`(n/suite_total)`** resets per suite |
-| `-w N` | Max `.` / `F` characters per line before wrapping |
+| `-e` | Per suite: `#id/N desc` + `.` / `F` (`N` = selected case count); yellow suite header |
+| `-t` / `--time` | With **`-e`**: ` time_ms …`; footer **Total tests time:** always |
+| `--list` | List each suite, case count, id range; exit without running |
+| `-w N` | Max `.` / `F` characters per line before wrapping (compact mode, no **`-e`**) |
 | `--flatl` | Pipeline driver: **`[flatl]`** section or fallback (see **`make test-flatl`**) |
 
 **`make test` vs `make test-flatl`**

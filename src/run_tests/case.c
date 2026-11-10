@@ -1,5 +1,6 @@
 #include "casefile.h"
 #include "flat_port.h"
+#include "flat_time.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -263,20 +264,130 @@ static void subst_flvm_with_flatl_run(char *cmd, size_t cap) {
     replace_token(cmd, cap, "\\bin\\flvm.exe ", "\\bin\\flatl.exe run ");
 }
 
+static void inject_tool_time(char *cmd, size_t cap) {
+    replace_token(cmd, cap, "/bin/flc ", "/bin/flc --time ");
+    replace_token(cmd, cap, "/bin/flc.exe ", "/bin/flc.exe --time ");
+    replace_token(cmd, cap, "\\bin\\flc ", "\\bin\\flc --time ");
+    replace_token(cmd, cap, "\\bin\\flc.exe ", "\\bin\\flc.exe --time ");
+    replace_token(cmd, cap, "/bin/flvm ", "/bin/flvm --time ");
+    replace_token(cmd, cap, "/bin/flvm.exe ", "/bin/flvm.exe --time ");
+    replace_token(cmd, cap, "\\bin\\flvm ", "\\bin\\flvm --time ");
+    replace_token(cmd, cap, "\\bin\\flvm.exe ", "\\bin\\flvm.exe --time ");
+    replace_token(cmd, cap, "/bin/flatl crun ", "/bin/flatl crun --time ");
+    replace_token(cmd, cap, "/bin/flatl.exe crun ", "/bin/flatl.exe crun --time ");
+    replace_token(cmd, cap, "/bin/flatl compile ", "/bin/flatl compile --time ");
+    replace_token(cmd, cap, "/bin/flatl.exe compile ", "/bin/flatl.exe compile --time ");
+    replace_token(cmd, cap, "/bin/flatl run ", "/bin/flatl run --time ");
+    replace_token(cmd, cap, "/bin/flatl.exe run ", "/bin/flatl.exe run --time ");
+    replace_token(cmd, cap, "/bin/flatl run --trace ", "/bin/flatl run --time --trace ");
+    replace_token(cmd, cap, "/bin/flatl.exe run --trace ", "/bin/flatl.exe run --time --trace ");
+}
+
+static int shell_capture_timed(const char *cmd, int *code, char *out, size_t out_sz, double *ms_out) {
+    double t0 = flat_time_monotonic_ms();
+    int rc = flat_port_shell_capture(cmd, code, out, (int)out_sz);
+    if (ms_out) {
+        *ms_out = flat_time_monotonic_ms() - t0;
+    }
+    (void)t0;
+    return rc;
+}
+
+static void timing_finish(FlatCaseTiming *timing, double t_case_start, int measure) {
+    if (!timing || !measure) {
+        return;
+    }
+    timing->total_ms = flat_time_monotonic_ms() - t_case_start;
+    timing->valid = 1;
+}
+
+static void parse_flatl_crun_capture(const char *out, FlatCaseTiming *timing) {
+    const char *line = strstr(out, "flatl: time_ms");
+    if (!line) {
+        return;
+    }
+    if (flat_time_parse_field_ms(line, "compile", &timing->compile_ms) == 0) {
+        timing->have_compile = 1;
+    }
+    if (flat_time_parse_field_ms(line, "run", &timing->run_ms) == 0) {
+        timing->have_run = 1;
+    }
+    flat_time_parse_tool_line(out, "flatl", &timing->units, &timing->fmod, &timing->have_units,
+                              &timing->have_fmod);
+}
+
+void flat_case_format_time_suffix(const FlatCase *c, int use_flatl, const FlatCaseTiming *t,
+                                  char *buf, size_t buf_sz) {
+    if (!t || !t->valid || !buf || buf_sz == 0) {
+        if (buf && buf_sz > 0) {
+            buf[0] = '\0';
+        }
+        return;
+    }
+    flat_time_line_begin(buf, buf_sz);
+    flat_time_append_field(buf, buf_sz, "prep", t->prep_ms);
+    if (c->kind == CASE_KIND_EXEC && t->have_exec) {
+        flat_time_append_field(buf, buf_sz, "exec", t->exec_ms);
+    } else if (c->kind == CASE_KIND_PIPELINE) {
+        if (t->have_flc) {
+            flat_time_append_field(buf, buf_sz, "flc", t->flc_ms);
+        }
+        if (t->have_flvm) {
+            flat_time_append_field(buf, buf_sz, "flvm", t->flvm_ms);
+        }
+        if (t->have_compile) {
+            flat_time_append_field(buf, buf_sz, "compile", t->compile_ms);
+        }
+        if (t->have_run) {
+            flat_time_append_field(buf, buf_sz, "run", t->run_ms);
+        }
+        if (t->have_units) {
+            flat_time_append_int_field(buf, buf_sz, "units", t->units);
+        }
+        if (t->have_fmod) {
+            flat_time_append_int_field(buf, buf_sz, "fmod", t->fmod);
+        }
+    }
+    flat_time_append_field(buf, buf_sz, "total", t->total_ms);
+    (void)use_flatl;
+}
+
 int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char *err, int err_size) {
+    return flat_case_run_ex(c, repo_root, use_flatl, NULL, NULL, err, err_size);
+}
+
+int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
+                     const FlatCaseRunOptions *opts, FlatCaseTiming *timing, char *err, int err_size) {
     int i;
+
+    int inject = opts && opts->inject_tool_time;
+    int measure = opts && opts->measure;
+    double t_case = 0.0;
+    double t_prep_done = 0.0;
 
     if (!c || !repo_root) {
         snprintf(err, (size_t)err_size, "invalid arguments");
         return -1;
     }
+    if (measure) {
+        t_case = flat_time_monotonic_ms();
+        if (timing) {
+            memset(timing, 0, sizeof *timing);
+        }
+    }
 
     if (c->kind == CASE_KIND_FILES) {
+        t_prep_done = flat_time_monotonic_ms();
         for (i = 0; i < c->path_check_count; i++) {
             if (!path_exists_at(repo_root, c->path_checks[i])) {
                 snprintf(err, (size_t)err_size, "missing path: %s", c->path_checks[i]);
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
+        }
+        if (timing && measure) {
+            timing->prep_ms = t_prep_done - t_case;
+            timing_finish(timing, t_case, measure);
         }
         return 0;
     }
@@ -285,22 +396,43 @@ int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char 
         char cmd[FLAT_CASE_MAX_CMD];
         char out[4096];
         int code = -1;
+        double exec_ms = 0.0;
 
         expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
+        if (inject) {
+            inject_tool_time(cmd, sizeof cmd);
+        }
         flat_port_prepare_shell_cmd(cmd, sizeof cmd);
-        if (flat_port_shell_capture(cmd, &code, out, sizeof out) != 0) {
+        t_prep_done = flat_time_monotonic_ms();
+        if (timing && measure) {
+            timing->prep_ms = t_prep_done - t_case;
+        }
+        if (shell_capture_timed(cmd, &code, out, sizeof out, &exec_ms) != 0) {
             snprintf(err, (size_t)err_size, "failed to run: %s", cmd);
+            timing_finish(timing, t_case, measure);
             return -1;
         }
         if (code != c->expect_exit) {
             snprintf(err, (size_t)err_size, "exit %d want %d (cmd: %s)", code, c->expect_exit, cmd);
+            if (timing && measure) {
+                timing->exec_ms = exec_ms;
+                timing->have_exec = 1;
+            }
+            timing_finish(timing, t_case, measure);
             return -1;
         }
         if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+            timing_finish(timing, t_case, measure);
             return -1;
         }
         if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+            timing_finish(timing, t_case, measure);
             return -1;
+        }
+        if (timing && measure) {
+            timing->exec_ms = exec_ms;
+            timing->have_exec = 1;
+            timing_finish(timing, t_case, measure);
         }
         return 0;
     }
@@ -332,60 +464,109 @@ int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char 
         flat_port_path_to_native(src_path);
 
         if (use_flatl && c->flatl_crun[0] != '\0') {
+            double crun_ms = 0.0;
             if (c->flatl_compile[0] != '\0' || c->flatl_run[0] != '\0') {
                 snprintf(err, (size_t)err_size, "[flatl]: use crun or compile+run, not both");
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
             expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                                 src_path, c->flatl_crun);
+            if (inject) {
+                inject_tool_time(compile_cmd, sizeof compile_cmd);
+            }
             flat_port_prepare_shell_cmd(compile_cmd, sizeof compile_cmd);
-            if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
+            t_prep_done = flat_time_monotonic_ms();
+            if (timing && measure) {
+                timing->prep_ms = t_prep_done - t_case;
+            }
+            if (shell_capture_timed(compile_cmd, &code, out, sizeof out, &crun_ms) != 0) {
                 snprintf(err, (size_t)err_size, "flatl crun failed: %s", compile_cmd);
+                timing_finish(timing, t_case, measure);
                 return -1;
+            }
+            if (timing && measure) {
+                parse_flatl_crun_capture(out, timing);
+                if (!timing->have_compile && !timing->have_run) {
+                    timing->compile_ms = crun_ms;
+                    timing->have_compile = 1;
+                }
             }
             if (code != c->expect_exit) {
                 snprintf(err, (size_t)err_size, "flatl crun exit %d want %d", code,
                          c->expect_exit);
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
             if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
             if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
+            timing_finish(timing, t_case, measure);
             return 0;
         }
 
         if (use_flatl && c->flatl_compile[0] != '\0' && c->flatl_run[0] != '\0') {
+            double compile_ms = 0.0;
+            double run_ms = 0.0;
             expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                                 src_path, c->flatl_compile);
             expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                                 c->flatl_run);
+            if (inject) {
+                inject_tool_time(compile_cmd, sizeof compile_cmd);
+                inject_tool_time(run_cmd, sizeof run_cmd);
+            }
             flat_port_prepare_shell_cmd(compile_cmd, sizeof compile_cmd);
             flat_port_prepare_shell_cmd(run_cmd, sizeof run_cmd);
-            if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
+            t_prep_done = flat_time_monotonic_ms();
+            if (timing && measure) {
+                timing->prep_ms = t_prep_done - t_case;
+            }
+            if (shell_capture_timed(compile_cmd, &code, out, sizeof out, measure ? &compile_ms : NULL) !=
+                0) {
                 snprintf(err, (size_t)err_size, "flatl compile failed: %s", compile_cmd);
+                timing_finish(timing, t_case, measure);
                 return -1;
+            }
+            if (timing && measure) {
+                timing->compile_ms = compile_ms;
+                timing->have_compile = 1;
+                flat_time_parse_tool_line(out, "flatl", &timing->units, &timing->fmod,
+                                          &timing->have_units, &timing->have_fmod);
             }
             if (code != 0) {
                 snprintf(err, (size_t)err_size, "flatl compile exit %d: %s", code, compile_cmd);
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
-            if (flat_port_shell_capture(run_cmd, &code, out, sizeof out) != 0) {
+            if (shell_capture_timed(run_cmd, &code, out, sizeof out, measure ? &run_ms : NULL) != 0) {
                 snprintf(err, (size_t)err_size, "flatl run failed: %s", run_cmd);
+                timing_finish(timing, t_case, measure);
                 return -1;
+            }
+            if (timing && measure) {
+                timing->run_ms = run_ms;
+                timing->have_run = 1;
             }
             if (code != c->expect_exit) {
                 snprintf(err, (size_t)err_size, "flatl run exit %d want %d", code, c->expect_exit);
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
             if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
             if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+                timing_finish(timing, t_case, measure);
                 return -1;
             }
+            timing_finish(timing, t_case, measure);
             return 0;
         }
 
@@ -407,35 +588,79 @@ int flat_case_run(const FlatCase *c, const char *repo_root, int use_flatl, char 
         if (use_flatl) {
             subst_flvm_with_flatl_run(run_cmd, sizeof run_cmd);
         }
+        if (inject) {
+            inject_tool_time(compile_cmd, sizeof compile_cmd);
+            inject_tool_time(run_cmd, sizeof run_cmd);
+        }
         flat_port_prepare_shell_cmd(compile_cmd, sizeof compile_cmd);
         flat_port_prepare_shell_cmd(run_cmd, sizeof run_cmd);
-        if (flat_port_shell_capture(compile_cmd, &code, out, sizeof out) != 0) {
+        t_prep_done = flat_time_monotonic_ms();
+        if (timing && measure) {
+            timing->prep_ms = t_prep_done - t_case;
+        }
+        {
+            double flc_ms = 0.0;
+            double flvm_ms = 0.0;
+        if (shell_capture_timed(compile_cmd, &code, out, sizeof out, measure ? &flc_ms : NULL) != 0) {
             snprintf(err, (size_t)err_size, "compile failed: %s", compile_cmd);
+            timing_finish(timing, t_case, measure);
             return -1;
+        }
+        if (timing && measure) {
+            if (use_flatl) {
+                timing->have_compile = 1;
+                timing->compile_ms = flc_ms;
+                timing->have_flc = 0;
+                flat_time_parse_tool_line(out, "flatl", &timing->units, &timing->fmod,
+                                          &timing->have_units, &timing->have_fmod);
+            } else {
+                timing->flc_ms = flc_ms;
+                timing->have_flc = 1;
+                flat_time_parse_tool_line(out, "flc", &timing->units, &timing->fmod,
+                                          &timing->have_units, &timing->have_fmod);
+            }
         }
         if (code != 0) {
             snprintf(err, (size_t)err_size, "%s exit %d: %s", use_flatl ? "flatl compile" : "flc",
                      code, compile_cmd);
+            timing_finish(timing, t_case, measure);
             return -1;
         }
-        if (flat_port_shell_capture(run_cmd, &code, out, sizeof out) != 0) {
+        if (shell_capture_timed(run_cmd, &code, out, sizeof out, measure ? &flvm_ms : NULL) != 0) {
             snprintf(err, (size_t)err_size, "run failed: %s", run_cmd);
+            timing_finish(timing, t_case, measure);
             return -1;
+        }
+        if (timing && measure) {
+            if (use_flatl) {
+                timing->have_run = 1;
+                timing->run_ms = flvm_ms;
+                timing->have_flvm = 0;
+            } else {
+                timing->flvm_ms = flvm_ms;
+                timing->have_flvm = 1;
+            }
         }
         if (code != c->expect_exit) {
             snprintf(err, (size_t)err_size, "%s exit %d want %d", use_flatl ? "flatl run" : "vm",
                      code, c->expect_exit);
+            timing_finish(timing, t_case, measure);
             return -1;
         }
         if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+            timing_finish(timing, t_case, measure);
             return -1;
         }
         if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+            timing_finish(timing, t_case, measure);
             return -1;
         }
+        timing_finish(timing, t_case, measure);
         return 0;
+        }
     }
 
     snprintf(err, (size_t)err_size, "unknown or unset case kind");
+    timing_finish(timing, t_case, measure);
     return -1;
 }

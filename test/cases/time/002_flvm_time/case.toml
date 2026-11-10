@@ -1,0 +1,8 @@
+suite = "time"
+id = 2
+desc = "flvm --time prints flvm: time_ms on stderr"
+kind = "exec"
+
+cmd = "{root}/bin/flvm --time {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 0
+stderr_contains = "flvm: time_ms"

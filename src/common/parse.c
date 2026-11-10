@@ -599,7 +599,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
 
 int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_size) {
     FlatLinkOptions opts = {0};
-    return flat_link_program(path, &opts, out, err, err_size);
+    return flat_link_program(path, &opts, out, NULL, err, err_size);
 }
 
 void flat_fgir_dump(const FgirProgram *prog, FILE *out) {
