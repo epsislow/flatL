@@ -39,6 +39,8 @@ def add(a, b) -> sum
 
 **Toolchain:** WASM `flc` in fleditor follows the same rules after AM-1. To compare call lowering size (A vs B), use static disassembly: **`fbdump`** on `.fb` or **`flc --dump-bc`** on `.fl` — see [TOOLCHAIN.md § Bytecode inspection](./TOOLCHAIN.md#bytecode-inspection-fbdump--flc---dump-bc).
 
+**AM-1 microbench (loop):** `test/cases/bench/` — 20 000× `inc(s)` in a `for` loop (`001` = strategy A, `002` = strategy B). Case **`003`** runs `test/bench/compare_callvm_loop.sh` (3× `flvm --time`, min `run` ms, opcode must be ≤ desugar + **5%** slack; logs ratio and optional `fbdump --summary`). Manual: `bin/run_tests bench -v` or `sh test/bench/compare_callvm_loop.sh .` Env: `FLAT_CALLVM_BENCH_ROUNDS`, `FLAT_CALLVM_BENCH_SLACK`. The plan’s **~20% faster** target is informational, not a CI gate.
+
 ## Call site
 
 ```flat

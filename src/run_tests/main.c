@@ -37,6 +37,13 @@ typedef struct {
     int cap;
 } FilterList;
 
+typedef struct {
+    char tags[16][FLAT_CASE_CATEG_LEN];
+    int count;
+    int all;
+    int explicit_spec;
+} CategFilter;
+
 static void print_help(const char *prog) {
     printf("flatL test runner\n\n");
     printf("Usage:\n");
@@ -52,6 +59,8 @@ static void print_help(const char *prog) {
     printf("  -w, --progress-width N     max . / F characters per line (default: %d)\n",
            DEFAULT_PROGRESS_WIDTH);
     printf("  --flatl                    pipeline: [flatl] in case.toml, else compile+run fallback\n");
+    printf("  --categ=TAG[,TAG...]       run cases with categ TAG (default run: categ=default)\n");
+    printf("  --categ=all                all categories (same as make test-all)\n");
     printf("  --list                     list suite names and case counts (no tests run)\n");
     printf("\nSession footer Total tests time: is always printed on stdout after the summary.\n");
 }
@@ -186,6 +195,81 @@ static int parse_id_spec(const char *spec, int **out_ids, int *out_count) {
     return count > 0 ? 0 : -1;
 }
 
+static void categ_filter_init_default(CategFilter *cf) {
+    memset(cf, 0, sizeof *cf);
+    snprintf(cf->tags[0], sizeof cf->tags[0], "%s", FLAT_CASE_CATEG_DEFAULT);
+    cf->count = 1;
+}
+
+static int categ_filter_add(CategFilter *cf, const char *tag) {
+    int i;
+
+    if (!cf || !tag || tag[0] == '\0') {
+        return -1;
+    }
+    if (strlen(tag) >= FLAT_CASE_CATEG_LEN) {
+        return -1;
+    }
+    for (i = 0; i < cf->count; i++) {
+        if (strcmp(cf->tags[i], tag) == 0) {
+            return 0;
+        }
+    }
+    if (cf->count >= 16) {
+        return -1;
+    }
+    snprintf(cf->tags[cf->count], sizeof cf->tags[cf->count], "%s", tag);
+    cf->count++;
+    return 0;
+}
+
+static int categ_filter_parse_spec(CategFilter *cf, const char *spec) {
+    char buf[256];
+    char *bp;
+    char *tok;
+
+    if (!cf || !spec) {
+        return -1;
+    }
+    memset(cf, 0, sizeof *cf);
+    cf->explicit_spec = 1;
+    if (strcmp(spec, "all") == 0 || strcmp(spec, "*") == 0) {
+        cf->all = 1;
+        return 0;
+    }
+    snprintf(buf, sizeof buf, "%s", spec);
+    bp = buf;
+    while ((tok = flat_str_next(&bp, ',')) != NULL) {
+        tok = flat_str_trim(tok);
+        if (*tok == '\0') {
+            continue;
+        }
+        if (categ_filter_add(cf, tok) != 0) {
+            return -1;
+        }
+    }
+    return cf->count > 0 ? 0 : -1;
+}
+
+static int categ_match(const CategFilter *cf, const FlatCase *c) {
+    int i;
+    const char *tag;
+
+    if (!cf || !c) {
+        return 0;
+    }
+    if (cf->all) {
+        return 1;
+    }
+    tag = c->categ[0] ? c->categ : FLAT_CASE_CATEG_DEFAULT;
+    for (i = 0; i < cf->count; i++) {
+        if (strcmp(cf->tags[i], tag) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int filter_push(FilterList *fl, const char *suite, const char *spec) {
     SuiteFilter *sf;
 
@@ -208,8 +292,9 @@ static int filter_push(FilterList *fl, const char *suite, const char *spec) {
     return parse_id_spec(spec, &sf->ids, &sf->id_count);
 }
 
-static int parse_args(int argc, char **argv, FilterList *fl, int *verbose, int *each, int *help,
-                      int *progress_width, int *use_flatl, int *show_time, int *list_only) {
+static int parse_args(int argc, char **argv, FilterList *fl, CategFilter *categ, int *verbose,
+                      int *each, int *help, int *progress_width, int *use_flatl, int *show_time,
+                      int *list_only) {
     int i;
     for (i = 1; i < argc; i++) {
         const char *arg = argv[i];
@@ -233,6 +318,11 @@ static int parse_args(int argc, char **argv, FilterList *fl, int *verbose, int *
             *progress_width = parse_positive_int(argv[++i], *progress_width);
         } else if (strncmp(arg, "--progress-width=", 17) == 0) {
             *progress_width = parse_positive_int(arg + 17, *progress_width);
+        } else if (strncmp(arg, "--categ=", 8) == 0) {
+            if (categ_filter_parse_spec(categ, arg + 8) != 0) {
+                fprintf(stderr, "Invalid --categ: %s\n", arg + 8);
+                return -1;
+            }
         } else if (arg[0] == '-' && arg[1] == 'w' && arg[2] != '\0' && isdigit((unsigned char)arg[2])) {
             *progress_width = parse_positive_int(arg + 2, *progress_width);
         } else {
@@ -290,11 +380,14 @@ static int filter_match(const FilterList *fl, const FlatCase *c) {
 }
 
 static int count_filtered(const FlatCase *cases, int ncases, const FilterList *fl,
-                          const char *suite_only) {
+                          const CategFilter *categ, const char *suite_only) {
     int i;
     int n = 0;
 
     for (i = 0; i < ncases; i++) {
+        if (!categ_match(categ, &cases[i])) {
+            continue;
+        }
         if (!filter_match(fl, &cases[i])) {
             continue;
         }
@@ -315,42 +408,79 @@ static void filters_free(FilterList *fl) {
     memset(fl, 0, sizeof *fl);
 }
 
-static void print_suite_catalog(const FlatCase *cases, int ncases) {
-    int i = 0;
+static void catalog_emit_suite(const char *suite, int count, int min_id, int max_id, int *suite_count,
+                               int *case_total) {
+    if (count <= 0) {
+        return;
+    }
+    (*suite_count)++;
+    *case_total += count;
+    if (count == 1) {
+        printf("%-24s  %d case   (id %d)\n", suite, count, min_id);
+    } else if (min_id == max_id) {
+        printf("%-24s  %d cases  (id %d)\n", suite, count, min_id);
+    } else {
+        printf("%-24s  %d cases  (ids %d–%d)\n", suite, count, min_id, max_id);
+    }
+}
+
+static void print_suite_catalog(const FlatCase *cases, int ncases, const FilterList *fl,
+                                const CategFilter *categ) {
+    int i;
     int suite_count = 0;
     int case_total = 0;
+    char cur_suite[FLAT_CASE_SUITE_LEN];
+    int count = 0;
+    int min_id = 0;
+    int max_id = 0;
+
+    cur_suite[0] = '\0';
 
     if (ncases <= 0) {
         printf("(no cases)\n");
         return;
     }
-    while (i < ncases) {
-        const char *suite = cases[i].suite;
-        int count = 0;
-        int min_id = cases[i].id;
-        int max_id = cases[i].id;
-
-        while (i < ncases && strcmp(cases[i].suite, suite) == 0) {
-            if (cases[i].id < min_id) {
-                min_id = cases[i].id;
-            }
-            if (cases[i].id > max_id) {
-                max_id = cases[i].id;
-            }
-            count++;
-            i++;
+    for (i = 0; i < ncases; i++) {
+        const FlatCase *c = &cases[i];
+        if (!categ_match(categ, c) || !filter_match(fl, c)) {
+            continue;
         }
-        suite_count++;
-        case_total += count;
-        if (count == 1) {
-            printf("%-24s  %d case   (id %d)\n", suite, count, min_id);
-        } else if (min_id == max_id) {
-            printf("%-24s  %d cases  (id %d)\n", suite, count, min_id);
-        } else {
-            printf("%-24s  %d cases  (ids %d–%d)\n", suite, count, min_id, max_id);
+        if (strcmp(cur_suite, c->suite) != 0) {
+            catalog_emit_suite(cur_suite, count, min_id, max_id, &suite_count, &case_total);
+            snprintf(cur_suite, sizeof cur_suite, "%s", c->suite);
+            count = 1;
+            min_id = c->id;
+            max_id = c->id;
+            continue;
         }
+        if (c->id < min_id) {
+            min_id = c->id;
+        }
+        if (c->id > max_id) {
+            max_id = c->id;
+        }
+        count++;
     }
-    printf("\nTotal: %d cases in %d suite(s)\n", case_total, suite_count);
+    catalog_emit_suite(cur_suite, count, min_id, max_id, &suite_count, &case_total);
+
+    if (case_total == 0) {
+        printf("(no cases match filters)\n");
+        return;
+    }
+    printf("\nTotal: %d cases in %d suite(s)", case_total, suite_count);
+    if (ncases != case_total) {
+        printf("  (%d discovered)", ncases);
+    }
+    if (categ != NULL && !categ->all && categ->count > 0) {
+        int ci;
+        printf("; categ");
+        for (ci = 0; ci < categ->count; ci++) {
+            printf(ci ? ",%s" : "=%s", categ->tags[ci]);
+        }
+    } else if (categ != NULL && categ->all) {
+        printf("; categ=all");
+    }
+    printf("\n");
 }
 
 int main(int argc, char **argv) {
@@ -358,6 +488,7 @@ int main(int argc, char **argv) {
     FlatCase *cases = NULL;
     int ncases = 0;
     FilterList filters = {0};
+    CategFilter categ = {0};
     int verbose = 0;
     int each = 0;
     int show_time = 0;
@@ -373,7 +504,9 @@ int main(int argc, char **argv) {
     double session_t0;
     FlatCaseRunOptions run_opts = {0};
 
-    if (parse_args(argc, argv, &filters, &verbose, &each, &help, &progress_width, &use_flatl,
+    categ_filter_init_default(&categ);
+
+    if (parse_args(argc, argv, &filters, &categ, &verbose, &each, &help, &progress_width, &use_flatl,
                    &show_time, &list_only) != 0) {
         return 2;
     }
@@ -396,13 +529,13 @@ int main(int argc, char **argv) {
     }
 
     if (list_only) {
-        print_suite_catalog(cases, ncases);
+        print_suite_catalog(cases, ncases, &filters, &categ);
         flat_discover_free(cases);
         filters_free(&filters);
         return 0;
     }
 
-    run_total = count_filtered(cases, ncases, &filters, NULL);
+    run_total = count_filtered(cases, ncases, &filters, &categ, NULL);
     progress_init(&progress, run_total, progress_width);
     session_t0 = flat_time_monotonic_ms();
     run_opts.measure = 1;
@@ -411,6 +544,15 @@ int main(int argc, char **argv) {
     printf("Running (%d selected", run_total);
     if (run_total != ncases) {
         printf(", %d discovered", ncases);
+    }
+    if (!categ.all && categ.count > 0) {
+        int ci;
+        printf("; categ");
+        for (ci = 0; ci < categ.count; ci++) {
+            printf(ci ? ",%s" : "=%s", categ.tags[ci]);
+        }
+    } else if (categ.all) {
+        printf("; categ=all");
     }
     printf(")");
     if (use_flatl) {
@@ -429,6 +571,9 @@ int main(int argc, char **argv) {
             FlatCaseTiming timing = {0};
             int ok;
 
+            if (!categ_match(&categ, c)) {
+                continue;
+            }
             if (!filter_match(&filters, c)) {
                 continue;
             }
@@ -438,7 +583,7 @@ int main(int argc, char **argv) {
                     printf("\n");
                 }
                 cur_suite = c->suite;
-                progress_init(&progress, count_filtered(cases, ncases, &filters, cur_suite),
+                progress_init(&progress, count_filtered(cases, ncases, &filters, &categ, cur_suite),
                               progress_width);
                 printf("%s%s:%s\n", ANSI_YELLOW, c->suite, ANSI_RESET);
             }

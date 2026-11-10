@@ -43,6 +43,18 @@ bin/run_tests flatl -v
 
 See [doc_src/TOOLCHAIN.md](../doc_src/TOOLCHAIN.md#flatl-driver-optional-ux). Pipeline cases include an optional **`[flatl]`** block (`crun` or `compile`+`run`) used by **`make test-flatl`**.
 
+### `func:callVM` microbench (`cases/bench/`)
+
+AM-1 call-site check: **20 000** nested `inc(s)` calls — **desugar** vs **`OP_CALL_FUNCTION`**.
+
+```bash
+make test-bench
+bin/run_tests --categ=bench
+sh test/bench/compare_callvm_loop.sh .   # timing + fbdump summary on stderr
+```
+
+Cases use **`categ = "bench"`** — excluded from **`make test`** / **`--categ=default`**. Case **`003`** gates **P1-lite**: B not slower than A (+5% slack). Override rounds: `FLAT_CALLVM_BENCH_ROUNDS=5`.
+
 ### Optional natives (`cases/native/`)
 
 `use native math.trig with trig`, manifest in `.fb`, lazy plugin load, alias/canonical calls, link-time union, compile errors. Docs: [doc_src/natives/README.md](../doc_src/natives/README.md). Requires **`bin/libflat_math_trig.so`** and **`bin/libflat_math_stats.so`** on Unix (`make all`).

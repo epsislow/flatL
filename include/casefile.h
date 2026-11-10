@@ -8,6 +8,8 @@
 #define FLAT_CASE_MAX_CHECKS 16
 #define FLAT_CASE_MAX_DESC 256
 #define FLAT_CASE_SUITE_LEN 64
+#define FLAT_CASE_CATEG_LEN 32
+#define FLAT_CASE_CATEG_DEFAULT "default"
 
 typedef enum {
     CASE_KIND_FILES,
@@ -19,6 +21,7 @@ typedef struct {
     char suite[FLAT_CASE_SUITE_LEN];
     int id;
     char desc[FLAT_CASE_MAX_DESC];
+    char categ[FLAT_CASE_CATEG_LEN];
     CaseKind kind;
     char case_dir[FLAT_CASE_MAX_PATH];
 

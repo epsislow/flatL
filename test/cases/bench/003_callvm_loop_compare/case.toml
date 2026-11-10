@@ -1,0 +1,9 @@
+suite = "bench"
+id = 3
+categ = "bench"
+desc = "AM-1 microbench: opcode callVM not slower than desugar (+5% slack)"
+kind = "exec"
+
+cmd = "sh {root}/test/bench/compare_callvm_loop.sh {root}"
+expect_exit = 0
+stderr_contains = "callvm_loop: ok"

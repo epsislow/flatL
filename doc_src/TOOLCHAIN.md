@@ -338,10 +338,31 @@ Progress prints `.` / `F` in ANSI color (flushed after each character so dots ap
 - `suite` — all cases in suite (e.g. `flatl`, `json`)
 - `suite[1]` / `suite[1-3,5]` — by `id` in `case.toml`
 
+Suite filters apply **after** the category filter (see below).
+
+### Category (`categ` in `case.toml`)
+
+Each case may set **`categ = "…"`** (single tag). Omitted → **`default`**.
+
+| `make` target | `run_tests` equivalent |
+|---------------|-------------------------|
+| **`make test`** | `--categ=default` (excludes `bench`, `slow`, …) |
+| **`make test-all`** | `--categ=all` |
+| **`make test-bench`** | `--categ=bench` |
+| (no `make`) | **`bin/run_tests`** alone → same as `--categ=default` |
+
+```bash
+bin/run_tests --categ=default,slow
+bin/run_tests bench --categ=bench   # suite + category
+```
+
+**`--list`** uses the same **`--categ`** and suite filters as a normal run (footer shows `discovered` total vs listed).
+
 ### Options
 
 | Flag | Effect |
 |------|--------|
+| `--categ=TAG[,TAG…]` | Only cases whose `categ` is listed (`all` = every category) |
 | `-v` | Failure messages after each `F` |
 | `-e` | Per suite: `#id (k/N) desc` + `.` / `F` (`id` = case id in manifest; `k`/`N` = position among selected in that suite); yellow suite header |
 | `-t` / `--time` | With **`-e`**: ` time_ms …`; footer **Total tests time:** always |

@@ -64,6 +64,8 @@ static void apply_kv(FlatCase *c, const char *key, char *val) {
         c->id = atoi(val);
     } else if (strcmp(key, "desc") == 0) {
         snprintf(c->desc, sizeof c->desc, "%s", val);
+    } else if (strcmp(key, "categ") == 0) {
+        snprintf(c->categ, sizeof c->categ, "%s", val);
     } else if (strcmp(key, "kind") == 0) {
         parse_kind(val, &c->kind);
     } else if (strcmp(key, "path_exists") == 0 || strcmp(key, "check") == 0) {
@@ -147,6 +149,9 @@ int flat_case_load(const char *case_toml_path, FlatCase *out) {
     }
     fclose(f);
 
+    if (out->categ[0] == '\0') {
+        snprintf(out->categ, sizeof out->categ, "%s", FLAT_CASE_CATEG_DEFAULT);
+    }
     if (out->suite[0] == '\0' || out->id <= 0) {
         return -1;
     }
