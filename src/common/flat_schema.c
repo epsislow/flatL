@@ -373,8 +373,24 @@ int flat_bind_validate_lhs(const char *lhs, const FlatSchemaCatalog *cat, char *
         spec++;
     }
     if (*spec == '/') {
-        snprintf(err, err_sz, "typed dynamic bind not supported: %s", lhs);
-        return -1;
+        FlatSlotType ty;
+        char name[FLAT_VAR_NAME_MAX + 1];
+        int has;
+        const char *tyspec = spec;
+
+        if (flat_slot_type_parse_spec(tyspec, &ty, cat, err, err_sz) != 0) {
+            snprintf(err, err_sz, "invalid dynamic type bind: %s", lhs);
+            return -1;
+        }
+        if (ty.kind != FLAT_SLOT_TYPE_DYNAMIC) {
+            snprintf(err, err_sz, "invalid dynamic type bind: %s", lhs);
+            return -1;
+        }
+        if (flat_bind_parse_lhs_catalog(lhs, name, sizeof name, &ty, &has, cat) != 0 || !has) {
+            snprintf(err, err_sz, "invalid typed bind lhs: %s", lhs);
+            return -1;
+        }
+        return 0;
     }
     {
         FlatSlotType ty;
@@ -426,18 +442,63 @@ const FlatSchemaDef *flat_schema_def_for_contract(const FlatSchemaCatalog *cat,
     return &cat->defs[contract->schema_id];
 }
 
-static int check_field_value(const FlatSchemaField *field, const FlatValue *val, FlatStringPool *pool,
-                             FlatCollectionPool *coll, const FlatSchemaCatalog *cat, char *panic,
-                             size_t panic_sz) {
-    FlatValue tmp = *val;
+int flat_schema_check_field_value(const FlatSchemaField *field, const FlatValue *val,
+                                  FlatStringPool *pool, FlatCollectionPool *coll,
+                                  const FlatSchemaCatalog *cat, FlatValue *inout_val,
+                                  char *panic, size_t panic_sz) {
+    FlatValue tmp;
+    int len;
+    int i;
+
+    if (!field || !val) {
+        snprintf(panic, panic_sz, "type.assign.incompatible");
+        return -1;
+    }
+    if (val->tag == VAL_NULL) {
+        if (inout_val) {
+            *inout_val = *val;
+        }
+        return 0;
+    }
     if (field->flags & FLAT_SCH_FIELD_LIST) {
         if (val->tag != VAL_LIST) {
             snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;
         }
+        if (!coll || flat_list_len(coll, val->u.coll_id, &len) != 0) {
+            snprintf(panic, panic_sz, "type.assign.incompatible");
+            return -1;
+        }
+        if (field->slot.list_max > 0 && len > (int)field->slot.list_max) {
+            snprintf(panic, panic_sz, "type.assign.list.len");
+            return -1;
+        }
+        for (i = 0; i < len; i++) {
+            FlatValue el;
+            if (flat_list_get(coll, val->u.coll_id, i, &el) != 0) {
+                snprintf(panic, panic_sz, "type.assign.incompatible");
+                return -1;
+            }
+            tmp = el;
+            if (flat_slot_type_check_value(&field->slot, &el, pool, coll, cat, &tmp, panic,
+                                           panic_sz) != 0) {
+                return -1;
+            }
+        }
+        if (inout_val) {
+            *inout_val = *val;
+        }
         return 0;
     }
-    return flat_slot_type_check_value(&field->slot, val, pool, coll, cat, &tmp, panic, panic_sz);
+    tmp = *val;
+    if (flat_slot_type_check_value(&field->slot, val, pool, coll, cat, &tmp, panic, panic_sz) !=
+        0) {
+        return -1;
+    }
+    if (inout_val) {
+        *inout_val = tmp;
+    }
+    return 0;
 }
 
 int flat_schema_bind_value(const FlatSchemaCatalog *cat, uint16_t schema_id, FlatValue *io_val,
@@ -481,7 +542,7 @@ int flat_schema_bind_value(const FlatSchemaCatalog *cat, uint16_t schema_id, Fla
             snprintf(panic, panic_sz, "type.schema.field.unknown");
             return -1;
         }
-        if (check_field_value(ff, &fv, pool, coll, cat, panic, panic_sz) != 0) {
+        if (flat_schema_check_field_value(ff, &fv, pool, coll, cat, NULL, panic, panic_sz) != 0) {
             return -1;
         }
     }

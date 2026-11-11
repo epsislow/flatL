@@ -415,15 +415,33 @@ static int flat_value_same_storage(const FlatValue *a, const FlatValue *b) {
     }
 }
 
+static int slot_types_compatible_for_retype(const FlatVcxVar *slot, const FlatSlotType *lhs_ty,
+                                            int lhs_has_ty, int lhs_dynamic,
+                                            const char *lhs_dynamic_expr) {
+    if (!slot || !slot->has_slot_type || !lhs_has_ty || !lhs_ty) {
+        return 1;
+    }
+    if (slot->slot_dynamic != (uint8_t)(lhs_dynamic ? 1 : 0)) {
+        return flat_slot_type_equals(&slot->slot_type, lhs_ty);
+    }
+    if (slot->slot_dynamic && lhs_dynamic && lhs_dynamic_expr &&
+        strcmp(slot->slot_dynamic_expr, lhs_dynamic_expr) != 0) {
+        return flat_slot_type_equals(&slot->slot_type, lhs_ty);
+    }
+    return flat_slot_type_equals(&slot->slot_type, lhs_ty);
+}
+
 static int set_var_value(VmState *st, const char *name, const FlatValue *val,
-                         const FlatSlotType *lhs_ty, int lhs_has_ty) {
+                         const FlatSlotType *lhs_ty, int lhs_has_ty, int lhs_dynamic,
+                         const char *lhs_dynamic_expr) {
     FlatSlotType contract;
     int has_contract = 0;
     char chk[64];
     int i = find_var(st, name);
     if (i >= 0) {
         if (st->vars[i].has_slot_type && lhs_has_ty && lhs_ty &&
-            !flat_slot_type_equals(&st->vars[i].slot_type, lhs_ty)) {
+            !slot_types_compatible_for_retype(&st->vars[i], lhs_ty, lhs_has_ty, lhs_dynamic,
+                                              lhs_dynamic_expr)) {
             snprintf(st->panic_reason, sizeof st->panic_reason, "type.assign.retype");
             return -1;
         }
@@ -449,6 +467,11 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
             if (lhs_has_ty && lhs_ty && !st->vars[i].has_slot_type) {
                 st->vars[i].slot_type = *lhs_ty;
                 st->vars[i].has_slot_type = 1;
+                st->vars[i].slot_dynamic = lhs_dynamic ? 1u : 0u;
+                if (lhs_dynamic && lhs_dynamic_expr) {
+                    snprintf(st->vars[i].slot_dynamic_expr, sizeof st->vars[i].slot_dynamic_expr,
+                             "%s", lhs_dynamic_expr);
+                }
             }
             return 0;
         }
@@ -465,6 +488,13 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         if (lhs_has_ty && lhs_ty) {
             st->vars[i].slot_type = *lhs_ty;
             st->vars[i].has_slot_type = 1;
+            st->vars[i].slot_dynamic = lhs_dynamic ? 1u : 0u;
+            if (lhs_dynamic && lhs_dynamic_expr) {
+                snprintf(st->vars[i].slot_dynamic_expr, sizeof st->vars[i].slot_dynamic_expr, "%s",
+                         lhs_dynamic_expr);
+            } else {
+                st->vars[i].slot_dynamic_expr[0] = '\0';
+            }
         }
         if (st->io_ctx) {
             flat_io_ctx_var_updated(st->io_ctx, i, val);
@@ -481,10 +511,14 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         if (!st->vcx ||
             flat_vcx_prepare_active_new_bind(st->vcx, st->panic_reason, sizeof st->panic_reason) !=
                 0) {
+            if (st->panic_reason[0] == '\0') {
+                snprintf(st->panic_reason, sizeof st->panic_reason, "vm.var.slots");
+            }
             return -1;
         }
     }
     if (var_name_forbidden(name)) {
+        snprintf(st->panic_reason, sizeof st->panic_reason, "vm.var.forbidden");
         return -1;
     }
     if (lhs_has_ty && lhs_ty) {
@@ -512,9 +546,18 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
     if (lhs_has_ty && lhs_ty) {
         st->vars[st->var_count].slot_type = *lhs_ty;
         st->vars[st->var_count].has_slot_type = 1;
+        st->vars[st->var_count].slot_dynamic = lhs_dynamic ? 1u : 0u;
+        if (lhs_dynamic && lhs_dynamic_expr) {
+            snprintf(st->vars[st->var_count].slot_dynamic_expr,
+                     sizeof st->vars[st->var_count].slot_dynamic_expr, "%s", lhs_dynamic_expr);
+        } else {
+            st->vars[st->var_count].slot_dynamic_expr[0] = '\0';
+        }
     } else {
         flat_slot_type_clear(&st->vars[st->var_count].slot_type);
         st->vars[st->var_count].has_slot_type = 0;
+        st->vars[st->var_count].slot_dynamic = 0;
+        st->vars[st->var_count].slot_dynamic_expr[0] = '\0';
     }
     if (st->io_ctx) {
         flat_io_ctx_var_updated(st->io_ctx, st->var_count, val);
@@ -547,6 +590,8 @@ static int apply_free(VmState *st, const char *varname) {
     flat_value_set_null(&st->vars[i].val);
     flat_slot_type_clear(&st->vars[i].slot_type);
     st->vars[i].has_slot_type = 0;
+    st->vars[i].slot_dynamic = 0;
+    st->vars[i].slot_dynamic_expr[0] = '\0';
     if (st->io_ctx) {
         flat_io_ctx_var_updated(st->io_ctx, i, &nullv);
     }
@@ -596,8 +641,10 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
     char *lhs;
     char *rhs;
     char slot_name[FLAT_VAR_NAME_MAX + 1];
+    char lhs_dyn_expr[FLAT_VAR_NAME_MAX + 1];
     FlatSlotType lhs_ty;
     int lhs_has_ty = 0;
+    int lhs_dynamic = 0;
     FlatValue v;
     FlatIoStatus ios;
     FlatValue *vals = NULL;
@@ -661,11 +708,23 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             rc = 0;
             goto done;
         }
-        if (flat_bind_parse_lhs_catalog(root_bind, root_name, sizeof root_name, &root_ty,
-                                      &root_has_ty, bc ? &bc->schemas : NULL) != 0) {
-            snprintf(st->panic_reason, sizeof st->panic_reason, "type.assign.incompatible");
+        lhs_dyn_expr[0] = '\0';
+        st->panic_reason[0] = '\0';
+        if (flat_bind_resolve_lhs_runtime(root_bind, root_name, sizeof root_name, &root_ty,
+                                          &root_has_ty, &lhs_dynamic, vals, st->var_count, names,
+                                          st->pool, st->coll, bc ? &bc->schemas : NULL, st->vcx,
+                                          st->panic_reason, sizeof st->panic_reason) != 0) {
             rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
             goto done;
+        }
+        if (lhs_dynamic) {
+            FlatSlotType raw;
+            int has_raw;
+
+            if (flat_bind_parse_lhs_catalog(root_bind, root_name, sizeof root_name, &raw, &has_raw,
+                                            bc ? &bc->schemas : NULL) == 0 && has_raw) {
+                snprintf(lhs_dyn_expr, sizeof lhs_dyn_expr, "%s", raw.dynamic_expr);
+            }
         }
         root_vi = find_var(st, root_name);
         if (root_vi < 0) {
@@ -681,7 +740,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
                 rc = 0;
                 goto done;
             }
-            if (set_var_value(st, root_name, &seed, &root_ty, 1) != 0) {
+            if (set_var_value(st, root_name, &seed, &root_ty, 1, lhs_dynamic,
+                              lhs_dynamic ? lhs_dyn_expr : NULL) != 0) {
                 rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
                 goto done;
             }
@@ -731,11 +791,23 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         rc = 0;
         goto done;
     }
-    if (flat_bind_parse_lhs_catalog(lhs, slot_name, sizeof slot_name, &lhs_ty, &lhs_has_ty,
-                                    bc ? &bc->schemas : NULL) != 0) {
-        snprintf(st->panic_reason, sizeof st->panic_reason, "type.assign.incompatible");
+    lhs_dyn_expr[0] = '\0';
+    st->panic_reason[0] = '\0';
+    if (flat_bind_resolve_lhs_runtime(lhs, slot_name, sizeof slot_name, &lhs_ty, &lhs_has_ty,
+                                      &lhs_dynamic, vals, st->var_count, names, st->pool, st->coll,
+                                      bc ? &bc->schemas : NULL, st->vcx, st->panic_reason,
+                                      sizeof st->panic_reason) != 0) {
         rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
         goto done;
+    }
+    if (lhs_dynamic) {
+        FlatSlotType raw;
+        int has_raw;
+
+        if (flat_bind_parse_lhs_catalog(lhs, slot_name, sizeof slot_name, &raw, &has_raw,
+                                        bc ? &bc->schemas : NULL) == 0 && has_raw) {
+            snprintf(lhs_dyn_expr, sizeof lhs_dyn_expr, "%s", raw.dynamic_expr);
+        }
     }
     if (var_name_forbidden(slot_name)) {
         rc = 0;
@@ -787,7 +859,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             goto done;
         }
         if (invoke_rc == 0 && ios == FLAT_IO_OK) {
-            if (set_var_value(st, slot_name, &v, lhs_has_ty ? &lhs_ty : NULL, lhs_has_ty) != 0) {
+            if (set_var_value(st, slot_name, &v, lhs_has_ty ? &lhs_ty : NULL, lhs_has_ty,
+                              lhs_dynamic, lhs_dynamic ? lhs_dyn_expr : NULL) != 0) {
                 rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
             }
         }
@@ -798,7 +871,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         rc = 0;
         goto done;
     }
-    if (set_var_value(st, slot_name, &v, lhs_has_ty ? &lhs_ty : NULL, lhs_has_ty) != 0) {
+    if (set_var_value(st, slot_name, &v, lhs_has_ty ? &lhs_ty : NULL, lhs_has_ty, lhs_dynamic,
+                      lhs_dynamic ? lhs_dyn_expr : NULL) != 0) {
         rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
     } else {
         rc = 0;
@@ -814,7 +888,7 @@ done:
 static void set_var_from_number(VmState *st, const char *name, double n) {
     FlatValue v;
     if (flat_value_set_number(&v, n) == 0) {
-        set_var_value(st, name, &v, NULL, 0);
+        set_var_value(st, name, &v, NULL, 0, 0, NULL);
     }
 }
 
@@ -1021,7 +1095,7 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
     if (fr->item_count > 0) {
         FlatValue el;
         if (flat_list_get(st->coll, fr->list_id, 0, &el) == 0) {
-            set_var_value(st, fr->item_var, &el, NULL, 0);
+            set_var_value(st, fr->item_var, &el, NULL, 0, 0, NULL);
         }
     } else {
         foreach_frame_end(st, fr);
@@ -1551,7 +1625,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
             goto done;
         }
         if (invoke_rc == 0 && ios == FLAT_IO_OK && bind && bind[0] != '\0') {
-            set_var_value(st, bind, &result, NULL, 0);
+            set_var_value(st, bind, &result, NULL, 0, 0, NULL);
         }
         rc = 0;
     }
@@ -1756,7 +1830,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                     } else {
                         FlatValue el;
                         if (flat_list_get(st.coll, fr->list_id, fr->index, &el) == 0) {
-                            set_var_value(&st, fr->item_var, &el, NULL, 0);
+                            set_var_value(&st, fr->item_var, &el, NULL, 0, 0, NULL);
                         }
                     }
                     ip = fr->loop_block_ip;

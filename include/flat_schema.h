@@ -8,6 +8,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+struct FlatVcxRuntime;
+
 #define FLAT_SCHEMA_MAX 64
 #define FLAT_SCHEMA_NAME_MAX 63
 #define FLAT_SCHEMA_FIELD_MAX 128
@@ -53,6 +55,14 @@ int flat_bind_parse_lhs_catalog(const char *lhs, char *name_out, size_t name_sz,
 
 int flat_bind_validate_lhs(const char *lhs, const FlatSchemaCatalog *cat, char *err, size_t err_sz);
 
+/* Resolve ASSIGN lhs (static or :/expr); *is_dynamic when STRING type read at runtime. */
+int flat_bind_resolve_lhs_runtime(const char *lhs, char *name_out, size_t name_sz,
+                                  FlatSlotType *type_out, int *has_type_out, int *is_dynamic_out,
+                                  FlatValue *vars, int var_count, const char (*var_names)[64],
+                                  FlatStringPool *pool, FlatCollectionPool *coll,
+                                  const FlatSchemaCatalog *cat, struct FlatVcxRuntime *vcx,
+                                  char *panic, size_t panic_sz);
+
 /* Runtime: coerce literal / {} to schema object; validate types. */
 int flat_schema_bind_value(const FlatSchemaCatalog *cat, uint16_t schema_id, FlatValue *io_val,
                            FlatStringPool *pool, FlatCollectionPool *coll, char *panic,
@@ -61,6 +71,12 @@ int flat_schema_bind_value(const FlatSchemaCatalog *cat, uint16_t schema_id, Fla
 /* NULL def or key → 0; on match *out_field set if non-NULL. */
 int flat_schema_field_lookup(const FlatSchemaDef *def, const char *key,
                              const FlatSchemaField **out_field);
+
+/* Validate a value against a schema field (incl. <s>[N] list fields and element types). */
+int flat_schema_check_field_value(const FlatSchemaField *field, const FlatValue *val,
+                                  FlatStringPool *pool, FlatCollectionPool *coll,
+                                  const FlatSchemaCatalog *cat, FlatValue *inout_val,
+                                  char *panic, size_t panic_sz);
 
 const FlatSchemaDef *flat_schema_def_for_contract(const FlatSchemaCatalog *cat,
                                                   const FlatSlotType *contract);

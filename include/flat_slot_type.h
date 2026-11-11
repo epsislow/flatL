@@ -25,7 +25,8 @@ typedef enum {
     FLAT_SLOT_TYPE_TN,
     FLAT_SLOT_TYPE_L,
     FLAT_SLOT_TYPE_O,
-    FLAT_SLOT_TYPE_SCHEMA
+    FLAT_SLOT_TYPE_SCHEMA,
+    FLAT_SLOT_TYPE_DYNAMIC /* LHS :/expr — resolved at assign (not stored on slot) */
 } FlatSlotTypeKind;
 
 typedef struct {
@@ -33,6 +34,7 @@ typedef struct {
     uint8_t aux; /* tN → N; t → 127 */
     uint16_t schema_id;
     uint16_t list_max; /* LIST schema field: 0 = unbounded */
+    char dynamic_expr[FLAT_VAR_NAME_MAX + 1]; /* FLAT_SLOT_TYPE_DYNAMIC */
 } FlatSlotType;
 
 #define FLAT_SLOT_TYPE_AUX_T_DEFAULT 127u

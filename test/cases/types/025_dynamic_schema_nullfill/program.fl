@@ -1,0 +1,9 @@
+<stock>:
+  qty: u16
+  product: t4
+
+#main
+  schemaStr = '<stock>'
+  payload:/schemaStr = {}
+  payload.qty == null
+  OK

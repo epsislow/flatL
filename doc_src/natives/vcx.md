@@ -129,6 +129,17 @@ A variable slot is small (name + tag/id). Long text, big lists, and objects live
 - **`varsCopy` / `varsCopyByNames` / `V.var`** deep-copy values → can increase **pool** use (duplicate LIST/OBJECT/REF), not just `vars_used`.
 - Worst-case **slot table** memory for one context at max capacity is on the order of **single-digit MiB** (empty slots); worst-case **payload** is governed by pool constants, not by `vars_max`.
 
+## Typed dynamic binds (`dSchema*`)
+
+For **`name:/typeExpr`** where the STRING may name a **`<schema>`** (T4), each VCX context has a policy:
+
+| Native | Role |
+|--------|------|
+| **`V.dSchemaAllow(ctx, allow)`** | **`allow = 0`** — dynamic STRING with any **`<schema>`** → **`type.assign.dynamic.denied`**. Atomics (`u8`, `t4`, `o`, …) still allowed. **`allow = 1`** — schemas allowed subject to list (default for new contexts). |
+| **`V.dSchemaList(ctx, list)`** | **`[]`** — any **declared** schema allowed (with **`allow(1)`**). Nonempty — only listed entries (`"<stock>"`, …, angle brackets required); other schemas → **`type.assign.dynamic.denied`**. |
+
+Context **1** is the initial global context; use **`V.current()`** or literal **`1`** as **`ctx`**.
+
 ## `mem.*` vs `vcx.*`
 
 **`mem.vars_used`**, **`mem.vars_max`**, **`mem.vars_avail`**, **`mem.free`**, and other **`mem.*`** counters refer to the **active** context (same as **`vcx.current()`**). Use **`vcx.varsUsed(ctx)`**, **`vcx.varsMax(ctx)`**, … to inspect another context without **`set`**.

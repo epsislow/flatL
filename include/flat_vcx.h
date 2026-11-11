@@ -18,7 +18,11 @@ typedef struct FlatVcxVar {
     FlatValue val;
     FlatSlotType slot_type;
     uint8_t has_slot_type;
+    uint8_t slot_dynamic; /* bind via name:/expr */
+    char slot_dynamic_expr[FLAT_VAR_NAME_MAX + 1];
 } FlatVcxVar;
+
+#define FLAT_VCX_DSCHEMA_LIST_MAX 32
 
 typedef struct FlatFileTable FlatFileTable;
 typedef struct FlatMemLiveStats FlatMemLiveStats;
@@ -104,5 +108,15 @@ void flat_vm_instr_stack_push(uint32_t id);
 int flat_vm_instr_stack_pop(uint32_t id);
 uint32_t flat_vm_instr_stack_peek(void);
 void flat_vm_instr_stack_clear(void);
+
+int flat_vcx_dschema_allow(FlatVcxRuntime *rt, uint32_t ctx_id, int allow, char *panic_detail,
+                           size_t panic_sz);
+int flat_vcx_dschema_list(FlatVcxRuntime *rt, uint32_t ctx_id, const FlatValue *list_val,
+                          FlatCollectionPool *coll, FlatStringPool *pool, char *panic_detail,
+                          size_t panic_sz);
+
+/* Active ctx: schema name in type string (e.g. stock from "<stock>"). */
+int flat_vcx_dynamic_schema_permit(FlatVcxRuntime *rt, const char *schema_name, char *panic,
+                                   size_t panic_sz);
 
 #endif

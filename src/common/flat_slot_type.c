@@ -203,10 +203,25 @@ int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSch
         return 0;
     }
     if (spec[0] == '/') {
-        if (err && err_sz) {
-            snprintf(err, err_sz, "typed dynamic bind not supported: %s", spec);
+        const char *ex = spec + 1;
+        while (*ex && isspace((unsigned char)*ex)) {
+            ex++;
         }
-        return -1;
+        if (*ex == '\0') {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "invalid dynamic type bind: %s", spec);
+            }
+            return -1;
+        }
+        if (strlen(ex) >= sizeof out->dynamic_expr) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "invalid dynamic type bind: %s", spec);
+            }
+            return -1;
+        }
+        snprintf(out->dynamic_expr, sizeof out->dynamic_expr, "%s", ex);
+        out->kind = FLAT_SLOT_TYPE_DYNAMIC;
+        return 0;
     }
     return parse_type_spec(spec, out) != 0 ? -1 : 0;
 }
@@ -255,6 +270,9 @@ int flat_slot_type_equals(const FlatSlotType *a, const FlatSlotType *b) {
     }
     if (a->kind == FLAT_SLOT_TYPE_SCHEMA) {
         return a->schema_id == b->schema_id;
+    }
+    if (a->kind == FLAT_SLOT_TYPE_DYNAMIC) {
+        return strcmp(a->dynamic_expr, b->dynamic_expr) == 0;
     }
     return 1;
 }
@@ -310,6 +328,10 @@ int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *va
 
     if (!contract || contract->kind == FLAT_SLOT_TYPE_NONE) {
         return 0;
+    }
+    if (contract->kind == FLAT_SLOT_TYPE_DYNAMIC) {
+        snprintf(panic, panic_sz, "type.assign.incompatible");
+        return -1;
     }
     if (!val) {
         snprintf(panic, panic_sz, "type.assign.incompatible");

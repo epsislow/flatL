@@ -5,7 +5,7 @@ Documentation index: [README.md](./README.md) (English).
 Normative reference for **value types**, **STRING ref pool**, and **limits** in the VM (`flvm` v0.2+).  
 Architecture overview: [SPECIFICATION.md](./SPECIFICATION.md). Tooling: [TOOLCHAIN.md](./TOOLCHAIN.md).
 
-**Typed bind (T1–T3):** optional **`name:type`** / **`name:<schema>`** on **ASSIGN**, plus **path assign** (`row.qty = 1`) — [TYPED_BIND.md](./TYPED_BIND.md). Dynamic types (`:/…`) still planned. Untyped binds behave as before (logical `VAL_*` only).
+**Typed bind (T1–T4):** optional **`name:type`** / **`name:<schema>`** / **`name:/expr`** on **ASSIGN**, plus **path assign** — [TYPED_BIND.md](./TYPED_BIND.md). Untyped binds behave as before (logical `VAL_*` only).
 
 ---
 
@@ -154,7 +154,7 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 
 **Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.incompatible`, `type.assign.string.len`, `type.assign.retype` (change `:type` without `free`).
 
-**Compile:** `flc` rejects **`:/…`** on ASSIGN lhs (T3+). **`<schema>`** on lhs requires a matching **`<schema>:`** declaration; unknown schema → `type.schema.unknown`.
+**Compile:** **`:/expr`** on ASSIGN lhs is allowed; runtime reads STRING each run. **`<schema>`** on static lhs requires a **`<schema>:`** declaration; unknown schema → `type.schema.unknown` (compile) or `type.assign.schema.unknown` (dynamic STRING).
 
 Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — integers are range-checked, not narrowed in storage.
 

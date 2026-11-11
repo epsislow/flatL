@@ -1,0 +1,15 @@
+<stock>:
+  qty: u16
+
+<var>:
+  userId: s16
+
+use native vcx with V
+
+#main
+  V.dSchemaList(1, ['<stock>'])
+  okStr = '<stock>'
+  badStr = '<var>'
+  good:/okStr = {}
+  bad:/badStr = {}
+  OK

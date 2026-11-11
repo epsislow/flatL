@@ -4,5 +4,6 @@ Runtime enforcement for optional `name:type` on **ASSIGN**, including **`var:<sc
 
 Cases **012–018** cover schema compile/runtime (`null`-fill, subset, cycle, unknown schema, etc.).
 Cases **019–023** cover **T3** path assign, unknown field on path, nested null materialize, compound LHS, range on path.
+Cases **024–029** cover **T4** dynamic `:/expr`, `dSchemaAllow` / `dSchemaList`, schema unknown / denied / retype.
 
 Panic cases use `expect_exit = 1` and `stderr_contains = "type.*"`.

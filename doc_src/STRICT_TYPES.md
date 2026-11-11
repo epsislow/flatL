@@ -1,6 +1,6 @@
 # Strict types & object schemas (overview)
 
-**Status:** **T3** — **T2** plus **path assign** (`myStock.qty = n`), **compound LHS** (`row:<var>.userId = n`), **`O.set2` / path** schema checks (unknown field → `type.schema.field.unknown`, nested `<schema>` null → materialize). Dynamic (`:/expr`), `const`, and `freeze` remain **T4+**.
+**Status:** **T4** — **T3** plus **dynamic bind** (`payload:/typeString`), **VCX schema policy** (`V.dSchemaAllow`, `V.dSchemaList`). `const`, `freeze`, typed `m.calc` / I/O remain **T5+**.
 
 | Doc | Role |
 |-----|------|
@@ -157,6 +157,7 @@ freeze(cfg)
 | **T1** | Parse `:type`, slot metadata, assign checks |
 | **T2** | **Done:** SCHM, `<schema>:`, `var:<schema>`, null-fill on `{}`, `type.schema.*` panics |
 | **T3** | **Done:** path assign, compound LHS, typed `O.set2`, nested schema materialize |
-| **T4+** | `:/`, `m.calc` typed, `def` typed, `const`, `freeze` |
+| **T4** | **Done:** `:/expr`, `dSchema*` |
+| **T5+** | `m.calc` typed, `def` typed, `const`, `freeze` |
 
 Specimens and T0 tests: `test/cases/types_t0/`.

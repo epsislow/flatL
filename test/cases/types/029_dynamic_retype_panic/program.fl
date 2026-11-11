@@ -1,0 +1,6 @@
+#main
+  typeSpec = 'u8'
+  n:/typeSpec = 1
+  typeSpec = 'u16'
+  n:/typeSpec = 2
+  OK

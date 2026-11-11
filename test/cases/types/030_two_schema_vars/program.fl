@@ -1,0 +1,8 @@
+<stock>:
+  qty: u16
+<item>:
+  name: t4
+#main
+  a:<stock> = {}
+  b:<item> = {}
+  OK

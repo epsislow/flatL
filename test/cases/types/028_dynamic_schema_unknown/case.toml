@@ -1,0 +1,9 @@
+suite = "types"
+id = 28
+desc = "dynamic STRING unknown schema"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "type.assign.schema.unknown"

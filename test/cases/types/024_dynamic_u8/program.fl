@@ -1,0 +1,11 @@
+<stock>:
+  qty: u16
+
+#main
+  typeSpec = 'u8'
+  n:/typeSpec = 5
+  n == 5
+  typeSpec = 'u8'
+  n:/typeSpec = 7
+  n == 7
+  OK

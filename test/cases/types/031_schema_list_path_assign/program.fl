@@ -1,0 +1,11 @@
+<stock>:
+  location: t4
+  qty: u16
+  product: t8
+<var>:
+  stocks: <stock>[10]
+#main
+  myStock:<stock> = { qty: 2, product: "ab" }
+  qq:<var> = {}
+  qq.stocks = [myStock]
+  OK

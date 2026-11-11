@@ -474,6 +474,12 @@ static int materialize_child_field(const FlatSchemaField *field, FlatCollectionP
     if (!field || !out || !pool || !str_pool) {
         return -1;
     }
+    if (field->flags & FLAT_SCH_FIELD_LIST) {
+        if (flat_list_empty(pool, str_pool, &id) != 0) {
+            return -1;
+        }
+        return flat_value_set_list(out, id);
+    }
     if (field->slot.kind == FLAT_SLOT_TYPE_SCHEMA && cat) {
         FlatValue obj;
         if (flat_obj_empty(pool, str_pool, &id) != 0) {
@@ -533,8 +539,8 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
                     return type_panic_write(typed, "type.schema.field.unknown");
                 }
                 if (field &&
-                    flat_slot_type_check_value(&field->slot, val, str_pool, pool, cat, &checked,
-                                               panic, sizeof panic) != 0) {
+                    flat_schema_check_field_value(field, val, str_pool, pool, cat, &checked, panic,
+                                                sizeof panic) != 0) {
                     return type_panic_write(typed, panic[0] ? panic : "type.assign.incompatible");
                 }
                 write_val = &checked;

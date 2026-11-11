@@ -1,8 +1,10 @@
 #include "flat_vcx.h"
+#include "flat_schema.h"
 #include "flat_file.h"
 #include "flat_mem_stats.h"
 #include "flat_value.h"
 
+#include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -12,7 +14,20 @@ typedef struct FlatVcxContext {
     FlatVcxVar *vars;
     int var_count;
     int auto_grow;
+    uint8_t dschema_allow_schemas;
+    uint8_t dschema_list_active;
+    int dschema_list_count;
+    char dschema_list[FLAT_VCX_DSCHEMA_LIST_MAX][FLAT_SCHEMA_NAME_MAX + 1];
 } FlatVcxContext;
+
+static void ctx_init_policy(FlatVcxContext *c) {
+    if (!c) {
+        return;
+    }
+    c->dschema_allow_schemas = 1;
+    c->dschema_list_active = 0;
+    c->dschema_list_count = 0;
+}
 
 struct FlatVcxRuntime {
     FlatVcxContext *contexts;
@@ -177,8 +192,12 @@ static int ctx_reserve_slots(FlatVcxRuntime *rt, FlatVcxContext *ctx, uint32_t n
         return 0;
     }
     if (!ctx->auto_grow) {
-        if (panic_detail && panic_sz > 0 && fixed_panic) {
-            snprintf(panic_detail, panic_sz, "%s", fixed_panic);
+        if (panic_detail && panic_sz > 0) {
+            if (fixed_panic) {
+                snprintf(panic_detail, panic_sz, "%s", fixed_panic);
+            } else {
+                snprintf(panic_detail, panic_sz, "vcx.slots.limit");
+            }
         }
         return -1;
     }
@@ -448,6 +467,7 @@ FlatVcxRuntime *flat_vcx_runtime_create(uint32_t global_capacity) {
         free(rt);
         return NULL;
     }
+    ctx_init_policy(g);
     return rt;
 }
 
@@ -556,6 +576,7 @@ int flat_vcx_create(FlatVcxRuntime *rt, uint32_t capacity, uint32_t *out_id, cha
         snprintf(panic_detail, panic_sz, "vcx.create");
         return -1;
     }
+    ctx_init_policy(c);
     rt->context_count++;
     *out_id = c->id;
     return 0;
@@ -601,8 +622,143 @@ int flat_vcx_create_auto(FlatVcxRuntime *rt, uint32_t initial_capacity, uint32_t
         snprintf(panic_detail, panic_sz, "vcx.createAuto");
         return -1;
     }
+    ctx_init_policy(c);
     rt->context_count++;
     *out_id = c->id;
+    return 0;
+}
+
+static int parse_schema_list_entry(const FlatValue *v, const FlatStringPool *pool,
+                                   char *name_out, size_t name_sz) {
+    char buf[FLAT_SCHEMA_NAME_MAX + 4];
+    const char *p;
+    const char *end;
+
+    if (flat_value_get_cstr(v, pool, buf, sizeof buf) != 0 || buf[0] == '\0') {
+        return -1;
+    }
+    p = buf;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '<') {
+        return -1;
+    }
+    p++;
+    end = strchr(p, '>');
+    if (!end || end == p) {
+        return -1;
+    }
+    if ((size_t)(end - p) >= name_sz) {
+        return -1;
+    }
+    memcpy(name_out, p, (size_t)(end - p));
+    name_out[end - p] = '\0';
+    if (end[1] != '\0') {
+        const char *t = end + 1;
+        while (*t && isspace((unsigned char)*t)) {
+            t++;
+        }
+        if (*t != '\0') {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int flat_vcx_dynamic_schema_permit(FlatVcxRuntime *rt, const char *schema_name, char *panic,
+                                   size_t panic_sz) {
+    FlatVcxContext *act;
+    int i;
+
+    if (!schema_name || !schema_name[0]) {
+        snprintf(panic, panic_sz, "type.assign.schema.unknown");
+        return -1;
+    }
+    if (!rt || rt->context_count <= 0) {
+        return 0;
+    }
+    act = &rt->contexts[rt->active_ix];
+    if (!act->dschema_allow_schemas) {
+        snprintf(panic, panic_sz, "type.assign.dynamic.denied");
+        return -1;
+    }
+    if (!act->dschema_list_active || act->dschema_list_count <= 0) {
+        return 0;
+    }
+    for (i = 0; i < act->dschema_list_count; i++) {
+        if (strcmp(act->dschema_list[i], schema_name) == 0) {
+            return 0;
+        }
+    }
+    snprintf(panic, panic_sz, "type.assign.dynamic.denied");
+    return -1;
+}
+
+int flat_vcx_dschema_allow(FlatVcxRuntime *rt, uint32_t ctx_id, int allow, char *panic_detail,
+                           size_t panic_sz) {
+    int ix;
+    FlatVcxContext *c;
+
+    if (!rt) {
+        return -1;
+    }
+    ix = ctx_index_by_id(rt, ctx_id);
+    if (ix < 0) {
+        snprintf(panic_detail, panic_sz, "vcx.dSchemaAllow.invalid");
+        return -1;
+    }
+    c = &rt->contexts[ix];
+    c->dschema_allow_schemas = allow ? 1u : 0u;
+    return 0;
+}
+
+int flat_vcx_dschema_list(FlatVcxRuntime *rt, uint32_t ctx_id, const FlatValue *list_val,
+                          FlatCollectionPool *coll, FlatStringPool *pool, char *panic_detail,
+                          size_t panic_sz) {
+    int ix;
+    FlatVcxContext *c;
+    int len;
+    int i;
+
+    if (!rt || !list_val || !coll || !pool) {
+        return -1;
+    }
+    if (list_val->tag != VAL_LIST) {
+        snprintf(panic_detail, panic_sz, "vcx.dSchemaList.arg");
+        return -1;
+    }
+    ix = ctx_index_by_id(rt, ctx_id);
+    if (ix < 0) {
+        snprintf(panic_detail, panic_sz, "vcx.dSchemaList.invalid");
+        return -1;
+    }
+    c = &rt->contexts[ix];
+    if (flat_list_len(coll, list_val->u.coll_id, &len) != 0) {
+        snprintf(panic_detail, panic_sz, "vcx.dSchemaList.arg");
+        return -1;
+    }
+    c->dschema_list_active = 1;
+    c->dschema_list_count = 0;
+    if (len == 0) {
+        return 0;
+    }
+    if (len > FLAT_VCX_DSCHEMA_LIST_MAX) {
+        snprintf(panic_detail, panic_sz, "vcx.dSchemaList.limit");
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        FlatValue el;
+        if (flat_list_get(coll, list_val->u.coll_id, i, &el) != 0) {
+            snprintf(panic_detail, panic_sz, "vcx.dSchemaList.arg");
+            return -1;
+        }
+        if (parse_schema_list_entry(&el, pool, c->dschema_list[i], sizeof c->dschema_list[i]) != 0) {
+            snprintf(panic_detail, panic_sz, "vcx.dSchemaList.entry");
+            return -1;
+        }
+    }
+    c->dschema_list_count = len;
     return 0;
 }
 
@@ -611,6 +767,9 @@ int flat_vcx_prepare_active_new_bind(FlatVcxRuntime *rt, char *panic_detail, siz
   int need;
 
     if (!rt || !rt->bind_attached || rt->context_count <= 0) {
+        if (panic_detail && panic_sz > 0) {
+            snprintf(panic_detail, panic_sz, "vcx.bind.prepare");
+        }
         return -1;
     }
     act = &rt->contexts[rt->active_ix];
@@ -737,6 +896,8 @@ typedef struct {
     FlatValue val;
     FlatSlotType slot_type;
     uint8_t has_slot_type;
+    uint8_t slot_dynamic;
+    char slot_dynamic_expr[FLAT_VAR_NAME_MAX + 1];
     int valid;
 } VcxCopyStage;
 
@@ -778,6 +939,9 @@ static void ctx_restore(FlatVcxRuntime *rt, FlatVcxContext *ctx, FlatCollectionP
         if (vi >= 0) {
             ctx->vars[vi].slot_type = bak[i].slot_type;
             ctx->vars[vi].has_slot_type = bak[i].has_slot_type;
+            ctx->vars[vi].slot_dynamic = bak[i].slot_dynamic;
+            snprintf(ctx->vars[vi].slot_dynamic_expr, sizeof ctx->vars[vi].slot_dynamic_expr, "%s",
+                     bak[i].slot_dynamic_expr);
         }
         flat_value_release(coll, pool, &bak[i].val);
     }
@@ -848,6 +1012,9 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
         }
         stage[stage_n].slot_type = src->vars[i].slot_type;
         stage[stage_n].has_slot_type = src->vars[i].has_slot_type;
+        stage[stage_n].slot_dynamic = src->vars[i].slot_dynamic;
+        snprintf(stage[stage_n].slot_dynamic_expr, sizeof stage[stage_n].slot_dynamic_expr, "%s",
+                 src->vars[i].slot_dynamic_expr);
         stage[stage_n].valid = 1;
         stage_n++;
     }
@@ -870,6 +1037,9 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
         if (di >= 0) {
             dst->vars[di].slot_type = stage[i].slot_type;
             dst->vars[di].has_slot_type = stage[i].has_slot_type;
+            dst->vars[di].slot_dynamic = stage[i].slot_dynamic;
+            snprintf(dst->vars[di].slot_dynamic_expr, sizeof dst->vars[di].slot_dynamic_expr, "%s",
+                     stage[i].slot_dynamic_expr);
         }
     }
     if (bak) {
@@ -1062,6 +1232,9 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
         }
         stage[i].slot_type = src->vars[src_vi].slot_type;
         stage[i].has_slot_type = src->vars[src_vi].has_slot_type;
+        stage[i].slot_dynamic = src->vars[src_vi].slot_dynamic;
+        snprintf(stage[i].slot_dynamic_expr, sizeof stage[i].slot_dynamic_expr, "%s",
+                 src->vars[src_vi].slot_dynamic_expr);
         stage[i].valid = 1;
         stage_n++;
     }
@@ -1084,6 +1257,9 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
         if (di >= 0) {
             dst->vars[di].slot_type = stage[i].slot_type;
             dst->vars[di].has_slot_type = stage[i].has_slot_type;
+            dst->vars[di].slot_dynamic = stage[i].slot_dynamic;
+            snprintf(dst->vars[di].slot_dynamic_expr, sizeof dst->vars[di].slot_dynamic_expr, "%s",
+                     stage[i].slot_dynamic_expr);
         }
     }
     if (bak) {

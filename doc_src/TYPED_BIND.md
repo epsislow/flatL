@@ -1,6 +1,6 @@
 # Typed bind, schemas, and slot contracts (T0 draft)
 
-**Status:** **T1–T3 implemented** in `flc`/`flvm`; T4+ still draft.  
+**Status:** **T1–T4 implemented** in `flc`/`flvm` (typed `m.calc` / typed I/O remain T5+).  
 **Overview:** [STRICT_TYPES.md](./STRICT_TYPES.md)  
 **Roadmap:** [`.cursor/plans/strict-types-schemas-roadmap.plan.md`](../.cursor/plans/strict-types-schemas-roadmap.plan.md)  
 **Ideas sketch:** [`.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt`](../.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt) (aligned)  
@@ -133,7 +133,8 @@ Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
 | **T1** | **Done:** parse `:type` on ASSIGN, slot metadata on VCX, assign checks, `free` clears type (`u*`/`s*`/`f*`/`b`/`t`/`tN`/`l`/`o`) |
 | **T2** | **Done:** `<schema>:` blocks, **`var:<schema>`**, SCHM in **`.fb` v6**, null-fill on `{}`, compile checks (`type.schema.cycle`, `type.schema.unknown`), runtime `type.schema.field.unknown` |
 | **T3** | **Done:** `var.field = …`, `var:<schema>.field = …`, typed `O.set2`, schema on path, nested null-fill on write |
-| **T4** | `:/expr`, `dSchema*`, typed `m.calc` / I/O |
+| **T4** | **Done:** `name:/expr`, `V.dSchemaAllow`, `V.dSchemaList` |
+| **T4+** | typed `m.calc` / I/O |
 | **T5** | `const`, `freeze()` |
 | **T6** | Typed `def`, optional native sugar |
 

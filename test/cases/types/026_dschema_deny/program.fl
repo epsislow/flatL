@@ -1,0 +1,10 @@
+<stock>:
+  qty: u16
+
+use native vcx with V
+
+#main
+  schemaStr = '<stock>'
+  V.dSchemaAllow(1, 0)
+  payload:/schemaStr = {}
+  OK

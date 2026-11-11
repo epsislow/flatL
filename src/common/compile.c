@@ -17,6 +17,8 @@
 
 typedef char VarName[64];
 
+static const FlatSchemaCatalog *g_compile_schemas;
+
 /* --- var_slots: distinct bind target names across the whole linked program --- */
 
 typedef struct {
@@ -82,7 +84,14 @@ static int varset_add_assign_lhs(VarSet *vs, const char *text) {
         FlatSlotType ty;
         int has;
 
-        if (flat_bind_parse_lhs(bind, name, sizeof name, &ty, &has) != 0 || name[0] == '\0') {
+        if (g_compile_schemas) {
+            if (flat_bind_parse_lhs_catalog(bind, name, sizeof name, &ty, &has,
+                                            g_compile_schemas) != 0 ||
+                name[0] == '\0') {
+                return 0;
+            }
+        } else if (flat_bind_parse_lhs(bind, name, sizeof name, &ty, &has) != 0 ||
+                   name[0] == '\0') {
             return 0;
         }
         return varset_add(vs, name);
@@ -238,8 +247,6 @@ static int count_var_slots(const FgirProgram *prog, uint32_t *out_slots, char *e
     free(vs.table);
     return rc == 0 ? 0 : -1;
 }
-
-static const FlatSchemaCatalog *g_compile_schemas;
 
 typedef struct {
     uint8_t *buf;
@@ -742,6 +749,11 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
     memset(&schema_catalog, 0, sizeof schema_catalog);
+    if (flat_schema_build_catalog(prog->schemas, prog->schema_count, &schema_catalog, err,
+                                  err_size) != 0) {
+        return -1;
+    }
+    g_compile_schemas = &schema_catalog;
     if (validate_free_in_program(prog, err, err_size) != 0) {
         return -1;
     }
@@ -757,11 +769,6 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     if (count_var_slots(prog, &var_slots, err, err_size) != 0) {
         return -1;
     }
-    if (flat_schema_build_catalog(prog->schemas, prog->schema_count, &schema_catalog, err,
-                                  err_size) != 0) {
-        return -1;
-    }
-    g_compile_schemas = &schema_catalog;
 
     offs = calloc((size_t)prog->block_count, sizeof(BlockOff));
     block_ids = calloc((size_t)prog->block_count, sizeof(uint32_t));

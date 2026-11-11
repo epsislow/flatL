@@ -181,6 +181,8 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("vcx", "destroy", "vcx.destroy(ctx)"),
     META_SIG("vcx", "varsCopyByNames", "vcx.varsCopyByNames(srcCtx, dstCtx, srcNames, dstNames)"),
     META_SIG("vcx", "callInstr", "vcx.callInstr()"),
+    META_SIG("vcx", "dSchemaAllow", "vcx.dSchemaAllow(ctx, allow)"),
+    META_SIG("vcx", "dSchemaList", "vcx.dSchemaList(ctx, list)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
