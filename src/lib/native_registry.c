@@ -170,6 +170,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("vcx", "isactive", "vcx.isactive(ctx)"),
     META_SIG("vcx", "set", "vcx.set(ctx)"),
     META_SIG("vcx", "create", "vcx.create(capacity)"),
+    META_SIG("vcx", "createAuto", "vcx.createAuto(seed?)"),
     META_SIG("vcx", "var", "vcx.var(srcCtx, name)"),
     META_SIG("vcx", "hasVar", "vcx.hasVar(ctx, name)"),
     META_SIG("vcx", "varsCopy", "vcx.varsCopy(srcCtx, dstCtx)"),

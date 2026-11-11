@@ -1,6 +1,6 @@
 suite = "func"
 id = 17
-desc = "func:varSlots 24 + nested def call (unique, B)"
+desc = "func:varSlots 24 seed + nested def call (unique, B, createAuto)"
 kind = "pipeline"
 source = "program.fl"
 compile = "{root}/bin/flc -o {tmp}/out.fb {src}"

@@ -6,14 +6,6 @@
 #include <stddef.h>
 
 #define FLAT_FUNC_INSTR_VCX_FIXED 8u
-/*
- * Compile-time safety margin per nested call site in a unique-executor def
- * (flc inference only; not a runtime nesting-depth rule). Each callee still
- * runs on its own funcVcx; see doc_src/USER_FUNCTIONS.md § func:varSlots.
- * ~11 temps on active VCX during strategy A setup; nested global executor ~+5.
- */
-#define FLAT_FUNC_NESTED_CALL_VCX_EXTRA 12u
-#define FLAT_FUNC_NESTED_GLOBAL_EXEC_EXTRA 6u
 #define FLAT_FUNC_RESERVED_INSTR_VAR "__call_instr_vcx"
 #define FLAT_FUNC_RESERVED_CALLE_VAR "__call_calle_vcx"
 #define FLAT_FUNC_DEFAULT_EXECUTOR "#fl_executor.unique.scope"

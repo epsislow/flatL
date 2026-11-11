@@ -49,7 +49,8 @@ With **`use native vcx with V`**, examples use the alias **`V.*`**; the full nam
 | **`V.current()`** | — | NUMBER — active context ID (global is **1**) | **`vcx.current`** — no VCX runtime |
 | **`V.isactive(ctx)`** | **`ctx`** — context ID (usually an **id you already hold**, not **`current()`**) | BOOL — **`true`** iff **`ctx`** equals the active context | **`vcx.isactive.arg`**, **`vcx.isactive.ctx`** |
 | **`V.set(ctx)`** | **`ctx`** — context ID | — | **`vcx.set.arg`**, **`vcx.set.invalid`** |
-| **`V.create(capacity)`** | **`capacity`** — positive **whole** NUMBER (≥ 1) | NUMBER — new context ID (does **not** switch active) | **`vcx.create.arg`**, **`vcx.create`**, **`vcx.create.limit`** |
+| **`V.create(capacity)`** | **`capacity`** — positive **whole** NUMBER (≥ 1) | NUMBER — new context ID (does **not** switch active); **fixed** capacity | **`vcx.create.arg`**, **`vcx.create`**, **`vcx.create.limit`** |
+| **`V.createAuto(seed?)`** | optional **`seed`** — initial capacity (≥ 1); omitted or **`0`** → **4** | NUMBER — new **auto-grow** context ID | **`vcx.createAuto.arg`**, **`vcx.createAuto`**, **`vcx.createAuto.limit`**, **`vcx.auto.limit`**, **`vcx.auto.alloc`** |
 | **`V.var(srcCtx, name)`** | **`srcCtx`** — ID; **`name`** — STRING (literal or variable holding name) | any value (deep copy from **`srcCtx`**) | **`vcx.var.arg`**, **`vcx.var.missing`**, **`vcx.var.copy`** |
 | **`V.hasVar(ctx, name)`** | **`ctx`** — ID; **`name`** — STRING | BOOL | **`vcx.hasVar.arg`**, **`vcx.hasVar.ctx`** |
 | **`V.varsCopy(src, dst)`** | two context IDs | — | **`vcx.varsCopy.arg`**, **`vcx.varsCopy`** (e.g. capacity / copy) |
@@ -63,7 +64,7 @@ With **`use native vcx with V`**, examples use the alias **`V.*`**; the full nam
 
 **`varsCopy` / `varsCopyLike`:** deep copy of **values** into **`dst`** (atomic for the operation). **`src == dst`** is a no-op for **`varsCopy`**. **`varsCopyLike`** applies a **glob** to **variable names** only (`*`, `?`), case-sensitive, **whole** name match.
 
-**`varsCopyByNames`:** for each index `i`, copies **`src[srcNames[i]]`** → **`dst[dstNames[i]]`** (deep copy, same rules as **`varsCopy`**). **`srcNames`** and **`dstNames`** must be **LIST** values of the **same length**; every element must be a non-empty **STRING** that is a valid variable name (not `null` / `true` / `false`). Missing source name → PANIC. Destination capacity is checked before any write; failure rolls back **`dst`** (atomic). **`n == 0`** (empty lists) is a no-op.
+**`varsCopyByNames`:** for each index `i`, copies **`src[srcNames[i]]`** → **`dst[dstNames[i]]`** (deep copy, same rules as **`varsCopy`**). **`srcNames`** and **`dstNames`** must be **LIST** values of the **same length**; every element must be a non-empty **STRING** that is a valid variable name (not `null` / `true` / `false`). Missing source name → PANIC. If **`dst`** is a **fixed** `create(N)` context and would overflow, PANIC **`vcx.varsCopyByNames.capacity`** (rolls back **`dst`**). If **`dst`** is **`createAuto`**, capacity grows (up to **`FLAT_MAX_VARS`**) before writes. **`n == 0`** (empty lists) is a no-op.
 
 **`destroy`:** releases all values in the context, frees its storage, and removes it from the runtime. **Global (ID 1)** cannot be destroyed. The **active** context cannot be destroyed — **`V.set`** elsewhere first (e.g. back to global). Unknown or already destroyed ID → **`vcx.destroy.notfound`**. Destroy does not change **`V.current()`** unless you destroyed a context that was not active (active unchanged).
 
@@ -95,8 +96,9 @@ At **compile** time, `flc` scans the whole program and counts **distinct bind na
 
 | Context | Capacity (`varsMax` / `mem.vars_max` when active) |
 |---------|---------------------------------------------------|
-| **Global** (ID **1**) | **`var_slots`** from bytecode |
-| **`create(N)`** | **`N`** (chosen at the `create` call; unchanged for that ID) |
+| **Global** (ID **1**) | **`var_slots`** from bytecode (fixed) |
+| **`create(N)`** | **`N`** (fixed for that ID) |
+| **`createAuto(seed?)`** | starts at **seed** (default **4**); **grows** when new names are bound or copies need space, max **`FLAT_MAX_VARS`** — while capacity is **under 2048**, each step **doubles**; from **2048** upward, each step adds **2048** slots (see `FLAT_VCX_AUTO_GROW_*` in `flat_vcx.h`) |
 
 Example: only `globalCtx`, `user`, `scratchCtx` in source → **`var_slots = 3`**, global **`mem.vars_max() = 3`**. After **`V.create(20)`** and **`V.set(scratchCtx)`**, **`mem.vars_max() = 20`** — that is the **`create`** size, not `var_slots`.
 
@@ -104,10 +106,28 @@ Example: only `globalCtx`, `user`, `scratchCtx` in source → **`var_slots = 3`*
 
 ### Can capacity become 21?
 
-- **At runtime, no.** Global stays **`var_slots`**. An existing **`create(N)`** context keeps **N**. When **`used == capacity`**, another **new** bind in that context fails; bytecode **`var_slots`** is unchanged.
+- **Fixed contexts:** Global stays **`var_slots`**. **`create(N)`** keeps **N**; a new bind when **`used == capacity`** → PANIC (unless the name already exists).
+- **Auto contexts:** **`createAuto`** may raise **`varsMax`** until **`FLAT_MAX_VARS`**; then **`vcx.auto.limit`** (or copy failures) on further growth.
 - **After recompile:** adding an 11th distinct bind name in source sets **`var_slots = 11`** in a **new** `.fb`; global **`varsMax`** on the next run is **11**. Contexts already created with **`create(20)`** still cap at **20** unless you **`create(21)`** (new ID) and copy.
 
 Compile-time **names** are program-wide: the slot table is the universe of names the program may bind.
+
+### VCX capacity vs value payload (pools)
+
+Two different budgets apply on every run:
+
+| Layer | What it limits | Typical APIs |
+|-------|----------------|--------------|
+| **VCX slot table** | **Distinct variable names** in one context (each name → one `FlatValue` header) | `mem.vars_max()` / `vcx.varsMax(ctx)` — per context, up to **`FLAT_MAX_VARS` (32768)** for `createAuto` |
+| **VM pools** (shared across **all** contexts) | **Heavy values**: STRING REF bytes, LIST/OBJECT bodies | `mem.strref_*`, `mem.list_*`, `mem.object_*` — see [mem.md](./mem.md) and [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §5 |
+
+A variable slot is small (name + tag/id). Long text, big lists, and objects live in the **string** and **collection** pools (**~64 MiB** owned string bytes cap, **256** live lists/objects, **1024** REF slots, etc.). Binding another name in a VCX does **not** grant a separate pool budget; every context uses the **same** pools.
+
+**Implications:**
+
+- **`createAuto`** can grow **name capacity** on one context without fixing how much **data** those names hold — payload still hits pool limits.
+- **`varsCopy` / `varsCopyByNames` / `V.var`** deep-copy values → can increase **pool** use (duplicate LIST/OBJECT/REF), not just `vars_used`.
+- Worst-case **slot table** memory for one context at max capacity is on the order of **single-digit MiB** (empty slots); worst-case **payload** is governed by pool constants, not by `vars_max`.
 
 ## `mem.*` vs `vcx.*`
 
@@ -135,6 +155,7 @@ Restore **`tout`** / **`terr`** when you need terminal output again; captured te
 | Bad context ID on **`set`** | **`vcx.set.invalid`** |
 | Bad **`ctx`** on **`isactive`** | **`vcx.isactive.ctx`** |
 | Bad args / alloc for **`create`** | **`vcx.create.arg`**, **`vcx.create.limit`**, **`vcx.create`** |
+| Bad args / limit for **`createAuto`** | **`vcx.createAuto.arg`**, **`vcx.createAuto.limit`**, **`vcx.createAuto`**, **`vcx.auto.limit`**, **`vcx.auto.alloc`** |
 | Missing var on **`var`** | **`vcx.var.missing`** |
 | Deep copy failure on **`var`** | **`vcx.var.copy`** |
 | Bad **`ctx`** on **`hasVar` / `varsUsed` / …** | **`vcx.<fn>.ctx`** (e.g. **`vcx.varsMax.ctx`**) |

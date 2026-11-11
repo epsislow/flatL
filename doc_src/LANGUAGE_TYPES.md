@@ -100,7 +100,7 @@ Allocates pool copy. Replaced by natives (e.g. `file.read`) later — not for pr
 | Constant | Value | Meaning |
 |----------|-------|---------|
 | `FLAT_INLINE_STR_MAX` | 127 | Max INLINE string bytes |
-| `FLAT_MAX_VARS` | 128 | Variables per run |
+| `FLAT_MAX_VARS` | 32768 | Max **distinct bind names** per one VCX context (`var_slots` / `create` / `createAuto` ceiling) |
 | `FLAT_POOL_MAX_SLOTS` | 1024 | Max pool entries (owned + views) |
 | `FLAT_POOL_MAX_CHUNK` | 16 MiB | Max single allocation |
 | `FLAT_POOL_MAX_TOTAL` | 64 MiB | Max sum of owned bytes |
@@ -112,6 +112,8 @@ Allocates pool copy. Replaced by natives (e.g. `file.read`) later — not for pr
 | `FLAT_OBJ_KEY_MAX` | 127 | Max key string bytes |
 
 Overflow → assign/alloc fails silently in VM today; future: compile-time or panic.
+
+**VCX vs pools:** each context has its own name table (capacity `vars_max`); STRING REF, LIST, and OBJECT limits above are **per VM run** (shared by all contexts). See [natives/vcx.md](./natives/vcx.md) § *VCX capacity vs value payload* and [natives/mem.md](./natives/mem.md) § *Names vs payload*.
 
 ---
 

@@ -165,6 +165,7 @@ int flat_native_vcx_current(FlatNativeCtx *ctx);
 int flat_native_vcx_isactive(FlatNativeCtx *ctx);
 int flat_native_vcx_set(FlatNativeCtx *ctx);
 int flat_native_vcx_create(FlatNativeCtx *ctx);
+int flat_native_vcx_create_auto(FlatNativeCtx *ctx);
 int flat_native_vcx_var(FlatNativeCtx *ctx);
 int flat_native_vcx_has_var(FlatNativeCtx *ctx);
 int flat_native_vcx_vars_copy(FlatNativeCtx *ctx);

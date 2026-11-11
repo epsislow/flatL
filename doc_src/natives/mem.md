@@ -67,7 +67,19 @@ Argument lists must be empty `()` unless noted above.
 
 **Without VCX:** one storage; **`vars_max()`** = program **`var_slots`** in bytecode (distinct bind names counted at compile — see [`vcx.md`](./vcx.md) § `var_slots`).
 
-**With [`vcx`](./vcx.md):** same three calls apply to the **active** context — global capacity = **`var_slots`**, **`create(N)`** contexts = **`N`**. Other contexts: **`vcx.varsUsed(ctx)`**, **`vcx.varsMax(ctx)`**, etc. Capacity does **not** increase at runtime when you add bindings; recompile changes **`var_slots`** (global on next run), not existing **`create`** capacities.
+**With [`vcx`](./vcx.md):** same three calls apply to the **active** context — global **`vars_max()`** = program **`var_slots`** (fixed); **`create(N)`** = **`N`** (fixed); **`createAuto`** can **grow** `vars_max` on that context up to **`FLAT_MAX_VARS`**. Inspect other contexts with **`vcx.varsUsed(ctx)`**, **`vcx.varsMax(ctx)`**, etc.
+
+#### Names vs payload
+
+**`vars_*`** counts **bindings** (how many names exist in the active VCX, and how many slots the table can hold). It does **not** measure string bytes or list element count.
+
+| You care about | Use |
+|----------------|-----|
+| Variable **name** slots in the active context | `mem.vars_used()`, `mem.vars_max()`, `mem.vars_avail()` |
+| STRING REF **pool** (shared, all contexts) | `mem.strref_used()`, `mem.strref_max()`, `mem.strref_avail()` |
+| LIST / OBJECT **live** values (shared) | `mem.list_*`, `mem.object_*` |
+
+Full ceilings: [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §5 (`FLAT_POOL_MAX_TOTAL` **64 MiB** owned string data, **1024** REF slots, **256** live lists/objects, **1024** list elements each, …). See also [`vcx.md`](./vcx.md) § *VCX capacity vs value payload*.
 
 ### LIST / OBJECT pools
 

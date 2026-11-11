@@ -1,0 +1,15 @@
+use native vcx with V
+
+#main
+  scratch = V.createAuto()
+  V.set(scratch)
+  v0 = 0
+  v1 = 1
+  v2 = 2
+  v3 = 3
+  v4 = 4
+  mem.vars_max() -> cap
+  io.outln(cap)
+  V.set(1)
+  V.destroy(scratch)
+  OK

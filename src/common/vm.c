@@ -443,7 +443,11 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val) {
         return 0;
     }
     if ((uint32_t)st->var_count >= st->var_slots_max) {
-        return -1;
+        if (!st->vcx ||
+            flat_vcx_prepare_active_new_bind(st->vcx, st->panic_reason, sizeof st->panic_reason) !=
+                0) {
+            return -1;
+        }
     }
     if (var_name_forbidden(name)) {
         return -1;

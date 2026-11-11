@@ -1,0 +1,19 @@
+use native vcx with V
+use native list with L
+
+#main
+  src = V.create(10)
+  V.set(src)
+  a = 1
+  b = 2
+  c = 3
+  V.set(1)
+  dst = V.createAuto(2)
+  V.varsCopyByNames(src, dst, ['a', 'b', 'c'], ['x', 'y', 'z'])
+  V.varsMax(dst) -> cap
+  io.outln(cap)
+  V.var(dst, 'z') -> got
+  io.outln(got)
+  V.destroy(src)
+  V.destroy(dst)
+  OK

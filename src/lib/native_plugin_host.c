@@ -70,6 +70,7 @@ static void register_embedded_vcx(void) {
     flat_native_plugin_register(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
     flat_native_plugin_register(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
     flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
+    flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE_AUTO, flat_native_vcx_create_auto);
     flat_native_plugin_register(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
     flat_native_plugin_register(FLAT_NATIVE_VCX_HAS_VAR, flat_native_vcx_has_var);
     flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY, flat_native_vcx_vars_copy);
@@ -233,6 +234,7 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
         flat_native_plugin_register(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
         flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_CREATE_AUTO, flat_native_vcx_create_auto);
         flat_native_plugin_register(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
         flat_native_plugin_register(FLAT_NATIVE_VCX_HAS_VAR, flat_native_vcx_has_var);
         flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY, flat_native_vcx_vars_copy);
@@ -242,7 +244,7 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_MAX, flat_native_vcx_vars_max);
         flat_native_plugin_register(FLAT_NATIVE_VCX_DESTROY, flat_native_vcx_destroy);
         flat_native_plugin_register(FLAT_NATIVE_VCX_VARS_COPY_BY_NAMES, flat_native_vcx_vars_copy_by_names);
-    flat_native_plugin_register(FLAT_NATIVE_VCX_CALL_INSTR, flat_native_vcx_call_instr);
+        flat_native_plugin_register(FLAT_NATIVE_VCX_CALL_INSTR, flat_native_vcx_call_instr);
         g_loaded_vcx = 1;
         return 0;
     }

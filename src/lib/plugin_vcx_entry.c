@@ -10,6 +10,7 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
     reg(FLAT_NATIVE_VCX_SET, flat_native_vcx_set);
     reg(FLAT_NATIVE_VCX_CREATE, flat_native_vcx_create);
+    reg(FLAT_NATIVE_VCX_CREATE_AUTO, flat_native_vcx_create_auto);
     reg(FLAT_NATIVE_VCX_VAR, flat_native_vcx_var);
     reg(FLAT_NATIVE_VCX_HAS_VAR, flat_native_vcx_has_var);
     reg(FLAT_NATIVE_VCX_VARS_COPY, flat_native_vcx_vars_copy);

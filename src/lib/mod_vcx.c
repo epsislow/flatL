@@ -353,6 +353,38 @@ int flat_native_vcx_create(FlatNativeCtx *ctx) {
     return vcx_out_num(ctx, (double)new_id);
 }
 
+int flat_native_vcx_create_auto(FlatNativeCtx *ctx) {
+    FlatVcxRuntime *rt = rt_from(ctx);
+    uint32_t seed = FLAT_VCX_AUTO_DEFAULT_SEED;
+    uint32_t new_id;
+    char inner[512];
+
+    if (!rt) {
+        return vcx_fail(ctx, "vcx.createAuto");
+    }
+    ctx->panic_detail[0] = '\0';
+    snprintf(inner, sizeof inner, "%s", ctx->inner ? ctx->inner : "");
+    flat_native_trim(inner);
+    if (inner[0] != '\0') {
+        FlatValue capv;
+
+        if (parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
+            return vcx_fail(ctx, "vcx.createAuto.arg");
+        }
+        if (vcx_number_to_uint32_strict(capv.u.number, &seed) != 0) {
+            return vcx_fail(ctx, "vcx.createAuto.arg");
+        }
+        if (seed < 1u) {
+            seed = FLAT_VCX_AUTO_DEFAULT_SEED;
+        }
+    }
+    if (flat_vcx_create_auto(rt, seed, &new_id, ctx->panic_detail, sizeof ctx->panic_detail) !=
+        0) {
+        return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.createAuto");
+    }
+    return vcx_out_num(ctx, (double)new_id);
+}
+
 int flat_native_vcx_var(FlatNativeCtx *ctx) {
     FlatVcxRuntime *rt = rt_from(ctx);
     char inner[512];

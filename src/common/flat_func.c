@@ -351,94 +351,24 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
     return 0;
 }
 
-static int varset_add_name(char names[][64], int *count, int max, const char *raw) {
-    int i;
-    char key[64];
-
-    snprintf(key, sizeof key, "%s", raw);
-    if (!key[0]) {
-        return 0;
-    }
-    for (i = 0; i < *count; i++) {
-        if (strcmp(names[i], key) == 0) {
-            return 0;
-        }
-    }
-    if (*count >= max) {
-        return 1;
-    }
-    snprintf(names[*count], 64, "%s", key);
-    (*count)++;
-    return 0;
-}
-
 int flat_func_finish_def(FgirFunction *fn, const FgirBlock *impl, int manual_slots, char *err,
                          size_t err_size) {
-    int scan = 0;
-    int pi;
+    (void)impl;
 
-    {
-        char names[256][64];
-        int count = 0;
-        for (pi = 0; pi < fn->param_count; pi++) {
-            varset_add_name(names, &count, 256, fn->params[pi]);
-        }
-        for (pi = 0; pi < impl->instr_count; pi++) {
-            const FgirInstr *ins = &impl->instr[pi];
-            if (ins->kind == FGIR_ASSIGN) {
-                char buf[FGIR_MAX_LINE];
-                char *bind;
-                char *val;
-                FlatAssignSplitForm form;
-
-                snprintf(buf, sizeof buf, "%s", ins->text);
-                if (flat_assign_split_line(buf, &bind, &val, &form) == 0 && bind[0]) {
-                    varset_add_name(names, &count, 256, bind);
-                }
-            }
-        }
-        scan = count;
-    }
     if (fn->is_global_executor) {
         fn->func_vcx_slots = 0;
         return 0;
     }
-    if (manual_slots >= 0 && manual_slots < scan) {
-        snprintf(err, err_size, "func.varSlots.underflow (%d < %d)", manual_slots, scan);
+    if (manual_slots > FLAT_MAX_VARS) {
+        snprintf(err, err_size, "func.varSlots.exceeds_max (%d > %d)", manual_slots,
+                 FLAT_MAX_VARS);
         return -1;
     }
-  fn->func_vcx_slots = (manual_slots >= 0) ? (uint32_t)manual_slots : (uint32_t)scan;
-    if (fn->func_vcx_slots == 0 && !fn->is_global_executor) {
-        fn->func_vcx_slots = (uint32_t)(scan > 0 ? scan : 4);
-    }
-    if (!fn->is_global_executor) {
-        int nested_calls = 0;
-        for (pi = 0; pi < impl->instr_count; pi++) {
-            const FgirInstr *ins = &impl->instr[pi];
-            char cname[FGIR_MAX_FUNC_NAME];
-            char carg[FGIR_MAX_LINE];
-            char cret[64];
-            int arrow = 0;
-
-            if (ins->kind == FGIR_FUNC_CALL || ins->kind == FGIR_FUNC_CALL_VM) {
-                nested_calls++;
-                continue;
-            }
-            if (ins->kind == FGIR_ASSIGN &&
-                parse_call_inner(ins->text, cname, sizeof cname, carg, sizeof carg, cret,
-                                 sizeof cret, &arrow) == 0 &&
-                arrow) {
-                nested_calls++;
-            }
-        }
-        fn->func_vcx_slots += 2u; /* executor: __run_block, __calle_id */
-        if (nested_calls > 0) {
-            fn->func_vcx_slots +=
-                (uint32_t)nested_calls * (uint32_t)FLAT_FUNC_NESTED_CALL_VCX_EXTRA;
-            fn->func_vcx_slots +=
-                (uint32_t)nested_calls * (uint32_t)FLAT_FUNC_NESTED_GLOBAL_EXEC_EXTRA;
-        }
-    }
+    /*
+     * Unique executor uses V.createAuto(funcVcxSlots) at runtime. 0 = default seed;
+     * explicit N = initial capacity hint only (see doc_src/USER_FUNCTIONS.md).
+     */
+    fn->func_vcx_slots = (manual_slots >= 0) ? (uint32_t)manual_slots : 0u;
     return 0;
 }
 

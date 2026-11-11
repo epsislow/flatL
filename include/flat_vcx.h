@@ -7,6 +7,10 @@
 #include <stdint.h>
 
 #define FLAT_VCX_MAX_CONTEXTS 64
+#define FLAT_VCX_AUTO_DEFAULT_SEED 4u
+/* createAuto: double while capacity < this, then add FLAT_VCX_AUTO_GROW_STEP per step */
+#define FLAT_VCX_AUTO_GROW_DOUBLE_CAP 2048u
+#define FLAT_VCX_AUTO_GROW_STEP 2048u
 
 typedef struct FlatVcxVar {
     char name[FLAT_VAR_NAME_MAX + 1];
@@ -41,6 +45,11 @@ int flat_vcx_is_active(const FlatVcxRuntime *rt, uint32_t ctx_id, int *out_activ
 int flat_vcx_set(FlatVcxRuntime *rt, uint32_t ctx_id, char *panic_detail, size_t panic_sz);
 int flat_vcx_create(FlatVcxRuntime *rt, uint32_t capacity, uint32_t *out_id, char *panic_detail,
                     size_t panic_sz);
+int flat_vcx_create_auto(FlatVcxRuntime *rt, uint32_t initial_capacity, uint32_t *out_id,
+                         char *panic_detail, size_t panic_sz);
+
+/* Before binding a new name on the active context (VM assign path). */
+int flat_vcx_prepare_active_new_bind(FlatVcxRuntime *rt, char *panic_detail, size_t panic_sz);
 
 int flat_vcx_get_var(const FlatVcxRuntime *rt, uint32_t ctx_id, const char *name, FlatValue *out,
                      FlatCollectionPool *coll, FlatStringPool *pool, FlatFileTable *files,

@@ -27,7 +27,7 @@ Same body rules as a `.fl` library, plus header lines:
 | `mod('id')` | Yes | Stable slug for internal impl block names (unique in the link) |
 | `export sym1, sym2, …` | Yes (≥1) | `def` names visible to importers |
 | `func:executor #…` | Yes | Executor block for calls inside the module (v0.3) |
-| `func:varSlots N` | Optional | Unique executor VCX size hint |
+| `func:varSlots N` | Optional | Initial seed for unique `V.createAuto` (**0** = default) |
 | `func:callVM 0\|1` | Optional | **`0`** = desugar (default); **`1`** = **`OP_CALL_FUNCTION`** (AM-1). See [USER_FUNCTIONS.md](./USER_FUNCTIONS.md). |
 | `use native …` | Optional | Same as entry/module `.fl` |
 | `use "…" as #…` | Optional (parsed only) | **Not** linked into the consumer binary from the `.fmod` alone |

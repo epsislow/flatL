@@ -3,10 +3,10 @@ use native list with L
 #executor.unique.scope
   instrId = V.callInstr()
   calleVcx = V.var(instrId, 'calleVcx')
-  funcVcxSlots = V.var(instrId, 'funcVcxSlots')
+  funcVcxSeed = V.var(instrId, 'funcVcxSlots')
   paramSrc = V.var(instrId, 'paramSrcNames')
   paramDst = V.var(instrId, 'funcParamNames')
-  funcVcx = V.create(funcVcxSlots)
+  funcVcx = V.createAuto(funcVcxSeed)
   V.varsCopyByNames(instrId, funcVcx, paramSrc, paramDst)
   V.varsCopyByNames(instrId, funcVcx, ['targetBlock'], ['__run_block'])
   V.varsCopyByNames(instrId, funcVcx, ['calleVcx'], ['__calle_id'])

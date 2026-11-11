@@ -11,6 +11,7 @@ typedef struct FlatVcxContext {
     uint32_t capacity;
     FlatVcxVar *vars;
     int var_count;
+    int auto_grow;
 } FlatVcxContext;
 
 struct FlatVcxRuntime {
@@ -112,9 +113,82 @@ static int var_name_forbidden(const char *name) {
     return strcmp(name, "null") == 0 || strcmp(name, "true") == 0 || strcmp(name, "false") == 0;
 }
 
-static int ctx_set_var(FlatVcxContext *ctx, const char *name, const FlatValue *val,
-                       FlatCollectionPool *coll, FlatStringPool *pool, FlatFileTable *files,
-                       FlatMemLiveStats *live) {
+static int ctx_grow_capacity(FlatVcxRuntime *rt, FlatVcxContext *ctx, uint32_t need_capacity,
+                             char *panic_detail, size_t panic_sz) {
+    uint32_t new_cap;
+    FlatVcxVar *grown;
+
+    if (!ctx || need_capacity == 0) {
+        return -1;
+    }
+    if (need_capacity <= ctx->capacity) {
+        return 0;
+    }
+    if (!ctx->auto_grow) {
+        return -1;
+    }
+    new_cap = ctx->capacity > 0 ? ctx->capacity : FLAT_VCX_AUTO_DEFAULT_SEED;
+    while (new_cap < need_capacity) {
+        uint32_t next;
+
+        if (new_cap >= (uint32_t)FLAT_MAX_VARS) {
+            if (panic_detail && panic_sz > 0) {
+                snprintf(panic_detail, panic_sz, "vcx.auto.limit");
+            }
+            return -1;
+        }
+        if (new_cap < FLAT_VCX_AUTO_GROW_DOUBLE_CAP) {
+            next = new_cap * 2u;
+            if (next < new_cap) {
+                next = (uint32_t)FLAT_MAX_VARS;
+            }
+        } else if (new_cap + FLAT_VCX_AUTO_GROW_STEP <= (uint32_t)FLAT_MAX_VARS) {
+            next = new_cap + FLAT_VCX_AUTO_GROW_STEP;
+        } else {
+            next = (uint32_t)FLAT_MAX_VARS;
+        }
+        new_cap = next;
+    }
+    grown = realloc(ctx->vars, (size_t)new_cap * sizeof *ctx->vars);
+    if (!grown) {
+        if (panic_detail && panic_sz > 0) {
+            snprintf(panic_detail, panic_sz, "vcx.auto.alloc");
+        }
+        return -1;
+    }
+    if (new_cap > ctx->capacity) {
+        memset(grown + ctx->capacity, 0, (size_t)(new_cap - ctx->capacity) * sizeof *grown);
+    }
+    ctx->vars = grown;
+    ctx->capacity = new_cap;
+    if (rt && rt->bind_attached && rt->active_ix >= 0 && rt->active_ix < rt->context_count &&
+        &rt->contexts[rt->active_ix] == ctx) {
+        refresh_bind_from_active(rt);
+    }
+    return 0;
+}
+
+static int ctx_reserve_slots(FlatVcxRuntime *rt, FlatVcxContext *ctx, uint32_t need_count,
+                             const char *fixed_panic, char *panic_detail, size_t panic_sz) {
+    if (!ctx) {
+        return -1;
+    }
+    if (need_count <= ctx->capacity) {
+        return 0;
+    }
+    if (!ctx->auto_grow) {
+        if (panic_detail && panic_sz > 0 && fixed_panic) {
+            snprintf(panic_detail, panic_sz, "%s", fixed_panic);
+        }
+        return -1;
+    }
+    return ctx_grow_capacity(rt, ctx, need_count, panic_detail, panic_sz);
+}
+
+static int ctx_set_var(FlatVcxRuntime *rt, FlatVcxContext *ctx, const char *name,
+                       const FlatValue *val, FlatCollectionPool *coll, FlatStringPool *pool,
+                       FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
+                       size_t panic_sz) {
     int i;
 
     if (!ctx || !name || !val) {
@@ -140,7 +214,10 @@ static int ctx_set_var(FlatVcxContext *ctx, const char *name, const FlatValue *v
         return 0;
     }
     if ((uint32_t)ctx->var_count >= ctx->capacity) {
-        return -1;
+        if (ctx_reserve_slots(rt, ctx, (uint32_t)ctx->var_count + 1u, NULL, panic_detail,
+                              panic_sz) != 0) {
+            return -1;
+        }
     }
     if (var_name_forbidden(name)) {
         return -1;
@@ -484,6 +561,66 @@ int flat_vcx_create(FlatVcxRuntime *rt, uint32_t capacity, uint32_t *out_id, cha
     return 0;
 }
 
+int flat_vcx_create_auto(FlatVcxRuntime *rt, uint32_t initial_capacity, uint32_t *out_id,
+                         char *panic_detail, size_t panic_sz) {
+    FlatVcxContext *c;
+    FlatVcxContext *grown;
+
+    if (!rt || !out_id) {
+        return -1;
+    }
+    if (initial_capacity < 1u) {
+        initial_capacity = FLAT_VCX_AUTO_DEFAULT_SEED;
+    }
+    if (initial_capacity > (uint32_t)FLAT_MAX_VARS) {
+        snprintf(panic_detail, panic_sz, "vcx.createAuto.arg");
+        return -1;
+    }
+    if (rt->context_count >= FLAT_VCX_MAX_CONTEXTS) {
+        snprintf(panic_detail, panic_sz, "vcx.createAuto.limit");
+        return -1;
+    }
+    if (!rt->contexts) {
+        snprintf(panic_detail, panic_sz, "vcx.createAuto");
+        return -1;
+    }
+    grown = realloc(rt->contexts, (size_t)(rt->context_count + 1) * sizeof *rt->contexts);
+    if (!grown) {
+        snprintf(panic_detail, panic_sz, "vcx.createAuto");
+        return -1;
+    }
+    rt->contexts = grown;
+    c = &rt->contexts[rt->context_count];
+    memset(c, 0, sizeof *c);
+    c->id = rt->next_id++;
+    c->capacity = initial_capacity;
+    c->auto_grow = 1;
+    c->vars = calloc(initial_capacity, sizeof *c->vars);
+    c->var_count = 0;
+    if (!c->vars) {
+        snprintf(panic_detail, panic_sz, "vcx.createAuto");
+        return -1;
+    }
+    rt->context_count++;
+    *out_id = c->id;
+    return 0;
+}
+
+int flat_vcx_prepare_active_new_bind(FlatVcxRuntime *rt, char *panic_detail, size_t panic_sz) {
+    FlatVcxContext *act;
+  int need;
+
+    if (!rt || !rt->bind_attached || rt->context_count <= 0) {
+        return -1;
+    }
+    act = &rt->contexts[rt->active_ix];
+    need = act->var_count + 1;
+    if ((uint32_t)need <= act->capacity) {
+        return 0;
+    }
+    return ctx_reserve_slots(rt, act, (uint32_t)need, NULL, panic_detail, panic_sz);
+}
+
 static int panic_ctx(char *panic_detail, size_t panic_sz, const char *fn) {
     snprintf(panic_detail, panic_sz, "%s.ctx", fn);
     return -1;
@@ -626,13 +763,14 @@ static int ctx_backup(FlatVcxContext *ctx, FlatCollectionPool *coll, FlatStringP
     return 0;
 }
 
-static void ctx_restore(FlatVcxContext *ctx, FlatCollectionPool *coll, FlatStringPool *pool,
-                        FlatFileTable *files, FlatMemLiveStats *live, FlatVcxVar *bak, int bak_n) {
+static void ctx_restore(FlatVcxRuntime *rt, FlatVcxContext *ctx, FlatCollectionPool *coll,
+                        FlatStringPool *pool, FlatFileTable *files, FlatMemLiveStats *live,
+                        FlatVcxVar *bak, int bak_n) {
     int i;
     release_context_vars(ctx, coll, pool, files);
     ctx->var_count = 0;
     for (i = 0; i < bak_n; i++) {
-        (void)ctx_set_var(ctx, bak[i].name, &bak[i].val, coll, pool, files, live);
+        (void)ctx_set_var(rt, ctx, bak[i].name, &bak[i].val, coll, pool, files, live, NULL, 0);
         flat_value_release(coll, pool, &bak[i].val);
     }
     free(bak);
@@ -676,8 +814,11 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
             new_names++;
         }
     }
-    if (dst->var_count + new_names > (int)dst->capacity) {
-        snprintf(panic_detail, panic_sz, "%s.capacity", panic_prefix);
+    if (ctx_reserve_slots(rt, dst, (uint32_t)dst->var_count + (uint32_t)new_names,
+                          "vcx.varsCopy.capacity", panic_detail, panic_sz) != 0) {
+        if (panic_detail[0] == '\0') {
+            snprintf(panic_detail, panic_sz, "%s.capacity", panic_prefix);
+        }
         return -1;
     }
 
@@ -707,8 +848,9 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
     }
 
     for (i = 0; i < stage_n; i++) {
-        if (ctx_set_var(dst, stage[i].name, &stage[i].val, coll, pool, files, live) != 0) {
-            ctx_restore(dst, coll, pool, files, live, bak, bak_n);
+        if (ctx_set_var(rt, dst, stage[i].name, &stage[i].val, coll, pool, files, live,
+                        panic_detail, panic_sz) != 0) {
+            ctx_restore(rt, dst, coll, pool, files, live, bak, bak_n);
             bak = NULL;
             snprintf(panic_detail, panic_sz, "%s.copy", panic_prefix);
             goto fail;
@@ -882,8 +1024,8 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
             new_names++;
         }
     }
-    if (dst->var_count + new_names > (int)dst->capacity) {
-        snprintf(panic_detail, panic_sz, "%s.capacity", prefix);
+    if (ctx_reserve_slots(rt, dst, (uint32_t)dst->var_count + (uint32_t)new_names,
+                          "vcx.varsCopyByNames.capacity", panic_detail, panic_sz) != 0) {
         return -1;
     }
 
@@ -912,8 +1054,9 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
     }
 
     for (i = 0; i < stage_n; i++) {
-        if (ctx_set_var(dst, stage[i].name, &stage[i].val, coll, pool, files, live) != 0) {
-            ctx_restore(dst, coll, pool, files, live, bak, bak_n);
+        if (ctx_set_var(rt, dst, stage[i].name, &stage[i].val, coll, pool, files, live,
+                        panic_detail, panic_sz) != 0) {
+            ctx_restore(rt, dst, coll, pool, files, live, bak, bak_n);
             bak = NULL;
             snprintf(panic_detail, panic_sz, "%s.copy", prefix);
             goto fail;
@@ -968,7 +1111,7 @@ int flat_vcx_set_named_var(FlatVcxRuntime *rt, uint32_t ctx_id, const char *name
         return -1;
     }
     ctx = &rt->contexts[ix];
-    if (ctx_set_var(ctx, name, val, coll, pool, files, live) != 0) {
+    if (ctx_set_var(rt, ctx, name, val, coll, pool, files, live, panic_detail, panic_sz) != 0) {
         return -1;
     }
     if (rt->contexts[rt->active_ix].id == ctx_id) {
