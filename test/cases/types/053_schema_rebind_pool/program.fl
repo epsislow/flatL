@@ -1,0 +1,13 @@
+<stock>:
+  qty: u16
+
+#main
+  for(5000, i, '#step')
+  mem.object_used() -> used
+  io.outln(used)
+  x.qty == 4999
+  OK
+
+#step
+  x:<stock> = { qty: i }
+  next

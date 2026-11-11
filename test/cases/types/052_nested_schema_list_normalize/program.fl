@@ -1,0 +1,11 @@
+<stock>:
+  qty: u16
+
+<root>:
+  stocks: <stock>[4]
+
+#main
+  s:<stock> = { qty: 4 }
+  r:<root> = { stocks: [s] }
+  io.outln(r.stocks)
+  OK

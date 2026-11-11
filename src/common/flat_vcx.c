@@ -745,27 +745,32 @@ int flat_vcx_dschema_list(FlatVcxRuntime *rt, uint32_t ctx_id, const FlatValue *
         snprintf(panic_detail, panic_sz, "vcx.dSchemaList.arg");
         return -1;
     }
-    c->dschema_list_active = 1;
-    c->dschema_list_count = 0;
-    if (len == 0) {
-        return 0;
-    }
-    if (len > FLAT_VCX_DSCHEMA_LIST_MAX) {
-        snprintf(panic_detail, panic_sz, "vcx.dSchemaList.limit");
-        return -1;
-    }
-    for (i = 0; i < len; i++) {
-        FlatValue el;
-        if (flat_list_get(coll, list_val->u.coll_id, i, &el) != 0) {
-            snprintf(panic_detail, panic_sz, "vcx.dSchemaList.arg");
+    {
+        char parsed[FLAT_VCX_DSCHEMA_LIST_MAX][FLAT_SCHEMA_NAME_MAX + 1];
+
+        if (len > FLAT_VCX_DSCHEMA_LIST_MAX) {
+            snprintf(panic_detail, panic_sz, "vcx.dSchemaList.limit");
             return -1;
         }
-        if (parse_schema_list_entry(&el, pool, c->dschema_list[i], sizeof c->dschema_list[i]) != 0) {
-            snprintf(panic_detail, panic_sz, "vcx.dSchemaList.entry");
-            return -1;
+        /* Build the replacement policy off to the side. A failed update must not
+         * weaken or partially overwrite the currently active whitelist. */
+        for (i = 0; i < len; i++) {
+            FlatValue el;
+            if (flat_list_get(coll, list_val->u.coll_id, i, &el) != 0) {
+                snprintf(panic_detail, panic_sz, "vcx.dSchemaList.arg");
+                return -1;
+            }
+            if (parse_schema_list_entry(&el, pool, parsed[i], sizeof parsed[i]) != 0) {
+                snprintf(panic_detail, panic_sz, "vcx.dSchemaList.entry");
+                return -1;
+            }
         }
+        if (len > 0) {
+            memcpy(c->dschema_list, parsed, (size_t)len * sizeof parsed[0]);
+        }
+        c->dschema_list_count = len;
+        c->dschema_list_active = 1;
     }
-    c->dschema_list_count = len;
     return 0;
 }
 

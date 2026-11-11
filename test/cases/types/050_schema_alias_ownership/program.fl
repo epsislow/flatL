@@ -1,0 +1,9 @@
+<stock>:
+  qty: u16
+
+#main
+  raw:o = { qty: 2 }
+  typed:<stock> = raw
+  io.outln(raw)
+  io.outln(typed)
+  OK

@@ -63,7 +63,9 @@ int flat_bind_resolve_lhs_runtime(const char *lhs, char *name_out, size_t name_s
                                   const FlatSchemaCatalog *cat, struct FlatVcxRuntime *vcx,
                                   char *panic, size_t panic_sz);
 
-/* Runtime: coerce literal / {} to schema object; validate types. */
+/* Runtime: normalize an object to a schema. The input value is borrowed and is never
+ * consumed/released. On success io_val references a newly-created, currently-unbound
+ * object; the caller must retain it exactly once when storing/binding the result. */
 int flat_schema_bind_value(const FlatSchemaCatalog *cat, uint16_t schema_id, FlatValue *io_val,
                            FlatStringPool *pool, FlatCollectionPool *coll, char *panic,
                            size_t panic_sz);

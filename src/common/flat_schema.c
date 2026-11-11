@@ -142,64 +142,67 @@ static int parse_field_spec(const char *spec, FlatSlotType *out, uint8_t *list_f
     char sname[FLAT_SCHEMA_NAME_MAX + 1];
     const char *rest;
 
+    if (!spec || !spec[0] || !out) {
+        snprintf(err, err_sz, "invalid field type");
+        return -1;
+    }
     if (list_flag) {
         *list_flag = 0;
     }
     flat_slot_type_clear(out);
     if (spec[0] == '<') {
+        unsigned long maxn = 0;
+        int is_list = 0;
+        int sid;
+
         if (parse_schema_ref_name(spec, sname, sizeof sname, &rest) != 0) {
             snprintf(err, err_sz, "invalid field type: %s", spec);
             return -1;
         }
-        rest = rest ? rest : strchr(spec, '>') + 1;
         if (*rest == '[') {
-            int maxn = 0;
+            char *endptr;
             const char *p = rest + 1;
-            if (list_flag) {
-                *list_flag = FLAT_SCH_FIELD_LIST;
-            }
+            is_list = 1;
             if (*p == ']') {
-                out->list_max = 0;
+                p++;
+                maxn = 0;
             } else {
-                maxn = atoi(p);
-                if (maxn <= 0) {
+                if (!isdigit((unsigned char)*p)) {
                     snprintf(err, err_sz, "invalid list bound in: %s", spec);
                     return -1;
                 }
-                out->list_max = (uint16_t)maxn;
-                while (*p && *p != ']') {
-                    p++;
-                }
-                if (*p != ']') {
-                    snprintf(err, err_sz, "invalid list syntax: %s", spec);
+                maxn = strtoul(p, &endptr, 10);
+                if (endptr == p || maxn == 0 || maxn > UINT16_MAX || *endptr != ']') {
+                    snprintf(err, err_sz, "invalid list bound in: %s", spec);
                     return -1;
                 }
+                p = endptr + 1;
             }
-            {
-                int sid = flat_schema_find_id(cat, sname);
-                if (sid < 0) {
-                    snprintf(err, err_sz, "type.schema.unknown: %s", sname);
-                    return -1;
-                }
-                out->kind = FLAT_SLOT_TYPE_SCHEMA;
-                out->schema_id = (uint16_t)sid;
-            }
-            return 0;
-        }
-        {
-            int sid = flat_schema_find_id(cat, sname);
-            if (sid < 0) {
-                snprintf(err, err_sz, "type.schema.unknown: %s", sname);
+            if (*p != '\0') {
+                snprintf(err, err_sz, "invalid list syntax: %s", spec);
                 return -1;
             }
-            if (sid == self_schema_ix) {
-                snprintf(err, err_sz, "type.schema.cycle: %s", sname);
-                return -1;
-            }
-            out->kind = FLAT_SLOT_TYPE_SCHEMA;
-            out->schema_id = (uint16_t)sid;
-            return 0;
+        } else if (*rest != '\0') {
+            snprintf(err, err_sz, "invalid field type: %s", spec);
+            return -1;
         }
+
+        sid = flat_schema_find_id(cat, sname);
+        if (sid < 0) {
+            snprintf(err, err_sz, "type.schema.unknown: %s", sname);
+            return -1;
+        }
+        if (!is_list && sid == self_schema_ix) {
+            snprintf(err, err_sz, "type.schema.cycle: %s", sname);
+            return -1;
+        }
+        out->kind = FLAT_SLOT_TYPE_SCHEMA;
+        out->schema_id = (uint16_t)sid;
+        out->list_max = (uint16_t)maxn;
+        if (is_list && list_flag) {
+            *list_flag = FLAT_SCH_FIELD_LIST;
+        }
+        return 0;
     }
     return flat_slot_type_parse_spec(spec, out, cat, err, err_sz);
 }
@@ -248,7 +251,18 @@ int flat_schema_build_catalog(const FgirSchemaDecl *decls, int decl_count, FlatS
         return -1;
     }
     for (di = 0; di < decl_count; di++) {
+        int prev;
         FlatSchemaDef *def = &out->defs[out->count];
+        if (!decls[di].name[0]) {
+            snprintf(err, err_sz, "type.schema.name.invalid");
+            return -1;
+        }
+        for (prev = 0; prev < di; prev++) {
+            if (strcmp(decls[prev].name, decls[di].name) == 0) {
+                snprintf(err, err_sz, "type.schema.duplicate: %s", decls[di].name);
+                return -1;
+            }
+        }
         snprintf(def->name, sizeof def->name, "%s", decls[di].name);
         def->field_count = 0;
         out->count++;
@@ -261,6 +275,16 @@ int flat_schema_build_catalog(const FgirSchemaDecl *decls, int decl_count, FlatS
             if (def->field_count >= FLAT_SCHEMA_FIELD_MAX) {
                 snprintf(err, err_sz, "too many fields in schema %s", def->name);
                 return -1;
+            }
+            {
+                int prev;
+                for (prev = 0; prev < def->field_count; prev++) {
+                    if (strcmp(def->fields[prev].key, decls[di].field_keys[fi]) == 0) {
+                        snprintf(err, err_sz, "type.schema.field.duplicate: %s.%s", def->name,
+                                 decls[di].field_keys[fi]);
+                        return -1;
+                    }
+                }
             }
             fld = &def->fields[def->field_count];
             snprintf(fld->key, sizeof fld->key, "%s", decls[di].field_keys[fi]);
@@ -446,7 +470,7 @@ int flat_schema_check_field_value(const FlatSchemaField *field, const FlatValue 
                                   FlatStringPool *pool, FlatCollectionPool *coll,
                                   const FlatSchemaCatalog *cat, FlatValue *inout_val,
                                   char *panic, size_t panic_sz) {
-    FlatValue tmp;
+    FlatValue checked;
     int len;
     int i;
 
@@ -461,15 +485,19 @@ int flat_schema_check_field_value(const FlatSchemaField *field, const FlatValue 
         return 0;
     }
     if (field->flags & FLAT_SCH_FIELD_LIST) {
-        if (val->tag != VAL_LIST) {
-            snprintf(panic, panic_sz, "type.assign.incompatible");
-            return -1;
-        }
-        if (!coll || flat_list_len(coll, val->u.coll_id, &len) != 0) {
+        FlatValue items[FLAT_LIST_MAX_ELEMS];
+        uint32_t new_id;
+
+        if (val->tag != VAL_LIST || !coll ||
+            flat_list_len(coll, val->u.coll_id, &len) != 0) {
             snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;
         }
         if (field->slot.list_max > 0 && len > (int)field->slot.list_max) {
+            snprintf(panic, panic_sz, "type.assign.list.len");
+            return -1;
+        }
+        if (len > FLAT_LIST_MAX_ELEMS) {
             snprintf(panic, panic_sz, "type.assign.list.len");
             return -1;
         }
@@ -479,24 +507,30 @@ int flat_schema_check_field_value(const FlatSchemaField *field, const FlatValue 
                 snprintf(panic, panic_sz, "type.assign.incompatible");
                 return -1;
             }
-            tmp = el;
-            if (flat_slot_type_check_value(&field->slot, &el, pool, coll, cat, &tmp, panic,
+            checked = el;
+            if (flat_slot_type_check_value(&field->slot, &el, pool, coll, cat, &checked, panic,
                                            panic_sz) != 0) {
                 return -1;
             }
+            items[i] = checked;
+        }
+        if (flat_list_build(coll, pool, items, len, &new_id) != 0) {
+            snprintf(panic, panic_sz, "type.assign.incompatible");
+            return -1;
         }
         if (inout_val) {
-            *inout_val = *val;
+            flat_value_set_list(inout_val, new_id);
         }
         return 0;
     }
-    tmp = *val;
-    if (flat_slot_type_check_value(&field->slot, val, pool, coll, cat, &tmp, panic, panic_sz) !=
-        0) {
+
+    checked = *val;
+    if (flat_slot_type_check_value(&field->slot, val, pool, coll, cat, &checked, panic,
+                                   panic_sz) != 0) {
         return -1;
     }
     if (inout_val) {
-        *inout_val = tmp;
+        *inout_val = checked;
     }
     return 0;
 }
@@ -507,12 +541,11 @@ int flat_schema_bind_value(const FlatSchemaCatalog *cat, uint16_t schema_id, Fla
     const FlatSchemaDef *def;
     FlatValue vals[FLAT_SCHEMA_FIELD_MAX];
     char keybuf[FLAT_SCHEMA_FIELD_MAX][FLAT_OBJ_KEY_MAX + 1];
-    int n = 0;
+    int present[FLAT_SCHEMA_FIELD_MAX] = {0};
+    int n;
     int i;
     int olen;
     uint32_t new_id;
-    uint32_t old_obj_id = 0;
-    int had_old_obj = 0;
 
     if (!cat || schema_id >= (uint16_t)cat->count || !io_val || !pool || !coll) {
         snprintf(panic, panic_sz, "type.assign.incompatible");
@@ -523,61 +556,52 @@ int flat_schema_bind_value(const FlatSchemaCatalog *cat, uint16_t schema_id, Fla
         snprintf(panic, panic_sz, "type.assign.incompatible");
         return -1;
     }
-    old_obj_id = io_val->u.coll_id;
-    had_old_obj = 1;
-    if (flat_obj_len(coll, io_val->u.coll_id, &olen) != 0) {
+    if (def->field_count < 0 || def->field_count > FLAT_SCHEMA_FIELD_MAX ||
+        flat_obj_len(coll, io_val->u.coll_id, &olen) != 0) {
         snprintf(panic, panic_sz, "type.assign.incompatible");
         return -1;
     }
-    for (i = 0; i < olen; i++) {
-        const char *k;
-        FlatValue fv;
-        const FlatSchemaField *ff;
 
-        if (flat_obj_entry_at(coll, io_val->u.coll_id, i, &k, &fv) != 0) {
+    n = def->field_count;
+    for (i = 0; i < n; i++) {
+        snprintf(keybuf[i], sizeof keybuf[i], "%s", def->fields[i].key);
+        flat_value_set_null(&vals[i]);
+    }
+
+    /* Validate and normalize each supplied field without consuming the input object. */
+    for (i = 0; i < olen; i++) {
+        const char *key;
+        FlatValue value;
+        const FlatSchemaField *field;
+        int field_ix;
+
+        if (flat_obj_entry_at(coll, io_val->u.coll_id, i, &key, &value) != 0) {
             snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;
         }
-        if (!flat_schema_field_lookup(def, k, &ff)) {
+        if (!flat_schema_field_lookup(def, key, &field)) {
             snprintf(panic, panic_sz, "type.schema.field.unknown");
             return -1;
         }
-        if (flat_schema_check_field_value(ff, &fv, pool, coll, cat, NULL, panic, panic_sz) != 0) {
+        field_ix = (int)(field - def->fields);
+        if (field_ix < 0 || field_ix >= n || present[field_ix]) {
+            snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;
         }
-    }
-    for (i = 0; i < def->field_count; i++) {
-        FlatValue existing;
-        int has = 0;
-        int j;
-        snprintf(keybuf[n], sizeof keybuf[n], "%s", def->fields[i].key);
-        for (j = 0; j < olen; j++) {
-            const char *k;
-            if (flat_obj_entry_at(coll, io_val->u.coll_id, j, &k, &existing) == 0 &&
-                strcmp(k, keybuf[n]) == 0) {
-                vals[n] = existing;
-                has = 1;
-                break;
-            }
+        if (flat_schema_check_field_value(field, &value, pool, coll, cat, &vals[field_ix], panic,
+                                          panic_sz) != 0) {
+            return -1;
         }
-        if (!has) {
-            flat_value_set_null(&vals[n]);
-        }
-        n++;
+        present[field_ix] = 1;
     }
+
     if (flat_obj_build(coll, pool, keybuf, vals, n, &new_id) != 0) {
         snprintf(panic, panic_sz, "type.assign.incompatible");
         return -1;
     }
-    flat_value_set_object(io_val, new_id);
-    flat_value_retain(coll, pool, io_val);
-    if (had_old_obj && old_obj_id != new_id) {
-        FlatValue old;
 
-        flat_value_set_object(&old, old_obj_id);
-        flat_value_release(coll, pool, &old);
-    }
-    return 0;
+    /* The caller owns the returned, currently-unbound value and retains it when binding it. */
+    return flat_value_set_object(io_val, new_id);
 }
 
 static int read_u16(const uint8_t *p, uint16_t *out) {

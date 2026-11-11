@@ -1,0 +1,11 @@
+<stock>:
+  qty: u16
+
+<var>:
+  hold: <stock>
+
+#main
+  s:<stock> = { qty: 3 }
+  row:<var> = { hold: s }
+  io.outln(row)
+  OK
