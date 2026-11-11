@@ -1,0 +1,7 @@
+suite = "types_t0"
+id = 3
+desc = "doc_src/index.json lists strict-types and typed-bind"
+kind = "exec"
+
+cmd = "grep -q '\"id\": \"strict-types\"' {root}/doc_src/index.json && grep -q '\"id\": \"typed-bind\"' {root}/doc_src/index.json"
+expect_exit = 0

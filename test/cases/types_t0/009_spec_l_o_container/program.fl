@@ -1,0 +1,6 @@
+-- T1: items:l = [1, "a"] OK
+-- T1: items:l = {} → type.assign.incompatible
+-- T1: bag:o = {} OK; bag:o = [] → incompatible
+
+#main
+  OK

@@ -1,0 +1,5 @@
+-- T4: m.calc('a+b') -> sum:u32 without arg2 — check at assign; overflow panic
+-- T6: def add(a:u8, b) -> out:u16; call type.call.arg
+
+#main
+  OK

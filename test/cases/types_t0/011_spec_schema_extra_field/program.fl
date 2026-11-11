@@ -1,0 +1,5 @@
+-- T3: myStock:<stock> = {}; myStock.extra = 1 → type.schema.field.unknown
+-- T3: literal { qty: 1, extra: 1 } → panic extra key
+
+#main
+  OK

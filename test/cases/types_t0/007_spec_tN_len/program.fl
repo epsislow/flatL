@@ -1,0 +1,5 @@
+-- T1: buf:t8 = "123456789" → type.assign.string.len
+-- T: alias t127
+
+#main
+  OK

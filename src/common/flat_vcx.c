@@ -735,6 +735,8 @@ int flat_vcx_vars_avail(const FlatVcxRuntime *rt, uint32_t ctx_id, int *out_n,
 typedef struct {
     char name[FLAT_VAR_NAME_MAX + 1];
     FlatValue val;
+    FlatSlotType slot_type;
+    uint8_t has_slot_type;
     int valid;
 } VcxCopyStage;
 
@@ -770,7 +772,13 @@ static void ctx_restore(FlatVcxRuntime *rt, FlatVcxContext *ctx, FlatCollectionP
     release_context_vars(ctx, coll, pool, files);
     ctx->var_count = 0;
     for (i = 0; i < bak_n; i++) {
+        int vi;
         (void)ctx_set_var(rt, ctx, bak[i].name, &bak[i].val, coll, pool, files, live, NULL, 0);
+        vi = ctx_find_var(ctx, bak[i].name);
+        if (vi >= 0) {
+            ctx->vars[vi].slot_type = bak[i].slot_type;
+            ctx->vars[vi].has_slot_type = bak[i].has_slot_type;
+        }
         flat_value_release(coll, pool, &bak[i].val);
     }
     free(bak);
@@ -838,6 +846,8 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
             snprintf(panic_detail, panic_sz, "%s.copy", panic_prefix);
             goto fail;
         }
+        stage[stage_n].slot_type = src->vars[i].slot_type;
+        stage[stage_n].has_slot_type = src->vars[i].has_slot_type;
         stage[stage_n].valid = 1;
         stage_n++;
     }
@@ -848,12 +858,18 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
     }
 
     for (i = 0; i < stage_n; i++) {
+        int di;
         if (ctx_set_var(rt, dst, stage[i].name, &stage[i].val, coll, pool, files, live,
                         panic_detail, panic_sz) != 0) {
             ctx_restore(rt, dst, coll, pool, files, live, bak, bak_n);
             bak = NULL;
             snprintf(panic_detail, panic_sz, "%s.copy", panic_prefix);
             goto fail;
+        }
+        di = ctx_find_var(dst, stage[i].name);
+        if (di >= 0) {
+            dst->vars[di].slot_type = stage[i].slot_type;
+            dst->vars[di].has_slot_type = stage[i].has_slot_type;
         }
     }
     if (bak) {
@@ -1044,6 +1060,8 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
             snprintf(panic_detail, panic_sz, "%s.copy", prefix);
             goto fail;
         }
+        stage[i].slot_type = src->vars[src_vi].slot_type;
+        stage[i].has_slot_type = src->vars[src_vi].has_slot_type;
         stage[i].valid = 1;
         stage_n++;
     }
@@ -1054,12 +1072,18 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
     }
 
     for (i = 0; i < stage_n; i++) {
+        int di;
         if (ctx_set_var(rt, dst, stage[i].name, &stage[i].val, coll, pool, files, live,
                         panic_detail, panic_sz) != 0) {
             ctx_restore(rt, dst, coll, pool, files, live, bak, bak_n);
             bak = NULL;
             snprintf(panic_detail, panic_sz, "%s.copy", prefix);
             goto fail;
+        }
+        di = ctx_find_var(dst, stage[i].name);
+        if (di >= 0) {
+            dst->vars[di].slot_type = stage[i].slot_type;
+            dst->vars[di].has_slot_type = stage[i].has_slot_type;
         }
     }
     if (bak) {

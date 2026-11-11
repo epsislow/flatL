@@ -1,0 +1,5 @@
+-- T4 doc: scalar a:u8 vs b:u16 in == → type.compare.incompatible
+-- LIST/OBJECT: json.stringify equality; c:<mschema>={} vs d={yes:null} → true
+
+#main
+  OK

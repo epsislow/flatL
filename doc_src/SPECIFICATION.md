@@ -6,6 +6,8 @@ Consolidated from project design notes. Normative details will be refined as `fl
 
 **Related:** FGIR (Flat Graph Intermediate Representation) v1.0 · `.fb` bytecode & VM v1.1
 
+**Planned typed bind & schemas (T0, not implemented in VM):** [STRICT_TYPES.md](./STRICT_TYPES.md) · [TYPED_BIND.md](./TYPED_BIND.md) — opt-in `name:type`, `<schema>:`, slot contract per VCX, `freeze()` / `const`.
+
 ---
 
 ## 1. Flat graph model (FGIR)
@@ -48,6 +50,8 @@ Explicit **`jump #block`** transfers control at compile-time-resolved block entr
 
 - `#block`, `call`, `jump`, `return`, `foreach`, `for`, `OK`, `FAIL`, `->` (call result binding)
 - **`free(var)`** — release pool-backed value held by **`var`**; **`var`** becomes **`null`** (see [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) §5)
+- **`freeze(var)`** — *planned* slot immutability after bind (see [TYPED_BIND.md](./TYPED_BIND.md) §8); not implemented yet
+- **`const name:type = expr`** — *planned* immutable typed bind (same doc)
 - Guards and assignment lines (`=`, `==`, value **`->`** bind) map to `OP_ASSIGN` / `OP_GUARD`
 
 **Assignment / bind** (same RHS rules — one literal, variable, list/object literal, `mem.ref_from(...)`, etc.; **no** infix such as `A * 2`):
@@ -55,7 +59,9 @@ Explicit **`jump #block`** transfers control at compile-time-resolved block entr
 | Form | Example |
 |------|---------|
 | Equals | `n = 6`, `s = 'hi'`, `B = A` |
+| Typed bind *(planned)* | `a:u8 = 3`, `row:<stock> = {}`, `s:/typeStr` — [TYPED_BIND.md](./TYPED_BIND.md) |
 | Arrow (value first) | `6 -> n`, `'hi' -> s`, `A -> B` |
+| Arrow + type *(planned)* | `json.parse_object(s) -> row:<stock>` |
 | Native + arrow | `str.to_num(raw) -> n` ( **`FGIR_IO`** , not assign) |
 | Native + equals | `n = str.to_num(raw)` |
 

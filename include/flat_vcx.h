@@ -2,6 +2,7 @@
 #define FLAT_VCX_H
 
 #include "flat_value.h"
+#include "flat_slot_type.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -15,6 +16,8 @@
 typedef struct FlatVcxVar {
     char name[FLAT_VAR_NAME_MAX + 1];
     FlatValue val;
+    FlatSlotType slot_type;
+    uint8_t has_slot_type;
 } FlatVcxVar;
 
 typedef struct FlatFileTable FlatFileTable;

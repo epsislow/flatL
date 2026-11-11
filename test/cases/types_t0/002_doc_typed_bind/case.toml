@@ -1,0 +1,6 @@
+suite = "types_t0"
+id = 2
+desc = "doc_src/TYPED_BIND.md exists (normative draft)"
+kind = "files"
+
+check = "doc_src/TYPED_BIND.md"

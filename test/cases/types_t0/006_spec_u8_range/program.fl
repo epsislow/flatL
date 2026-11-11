@@ -1,0 +1,5 @@
+-- T1 target: a:u8 = 3 OK; a:u8 = 300 → type.assign.range
+-- T1 target: a:u8 = 3; a = "x" → type.assign.incompatible
+
+#main
+  OK

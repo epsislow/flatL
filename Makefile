@@ -48,14 +48,15 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_d
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
-          src/common/value_ops.c src/common/flat_obj_path.c src/common/flat_vcx.c \
+          src/common/flat_slot_type.c src/common/value_ops.c src/common/flat_obj_path.c \
+          src/common/flat_vcx.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/value_json.c src/common/flat_file.c src/common/flat_io_ctx.c \
           src/common/flat_memstream.c \
           $(STR_SRC) $(NATIVE_VM_SRC)
 FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
-               src/common/flat_assign.c \
+               src/common/flat_assign.c src/common/flat_slot_type.c src/common/value_pool.c \
                src/common/line_label.c \
            src/common/native_use.c \
            $(FLAT_TIME_SRC) \

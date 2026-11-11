@@ -1,0 +1,5 @@
+-- T4: payload:/payloadSchema; V.dSchemaAllow(ctx,0) denies <schema> in STRING
+-- dSchemaList entries must be "<var>" with angle brackets
+
+#main
+  OK

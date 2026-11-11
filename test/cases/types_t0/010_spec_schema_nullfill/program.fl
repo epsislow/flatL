@@ -1,0 +1,6 @@
+-- T2/T3: <stock> qty:u16 …
+-- myStock:<stock> = {} → qty null; io.out(myStock.qty) → null
+-- myStock:<stock> = { qty: 2 } subset + null-fill rest
+
+#main
+  OK

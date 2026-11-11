@@ -1,0 +1,9 @@
+suite = "types_t0"
+id = 15
+desc = "specimen: dynamic :/expr and V.dSchema* (T4)"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

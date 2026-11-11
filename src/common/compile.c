@@ -7,6 +7,7 @@
 #include "flat_line_label.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
+#include "flat_slot_type.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -75,7 +76,16 @@ static int varset_add_assign_lhs(VarSet *vs, const char *text) {
     if (bind[0] == '\0' || bind_name_forbidden(bind)) {
         return 0;
     }
-    return varset_add(vs, bind);
+    {
+        char name[FLAT_VAR_NAME_MAX + 1];
+        FlatSlotType ty;
+        int has;
+
+        if (flat_bind_parse_lhs(bind, name, sizeof name, &ty, &has) != 0 || name[0] == '\0') {
+            return 0;
+        }
+        return varset_add(vs, name);
+    }
 }
 
 static int varset_has_name(const VarSet *vs, const char *name) {
@@ -413,6 +423,9 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             snprintf(assign_chk, sizeof assign_chk, "%s", ins->text);
             if (flat_assign_split_line(assign_chk, &bind, &value, &form) != 0) {
                 snprintf(err, err_size, "invalid assignment: %s", ins->text);
+                return -1;
+            }
+            if (flat_bind_validate_t1_lhs(bind, err, err_size) != 0) {
                 return -1;
             }
             if (tlen + 1 > sizeof payload) {

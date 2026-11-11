@@ -1,0 +1,9 @@
+suite = "types_t0"
+id = 10
+desc = "specimen: schema null-fill and literal subset (T2/T3)"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

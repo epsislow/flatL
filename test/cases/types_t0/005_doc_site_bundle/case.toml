@@ -1,0 +1,8 @@
+suite = "types_t0"
+id = 5
+desc = "gen_doc_site bundles STRICT_TYPES and TYPED_BIND into doc-data.js"
+kind = "exec"
+
+cmd = "{root}/bin/gen_doc_site --root {root} && grep -q 'Strict types' {root}/docs/doc_site/js/doc-data.js && grep -q 'Typed bind' {root}/docs/doc_site/js/doc-data.js"
+expect_exit = 0
+stdout_contains = "Wrote docs/doc_site"

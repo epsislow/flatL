@@ -5,6 +5,8 @@ Documentation index: [README.md](./README.md) (English).
 Normative reference for **value types**, **STRING ref pool**, and **limits** in the VM (`flvm` v0.2+).  
 Architecture overview: [SPECIFICATION.md](./SPECIFICATION.md). Tooling: [TOOLCHAIN.md](./TOOLCHAIN.md).
 
+**Typed bind (T1):** optional **`name:type`** on **ASSIGN** — [TYPED_BIND.md](./TYPED_BIND.md). Schemas and dynamic types are still planned. Untyped binds behave as before (logical `VAL_*` only).
+
 ---
 
 ## 1. Value types (logical)
@@ -134,7 +136,44 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 
 ---
 
-## 6. C API (for native libraries)
+## 6. Static slot contracts (strict types)
+
+**Normative:** [STRICT_TYPES.md](./STRICT_TYPES.md) · [TYPED_BIND.md](./TYPED_BIND.md).
+
+### T1 (implemented)
+
+| Form | Meaning |
+|------|---------|
+| `a:u8 = 3` | Contract on **`(VCX, slot)`**; value checked on every assign |
+| `a = 5` | Keeps existing contract; value must still fit |
+| `free(a)` | Clears value **and** contract (extends §5) |
+| `a:t8 = "hi"` | Max **8** UTF-8 bytes on bind |
+| `items:l = [1]` / `doc:o = {}` | Open LIST / OBJECT container |
+
+**Supported type tokens (T1):** `u8`…`u64`, `s8`…`s64`, `f32`, `f64`, `b`, `t` (same as **`t127`**), `t1`…`t127`, `l`, `o`.
+
+**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.incompatible`, `type.assign.string.len`, `type.assign.retype` (change `:type` without `free`).
+
+**Compile (T1):** `flc` rejects **`<schema>`** and **`:/…`** on ASSIGN lhs; unknown type spellings fail at compile or bind.
+
+Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — integers are range-checked, not narrowed in storage.
+
+### Planned (T2+)
+
+| Form | Meaning |
+|------|---------|
+| `row:<stock> = {}` | Closed object schema |
+| `s:/typeStr` | Dynamic type |
+| `const n:u16 = 1` | Immutable slot |
+| `freeze(cfg)` | Frozen until `free` |
+
+**Comparison:** mixed logical types → `==` is **false** today. Typed scalar compare panics — **T4** (`json.stringify` for LIST/OBJECT).
+
+**Phases:** T0 docs → **T1** (this section) → T2 schemas → … — [TYPED_BIND.md §10](./TYPED_BIND.md#10-implementation-phases).
+
+---
+
+## 7. C API (for native libraries)
 
 Header: `include/flat_value.h`
 
@@ -152,14 +191,14 @@ Future: VM handle passed into natives for binding outputs; remaining `__list_*` 
 
 ---
 
-## 7. Related keywords
+## 8. Related keywords
 
 `OK`, `FAIL`, `call`, `foreach`, etc. are **language keywords**, not types.  
 Dotted calls (`kv.get`) will return STRING REF via natives — see SPECIFICATION §1.1.1.
 
 ---
 
-## 8. I/O (output & debug)
+## 9. I/O (output & debug)
 
 **Full normative spec:** [IO.md](./IO.md) (prompts, `->` binding, cancel/EOF, BOOL tokens, PANIC rules).
 

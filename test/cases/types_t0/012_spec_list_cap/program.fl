@@ -1,0 +1,6 @@
+-- T2: selected:<stock>[4] = [] OK len 0
+-- T1 assign: len>4 after pushes → type.assign.list.len at bind back
+-- cap snapshot at bind; batchSize variable change does not alter cap
+
+#main
+  OK

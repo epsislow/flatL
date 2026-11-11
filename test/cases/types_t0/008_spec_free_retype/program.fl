@@ -1,0 +1,5 @@
+-- T1: a:u8 = 1; free(a); a:t4 = "hi" OK
+-- T1: a:u8 = 1; a:t4 = "hi" without free → type.assign.retype
+
+#main
+  OK

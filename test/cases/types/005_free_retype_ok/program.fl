@@ -1,0 +1,5 @@
+#main
+  a:u8 = 1
+  free(a)
+  a:t4 = "hi"
+  OK

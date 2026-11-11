@@ -1,0 +1,6 @@
+suite = "types_t0"
+id = 1
+desc = "doc_src/STRICT_TYPES.md exists (T0 overview)"
+kind = "files"
+
+check = "doc_src/STRICT_TYPES.md"

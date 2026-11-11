@@ -1,0 +1,5 @@
+-- T5: const limit:u16 = 1; limit = 2 → type.const.assign
+-- T5: cfg:<config> = {}; freeze(cfg); cfg.db = {} → type.freeze.assign
+
+#main
+  OK

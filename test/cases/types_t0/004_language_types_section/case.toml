@@ -1,0 +1,7 @@
+suite = "types_t0"
+id = 4
+desc = "LANGUAGE_TYPES.md documents static slot contracts (section 6)"
+kind = "exec"
+
+cmd = "grep -q 'Static slot contracts' {root}/doc_src/LANGUAGE_TYPES.md && grep -q 'STRICT_TYPES.md' {root}/doc_src/LANGUAGE_TYPES.md"
+expect_exit = 0
