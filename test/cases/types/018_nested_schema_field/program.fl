@@ -1,0 +1,9 @@
+<stock>:
+   qty: u16
+<var>:
+   userId: s16
+   hold: <stock>
+
+#main
+  row:<var> = { hold: {} }
+  OK

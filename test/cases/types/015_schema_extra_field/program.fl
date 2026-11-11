@@ -1,0 +1,5 @@
+<stock>:
+   qty: u16
+
+#main
+  myStock:<stock> = { qty: 1, extra: 2 }

@@ -159,8 +159,12 @@ typedef enum {
 int flat_assign_split_line(char *line_buf, char **bind_out, char **value_out,
                            FlatAssignSplitForm *form_out);
 
+int flat_assign_lhs_has_path(const char *lhs);
+int flat_assign_path_build_expr(const char *lhs, char *path_expr, size_t path_sz, char *root_bind,
+                                size_t root_bind_sz);
+
 int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count,
-                          const char (*names)[64], const FlatStringPool *pool);
+                          const char (*names)[64], FlatStringPool *pool, FlatCollectionPool *coll);
 
 typedef enum {
     FLAT_IO_OK = 0,

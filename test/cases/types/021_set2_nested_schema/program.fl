@@ -1,0 +1,13 @@
+<stock>:
+   location: t4
+   qty: u16
+
+<select>:
+   user: t4
+   s: <stock>
+
+#main
+  result:<select> = {}
+  result.s.location = "A101"
+  result.s.location == "A101"
+  OK

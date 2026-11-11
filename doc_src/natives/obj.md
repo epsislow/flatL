@@ -60,7 +60,7 @@ Prints **`42`** — **`sentinel`** was not updated.
 | `remove(obj, pathString)` | OBJECT | **`obj.remove.path`** — missing leaf → copy, no panic |
 | `keys(obj)` | LIST | **`obj.keys`** — root object only (no path) |
 | `values(obj)` | LIST | **`obj.values`** — root object only |
-| `set2(pathExpr, val)` | OBJECT | **`obj.set2.root`**, **`obj.set2.path`** — COW on OBJECT root |
+| `set2(pathExpr, val)` | OBJECT | **`obj.set2.root`**, **`obj.set2.path`** — COW on OBJECT root; with **T3**, paths on **`var:<schema>`** enforce schema fields (same panics as assign) |
 
 ### Path argument (STRING) — `get` / `set` / `has` / `remove`
 

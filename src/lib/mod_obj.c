@@ -296,10 +296,24 @@ int flat_native_obj_set2(FlatNativeCtx *ctx) {
     if (parse_expr(ctx, val_e, &val) != 0) {
         return io_err(ctx);
     }
-    if (flat_path_set2(ctx->coll, ctx->pool, ctx->vars, ctx->var_count, ctx->var_names, path_e,
-                       &val, &root_id, &err) != 0) {
-        flat_path_reason(err, "set2", ctx->panic_detail, sizeof ctx->panic_detail);
-        return io_err(ctx);
+    {
+        FlatPathTypedCtx ptc;
+
+        memset(&ptc, 0, sizeof ptc);
+        ptc.type_panic = ctx->panic_detail;
+        ptc.type_panic_sz = sizeof ctx->panic_detail;
+        if (ctx->bc) {
+            ptc.schemas = &ctx->bc->schemas;
+        }
+        ptc.var_slot_types = ctx->var_slot_types;
+        ptc.var_has_slot_type = ctx->var_has_slot_type;
+        if (flat_path_set2(ctx->coll, ctx->pool, ctx->vars, ctx->var_count, ctx->var_names, path_e,
+                           &val, &root_id, &err, &ptc) != 0) {
+            if (ctx->panic_detail[0] == '\0') {
+                flat_path_reason(err, "set2", ctx->panic_detail, sizeof ctx->panic_detail);
+            }
+            return io_err(ctx);
+        }
     }
     return flat_value_set_object(ctx->out, root_id);
 }

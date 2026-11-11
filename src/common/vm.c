@@ -12,6 +12,8 @@
 #include "flat_value.h"
 #include "flat_vcx.h"
 #include "flat_slot_type.h"
+#include "flat_obj_path.h"
+#include "flat_schema.h"
 
 #ifdef FLAT_WASM_BUILD
 #include "flat_wasm_io.h"
@@ -432,10 +434,16 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
             contract = st->vars[i].slot_type;
             has_contract = 1;
         }
-        if (has_contract && flat_slot_type_check_value(&contract, val, st->pool, chk, sizeof chk) !=
-                                 0) {
-            snprintf(st->panic_reason, sizeof st->panic_reason, "%s", chk);
-            return -1;
+        {
+            const FlatSchemaCatalog *sc = st->bc ? &st->bc->schemas : NULL;
+            FlatValue bound = *val;
+            if (has_contract &&
+                flat_slot_type_check_value(&contract, val, st->pool, st->coll, sc, &bound, chk,
+                                           sizeof chk) != 0) {
+                snprintf(st->panic_reason, sizeof st->panic_reason, "%s", chk);
+                return -1;
+            }
+            val = &bound;
         }
         if (flat_value_same_storage(&st->vars[i].val, val)) {
             if (lhs_has_ty && lhs_ty && !st->vars[i].has_slot_type) {
@@ -483,9 +491,16 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         contract = *lhs_ty;
         has_contract = 1;
     }
-    if (has_contract && flat_slot_type_check_value(&contract, val, st->pool, chk, sizeof chk) != 0) {
-        snprintf(st->panic_reason, sizeof st->panic_reason, "%s", chk);
-        return -1;
+    {
+        const FlatSchemaCatalog *sc = st->bc ? &st->bc->schemas : NULL;
+        FlatValue bound = *val;
+        if (has_contract &&
+            flat_slot_type_check_value(&contract, val, st->pool, st->coll, sc, &bound, chk,
+                                       sizeof chk) != 0) {
+            snprintf(st->panic_reason, sizeof st->panic_reason, "%s", chk);
+            return -1;
+        }
+        val = &bound;
     }
     flat_value_retain(st->coll, st->pool, val);
     if (val->tag == VAL_FILE) {
@@ -587,6 +602,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
     FlatIoStatus ios;
     FlatValue *vals = NULL;
     char (*names)[64] = NULL;
+    FlatSlotType *slot_types = NULL;
+    uint8_t *has_types = NULL;
     size_t scratch_n;
     int i;
     int rc = 0;
@@ -602,9 +619,13 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
     scratch_n = st->var_slots_max > 0 ? st->var_slots_max : 1u;
     vals = calloc(scratch_n, sizeof *vals);
     names = calloc(scratch_n, 64);
-    if (!vals || !names) {
+    slot_types = calloc(scratch_n, sizeof *slot_types);
+    has_types = calloc(scratch_n, sizeof *has_types);
+    if (!vals || !names || !slot_types || !has_types) {
         free(vals);
         free(names);
+        free(slot_types);
+        free(has_types);
         return -1;
     }
 
@@ -618,7 +639,100 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         }
         (void)form;
     }
-    if (flat_bind_parse_lhs(lhs, slot_name, sizeof slot_name, &lhs_ty, &lhs_has_ty) != 0) {
+    var_names_table(st, names);
+    for (i = 0; i < st->var_count; i++) {
+        vals[i] = st->vars[i].val;
+        slot_types[i] = st->vars[i].slot_type;
+        has_types[i] = (uint8_t)st->vars[i].has_slot_type;
+    }
+    if (flat_assign_lhs_has_path(lhs)) {
+        char path_expr[384];
+        char root_bind[192];
+        char root_name[FLAT_VAR_NAME_MAX + 1];
+        FlatSlotType root_ty;
+        int root_has_ty = 0;
+        uint32_t root_obj_id = 0;
+        FlatPathErr perr = FLAT_PATH_OK;
+        FlatPathTypedCtx ptc;
+        int root_vi;
+
+        if (flat_assign_path_build_expr(lhs, path_expr, sizeof path_expr, root_bind,
+                                        sizeof root_bind) != 0) {
+            rc = 0;
+            goto done;
+        }
+        if (flat_bind_parse_lhs_catalog(root_bind, root_name, sizeof root_name, &root_ty,
+                                      &root_has_ty, bc ? &bc->schemas : NULL) != 0) {
+            snprintf(st->panic_reason, sizeof st->panic_reason, "type.assign.incompatible");
+            rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            goto done;
+        }
+        root_vi = find_var(st, root_name);
+        if (root_vi < 0) {
+            FlatValue seed;
+
+            if (!root_has_ty) {
+                rc = 0;
+                goto done;
+            }
+            memset(&seed, 0, sizeof seed);
+            if (flat_value_parse_assign_rhs("{}", &seed, st->pool, st->coll, vals, st->var_count,
+                                            names) != 0) {
+                rc = 0;
+                goto done;
+            }
+            if (set_var_value(st, root_name, &seed, &root_ty, 1) != 0) {
+                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+                goto done;
+            }
+            root_vi = find_var(st, root_name);
+            vals[root_vi] = st->vars[root_vi].val;
+            slot_types[root_vi] = st->vars[root_vi].slot_type;
+            has_types[root_vi] = (uint8_t)st->vars[root_vi].has_slot_type;
+            snprintf(names[root_vi], 64, "%s", root_name);
+        }
+        if (rhs_is_native_call(rhs)) {
+            rc = 0;
+            goto done;
+        }
+        if (flat_value_parse_assign_rhs(rhs, &v, st->pool, st->coll, vals, st->var_count, names) !=
+            0) {
+            rc = 0;
+            goto done;
+        }
+        memset(&ptc, 0, sizeof ptc);
+        ptc.schemas = bc ? &bc->schemas : NULL;
+        ptc.var_slot_types = slot_types;
+        ptc.var_has_slot_type = has_types;
+        ptc.type_panic = st->panic_reason;
+        ptc.type_panic_sz = sizeof st->panic_reason;
+        st->panic_reason[0] = '\0';
+        if (flat_path_set2(st->coll, st->pool, vals, st->var_count, names, path_expr, &v,
+                           &root_obj_id, &perr, &ptc) != 0) {
+            if (st->panic_reason[0] != '\0') {
+                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            } else {
+                rc = 0;
+            }
+            goto done;
+        }
+        {
+            FlatValue nv;
+
+            flat_value_set_object(&nv, root_obj_id);
+            flat_value_retain(st->coll, st->pool, &nv);
+            flat_value_live_replace(&st->live, &st->vars[root_vi].val, &nv);
+            flat_value_release(st->coll, st->pool, &st->vars[root_vi].val);
+            st->vars[root_vi].val = nv;
+            if (st->io_ctx) {
+                flat_io_ctx_var_updated(st->io_ctx, root_vi, &nv);
+            }
+        }
+        rc = 0;
+        goto done;
+    }
+    if (flat_bind_parse_lhs_catalog(lhs, slot_name, sizeof slot_name, &lhs_ty, &lhs_has_ty,
+                                    bc ? &bc->schemas : NULL) != 0) {
         snprintf(st->panic_reason, sizeof st->panic_reason, "type.assign.incompatible");
         rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
         goto done;
@@ -626,10 +740,6 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
     if (var_name_forbidden(slot_name)) {
         rc = 0;
         goto done;
-    }
-    var_names_table(st, names);
-    for (i = 0; i < st->var_count; i++) {
-        vals[i] = st->vars[i].val;
     }
     if (rhs_is_native_call(rhs)) {
         const FlatOptionalNativeDecl *ndecl = NULL;
@@ -666,6 +776,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.io_ctx = st->io_ctx;
             ctx.file_tbl = &st->files;
             ctx.vcx = st->vcx;
+            ctx.var_slot_types = slot_types;
+            ctx.var_has_slot_type = has_types;
             vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
             invoke_rc = flat_native_invoke(native_id, &ctx);
         }
@@ -694,6 +806,8 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
 done:
     free(vals);
     free(names);
+    free(slot_types);
+    free(has_types);
     return rc;
 }
 
@@ -1384,6 +1498,8 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     FlatNativeCtx ctx;
     FlatValue *vals = NULL;
     char (*names)[64] = NULL;
+    FlatSlotType *slot_types = NULL;
+    uint8_t *has_types = NULL;
     size_t scratch_n;
     int i;
     int rc = 0;
@@ -1391,9 +1507,13 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     scratch_n = st->var_slots_max > 0 ? st->var_slots_max : 1u;
     vals = calloc(scratch_n, sizeof *vals);
     names = calloc(scratch_n, 64);
-    if (!vals || !names) {
+    slot_types = calloc(scratch_n, sizeof *slot_types);
+    has_types = calloc(scratch_n, sizeof *has_types);
+    if (!vals || !names || !slot_types || !has_types) {
         free(vals);
         free(names);
+        free(slot_types);
+        free(has_types);
         return 0;
     }
 
@@ -1401,6 +1521,8 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     var_names_table(st, names);
     for (i = 0; i < st->var_count; i++) {
         vals[i] = st->vars[i].val;
+        slot_types[i] = st->vars[i].slot_type;
+        has_types[i] = (uint8_t)st->vars[i].has_slot_type;
     }
     ctx.pool = st->pool;
     ctx.coll = st->coll;
@@ -1416,6 +1538,8 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.io_ctx = st->io_ctx;
     ctx.file_tbl = &st->files;
     ctx.vcx = st->vcx;
+    ctx.var_slot_types = slot_types;
+    ctx.var_has_slot_type = has_types;
     ctx.panic_detail[0] = '\0';
     vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
     ios = FLAT_IO_OK;
@@ -1434,6 +1558,8 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
 done:
     free(vals);
     free(names);
+    free(slot_types);
+    free(has_types);
     return rc;
 }
 
@@ -1711,7 +1837,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             for (gi = 0; gi < st.var_count; gi++) {
                 guard_vals[gi] = st.vars[gi].val;
             }
-            if (!flat_value_eval_guard(expr, guard_vals, st.var_count, guard_names, st.pool)) {
+            if (!flat_value_eval_guard(expr, guard_vals, st.var_count, guard_names, st.pool,
+                                       st.coll)) {
                 if (bt == 0) {
                     return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL,
                                      opts);

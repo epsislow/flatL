@@ -1,2 +1,6 @@
+<stock>:
+   qty: u16
+
 #main
-  row:<stock> = {}
+  myStock:<stock> = {}
+  OK

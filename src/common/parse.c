@@ -5,6 +5,7 @@
 #include "flat_link.h"
 #include "flat_native.h"
 #include "flat_str.h"
+#include "flat_schema.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -388,6 +389,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
     int in_block_comment = 0;
     int in_header = 1;
     int open_fn_idx = -1;
+    int schema_cur = -1;
     int hdr;
 
     if (!path || !out) {
@@ -406,6 +408,23 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
     while (fgets(line, sizeof line, f)) {
         char *p;
         line_no++;
+        if (schema_cur >= 0 && (line[0] == ' ' || line[0] == '\t')) {
+            FgirSchemaDecl *sd = &out->schemas[schema_cur];
+            char fkey[FGIR_OBJ_KEY_MAX + 1];
+            char fspec[FGIR_SCHEMA_TYPE_SPEC_MAX + 1];
+            if (flat_schema_parse_field_line(line, fkey, sizeof fkey, fspec, sizeof fspec) != 0 ||
+                sd->field_count >= FGIR_SCHEMA_FIELD_MAX) {
+                snprintf(err, err_size, "%s:%d: bad schema field", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            snprintf(sd->field_keys[sd->field_count], sizeof sd->field_keys[sd->field_count], "%s",
+                     fkey);
+            snprintf(sd->field_specs[sd->field_count], sizeof sd->field_specs[sd->field_count],
+                     "%s", fspec);
+            sd->field_count++;
+            continue;
+        }
         p = trim(line);
         if (in_block_comment) {
             if (line_is_block_comment_close(p)) {
@@ -429,7 +448,38 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
         if (line_is_line_comment(p)) {
             continue;
         }
+        if (cur < 0) {
+            char sname[FLAT_SCHEMA_NAME_MAX + 1];
+            if (flat_schema_parse_header_line(p, sname, sizeof sname) == 0) {
+                if (out->schema_count >= FGIR_SCHEMA_MAX) {
+                    snprintf(err, err_size, "%s:%d: too many schemas", path, line_no);
+                    fclose(f);
+                    return -1;
+                }
+                schema_cur = out->schema_count++;
+                snprintf(out->schemas[schema_cur].name, sizeof out->schemas[schema_cur].name, "%s",
+                         sname);
+                out->schemas[schema_cur].field_count = 0;
+                continue;
+            }
+            if (schema_cur >= 0) {
+                schema_cur = -1;
+            }
+        }
         if (in_header) {
+            char sname_hdr[FLAT_SCHEMA_NAME_MAX + 1];
+            if (flat_schema_parse_header_line(p, sname_hdr, sizeof sname_hdr) == 0) {
+                if (out->schema_count >= FGIR_SCHEMA_MAX) {
+                    snprintf(err, err_size, "%s:%d: too many schemas", path, line_no);
+                    fclose(f);
+                    return -1;
+                }
+                schema_cur = out->schema_count++;
+                snprintf(out->schemas[schema_cur].name, sizeof out->schemas[schema_cur].name, "%s",
+                         sname_hdr);
+                out->schemas[schema_cur].field_count = 0;
+                continue;
+            }
             if (line_is_use_directive(p)) {
                 continue;
             }
@@ -510,6 +560,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             continue;
         }
         if (*p == '#') {
+            schema_cur = -1;
             if (finish_open_def(out, open_fn_idx, path, line_no, err, err_size) != 0) {
                 fclose(f);
                 return -1;

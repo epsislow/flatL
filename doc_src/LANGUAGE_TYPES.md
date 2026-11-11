@@ -5,7 +5,7 @@ Documentation index: [README.md](./README.md) (English).
 Normative reference for **value types**, **STRING ref pool**, and **limits** in the VM (`flvm` v0.2+).  
 Architecture overview: [SPECIFICATION.md](./SPECIFICATION.md). Tooling: [TOOLCHAIN.md](./TOOLCHAIN.md).
 
-**Typed bind (T1):** optional **`name:type`** on **ASSIGN** — [TYPED_BIND.md](./TYPED_BIND.md). Schemas and dynamic types are still planned. Untyped binds behave as before (logical `VAL_*` only).
+**Typed bind (T1–T3):** optional **`name:type`** / **`name:<schema>`** on **ASSIGN**, plus **path assign** (`row.qty = 1`) — [TYPED_BIND.md](./TYPED_BIND.md). Dynamic types (`:/…`) still planned. Untyped binds behave as before (logical `VAL_*` only).
 
 ---
 
@@ -154,22 +154,41 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 
 **Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.incompatible`, `type.assign.string.len`, `type.assign.retype` (change `:type` without `free`).
 
-**Compile (T1):** `flc` rejects **`<schema>`** and **`:/…`** on ASSIGN lhs; unknown type spellings fail at compile or bind.
+**Compile:** `flc` rejects **`:/…`** on ASSIGN lhs (T3+). **`<schema>`** on lhs requires a matching **`<schema>:`** declaration; unknown schema → `type.schema.unknown`.
 
 Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — integers are range-checked, not narrowed in storage.
 
-### Planned (T2+)
+### T2 (schema objects) — done
+
+### T3 (schema paths)
+| Form | Meaning |
+|------|---------|
+| `myStock.qty = 9` | Validates field `qty` on slot `<stock>` |
+| `myStock.extra = 1` | **`type.schema.field.unknown`** |
+| `row:<var>.userId = 3` | Defines typed slot + sets path in one line |
+| `O.set2(row.s.location, "A1")` | Same path engine as assign (materializes nested schema) |
+
+### T2 recap (schema objects)
 
 | Form | Meaning |
 |------|---------|
-| `row:<stock> = {}` | Closed object schema |
+| `<stock>:` … | Schema declaration (indented fields) |
+| `row:<stock> = {}` | Closed object; missing fields → **`null`** |
+| `row:<stock> = { qty: 1 }` | Extra keys → **`type.schema.field.unknown`** |
+
+**GUARD** expressions may use **dotted paths** (e.g. `row.qty == null`).
+
+### Planned (T3+)
+
+| Form | Meaning |
+|------|---------|
 | `s:/typeStr` | Dynamic type |
 | `const n:u16 = 1` | Immutable slot |
 | `freeze(cfg)` | Frozen until `free` |
 
 **Comparison:** mixed logical types → `==` is **false** today. Typed scalar compare panics — **T4** (`json.stringify` for LIST/OBJECT).
 
-**Phases:** T0 docs → **T1** (this section) → T2 schemas → … — [TYPED_BIND.md §10](./TYPED_BIND.md#10-implementation-phases).
+**Phases:** T0 docs → **T1** → **T2** (schemas) → … — [TYPED_BIND.md §10](./TYPED_BIND.md#10-implementation-phases).
 
 ---
 

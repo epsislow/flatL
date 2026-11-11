@@ -18,8 +18,11 @@ endif
 STR_SRC = src/common/flat_str.c
 PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
+FB_TOOL_SRC = $(FB_SRC) src/common/flat_assign.c src/common/flat_schema.c \
+              src/common/flat_slot_type.c src/common/value_pool.c \
+              src/common/value_collection.c src/common/value_live.c
 DISASM_SRC = src/common/flat_disasm.c
-FBDUMP_SRCS = src/fbdump/main.c $(DISASM_SRC) $(FB_SRC) $(NATIVE_FLC_SRC)
+FBDUMP_SRCS = src/fbdump/main.c $(DISASM_SRC) $(FB_TOOL_SRC) $(NATIVE_FLC_SRC)
 NATIVE_VM_PLUGIN = src/lib/native_plugin_host.c
 ifeq ($(OS),Windows_NT)
 NATIVE_VM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math.c \
@@ -33,7 +36,8 @@ PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
                 $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so $(BINDIR)/libflat_obj.so
 PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/value_parse.c src/common/value_ops.c \
                src/common/value_pool.c src/common/value_collection.c src/common/value_live.c \
-               src/common/flat_obj_path.c src/common/flat_str.c
+               src/common/flat_assign.c src/common/flat_obj_path.c src/common/flat_schema.c \
+               src/common/flat_slot_type.c src/common/flat_str.c
 PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c src/lib/flat_math_calc.c \
@@ -48,7 +52,8 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_d
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
-          src/common/flat_slot_type.c src/common/value_ops.c src/common/flat_obj_path.c \
+          src/common/flat_slot_type.c src/common/flat_schema.c src/common/value_ops.c \
+          src/common/flat_obj_path.c \
           src/common/flat_vcx.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/value_json.c src/common/flat_file.c src/common/flat_io_ctx.c \
@@ -56,7 +61,8 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/com
           $(STR_SRC) $(NATIVE_VM_SRC)
 FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
-               src/common/flat_assign.c src/common/flat_slot_type.c src/common/value_pool.c \
+               src/common/flat_assign.c src/common/flat_slot_type.c src/common/flat_schema.c \
+               src/common/value_pool.c src/common/value_collection.c src/common/value_live.c \
                src/common/line_label.c \
            src/common/native_use.c \
            $(FLAT_TIME_SRC) \
@@ -209,8 +215,8 @@ $(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) -lm
 
-$(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_SRC) $(LDFLAGS)
+$(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_TOOL_SRC) | $(BINDIR)
+	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_TOOL_SRC) $(LDFLAGS)
 
 $(BINDIR)/gen_doc_site$(EXEEXT): $(GEN_DOC_SITE_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(GEN_DOC_SITE_SRCS) $(LDFLAGS)

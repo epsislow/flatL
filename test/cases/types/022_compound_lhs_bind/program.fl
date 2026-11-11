@@ -1,0 +1,7 @@
+<var>:
+   userId: s16
+
+#main
+  row:<var>.userId = 99
+  row.userId == 99
+  OK

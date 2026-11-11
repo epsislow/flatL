@@ -1,6 +1,7 @@
 #include "fb_format.h"
 #include "flat.h"
 #include "flat_value.h"
+#include "flat_schema.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -448,7 +449,7 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                         "flc (format v%u required)\n", (unsigned)FLAT_FB_FORMAT_VERSION);
         return -1;
     }
-    if (buf[5] != 3 && buf[5] != 4 && buf[5] != FLAT_FB_FORMAT_VERSION) {
+    if (buf[5] < 3 || buf[5] > FLAT_FB_FORMAT_VERSION) {
         unsigned got = (unsigned)buf[5];
         free(buf);
         fprintf(stderr, "flvm: unsupported .fb format v%u (format v3–v%u required); rebuild with "
@@ -461,7 +462,12 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         fprintf(stderr, "flvm: truncated .fb header\n");
         return -1;
     }
-    if (out->format_version >= 5 && fsize < FLAT_FB_HEADER_SIZE) {
+    if (out->format_version >= 6 && fsize < FLAT_FB_HEADER_SIZE) {
+        free(buf);
+        fprintf(stderr, "flvm: truncated .fb header\n");
+        return -1;
+    }
+    if (out->format_version == 5 && fsize < FLAT_FB_HEADER_SIZE_V5) {
         free(buf);
         fprintf(stderr, "flvm: truncated .fb header\n");
         return -1;
@@ -478,6 +484,7 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         uint32_t labels_off = read_u32_le(buf + 16);
         uint32_t fnun_off = 0;
         uint32_t ffun_off = 0;
+        uint32_t schm_off = 0;
 
         if (out->format_version >= 4) {
             fnun_off = read_u32_le(buf + 20);
@@ -485,7 +492,9 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         if (out->format_version >= 5) {
             ffun_off = read_u32_le(buf + 24);
         }
-        (void)ffun_off;
+        if (out->format_version >= 6) {
+            schm_off = read_u32_le(buf + 28);
+        }
 
         if (labels_off != 0 && labels_off <= fsize) {
             out->code_size = labels_off;
@@ -507,6 +516,8 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 label_len = (size_t)(fnun_off - labels_off);
             } else if (ffun_off != 0 && ffun_off > labels_off) {
                 label_len = (size_t)(ffun_off - labels_off);
+            } else if (schm_off != 0 && schm_off > labels_off) {
+                label_len = (size_t)(schm_off - labels_off);
             } else if (native_off != 0 && native_off > labels_off) {
                 label_len = (size_t)(native_off - labels_off);
             } else {
@@ -529,6 +540,8 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
             size_t fnun_len;
             if (ffun_off != 0 && ffun_off > fnun_off) {
                 fnun_len = (size_t)(ffun_off - fnun_off);
+            } else if (schm_off != 0 && schm_off > fnun_off) {
+                fnun_len = (size_t)(schm_off - fnun_off);
             } else if (native_off != 0 && native_off > fnun_off) {
                 fnun_len = (size_t)(native_off - fnun_off);
             } else {
@@ -543,7 +556,9 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         }
         if (ffun_off != 0 && ffun_off < fsize) {
             size_t ffun_len;
-            if (native_off != 0 && native_off > ffun_off) {
+            if (schm_off != 0 && schm_off > ffun_off) {
+                ffun_len = (size_t)(schm_off - ffun_off);
+            } else if (native_off != 0 && native_off > ffun_off) {
                 ffun_len = (size_t)(native_off - ffun_off);
             } else {
                 ffun_len = (size_t)(fsize - ffun_off);
@@ -555,6 +570,20 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 return -1;
             }
         }
+        memset(&out->schemas, 0, sizeof out->schemas);
+        if (schm_off != 0 && schm_off < fsize) {
+            size_t schm_len;
+            if (native_off != 0 && native_off > schm_off) {
+                schm_len = (size_t)(native_off - schm_off);
+            } else {
+                schm_len = (size_t)(fsize - schm_off);
+            }
+            if (flat_fb_parse_schm_section(buf + schm_off, schm_len, &out->schemas) != 0) {
+                free(buf);
+                fprintf(stderr, "flvm: invalid SCHM section\n");
+                return -1;
+            }
+        }
     }
     if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
         free(buf);
@@ -562,8 +591,10 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 (unsigned)out->var_slots, FLAT_MAX_VARS);
         return -1;
     }
-    if (out->format_version >= 5) {
+    if (out->format_version >= 6) {
         header_size = FLAT_FB_HEADER_SIZE;
+    } else if (out->format_version >= 5) {
+        header_size = FLAT_FB_HEADER_SIZE_V5;
     } else if (out->format_version >= 4) {
         header_size = FLAT_FB_HEADER_SIZE_V4;
     } else {
@@ -767,11 +798,12 @@ int flat_fb_write_min_ok(const char *path) {
     const uint8_t native_off[4] = { 0, 0, 0, 0 };
     const uint8_t var_slots[4] = { 0, 0, 0, 0 };
     const uint8_t ffun_off_bytes[4] = { 0, 0, 0, 0 };
-    const uint8_t labels_off_bytes[4] = { 38, 0, 0, 0 }; /* header28 + dir8 + code2 */
-    const uint8_t fnun_off_bytes[4] = { 51, 0, 0, 0 };
+    const uint8_t schm_off_bytes[4] = { 0, 0, 0, 0 };
+    const uint8_t labels_off_bytes[4] = { 42, 0, 0, 0 }; /* header32 + dir8 + code2 */
+    const uint8_t fnun_off_bytes[4] = { 55, 0, 0, 0 };
     const uint8_t dir[8] = {
         0, 0, 0, 0, /* block_id main = 0 */
-        36, 0, 0, 0  /* code offset after 28-byte header */
+        40, 0, 0, 0  /* code offset after 32-byte header */
     };
     const uint8_t code[2] = { OP_OK, 0 };
     const uint32_t blbl_magic = FLAT_FB_LABEL_MAGIC;
@@ -795,7 +827,8 @@ int flat_fb_write_min_ok(const char *path) {
             write_bytes(f, version, 1) != 0 || write_bytes(f, count, 2) != 0 ||
             write_bytes(f, native_off, 4) != 0 || write_bytes(f, var_slots, 4) != 0 ||
             write_bytes(f, labels_off_bytes, 4) != 0 || write_bytes(f, fnun_off_bytes, 4) != 0 ||
-            write_bytes(f, ffun_off_bytes, 4) != 0 || write_bytes(f, dir, 8) != 0 ||
+            write_bytes(f, ffun_off_bytes, 4) != 0 || write_bytes(f, schm_off_bytes, 4) != 0 ||
+            write_bytes(f, dir, 8) != 0 ||
             write_bytes(f, code, 2) != 0 ||
             write_bytes(f, &blbl_magic, 4) != 0 || write_bytes(f, &blbl_count, 2) != 0 ||
             write_bytes(f, &main_len, 2) != 0 || write_bytes(f, main_label, main_len) != 0 ||

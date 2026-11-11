@@ -1,8 +1,9 @@
 suite = "types"
 id = 12
-desc = "flc rejects schema lhs (T1)"
-kind = "exec"
+desc = "schema decl + typed bind compile"
+kind = "pipeline"
 
-cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
-expect_exit = 1
-stderr_contains = "schema"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

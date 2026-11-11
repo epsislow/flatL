@@ -1,6 +1,6 @@
 # Strict types & object schemas (overview)
 
-**Status:** **T1** — `name:type` on **ASSIGN** is enforced in `flvm` for scalars, `b`, `t` / `tN`, `l`, `o`. Schemas (`<name>`), dynamic (`:/expr`), `const`, and `freeze` remain **T2+**.
+**Status:** **T3** — **T2** plus **path assign** (`myStock.qty = n`), **compound LHS** (`row:<var>.userId = n`), **`O.set2` / path** schema checks (unknown field → `type.schema.field.unknown`, nested `<schema>` null → materialize). Dynamic (`:/expr`), `const`, and `freeze` remain **T4+**.
 
 | Doc | Role |
 |-----|------|
@@ -155,6 +155,8 @@ freeze(cfg)
 |-------|-------------|
 | **T0** | Docs, specimens, doc-site (this release) |
 | **T1** | Parse `:type`, slot metadata, assign checks |
-| **T2+** | SCHM, schema objects, `:/`, `m.calc` typed, `def` typed |
+| **T2** | **Done:** SCHM, `<schema>:`, `var:<schema>`, null-fill on `{}`, `type.schema.*` panics |
+| **T3** | **Done:** path assign, compound LHS, typed `O.set2`, nested schema materialize |
+| **T4+** | `:/`, `m.calc` typed, `def` typed, `const`, `freeze` |
 
 Specimens and T0 tests: `test/cases/types_t0/`.

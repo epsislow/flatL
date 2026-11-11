@@ -1,10 +1,10 @@
 # Typed bind, schemas, and slot contracts (T0 draft)
 
-**Status:** normative **draft** — product decisions agreed; **not implemented** in `flc`/`flvm` yet.  
+**Status:** **T1–T3 implemented** in `flc`/`flvm`; T4+ still draft.  
 **Overview:** [STRICT_TYPES.md](./STRICT_TYPES.md)  
 **Roadmap:** [`.cursor/plans/strict-types-schemas-roadmap.plan.md`](../.cursor/plans/strict-types-schemas-roadmap.plan.md)  
 **Ideas sketch:** [`.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt`](../.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt) (aligned)  
-**Current runtime:** [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) §1 and §6 (logical `VAL_*` only today)
+**Current runtime:** [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) §1 and §6 (logical `VAL_*` + T1/T2 typed bind)
 
 ---
 
@@ -130,9 +130,9 @@ Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
 | Phase | Scope |
 |-------|--------|
 | **T0** | This doc + panic table + SCHM concept |
-| **T1** | **Done:** parse `:type` on ASSIGN, slot metadata on VCX, assign checks, `free` clears type (`u*`/`s*`/`f*`/`b`/`t`/`tN`/`l`/`o`; no `<schema>`) |
-| **T2** | `<schema>:`, SCHM in `.fb` |
-| **T3** | Schema objects, literals, `O.set2` paths |
+| **T1** | **Done:** parse `:type` on ASSIGN, slot metadata on VCX, assign checks, `free` clears type (`u*`/`s*`/`f*`/`b`/`t`/`tN`/`l`/`o`) |
+| **T2** | **Done:** `<schema>:` blocks, **`var:<schema>`**, SCHM in **`.fb` v6**, null-fill on `{}`, compile checks (`type.schema.cycle`, `type.schema.unknown`), runtime `type.schema.field.unknown` |
+| **T3** | **Done:** `var.field = …`, `var:<schema>.field = …`, typed `O.set2`, schema on path, nested null-fill on write |
 | **T4** | `:/expr`, `dSchema*`, typed `m.calc` / I/O |
 | **T5** | `const`, `freeze()` |
 | **T6** | Typed `def`, optional native sugar |

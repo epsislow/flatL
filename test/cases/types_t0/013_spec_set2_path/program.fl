@@ -1,5 +1,12 @@
--- T3: result:<select> = {}; O.set2(result.s.location, "A101") materialize s:<stock>
--- T3: stocksList[2] must exist; empty list index → panic (general list rule)
+<stock>:
+   location: t4
+
+<select>:
+   user: t4
+   s: <stock>
 
 #main
+  result:<select> = {}
+  result.s.location = "A101"
+  result.s.location == "A101"
   OK

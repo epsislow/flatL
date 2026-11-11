@@ -1,4 +1,5 @@
 #include "flat_slot_type.h"
+#include "flat_schema.h"
 
 #include <ctype.h>
 #include <limits.h>
@@ -136,12 +137,78 @@ int flat_bind_parse_lhs(const char *lhs, char *name_out, size_t name_sz, FlatSlo
         if (*spec == '\0') {
             return -1;
         }
-        if (parse_type_spec(spec, type_out) != 0) {
+        if (flat_slot_type_parse_spec(spec, type_out, NULL, NULL, 0) != 0) {
             return -1;
         }
         *has_type_out = 1;
     }
     return 0;
+}
+
+int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSchemaCatalog *cat,
+                              char *err, size_t err_sz) {
+    char sname[FLAT_SCHEMA_NAME_MAX + 1];
+    const char *rest;
+    int sid;
+
+    if (!spec || !out) {
+        return -1;
+    }
+    flat_slot_type_clear(out);
+    if (spec[0] == '<') {
+        const char *p = spec + 1;
+        const char *end = strchr(p, '>');
+        if (!end) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "invalid schema type: %s", spec);
+            }
+            return -1;
+        }
+        if ((size_t)(end - p) >= sizeof sname) {
+            return -1;
+        }
+        memcpy(sname, p, (size_t)(end - p));
+        sname[end - p] = '\0';
+        rest = end + 1;
+        if (!cat) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "schema type requires catalog: %s", spec);
+            }
+            return -1;
+        }
+        sid = flat_schema_find_id(cat, sname);
+        if (sid < 0) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "type.schema.unknown: %s", sname);
+            }
+            return -1;
+        }
+        if (rest[0] == '[') {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "list schema bind not supported: %s", spec);
+            }
+            return -1;
+        }
+        while (*rest && isspace((unsigned char)*rest)) {
+            rest++;
+        }
+        if (*rest != '\0') {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "invalid schema type: %s", spec);
+            }
+            return -1;
+        }
+        out->kind = FLAT_SLOT_TYPE_SCHEMA;
+        out->schema_id = (uint16_t)sid;
+        return 0;
+    }
+    if (spec[0] == '/') {
+        if (err && err_sz) {
+            snprintf(err, err_sz, "typed dynamic bind not supported: %s", spec);
+        }
+        return -1;
+    }
+    return parse_type_spec(spec, out) != 0 ? -1 : 0;
 }
 
 int flat_bind_validate_t1_lhs(const char *lhs, char *err, size_t err_sz) {
@@ -185,6 +252,9 @@ int flat_slot_type_equals(const FlatSlotType *a, const FlatSlotType *b) {
     }
     if (a->kind == FLAT_SLOT_TYPE_TN || a->kind == FLAT_SLOT_TYPE_T) {
         return a->aux == b->aux;
+    }
+    if (a->kind == FLAT_SLOT_TYPE_SCHEMA) {
+        return a->schema_id == b->schema_id;
     }
     return 1;
 }
@@ -232,7 +302,9 @@ static size_t value_string_bytes(const FlatValue *val, const FlatStringPool *poo
 }
 
 int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *val,
-                               const FlatStringPool *pool, char *panic, size_t panic_sz) {
+                               FlatStringPool *pool, FlatCollectionPool *coll,
+                               const FlatSchemaCatalog *schemas, FlatValue *inout_val,
+                               char *panic, size_t panic_sz) {
     double d;
     size_t slen;
 
@@ -262,6 +334,14 @@ int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *va
             return -1;
         }
         return 0;
+    case FLAT_SLOT_TYPE_SCHEMA:
+        if (!schemas || !coll || !inout_val) {
+            snprintf(panic, panic_sz, "type.assign.incompatible");
+            return -1;
+        }
+        *inout_val = *val;
+        return flat_schema_bind_value((const FlatSchemaCatalog *)schemas, contract->schema_id,
+                                      inout_val, pool, coll, panic, panic_sz);
     case FLAT_SLOT_TYPE_F32:
     case FLAT_SLOT_TYPE_F64:
         if (val->tag != VAL_NUMBER) {

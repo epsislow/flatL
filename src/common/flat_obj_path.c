@@ -1,4 +1,6 @@
 #include "flat_obj_path.h"
+#include "flat_schema.h"
+#include "flat_slot_type.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -464,17 +466,81 @@ static int parse_lvalue_steps(const char *expr, FlatStringPool *pool, FlatCollec
     }
 }
 
+static int materialize_child_field(const FlatSchemaField *field, FlatCollectionPool *pool,
+                                   FlatStringPool *str_pool, const FlatSchemaCatalog *cat,
+                                   FlatValue *out, char *panic, size_t panic_sz) {
+    uint32_t id;
+
+    if (!field || !out || !pool || !str_pool) {
+        return -1;
+    }
+    if (field->slot.kind == FLAT_SLOT_TYPE_SCHEMA && cat) {
+        FlatValue obj;
+        if (flat_obj_empty(pool, str_pool, &id) != 0) {
+            return -1;
+        }
+        flat_value_set_object(&obj, id);
+        if (flat_schema_bind_value(cat, field->slot.schema_id, &obj, str_pool, pool, panic,
+                                   panic_sz) != 0) {
+            return -1;
+        }
+        *out = obj;
+        return 0;
+    }
+    if (field->slot.kind == FLAT_SLOT_TYPE_O) {
+        if (flat_obj_empty(pool, str_pool, &id) != 0) {
+            return -1;
+        }
+        return flat_value_set_object(out, id);
+    }
+    if (field->slot.kind == FLAT_SLOT_TYPE_L) {
+        if (flat_list_empty(pool, str_pool, &id) != 0) {
+            return -1;
+        }
+        return flat_value_set_list(out, id);
+    }
+    return -1;
+}
+
+static int type_panic_write(const FlatPathTypedCtx *typed, const char *code) {
+    if (typed && typed->type_panic && typed->type_panic_sz > 0 && code) {
+        snprintf(typed->type_panic, typed->type_panic_sz, "%s", code);
+    }
+    return -4;
+}
+
 static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, FlatValue cur,
                          const FlatPathStep *steps, int step_i, int nsteps, const FlatValue *val,
-                         FlatValue *out_cur) {
+                         FlatValue *out_cur, const FlatSlotType *cur_contract,
+                         const FlatPathTypedCtx *typed) {
+    const FlatValue *write_val = val;
+
     if (step_i == nsteps - 1) {
         if (steps[step_i].kind == FLAT_PATH_STEP_FIELD) {
+            const FlatSchemaCatalog *cat =
+                typed && typed->schemas ? (const FlatSchemaCatalog *)typed->schemas : NULL;
+            const FlatSchemaDef *schema_def = flat_schema_def_for_contract(cat, cur_contract);
+            const FlatSchemaField *field = NULL;
+            FlatValue checked = *val;
+            char panic[64];
             uint32_t new_id;
+
             if (cur.tag != VAL_OBJECT) {
                 return -2;
             }
-            if (flat_obj_set_copy(pool, str_pool, cur.u.coll_id, steps[step_i].key, val, &new_id) !=
-                0) {
+            if (schema_def) {
+                if (!flat_schema_field_lookup(schema_def, steps[step_i].key, &field)) {
+                    return type_panic_write(typed, "type.schema.field.unknown");
+                }
+                if (field &&
+                    flat_slot_type_check_value(&field->slot, val, str_pool, pool, cat, &checked,
+                                               panic, sizeof panic) != 0) {
+                    return type_panic_write(typed, panic[0] ? panic : "type.assign.incompatible");
+                }
+                write_val = &checked;
+            }
+            if (flat_obj_set_copy(pool, str_pool, cur.u.coll_id, steps[step_i].key, write_val,
+                                  &new_id) != 0) {
                 return -1;
             }
             return flat_value_set_object(out_cur, new_id);
@@ -501,14 +567,48 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
         if (cur.tag != VAL_OBJECT) {
             return -2;
         }
-        if (flat_obj_get(pool, cur.u.coll_id, steps[step_i].key, &child) != 0) {
-            uint32_t empty_id;
-            if (flat_obj_empty(pool, str_pool, &empty_id) != 0) {
-                return -1;
+        {
+            const FlatSchemaCatalog *cat =
+                typed && typed->schemas ? (const FlatSchemaCatalog *)typed->schemas : NULL;
+            const FlatSchemaDef *schema_def = flat_schema_def_for_contract(cat, cur_contract);
+            const FlatSchemaField *field = NULL;
+            FlatSlotType next_contract;
+            char mat_panic[64];
+            int has_child = 0;
+
+            flat_slot_type_clear(&next_contract);
+            if (schema_def) {
+                if (!flat_schema_field_lookup(schema_def, steps[step_i].key, &field)) {
+                    return type_panic_write(typed, "type.schema.field.unknown");
+                }
+                next_contract = field->slot;
             }
-            flat_value_set_object(&child, empty_id);
+            has_child = (flat_obj_get(pool, cur.u.coll_id, steps[step_i].key, &child) == 0);
+            if (!has_child) {
+                if (schema_def && field &&
+                    materialize_child_field(field, pool, str_pool, cat, &child, mat_panic,
+                                            sizeof mat_panic) != 0) {
+                    return type_panic_write(typed,
+                                            mat_panic[0] ? mat_panic : "type.assign.incompatible");
+                } else if (!schema_def) {
+                    uint32_t empty_id;
+                    if (flat_obj_empty(pool, str_pool, &empty_id) != 0) {
+                        return -1;
+                    }
+                    flat_value_set_object(&child, empty_id);
+                } else {
+                    return type_panic_write(typed, "type.schema.field.unknown");
+                }
+            } else if (child.tag == VAL_NULL && field) {
+                if (materialize_child_field(field, pool, str_pool, cat, &child, mat_panic,
+                                            sizeof mat_panic) != 0) {
+                    return type_panic_write(typed,
+                                            mat_panic[0] ? mat_panic : "type.assign.incompatible");
+                }
+            }
+            rc = write_at_step(pool, str_pool, child, steps, step_i + 1, nsteps, val, &child_new,
+                               field ? &next_contract : cur_contract, typed);
         }
-        rc = write_at_step(pool, str_pool, child, steps, step_i + 1, nsteps, val, &child_new);
         if (rc != 0) {
             return rc;
         }
@@ -530,7 +630,8 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
         if (flat_list_get(pool, cur.u.coll_id, steps[step_i].index, &elem) != 0) {
             return -3;
         }
-        rc = write_at_step(pool, str_pool, elem, steps, step_i + 1, nsteps, val, &elem_new);
+        rc = write_at_step(pool, str_pool, elem, steps, step_i + 1, nsteps, val, &elem_new,
+                           cur_contract, typed);
         if (rc != 0) {
             return rc;
         }
@@ -545,7 +646,7 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
 
 int flat_path_set2(FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *vars, int var_count,
                    const char (*var_names)[64], const char *path_expr, const FlatValue *val,
-                   uint32_t *out_root_obj, FlatPathErr *err_out) {
+                   uint32_t *out_root_obj, FlatPathErr *err_out, const FlatPathTypedCtx *typed) {
     FlatPathStep steps[FLAT_OBJ_PATH_MAX_SEG];
     int nsteps = 0;
     int root_vi;
@@ -567,7 +668,23 @@ int flat_path_set2(FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *va
         return -1;
     }
     root = vars[root_vi];
-    rc = write_at_step(coll, pool, root, steps, 0, nsteps, val, &new_root);
+    {
+        FlatSlotType root_contract;
+
+        flat_slot_type_clear(&root_contract);
+        if (typed && typed->var_has_slot_type && typed->var_slot_types &&
+            typed->var_has_slot_type[root_vi]) {
+            root_contract = typed->var_slot_types[root_vi];
+        }
+        if (typed && typed->type_panic && typed->type_panic_sz > 0) {
+            typed->type_panic[0] = '\0';
+        }
+        rc = write_at_step(coll, pool, root, steps, 0, nsteps, val, &new_root, &root_contract,
+                           typed);
+    }
+    if (rc == -4) {
+        return -1;
+    }
     if (rc == -2) {
         if (err_out) {
             *err_out = FLAT_PATH_SET;

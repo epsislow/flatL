@@ -5,7 +5,9 @@
 #include "flat_guard.h"
 #include "flat_func.h"
 #include "flat_link.h"
+#include "fgir.h"
 #include "flat_native_use.h"
+#include "flat_schema.h"
 #include "flat_port.h"
 
 #include <ctype.h>
@@ -276,6 +278,7 @@ static int scan_header_fmod_uses(const char *path, const FlatLinkOptions *opts, 
     int in_block = 0;
     int n = 0;
     int in_header = 1;
+    int schema_cur = -1;
 
     *out_count = 0;
     f = fopen(path, "r");
@@ -286,6 +289,13 @@ static int scan_header_fmod_uses(const char *path, const FlatLinkOptions *opts, 
     while (fgets(line, sizeof line, f)) {
         char *p;
         line_no++;
+        if (schema_cur >= 0 && (line[0] == ' ' || line[0] == '\t')) {
+            char fk[FGIR_OBJ_KEY_MAX + 1];
+            char fs[FGIR_SCHEMA_TYPE_SPEC_MAX + 1];
+            if (flat_schema_parse_field_line(line, fk, sizeof fk, fs, sizeof fs) == 0) {
+                continue;
+            }
+        }
         p = trim_local(line);
         if (in_block) {
             if (strncmp(p, "-->", 3) == 0) {
@@ -318,10 +328,19 @@ static int scan_header_fmod_uses(const char *path, const FlatLinkOptions *opts, 
             continue;
         }
         if (*p == '#') {
+            schema_cur = -1;
             in_header = 0;
             break;
         }
         if (in_header) {
+            char sname[FLAT_SCHEMA_NAME_MAX + 1];
+            if (flat_schema_parse_header_line(p, sname, sizeof sname) == 0) {
+                schema_cur = 1;
+                continue;
+            }
+            if (schema_cur >= 0) {
+                schema_cur = -1;
+            }
             if (strncmp(p, "def ", 4) == 0) {
                 in_header = 0;
                 break;
@@ -452,6 +471,7 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
     int in_block = 0;
     int n = 0;
     int in_header = 1;
+    int schema_cur = -1;
 
     *out_count = 0;
     f = fopen(path, "r");
@@ -462,6 +482,13 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
     while (fgets(line, sizeof line, f)) {
         char *p;
         line_no++;
+        if (schema_cur >= 0 && (line[0] == ' ' || line[0] == '\t')) {
+            char fk[FGIR_OBJ_KEY_MAX + 1];
+            char fs[FGIR_SCHEMA_TYPE_SPEC_MAX + 1];
+            if (flat_schema_parse_field_line(line, fk, sizeof fk, fs, sizeof fs) == 0) {
+                continue;
+            }
+        }
         p = trim_local(line);
         if (in_block) {
             if (strncmp(p, "-->", 3) == 0) {
@@ -500,10 +527,19 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
             continue;
         }
         if (*p == '#') {
+            schema_cur = -1;
             in_header = 0;
             break;
         }
         if (in_header) {
+            char sname[FLAT_SCHEMA_NAME_MAX + 1];
+            if (flat_schema_parse_header_line(p, sname, sizeof sname) == 0) {
+                schema_cur = 1;
+                continue;
+            }
+            if (schema_cur >= 0) {
+                schema_cur = -1;
+            }
             if (strncmp(p, "def ", 4) == 0) {
                 in_header = 0;
                 break;
@@ -838,6 +874,13 @@ static int merge_entry(FgirProgram *out, const FgirProgram *entry, char *err, si
         if (append_block(out, &b, err, err_size) != 0) {
             return -1;
         }
+    }
+    for (i = 0; i < entry->schema_count; i++) {
+        if (out->schema_count >= FGIR_SCHEMA_MAX) {
+            snprintf(err, err_size, "too many schemas after link");
+            return -1;
+        }
+        out->schemas[out->schema_count++] = entry->schemas[i];
     }
     return 0;
 }

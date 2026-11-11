@@ -1,0 +1,8 @@
+<stock>:
+   qty: u16
+   product: t4
+
+#main
+  myStock:<stock> = {}
+  myStock.qty == null
+  OK

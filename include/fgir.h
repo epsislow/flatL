@@ -18,6 +18,19 @@
 #define FGIR_NATIVE_MODULE_LEN 64
 #define FGIR_NATIVE_ALIAS_LEN 64
 
+#define FGIR_SCHEMA_MAX 64
+#define FGIR_SCHEMA_NAME_MAX 63
+#define FGIR_SCHEMA_FIELD_MAX 128
+#define FGIR_SCHEMA_TYPE_SPEC_MAX 63
+#define FGIR_OBJ_KEY_MAX 127
+
+typedef struct {
+    char name[FGIR_SCHEMA_NAME_MAX + 1];
+    int field_count;
+    char field_keys[FGIR_SCHEMA_FIELD_MAX][FGIR_OBJ_KEY_MAX + 1];
+    char field_specs[FGIR_SCHEMA_FIELD_MAX][FGIR_SCHEMA_TYPE_SPEC_MAX + 1];
+} FgirSchemaDecl;
+
 typedef struct {
     char module[FGIR_NATIVE_MODULE_LEN];
     char alias[FGIR_NATIVE_ALIAS_LEN];
@@ -107,6 +120,8 @@ typedef struct {
     char mod_id[64];
     int export_count;
     char exports[FGIR_MAX_FUNCTIONS][FGIR_MAX_FUNC_NAME];
+    FgirSchemaDecl schemas[FGIR_SCHEMA_MAX];
+    int schema_count;
 } FgirProgram;
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);

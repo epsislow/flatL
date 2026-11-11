@@ -576,7 +576,7 @@ static int literal_to_value(const char *lit, FlatValue *out) {
 }
 
 int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, const char (*names)[64],
-                          const FlatStringPool *pool) {
+                          FlatStringPool *pool, FlatCollectionPool *coll) {
     char buf[512];
     char *oppos = NULL;
     char *lhs;
@@ -627,18 +627,22 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     lhs = trim(buf);
     rhs = trim(oppos + (op <= 2 ? 2 : 1));
 
-    li = find_var_index(lhs, var_count, names);
-    if (li >= 0) {
-        lv = vars[li];
-    } else if (literal_to_value(lhs, &lv) != 0) {
-        return 0;
-    }
-    if (literal_to_value(rhs, &rv) != 0) {
-        li = find_var_index(rhs, var_count, names);
+    if (flat_value_parse_assign_rhs(lhs, &lv, pool, coll, vars, var_count, names) != 0) {
+        li = find_var_index(lhs, var_count, names);
         if (li >= 0) {
-            rv = vars[li];
-        } else {
+            lv = vars[li];
+        } else if (literal_to_value(lhs, &lv) != 0) {
             return 0;
+        }
+    }
+    if (flat_value_parse_assign_rhs(rhs, &rv, pool, coll, vars, var_count, names) != 0) {
+        if (literal_to_value(rhs, &rv) != 0) {
+            li = find_var_index(rhs, var_count, names);
+            if (li >= 0) {
+                rv = vars[li];
+            } else {
+                return 0;
+            }
         }
     }
 

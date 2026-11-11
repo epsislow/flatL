@@ -4,6 +4,7 @@
 #include "fb_format.h"
 #include "fgir.h"
 #include "flat_value.h"
+#include "flat_slot_type.h"
 
 #include <stdint.h>
 
@@ -194,6 +195,8 @@ typedef struct {
     FlatCollectionPool *coll;
     FlatValue *vars;
     int var_count;
+    const FlatSlotType *var_slot_types;
+    const uint8_t *var_has_slot_type;
     const char (*var_names)[64];
     const char *inner;
     FlatValue *out;

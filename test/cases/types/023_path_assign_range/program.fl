@@ -1,0 +1,6 @@
+<stock>:
+   qty: u16
+
+#main
+  myStock:<stock> = {}
+  myStock.qty = 70000

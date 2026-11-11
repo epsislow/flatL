@@ -226,11 +226,12 @@ bin/flc -o /tmp/x.fb --dump-bc examples/order_flow.fl
 
 ### What gets printed
 
-1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**).  
+1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**; **v6** adds **`schm_off`** → **SCHM** schema catalog for typed `<schema>` binds).  
 2. **Block directory** — block id, code offset, resolved **BLBL** name when present (`#main` = id 0).  
 3. **Per-block bytecode** — for each instruction: IP, opcode name (`0xNN`), payload size, decoded payload per [SPECIFICATION.md §3](./SPECIFICATION.md#3-fb-binary-layout-v12).  
 4. **Optional native manifest** — FNUN units + FNAT (same as `flvm` lazy load metadata).  
 5. **FFUN** (v5) — user `def` table: name, impl/executor block ids, params, return slot, `func_vcx_slots` (metadata for tools and future **`func:callVM 1`**).
+6. **SCHM** (v6) — schema definitions (`schema_id` order); required when the program uses **`name:<schema>`**.
 
 Unknown or future opcodes (e.g. **`OP_CALL_FUNCTION`** in AM-1) print as hex with a clear label.
 

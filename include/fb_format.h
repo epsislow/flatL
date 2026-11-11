@@ -2,6 +2,7 @@
 #define FLAT_FB_FORMAT_H
 
 #include "fgir.h"
+#include "flat_schema.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -9,8 +10,9 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 5u
-#define FLAT_FB_HEADER_SIZE 28 /* v5: + ffun_off at 24 */
+#define FLAT_FB_FORMAT_VERSION 6u
+#define FLAT_FB_HEADER_SIZE 32 /* v6: + schm_off at 28; v5 was 28 without schm */
+#define FLAT_FB_HEADER_SIZE_V5 28
 #define FLAT_FB_HEADER_SIZE_V4 24
 #define FLAT_FB_HEADER_SIZE_V3 20
 #define FLAT_FB_FFUN_MAGIC 0x4e554646u /* 'FFUN' LE */
@@ -53,6 +55,7 @@ typedef struct {
     uint8_t *block_native_unit; /* heap; length block_count; FNUN section */
     FlatFbFunctionEntry *functions;
     uint16_t function_count;
+    FlatSchemaCatalog schemas;
 } FlatBytecode;
 
 size_t flat_fb_native_section_size(int decl_count, const FlatOptionalNativeDecl *decls);

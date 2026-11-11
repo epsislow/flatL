@@ -8,6 +8,7 @@
 #include "flat_native.h"
 #include "flat_native_use.h"
 #include "flat_slot_type.h"
+#include "flat_schema.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -238,6 +239,8 @@ static int count_var_slots(const FgirProgram *prog, uint32_t *out_slots, char *e
     return rc == 0 ? 0 : -1;
 }
 
+static const FlatSchemaCatalog *g_compile_schemas;
+
 typedef struct {
     uint8_t *buf;
     size_t cap;
@@ -425,7 +428,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 snprintf(err, err_size, "invalid assignment: %s", ins->text);
                 return -1;
             }
-            if (flat_bind_validate_t1_lhs(bind, err, err_size) != 0) {
+            if (flat_bind_validate_lhs(bind, g_compile_schemas, err, err_size) != 0) {
                 return -1;
             }
             if (tlen + 1 > sizeof payload) {
@@ -733,10 +736,12 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     size_t stream_base;
     FILE *f;
     int i;
+    FlatSchemaCatalog schema_catalog;
 
     if (!prog || !out_path) {
         return -1;
     }
+    memset(&schema_catalog, 0, sizeof schema_catalog);
     if (validate_free_in_program(prog, err, err_size) != 0) {
         return -1;
     }
@@ -752,6 +757,11 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     if (count_var_slots(prog, &var_slots, err, err_size) != 0) {
         return -1;
     }
+    if (flat_schema_build_catalog(prog->schemas, prog->schema_count, &schema_catalog, err,
+                                  err_size) != 0) {
+        return -1;
+    }
+    g_compile_schemas = &schema_catalog;
 
     offs = calloc((size_t)prog->block_count, sizeof(BlockOff));
     block_ids = calloc((size_t)prog->block_count, sizeof(uint32_t));
@@ -798,9 +808,11 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         uint32_t fnun_off = 0;
         uint32_t ffun_off = 0;
         uint32_t native_off = 0;
+        uint32_t schm_off = 0;
         size_t label_sec = 6;
         size_t fnun_sz = 0;
         size_t ffun_sz = 0;
+        size_t schm_sz = 0;
         int li;
 
         for (li = 0; li < prog->block_count; li++) {
@@ -862,8 +874,10 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         } else {
             ffun_off = (uint32_t)(labels_off + label_sec);
         }
+        schm_sz = flat_fb_schm_section_size(&schema_catalog);
+        schm_off = 0;
         if (prog->optional_native_count > 0) {
-            native_off = (uint32_t)(ffun_off + ffun_sz);
+            native_off = (uint32_t)(ffun_off + ffun_sz + schm_sz);
         }
         fwrite(magic, 1, 4, f);
         fwrite(&sentinel, 1, 1, f);
@@ -874,6 +888,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         fwrite(&labels_off, 1, 4, f);
         fwrite(&fnun_off, 1, 4, f);
         fwrite(&ffun_off, 1, 4, f);
+        fwrite(&schm_off, 1, 4, f);
         for (i = 0; i < prog->block_count; i++) {
             uint32_t id = block_ids[i];
             uint32_t off = (uint32_t)offs[i].abs_offset;
@@ -989,6 +1004,44 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                 return -1;
             }
             free(ftab);
+        }
+        schm_off = (uint32_t)ftell(f);
+        if (flat_fb_write_schm_section(f, &schema_catalog) != 0) {
+            fclose(f);
+            snprintf(err, err_size, "failed to write SCHM");
+            free(offs);
+            free(block_ids);
+            free(code.buf);
+            return -1;
+        }
+        if (fseek(f, 28, SEEK_SET) != 0 ||
+            fwrite(&schm_off, 1, 4, f) != 4) {
+            fclose(f);
+            snprintf(err, err_size, "failed to patch SCHM offset");
+            free(offs);
+            free(block_ids);
+            free(code.buf);
+            return -1;
+        }
+        if (prog->optional_native_count > 0) {
+            if (fseek(f, 0, SEEK_END) != 0) {
+                fclose(f);
+                snprintf(err, err_size, "failed to seek before FNAT");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            native_off = (uint32_t)ftell(f);
+            if (fseek(f, 8, SEEK_SET) != 0 || fwrite(&native_off, 1, 4, f) != 4) {
+                fclose(f);
+                snprintf(err, err_size, "failed to patch native offset");
+                free(offs);
+                free(block_ids);
+                free(code.buf);
+                return -1;
+            }
+            fseek(f, 0, SEEK_END);
         }
         if (native_off != 0 && prog->optional_native_count > 0) {
             if (flat_fb_write_native_section(f, prog->optional_native_count,

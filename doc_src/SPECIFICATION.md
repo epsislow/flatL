@@ -6,7 +6,7 @@ Consolidated from project design notes. Normative details will be refined as `fl
 
 **Related:** FGIR (Flat Graph Intermediate Representation) v1.0 · `.fb` bytecode & VM v1.1
 
-**Planned typed bind & schemas (T0, not implemented in VM):** [STRICT_TYPES.md](./STRICT_TYPES.md) · [TYPED_BIND.md](./TYPED_BIND.md) — opt-in `name:type`, `<schema>:`, slot contract per VCX, `freeze()` / `const`.
+**Typed bind & schemas (T1–T2 in VM):** [STRICT_TYPES.md](./STRICT_TYPES.md) · [TYPED_BIND.md](./TYPED_BIND.md) — opt-in `name:type`, **`<schema>:`** + **`name:<schema>`**, slot contract per VCX; `freeze()` / `const` still planned.
 
 ---
 
