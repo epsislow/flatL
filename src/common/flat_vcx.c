@@ -90,8 +90,14 @@ static void refresh_bind_from_active(FlatVcxRuntime *rt) {
     }
     act = &rt->contexts[rt->active_ix];
     *rt->bind.vars = act->vars;
-    *rt->bind.var_count = act->var_count;
     *rt->bind.var_slots_max = act->capacity;
+}
+
+static void adopt_active_var_count_to_bind(FlatVcxRuntime *rt) {
+    if (!rt || !rt->bind_attached || !rt->bind.var_count) {
+        return;
+    }
+    *rt->bind.var_count = rt->contexts[rt->active_ix].var_count;
 }
 
 static int value_same_storage(const FlatValue *a, const FlatValue *b) {
@@ -537,6 +543,7 @@ int flat_vcx_set(FlatVcxRuntime *rt, uint32_t ctx_id, char *panic_detail, size_t
     sync_bind_var_count_to_active(rt);
     rt->active_ix = ix;
     refresh_bind_from_active(rt);
+    adopt_active_var_count_to_bind(rt);
     return 0;
 }
 
@@ -1072,6 +1079,7 @@ fail:
     }
     if (rc == 0 && rt->active_ix == dst_ix && rt->bind_attached) {
         refresh_bind_from_active(rt);
+        adopt_active_var_count_to_bind(rt);
     }
     return rc;
 }
@@ -1273,6 +1281,7 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
     stage = NULL;
     if (rt->active_ix == dst_ix && rt->bind_attached) {
         refresh_bind_from_active(rt);
+        adopt_active_var_count_to_bind(rt);
     }
     return 0;
 
@@ -1316,6 +1325,7 @@ int flat_vcx_set_named_var(FlatVcxRuntime *rt, uint32_t ctx_id, const char *name
     }
     if (rt->contexts[rt->active_ix].id == ctx_id) {
         refresh_bind_from_active(rt);
+        adopt_active_var_count_to_bind(rt);
     }
     return 0;
 }

@@ -435,6 +435,8 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
                          const FlatSlotType *lhs_ty, int lhs_has_ty, int lhs_dynamic,
                          const char *lhs_dynamic_expr) {
     FlatSlotType contract;
+    FlatValue staged;
+    const FlatValue *use;
     int has_contract = 0;
     char chk[64];
     int i = find_var(st, name);
@@ -454,16 +456,16 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         }
         {
             const FlatSchemaCatalog *sc = st->bc ? &st->bc->schemas : NULL;
-            FlatValue bound = *val;
+            staged = *val;
             if (has_contract &&
-                flat_slot_type_check_value(&contract, val, st->pool, st->coll, sc, &bound, chk,
+                flat_slot_type_check_value(&contract, val, st->pool, st->coll, sc, &staged, chk,
                                            sizeof chk) != 0) {
                 snprintf(st->panic_reason, sizeof st->panic_reason, "%s", chk);
                 return -1;
             }
-            val = &bound;
+            use = &staged;
         }
-        if (flat_value_same_storage(&st->vars[i].val, val)) {
+        if (flat_value_same_storage(&st->vars[i].val, use)) {
             if (lhs_has_ty && lhs_ty && !st->vars[i].has_slot_type) {
                 st->vars[i].slot_type = *lhs_ty;
                 st->vars[i].has_slot_type = 1;
@@ -478,13 +480,13 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         if (st->vars[i].val.tag == VAL_FILE) {
             flat_file_release(&st->files, st->vars[i].val.u.file_id);
         }
-        flat_value_retain(st->coll, st->pool, val);
-        if (val->tag == VAL_FILE) {
-            flat_file_retain(&st->files, val->u.file_id);
+        flat_value_retain(st->coll, st->pool, use);
+        if (use->tag == VAL_FILE) {
+            flat_file_retain(&st->files, use->u.file_id);
         }
-        flat_value_live_replace(&st->live, &st->vars[i].val, val);
+        flat_value_live_replace(&st->live, &st->vars[i].val, use);
         flat_value_release(st->coll, st->pool, &st->vars[i].val);
-        st->vars[i].val = *val;
+        st->vars[i].val = *use;
         if (lhs_has_ty && lhs_ty) {
             st->vars[i].slot_type = *lhs_ty;
             st->vars[i].has_slot_type = 1;
@@ -497,10 +499,10 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
             }
         }
         if (st->io_ctx) {
-            flat_io_ctx_var_updated(st->io_ctx, i, val);
+            flat_io_ctx_var_updated(st->io_ctx, i, use);
         }
-        if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && val->tag == VAL_NUMBER) {
-            uint32_t iid = vm_number_to_u32(val->u.number);
+        if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && use->tag == VAL_NUMBER) {
+            uint32_t iid = vm_number_to_u32(use->u.number);
             if (iid >= 1u) {
                 flat_vm_instr_stack_push(iid);
             }
@@ -527,22 +529,22 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
     }
     {
         const FlatSchemaCatalog *sc = st->bc ? &st->bc->schemas : NULL;
-        FlatValue bound = *val;
+        staged = *val;
         if (has_contract &&
-            flat_slot_type_check_value(&contract, val, st->pool, st->coll, sc, &bound, chk,
+            flat_slot_type_check_value(&contract, val, st->pool, st->coll, sc, &staged, chk,
                                        sizeof chk) != 0) {
             snprintf(st->panic_reason, sizeof st->panic_reason, "%s", chk);
             return -1;
         }
-        val = &bound;
+        use = &staged;
     }
-    flat_value_retain(st->coll, st->pool, val);
-    if (val->tag == VAL_FILE) {
-        flat_file_retain(&st->files, val->u.file_id);
+    flat_value_retain(st->coll, st->pool, use);
+    if (use->tag == VAL_FILE) {
+        flat_file_retain(&st->files, use->u.file_id);
     }
-    flat_value_live_bind(&st->live, val);
+    flat_value_live_bind(&st->live, use);
     snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
-    st->vars[st->var_count].val = *val;
+    st->vars[st->var_count].val = *use;
     if (lhs_has_ty && lhs_ty) {
         st->vars[st->var_count].slot_type = *lhs_ty;
         st->vars[st->var_count].has_slot_type = 1;
@@ -560,11 +562,11 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         st->vars[st->var_count].slot_dynamic_expr[0] = '\0';
     }
     if (st->io_ctx) {
-        flat_io_ctx_var_updated(st->io_ctx, st->var_count, val);
+        flat_io_ctx_var_updated(st->io_ctx, st->var_count, use);
     }
     st->var_count++;
-    if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && val->tag == VAL_NUMBER) {
-        uint32_t iid = vm_number_to_u32(val->u.number);
+    if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && use->tag == VAL_NUMBER) {
+        uint32_t iid = vm_number_to_u32(use->u.number);
         if (iid >= 1u) {
             flat_vm_instr_stack_push(iid);
         }
@@ -862,9 +864,12 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             if (set_var_value(st, slot_name, &v, lhs_has_ty ? &lhs_ty : NULL, lhs_has_ty,
                               lhs_dynamic, lhs_dynamic ? lhs_dyn_expr : NULL) != 0) {
                 rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            } else {
+                rc = 0;
             }
+        } else {
+            rc = 0;
         }
-        rc = 0;
         goto done;
     }
     if (flat_value_parse_assign_rhs(rhs, &v, st->pool, st->coll, vals, st->var_count, names) != 0) {
@@ -1570,6 +1575,8 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     FlatValue result;
     FlatIoStatus ios;
     FlatNativeCtx ctx;
+
+    memset(&result, 0, sizeof result);
     FlatValue *vals = NULL;
     char (*names)[64] = NULL;
     FlatSlotType *slot_types = NULL;
@@ -1698,12 +1705,12 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         }
         return 1;
     }
-#ifndef FLAT_WASM_BUILD
     /*
      * Host locale can use ',' as decimal separator; strtod then rejects '.' from
      * piped test input → io.parse / json parse failures on Windows.
      */
     (void)setlocale(LC_ALL, "C");
+#ifndef FLAT_WASM_BUILD
     flat_port_stdio_setup();
 #endif
     flat_native_runtime_reset();

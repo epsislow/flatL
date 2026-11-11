@@ -352,6 +352,9 @@ fleditor-wasm-multifile-smoke: fleditor-wasm
 fleditor-wasm-order-flow-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_order_flow_smoke.mjs
 
+fleditor-wasm-var-smoke: fleditor-wasm
+	$(NODE) test/fleditor/wasm_var_smoke.mjs
+
 clean:
 	rm -rf $(BINDIR)
 	rm -f $(MIN_OK_FB)
