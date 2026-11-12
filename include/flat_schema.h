@@ -40,6 +40,12 @@ typedef struct FlatSchemaCatalog {
 /* Parse `<name>:` header into name (without brackets). */
 int flat_schema_parse_header_line(const char *line, char *name_out, size_t name_sz);
 
+/* Non-zero when line is `<name>` with valid name but missing trailing `:`. */
+int flat_schema_header_missing_colon(const char *line, char *name_out, size_t name_sz);
+
+/* Trimmed schema body line (no leading indent): blank/--, ident-only, or empty spec. */
+int flat_schema_body_line_ignorable(const char *trimmed);
+
 /* Parse field line `key: type` (non-indented rejected). */
 int flat_schema_parse_field_line(const char *line, char *key_out, size_t key_sz, char *spec_out,
                                  size_t spec_sz);

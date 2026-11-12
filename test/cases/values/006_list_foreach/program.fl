@@ -5,4 +5,5 @@
   OK
 
 #loop
+  io.outln(x)
   next

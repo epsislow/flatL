@@ -7,5 +7,6 @@ use native math with M
   OK
 
 #loop
+  io.outln(x)
   M.calc('sum + x') -> sum
   next

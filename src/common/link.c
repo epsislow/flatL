@@ -290,8 +290,27 @@ static int scan_header_fmod_uses(const char *path, const FlatLinkOptions *opts, 
         char *p;
         line_no++;
         if (schema_cur >= 0 && (line[0] == ' ' || line[0] == '\t')) {
+            char body[FGIR_MAX_LINE + 8];
             char fk[FGIR_OBJ_KEY_MAX + 1];
             char fs[FGIR_SCHEMA_TYPE_SPEC_MAX + 1];
+            char *bp;
+
+            if (in_block) {
+                bp = trim_local(line);
+                if (strncmp(bp, "-->", 3) == 0) {
+                    in_block = 0;
+                }
+                continue;
+            }
+            snprintf(body, sizeof body, "%s", line);
+            bp = trim_local(body);
+            if (strncmp(bp, "--<", 3) == 0) {
+                in_block = 1;
+                continue;
+            }
+            if (flat_schema_body_line_ignorable(bp)) {
+                continue;
+            }
             if (flat_schema_parse_field_line(line, fk, sizeof fk, fs, sizeof fs) == 0) {
                 continue;
             }
@@ -483,8 +502,27 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
         char *p;
         line_no++;
         if (schema_cur >= 0 && (line[0] == ' ' || line[0] == '\t')) {
+            char body[FGIR_MAX_LINE + 8];
             char fk[FGIR_OBJ_KEY_MAX + 1];
             char fs[FGIR_SCHEMA_TYPE_SPEC_MAX + 1];
+            char *bp;
+
+            if (in_block) {
+                bp = trim_local(line);
+                if (strncmp(bp, "-->", 3) == 0) {
+                    in_block = 0;
+                }
+                continue;
+            }
+            snprintf(body, sizeof body, "%s", line);
+            bp = trim_local(body);
+            if (strncmp(bp, "--<", 3) == 0) {
+                in_block = 1;
+                continue;
+            }
+            if (flat_schema_body_line_ignorable(bp)) {
+                continue;
+            }
             if (flat_schema_parse_field_line(line, fk, sizeof fk, fs, sizeof fs) == 0) {
                 continue;
             }
@@ -546,6 +584,12 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
             }
             if (strncmp(p, "func:", 5) == 0 || strncmp(p, "mod(", 4) == 0 || strncmp(p, "export", 6) == 0) {
                 continue;
+            }
+            if (flat_schema_header_missing_colon(p, sname, sizeof sname)) {
+                snprintf(err, err_size, "%s:%d: expected ':' after schema <%s>", path, line_no,
+                         sname);
+                fclose(f);
+                return -1;
             }
             snprintf(err, err_size, "%s:%d: expected use directive or block", path, line_no);
             fclose(f);

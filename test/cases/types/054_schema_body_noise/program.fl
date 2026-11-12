@@ -1,0 +1,14 @@
+<stock>:
+  qty: u16
+  -- field comment
+  --<
+  block comment in schema
+  -->
+  
+  orphanIdent
+  emptySpec:
+
+#main
+  s:<stock> = { qty: 7 }
+  s.qty == 7
+  OK

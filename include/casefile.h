@@ -6,6 +6,7 @@
 #define FLAT_CASE_MAX_PATH 512
 #define FLAT_CASE_MAX_CMD 1024
 #define FLAT_CASE_MAX_CHECKS 16
+#define FLAT_CASE_MAX_STDOUT_EXTRA 7
 #define FLAT_CASE_MAX_DESC 256
 #define FLAT_CASE_SUITE_LEN 64
 #define FLAT_CASE_CATEG_LEN 32
@@ -31,6 +32,9 @@ typedef struct {
     char cmd[FLAT_CASE_MAX_CMD];
     int expect_exit;
     char stdout_contains[FLAT_CASE_MAX_DESC];
+    char stdout_contains_extra[FLAT_CASE_MAX_STDOUT_EXTRA][FLAT_CASE_MAX_DESC];
+    int stdout_contains_extra_count;
+    char stdout_must_not_contain[FLAT_CASE_MAX_DESC];
     char stderr_contains[FLAT_CASE_MAX_DESC];
 
     char pipeline_compile[FLAT_CASE_MAX_CMD];

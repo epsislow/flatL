@@ -477,6 +477,24 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             break;
         }
+        case FGIR_PANIC_RESET:
+            if (emit_instr(code, OP_PANIC_RESET, NULL, 0) != 0) {
+                return -1;
+            }
+            break;
+        case FGIR_PANIC_REASON: {
+            char var[64];
+            uint8_t plen;
+            if (flat_parse_panic_reason_bind(ins->text, var, sizeof var) != 0) {
+                snprintf(err, err_size, "invalid panicReason bind: %s", ins->text);
+                return -1;
+            }
+            plen = (uint8_t)(strlen(var) + 1);
+            if (emit_instr(code, OP_PANIC_REASON, var, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
         case FGIR_GUARD: {
             uint8_t payload[4 + FGIR_MAX_LINE];
             int bt_idx;

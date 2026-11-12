@@ -1,0 +1,18 @@
+#main
+  panicReason() -> r
+  io.outln(r)
+  tag = 'not-a-number'
+  for(tag, i, '#step')
+  OK
+
+#panic.any
+  panicReason() -> r
+  io.outln(r)
+  panicReset()
+  panicReason() -> r
+  io.outln(r)
+  io.outln('handled')
+  OK
+
+#step
+  next

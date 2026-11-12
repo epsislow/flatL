@@ -68,6 +68,7 @@ typedef struct {
     ForeachFrame loops[VM_MAX_FOREACH];
     int loop_sp;
     char panic_reason[64];
+    char caught_panic_reason[64];
     int unhandled_panic;
     FlatFileTable files;
     FlatIOContext *io_ctx;
@@ -199,10 +200,28 @@ static uint32_t flat_label_hash(const char *label) {
     return h;
 }
 
+static void vm_note_caught_panic(VmState *st, const char *reason) {
+    if (!st) {
+        return;
+    }
+    if (!reason || reason[0] == '\0') {
+        reason = "panic";
+    }
+    snprintf(st->caught_panic_reason, sizeof st->caught_panic_reason, "%s", reason);
+}
+
+static void vm_clear_caught_panic(VmState *st) {
+    if (st) {
+        st->caught_panic_reason[0] = '\0';
+    }
+}
+
 static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *reason,
                              int trace) {
     size_t i;
     uint32_t want = flat_label_hash("#panic.any");
+
+    vm_note_caught_panic(st, reason);
 
     if (trace) {
         {
@@ -575,6 +594,32 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         flat_vcx_runtime_sync_bind_var_count(st->vcx);
     }
     return 0;
+}
+
+static int apply_panic_reason(VmState *st, const char *bind_name) {
+    FlatValue v;
+
+    if (!st || !bind_name || !bind_name[0]) {
+        return -1;
+    }
+    memset(&v, 0, sizeof v);
+    if (st->caught_panic_reason[0] == '\0') {
+        if (flat_value_set_str_inline(&v, "", 0) != 0) {
+            return -1;
+        }
+    } else {
+        size_t len = strlen(st->caught_panic_reason);
+        if (len > FLAT_INLINE_STR_MAX) {
+            uint32_t id = 0u;
+            if (flat_pool_alloc_copy(st->pool, st->caught_panic_reason, len, &id) != 0) {
+                return -1;
+            }
+            flat_value_set_str_ref(&v, id);
+        } else if (flat_value_set_str_inline(&v, st->caught_panic_reason, len) != 0) {
+            return -1;
+        }
+    }
+    return set_var_value(st, bind_name, &v, NULL, 0, 0, NULL);
 }
 
 static int apply_free(VmState *st, const char *varname) {
@@ -1160,6 +1205,10 @@ static const char *opcode_name(uint8_t opcode) {
         return "NATIVE";
     case OP_FREE:
         return "FREE";
+    case OP_PANIC_RESET:
+        return "PANIC_RESET";
+    case OP_PANIC_REASON:
+        return "PANIC_REASON";
     case OP_JUMP:
         return "JUMP";
     case OP_CALL_FUNCTION:
@@ -1824,10 +1873,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_FAIL:
             return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL, opts);
         case OP_NEXT:
-            if (st.call_sp > 0) {
-                ip = st.calls[--st.call_sp].return_ip;
-                continue;
-            }
+            /* Loop continuation wins over call return: a for/foreach body may live
+             * inside an OP_CALL block (call #worker with for in the body). */
             if (st.loop_sp > 0) {
                 ForeachFrame *fr = &st.loops[st.loop_sp - 1];
                 fr->index++;
@@ -1846,6 +1893,10 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 foreach_frame_end(&st, fr);
                 st.loop_sp--;
                 ip = fr->resume_ip;
+                continue;
+            }
+            if (st.call_sp > 0) {
+                ip = st.calls[--st.call_sp].return_ip;
                 continue;
             }
             return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_COMPLETE, opts);
@@ -1879,6 +1930,21 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         }
         case OP_FREE: {
             apply_free(&st, (const char *)payload);
+            ip += 2u + payload_size;
+            continue;
+        }
+        case OP_PANIC_RESET: {
+            vm_clear_caught_panic(&st);
+            ip += 2u + payload_size;
+            continue;
+        }
+        case OP_PANIC_REASON: {
+            if (apply_panic_reason(&st, (const char *)payload) != 0) {
+                if (vm_jump_panic_any(&st, bc, &ip, st.panic_reason, trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
             ip += 2u + payload_size;
             continue;
         }

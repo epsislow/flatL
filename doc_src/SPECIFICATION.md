@@ -209,6 +209,13 @@ On an **infrastructure** fault at index *n* in block `#target`, the runtime rout
 
 If no handler exists for that index, control falls through to **`#panic.any`** (e.g. transaction rollback via `tstop()`).
 
+**Panic reason intrinsics** (language builtins, not optional natives):
+
+- **`panicReason() -> name`** — binds the **last infrastructure panic reason** (same string as VM / unhandled stderr: `io.parse`, `for.ntimes_type`, qualified native name, `type.assign.*`, …). Empty string when none was recorded.
+- **`panicReset()`** — clears the stored reason; the next **`panicReason()`** returns `""` until another panic is recorded.
+
+The reason is updated on each PANIC routed to a handler (`#panic.*` / `#panic.any`). It is **not** cleared when the handler returns unless the program calls **`panicReset()`**.
+
 Example:
 
 ```text

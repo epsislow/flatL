@@ -65,6 +65,78 @@ int flat_schema_parse_header_line(const char *line, char *name_out, size_t name_
     return 0;
 }
 
+int flat_schema_header_missing_colon(const char *line, char *name_out, size_t name_sz) {
+    const char *p;
+    const char *end;
+    size_t nlen;
+    char name_buf[FLAT_SCHEMA_NAME_MAX + 1];
+
+    if (!line) {
+        return 0;
+    }
+    p = line;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '<') {
+        return 0;
+    }
+    p++;
+    end = strchr(p, '>');
+    if (!end) {
+        return 0;
+    }
+    nlen = (size_t)(end - p);
+    if (nlen == 0 || nlen >= sizeof name_buf) {
+        return 0;
+    }
+    memcpy(name_buf, p, nlen);
+    name_buf[nlen] = '\0';
+    {
+        const char *rest = end + 1;
+        while (*rest && isspace((unsigned char)*rest)) {
+            rest++;
+        }
+        if (*rest == ':') {
+            return 0;
+        }
+        if (*rest != '\0') {
+            return 0;
+        }
+    }
+    if (name_out && name_sz > 0) {
+        snprintf(name_out, name_sz, "%s", name_buf);
+    }
+    return 1;
+}
+
+int flat_schema_body_line_ignorable(const char *trimmed) {
+    char buf[FGIR_MAX_LINE + 8];
+    char *colon;
+    char *spec;
+
+    if (!trimmed || !trimmed[0]) {
+        return 1;
+    }
+    snprintf(buf, sizeof buf, "%s", trimmed);
+    trimmed = trim_inplace(buf);
+    if (!trimmed[0]) {
+        return 1;
+    }
+    if (trimmed[0] == '-' && trimmed[1] == '-') {
+        return 1;
+    }
+    colon = strchr(trimmed, ':');
+    if (!colon) {
+        return 1;
+    }
+    spec = trim_inplace(colon + 1);
+    if (!spec[0]) {
+        return 1;
+    }
+    return 0;
+}
+
 int flat_schema_parse_field_line(const char *line, char *key_out, size_t key_sz, char *spec_out,
                                  size_t spec_sz) {
     char buf[256];

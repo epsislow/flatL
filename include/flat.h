@@ -20,7 +20,9 @@ typedef enum {
     OP_JUMP          = 0x0D, /* uint32 target block IP */
     OP_CALL_BLOCK    = 0x0E, /* block id expr NUL + bind name NUL (may be empty) */
     OP_NEXT          = 0x0F, /* next for/for-each iteration (was OP_RETURN in loop body) */
-    OP_CALL_FUNCTION = 0x10  /* u16 func_index + u8 argc + u8 global + ret\\0 + formal names\\0… */
+    OP_CALL_FUNCTION = 0x10, /* u16 func_index + u8 argc + u8 global + ret\\0 + formal names\\0… */
+    OP_PANIC_RESET   = 0x11,
+    OP_PANIC_REASON  = 0x12  /* bind var name NUL-terminated */
 } OpCode;
 
 /* Line modifiers on native / assign-native lines (see SPECIFICATION.md). */

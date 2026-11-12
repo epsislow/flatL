@@ -1,0 +1,13 @@
+#main
+  call #worker
+  io.outln('main-done')
+  OK
+
+#worker
+  for(3, i, '#step')
+  io.outln('worker-done')
+  return
+
+#step
+  io.outln(i)
+  next

@@ -6,6 +6,7 @@
   OK
 
 #loop
+  io.outln('body')
   next
 
 #sub

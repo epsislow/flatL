@@ -42,6 +42,37 @@ static int line_is_line_comment(const char *p) {
     return line_starts_with(p, "--") && !line_is_block_comment_open(p);
 }
 
+static int parse_schema_missing_colon_err(const char *path, int line_no, const char *line,
+                                        char *err, size_t err_size) {
+    char sname[FLAT_SCHEMA_NAME_MAX + 1];
+
+    if (!flat_schema_header_missing_colon(line, sname, sizeof sname)) {
+        return 0;
+    }
+    snprintf(err, err_size, "%s:%d: expected ':' after schema <%s>", path, line_no, sname);
+    return 1;
+}
+
+static int try_begin_schema(FgirProgram *out, const char *path, int line_no, const char *line,
+                            int *schema_cur, char *err, size_t err_size) {
+    char sname[FLAT_SCHEMA_NAME_MAX + 1];
+
+    if (flat_schema_parse_header_line(line, sname, sizeof sname) == 0) {
+        if (out->schema_count >= FGIR_SCHEMA_MAX) {
+            snprintf(err, err_size, "%s:%d: too many schemas", path, line_no);
+            return -1;
+        }
+        *schema_cur = out->schema_count++;
+        snprintf(out->schemas[*schema_cur].name, sizeof out->schemas[*schema_cur].name, "%s", sname);
+        out->schemas[*schema_cur].field_count = 0;
+        return 1;
+    }
+    if (parse_schema_missing_colon_err(path, line_no, line, err, err_size)) {
+        return -1;
+    }
+    return 0;
+}
+
 static int starts_with_kw(const char *s, const char *kw) {
     size_t n = strlen(kw);
     return strncmp(s, kw, n) == 0 &&
@@ -95,9 +126,101 @@ int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz) {
     return 0;
 }
 
+int flat_parse_panic_reset_line(const char *line) {
+    const char *p;
+
+    if (!line) {
+        return -1;
+    }
+    if (strncmp(line, "panicReset", 10) != 0) {
+        return -1;
+    }
+    p = line + 10;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '(') {
+        return -1;
+    }
+    p++;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != ')') {
+        return -1;
+    }
+    p++;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    return (*p == '\0') ? 0 : -1;
+}
+
+int flat_parse_panic_reason_bind(const char *line, char *var_out, size_t var_sz) {
+    const char *p;
+    const char *arrow;
+    const char *start;
+    const char *end;
+
+    if (!line || !var_out || var_sz == 0) {
+        return -1;
+    }
+    if (strncmp(line, "panicReason", 11) != 0) {
+        return -1;
+    }
+    p = line + 11;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '(') {
+        return -1;
+    }
+    p++;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != ')') {
+        return -1;
+    }
+    p++;
+    arrow = strstr(p, "->");
+    if (!arrow) {
+        return -1;
+    }
+    p = arrow + 2;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    start = p;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-')) {
+        p++;
+    }
+    end = p;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '\0' || end == start) {
+        return -1;
+    }
+    snprintf(var_out, var_sz, "%.*s", (int)(end - start), start);
+    if (strcmp(var_out, "null") == 0 || strcmp(var_out, "true") == 0 || strcmp(var_out, "false") == 0) {
+        return -1;
+    }
+    return 0;
+}
+
 static int is_free_line(const char *line) {
     char tmp[64];
     return flat_parse_free_varname(line, tmp, sizeof tmp) == 0;
+}
+
+static int is_panic_reset_line(const char *line) {
+    return flat_parse_panic_reset_line(line) == 0;
+}
+
+static int is_panic_reason_line(const char *line) {
+    char tmp[64];
+    return flat_parse_panic_reason_bind(line, tmp, sizeof tmp) == 0;
 }
 
 static int assign_rhs_is_native_call(const char *line) {
@@ -175,6 +298,12 @@ static FgirInstrKind classify(const char *line) {
     }
     if (starts_with_kw(line, "jump")) {
         return FGIR_JUMP;
+    }
+    if (is_panic_reason_line(line)) {
+        return FGIR_PANIC_REASON;
+    }
+    if (is_panic_reset_line(line)) {
+        return FGIR_PANIC_RESET;
     }
     if (strstr(line, "->") != NULL) {
         return FGIR_ASSIGN;
@@ -412,6 +541,29 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             FgirSchemaDecl *sd = &out->schemas[schema_cur];
             char fkey[FGIR_OBJ_KEY_MAX + 1];
             char fspec[FGIR_SCHEMA_TYPE_SPEC_MAX + 1];
+            char body[FGIR_MAX_LINE + 8];
+            char *bp;
+
+            if (in_block_comment) {
+                bp = trim(line);
+                if (line_is_block_comment_close(bp)) {
+                    in_block_comment = 0;
+                } else if (line_is_block_comment_open(bp)) {
+                    snprintf(err, err_size, "%s:%d: nested block comment", path, line_no);
+                    fclose(f);
+                    return -1;
+                }
+                continue;
+            }
+            snprintf(body, sizeof body, "%s", line);
+            bp = trim(body);
+            if (line_is_block_comment_open(bp)) {
+                in_block_comment = 1;
+                continue;
+            }
+            if (flat_schema_body_line_ignorable(bp)) {
+                continue;
+            }
             if (flat_schema_parse_field_line(line, fkey, sizeof fkey, fspec, sizeof fspec) != 0 ||
                 sd->field_count >= FGIR_SCHEMA_FIELD_MAX) {
                 snprintf(err, err_size, "%s:%d: bad schema field", path, line_no);
@@ -449,17 +601,12 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             continue;
         }
         if (cur < 0) {
-            char sname[FLAT_SCHEMA_NAME_MAX + 1];
-            if (flat_schema_parse_header_line(p, sname, sizeof sname) == 0) {
-                if (out->schema_count >= FGIR_SCHEMA_MAX) {
-                    snprintf(err, err_size, "%s:%d: too many schemas", path, line_no);
-                    fclose(f);
-                    return -1;
-                }
-                schema_cur = out->schema_count++;
-                snprintf(out->schemas[schema_cur].name, sizeof out->schemas[schema_cur].name, "%s",
-                         sname);
-                out->schemas[schema_cur].field_count = 0;
+            int sr = try_begin_schema(out, path, line_no, p, &schema_cur, err, err_size);
+            if (sr < 0) {
+                fclose(f);
+                return -1;
+            }
+            if (sr > 0) {
                 continue;
             }
             if (schema_cur >= 0) {
@@ -467,17 +614,12 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             }
         }
         if (in_header) {
-            char sname_hdr[FLAT_SCHEMA_NAME_MAX + 1];
-            if (flat_schema_parse_header_line(p, sname_hdr, sizeof sname_hdr) == 0) {
-                if (out->schema_count >= FGIR_SCHEMA_MAX) {
-                    snprintf(err, err_size, "%s:%d: too many schemas", path, line_no);
-                    fclose(f);
-                    return -1;
-                }
-                schema_cur = out->schema_count++;
-                snprintf(out->schemas[schema_cur].name, sizeof out->schemas[schema_cur].name, "%s",
-                         sname_hdr);
-                out->schemas[schema_cur].field_count = 0;
+            int sr = try_begin_schema(out, path, line_no, p, &schema_cur, err, err_size);
+            if (sr < 0) {
+                fclose(f);
+                return -1;
+            }
+            if (sr > 0) {
                 continue;
             }
             if (line_is_use_directive(p)) {

@@ -3,5 +3,5 @@
   foreach(xs, k, '#loop')
   OK
 #loop
-  io.out(k)
+  io.outln(k)
   next

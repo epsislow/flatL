@@ -7,5 +7,5 @@ use native obj with O
   OK
 
 #each
-  io.out(t)
+  io.outln(t)
   next

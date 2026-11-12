@@ -77,8 +77,23 @@ static void apply_kv(FlatCase *c, const char *key, char *val) {
         snprintf(c->cmd, sizeof c->cmd, "%s", val);
     } else if (strcmp(key, "expect_exit") == 0) {
         c->expect_exit = atoi(val);
-    } else if (strcmp(key, "stdout_contains") == 0) {
-        snprintf(c->stdout_contains, sizeof c->stdout_contains, "%s", val);
+    } else if (strncmp(key, "stdout_contains", 15) == 0) {
+        if (strcmp(key, "stdout_contains") == 0) {
+            snprintf(c->stdout_contains, sizeof c->stdout_contains, "%s", val);
+        } else if (key[15] == '_' && key[16] != '\0') {
+            int n = atoi(key + 16);
+            int ix;
+            if (n >= 2 && n <= FLAT_CASE_MAX_STDOUT_EXTRA + 1) {
+                ix = n - 2;
+                snprintf(c->stdout_contains_extra[ix], sizeof c->stdout_contains_extra[ix], "%s",
+                         val);
+                if (c->stdout_contains_extra_count < ix + 1) {
+                    c->stdout_contains_extra_count = ix + 1;
+                }
+            }
+        }
+    } else if (strcmp(key, "stdout_must_not_contain") == 0) {
+        snprintf(c->stdout_must_not_contain, sizeof c->stdout_must_not_contain, "%s", val);
     } else if (strcmp(key, "stderr_contains") == 0) {
         snprintf(c->stderr_contains, sizeof c->stderr_contains, "%s", val);
     } else if (strcmp(key, "source") == 0) {
@@ -233,6 +248,23 @@ static int check_output(const char *hay, const char *needle, char *err, int err_
     }
     if (!hay || !strstr(hay, needle)) {
         snprintf(err, (size_t)err_size, "output missing substring: %s", needle);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_stdout_all(const FlatCase *c, const char *out, char *err, int err_size) {
+    int i;
+    if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+        return -1;
+    }
+    for (i = 0; i < c->stdout_contains_extra_count; i++) {
+        if (check_output(out, c->stdout_contains_extra[i], err, err_size) != 0) {
+            return -1;
+        }
+    }
+    if (c->stdout_must_not_contain[0] != '\0' && out && strstr(out, c->stdout_must_not_contain)) {
+        snprintf(err, (size_t)err_size, "output must not contain: %s", c->stdout_must_not_contain);
         return -1;
     }
     return 0;
@@ -426,7 +458,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             timing_finish(timing, t_case, measure);
             return -1;
         }
-        if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+        if (check_stdout_all(c, out, err, err_size) != 0) {
             timing_finish(timing, t_case, measure);
             return -1;
         }
@@ -503,7 +535,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
-            if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+            if (check_stdout_all(c, out, err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
@@ -563,7 +595,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
-            if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+            if (check_stdout_all(c, out, err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
@@ -652,7 +684,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             timing_finish(timing, t_case, measure);
             return -1;
         }
-        if (check_output(out, c->stdout_contains, err, err_size) != 0) {
+        if (check_stdout_all(c, out, err, err_size) != 0) {
             timing_finish(timing, t_case, measure);
             return -1;
         }
