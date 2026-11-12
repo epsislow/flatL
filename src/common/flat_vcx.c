@@ -1,5 +1,7 @@
 #include "flat_vcx.h"
 #include "flat_schema.h"
+#include "flat_value.h"
+#include "flat_schema.h"
 #include "flat_file.h"
 #include "flat_mem_stats.h"
 #include "flat_value.h"
@@ -1345,6 +1347,271 @@ int flat_vcx_set_named_var(FlatVcxRuntime *rt, uint32_t ctx_id, const char *name
         return -1;
     }
     if (rt->contexts[rt->active_ix].id == ctx_id) {
+        refresh_bind_from_active(rt);
+        adopt_active_var_count_to_bind(rt);
+    }
+    return 0;
+}
+
+static int vcx_value_to_name(const FlatValue *v, FlatStringPool *pool, char *out, size_t out_sz) {
+    if (!v || !out || out_sz == 0) {
+        return -1;
+    }
+    if (v->tag == VAL_STR_INLINE) {
+        if (v->u.ins.len == 0) {
+            return -1;
+        }
+        snprintf(out, out_sz, "%s", v->u.ins.bytes);
+        return 0;
+    }
+    if (v->tag == VAL_STR_REF && pool) {
+        if (flat_value_get_cstr(v, pool, out, out_sz) != 0 || out[0] == '\0') {
+            return -1;
+        }
+        return 0;
+    }
+    return -1;
+}
+
+static int vcx_read_name_list(FlatVcxRuntime *rt, uint32_t ctx_id, const char *list_var,
+                              char names[16][FLAT_VAR_NAME_MAX + 1], int *out_n,
+                              FlatCollectionPool *coll, FlatStringPool *pool,
+                              FlatFileTable *files, char *panic, size_t panic_sz) {
+    FlatValue v;
+    int len;
+    int i;
+
+    *out_n = 0;
+    if (flat_vcx_get_var(rt, ctx_id, list_var, &v, coll, pool, files, panic, panic_sz) != 0) {
+        return -1;
+    }
+    if (v.tag != VAL_LIST) {
+        snprintf(panic, panic_sz, "vcx.bindCallParams.list");
+        return -1;
+    }
+    if (flat_list_len(coll, v.u.coll_id, &len) != 0 || len < 0 || len > 16) {
+        snprintf(panic, panic_sz, "vcx.bindCallParams.list");
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        FlatValue item;
+        if (flat_list_get(coll, v.u.coll_id, i, &item) != 0) {
+            return -1;
+        }
+        if (vcx_value_to_name(&item, pool, names[i], sizeof names[i]) != 0) {
+            snprintf(panic, panic_sz, "vcx.bindCallParams.list");
+            return -1;
+        }
+    }
+    flat_value_release(coll, pool, &v);
+    *out_n = len;
+    return 0;
+}
+
+static int vcx_bind_one(FlatVcxRuntime *rt, FlatVcxContext *dst, const char *dst_name,
+                        FlatVcxContext *src, const char *src_name, int typed,
+                        const char *type_spec, const FlatSchemaCatalog *schemas,
+                        FlatCollectionPool *coll, FlatStringPool *pool, FlatFileTable *files,
+                        FlatMemLiveStats *live, char *panic, size_t panic_sz) {
+    int svi = ctx_find_var(src, src_name);
+    int dvi;
+    FlatSlotType contract;
+    FlatValue staged;
+    FlatValue checked;
+    const FlatValue *use;
+    char chk[64];
+
+    if (svi < 0) {
+        snprintf(panic, panic_sz, "vcx.bindCallParams.missing");
+        return -1;
+    }
+    staged = src->vars[svi].val;
+    flat_value_retain(coll, pool, &staged);
+    use = &staged;
+    if (typed && type_spec && type_spec[0] != '\0') {
+        flat_slot_type_clear(&contract);
+        if (flat_slot_type_parse_spec(type_spec, &contract, schemas, panic, panic_sz) != 0) {
+            flat_value_release(coll, pool, &staged);
+            snprintf(panic, panic_sz, "type.call.arg");
+            return -1;
+        }
+        checked = staged;
+        if (flat_slot_type_check_value(&contract, &staged, pool, coll, schemas, &checked, chk,
+                                       sizeof chk) != 0) {
+            flat_value_release(coll, pool, &staged);
+            snprintf(panic, panic_sz, "%s", chk[0] ? chk : "type.call.arg");
+            return -1;
+        }
+        use = &checked;
+    }
+    if (ctx_set_var(rt, dst, dst_name, use, coll, pool, files, live, panic, panic_sz) != 0) {
+        flat_value_release(coll, pool, &staged);
+        return -1;
+    }
+    dvi = ctx_find_var(dst, dst_name);
+    if (dvi >= 0 && typed && type_spec && type_spec[0] != '\0') {
+        if (flat_slot_type_parse_spec(type_spec, &dst->vars[dvi].slot_type, schemas, NULL, 0) == 0) {
+            dst->vars[dvi].has_slot_type = 1;
+            dst->vars[dvi].slot_dynamic = 0;
+            dst->vars[dvi].slot_dynamic_expr[0] = '\0';
+        }
+    }
+    flat_value_release(coll, pool, &staged);
+    return 0;
+}
+
+int flat_vcx_bind_call_params(FlatVcxRuntime *rt, uint32_t instr_id, uint32_t dst_id,
+                              const FlatBytecode *bc, FlatCollectionPool *coll,
+                              FlatStringPool *pool, FlatFileTable *files, FlatMemLiveStats *live,
+                              char *panic_detail, size_t panic_sz) {
+    int src_ix;
+    int dst_ix;
+    FlatVcxContext *src;
+    FlatVcxContext *dst;
+    FlatValue idxv;
+    uint32_t fi;
+    const FlatFbFunctionEntry *fn;
+    char src_names[16][FLAT_VAR_NAME_MAX + 1];
+    char dst_names[16][FLAT_VAR_NAME_MAX + 1];
+    int sn = 0;
+    int dn = 0;
+    int i;
+    FlatValue nullv;
+    const FlatSchemaCatalog *schemas;
+
+    if (!rt || !bc || !bc->functions) {
+        return -1;
+    }
+    src_ix = ctx_index_by_id(rt, instr_id);
+    dst_ix = ctx_index_by_id(rt, dst_id);
+    if (src_ix < 0 || dst_ix < 0) {
+        snprintf(panic_detail, panic_sz, "vcx.bindCallParams.ctx");
+        return -1;
+    }
+    src = &rt->contexts[src_ix];
+    dst = &rt->contexts[dst_ix];
+    schemas = &bc->schemas;
+    if (flat_vcx_get_var(rt, instr_id, "__fl_funcIndex", &idxv, coll, pool, files, panic_detail,
+                         panic_sz) != 0 ||
+        idxv.tag != VAL_NUMBER) {
+        snprintf(panic_detail, panic_sz, "vcx.bindCallParams.meta");
+        return -1;
+    }
+    fi = (uint32_t)idxv.u.number;
+    flat_value_release(coll, pool, &idxv);
+    if (fi >= bc->function_count) {
+        snprintf(panic_detail, panic_sz, "vcx.bindCallParams.meta");
+        return -1;
+    }
+    fn = &bc->functions[fi];
+    if (vcx_read_name_list(rt, instr_id, "paramSrcNames", src_names, &sn, coll, pool, files,
+                           panic_detail, panic_sz) != 0 ||
+        vcx_read_name_list(rt, instr_id, "funcParamNames", dst_names, &dn, coll, pool, files,
+                           panic_detail, panic_sz) != 0) {
+        return -1;
+    }
+    if (sn != dn || sn != (int)fn->param_count) {
+        snprintf(panic_detail, panic_sz, "vcx.bindCallParams.length");
+        return -1;
+    }
+    for (i = 0; i < sn; i++) {
+        if (vcx_bind_one(rt, dst, dst_names[i], src, src_names[i], fn->param_has_type[i],
+                         fn->param_type_spec[i], schemas, coll, pool, files, live, panic_detail,
+                         panic_sz) != 0) {
+            return -1;
+        }
+    }
+    if (fn->return_has_type && fn->return_name[0] != '\0' && fn->return_type_spec[0] != '\0') {
+        int rvi = ctx_find_var(dst, fn->return_name);
+        FlatSlotType rty;
+        flat_slot_type_clear(&rty);
+        if (flat_slot_type_parse_spec(fn->return_type_spec, &rty, schemas, panic_detail,
+                                      panic_sz) != 0) {
+            return -1;
+        }
+        flat_value_set_null(&nullv);
+        if (rvi < 0) {
+            if (ctx_set_var(rt, dst, fn->return_name, &nullv, coll, pool, files, live, panic_detail,
+                            panic_sz) != 0) {
+                return -1;
+            }
+            rvi = ctx_find_var(dst, fn->return_name);
+        }
+        if (rvi >= 0) {
+            dst->vars[rvi].slot_type = rty;
+            dst->vars[rvi].has_slot_type = 1;
+            dst->vars[rvi].slot_dynamic = 0;
+            dst->vars[rvi].slot_dynamic_expr[0] = '\0';
+        }
+    }
+    if (rt->active_ix == dst_ix && rt->bind_attached) {
+        refresh_bind_from_active(rt);
+        adopt_active_var_count_to_bind(rt);
+    }
+    return 0;
+}
+
+int flat_vcx_copy_call_return(FlatVcxRuntime *rt, uint32_t src_ctx_id, uint32_t dst_ctx_id,
+                              uint32_t instr_id, const FlatBytecode *bc, FlatCollectionPool *coll,
+                              FlatStringPool *pool, FlatFileTable *files, FlatMemLiveStats *live,
+                              char *panic_detail, size_t panic_sz) {
+    FlatValue idxv;
+    FlatValue ret_src_n;
+    FlatValue ret_dst_n;
+    char src_name[FLAT_VAR_NAME_MAX + 1];
+    char dst_name[FLAT_VAR_NAME_MAX + 1];
+    uint32_t fi;
+    const FlatFbFunctionEntry *fn;
+    int src_ix;
+    int dst_ix;
+    FlatVcxContext *src;
+    FlatVcxContext *dst;
+    const FlatSchemaCatalog *schemas = &bc->schemas;
+
+    if (!rt || !bc || !bc->functions) {
+        return -1;
+    }
+    src_ix = ctx_index_by_id(rt, src_ctx_id);
+    dst_ix = ctx_index_by_id(rt, dst_ctx_id);
+    if (src_ix < 0 || dst_ix < 0) {
+        snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.ctx");
+        return -1;
+    }
+    src = &rt->contexts[src_ix];
+    dst = &rt->contexts[dst_ix];
+    if (flat_vcx_get_var(rt, instr_id, "__fl_funcIndex", &idxv, coll, pool, files, panic_detail,
+                         panic_sz) != 0 ||
+        idxv.tag != VAL_NUMBER) {
+        snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.meta");
+        return -1;
+    }
+    fi = (uint32_t)idxv.u.number;
+    flat_value_release(coll, pool, &idxv);
+    if (fi >= bc->function_count) {
+        snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.meta");
+        return -1;
+    }
+    fn = &bc->functions[fi];
+    if (flat_vcx_get_var(rt, instr_id, "returnVar", &ret_src_n, coll, pool, files, panic_detail,
+                         panic_sz) != 0 ||
+        flat_vcx_get_var(rt, instr_id, "calleReturnVar", &ret_dst_n, coll, pool, files,
+                         panic_detail, panic_sz) != 0) {
+        return -1;
+    }
+    if (vcx_value_to_name(&ret_src_n, pool, src_name, sizeof src_name) != 0 ||
+        vcx_value_to_name(&ret_dst_n, pool, dst_name, sizeof dst_name) != 0) {
+        flat_value_release(coll, pool, &ret_src_n);
+        flat_value_release(coll, pool, &ret_dst_n);
+        snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.name");
+        return -1;
+    }
+    flat_value_release(coll, pool, &ret_src_n);
+    flat_value_release(coll, pool, &ret_dst_n);
+    if (vcx_bind_one(rt, dst, dst_name, src, src_name, fn->return_has_type, fn->return_type_spec,
+                     schemas, coll, pool, files, live, panic_detail, panic_sz) != 0) {
+        return -1;
+    }
+    if (rt->active_ix == dst_ix && rt->bind_attached) {
         refresh_bind_from_active(rt);
         adopt_active_var_count_to_bind(rt);
     }

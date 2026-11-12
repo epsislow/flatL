@@ -18,6 +18,7 @@ def add(a, b) -> sum
 - Optional `func:varSlots N` is an **initial capacity seed** for the unique executor’s `V.createAuto(...)` (see below). **`0`** or omitted → default seed (**4**). Capacity grows at runtime up to **`FLAT_MAX_VARS`**.
 - Optional `func:callVM N` selects **how** user calls are lowered (see below). Omitted = same as **`0`**.
 - The name after `->` on `def` is the formal return slot (here `sum`).
+- **Typed formals / return (T6):** `def add(a:u8, b) -> out:u16` — `a` and `out` carry slot contracts; `b` stays untyped. Invalid arguments panic at bind (**`type.assign.range`**, **`type.call.arg`**, …). Types are stored in **FFUN** (`.fb` **v7**).
 
 ### `func:callVM` — call lowering (A vs B)
 
@@ -78,7 +79,7 @@ Growth is the same as [`vcx.createAuto`](./natives/vcx.md): **`varsMax`** increa
 | Label | Behaviour |
 |-------|-----------|
 | `#executor.global.scope` | Body runs on the caller context (`calleVcx`); after the call, `r = <returnVar>` assigns into the callee result name. |
-| `#executor.unique.scope` | Body runs on a dedicated VCX; on return, formal and caller names are copied via `L.pack` + `V.varsCopyByNames`. |
+| `#executor.unique.scope` | Body runs on a dedicated VCX; params via **`V.bindCallParams`**, return via **`V.copyCallReturn`** (typed when declared on `def`). |
 
 Source: `blocks/executor.fl` (use with prefix `as #fl_` → labels `#fl_executor.*`).
 
@@ -88,9 +89,9 @@ Plain `lhs = rhs` allows a **single** rhs atom (literal, variable, native call).
 
 Lines of the form `native(...) -> var` are compiled as **ASSIGN**, not I/O.
 
-## FFUN (`.fb` v5)
+## FFUN (`.fb` v5+, **v7** typed `def`)
 
-`flc` emits an optional **FFUN** section in v5 bytecode; `flvm` does not consume it at run time (toolchain metadata).
+`flc` emits **FFUN** (function table). **v7** adds per-parameter and return **type spec strings** for typed `def`; `flvm` uses them in **`vcx.bindCallParams`** / **`vcx.copyCallReturn`**.
 
 ## Modules (`.fmod`, v0.4)
 

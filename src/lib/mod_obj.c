@@ -86,6 +86,40 @@ static int parse_obj_arg(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
     return 0;
 }
 
+static int is_simple_ident(const char *s) {
+    size_t i;
+    if (!s || !s[0]) {
+        return 0;
+    }
+    if (!(isalpha((unsigned char)s[0]) || s[0] == '_')) {
+        return 0;
+    }
+    for (i = 1; s[i]; i++) {
+        if (!(isalnum((unsigned char)s[i]) || s[i] == '_')) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int path_join_for_set2(char *out, size_t out_sz, const char *root,
+                            const FlatObjPathSegs *path) {
+    size_t pos;
+    int i;
+
+    pos = (size_t)snprintf(out, out_sz, "%s", root);
+    for (i = 0; i < path->n; i++) {
+        if (pos + 1 + strlen(path->keys[i]) >= out_sz) {
+            return -1;
+        }
+        out[pos++] = '.';
+        memcpy(out + pos, path->keys[i], strlen(path->keys[i]));
+        pos += strlen(path->keys[i]);
+        out[pos] = '\0';
+    }
+    return path->n > 0 ? 0 : -1;
+}
+
 static int parse_path_arg(FlatNativeCtx *ctx, const char *expr, FlatObjPathSegs *path,
                           const char *fn) {
     FlatValue pv;
@@ -188,6 +222,29 @@ int flat_native_obj_set(FlatNativeCtx *ctx) {
     if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 || parse_path_arg(ctx, key_e, &path, "set") != 0 ||
         parse_expr(ctx, val_e, &val) != 0) {
         return io_err(ctx);
+    }
+    if (is_simple_ident(obj_e) && ctx->var_names && ctx->var_slot_types && ctx->var_has_slot_type) {
+        char full[512];
+        uint32_t root_obj;
+        FlatPathErr perr = FLAT_PATH_OK;
+        FlatPathTypedCtx ptc;
+
+        if (path_join_for_set2(full, sizeof full, obj_e, &path) == 0) {
+            memset(&ptc, 0, sizeof ptc);
+            ptc.schemas = ctx->bc ? &ctx->bc->schemas : NULL;
+            ptc.var_slot_types = ctx->var_slot_types;
+            ptc.var_has_slot_type = ctx->var_has_slot_type;
+            ptc.type_panic = ctx->panic_detail;
+            ptc.type_panic_sz = sizeof ctx->panic_detail;
+            ctx->panic_detail[0] = '\0';
+            if (flat_path_set2(ctx->coll, ctx->pool, ctx->vars, ctx->var_count, ctx->var_names,
+                               full, &val, &root_obj, &perr, &ptc) == 0) {
+                return flat_value_set_object(ctx->out, root_obj);
+            }
+            if (ctx->panic_detail[0] != '\0') {
+                return io_err(ctx);
+            }
+        }
     }
     rc = flat_obj_set_path_copy(ctx->coll, ctx->pool, obj_v.u.coll_id, &path, &val, &new_id);
     if (rc == -2) {

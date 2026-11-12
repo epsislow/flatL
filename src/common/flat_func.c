@@ -1,5 +1,7 @@
 #include "flat_func.h"
 #include "flat_native.h"
+#include "flat_schema.h"
+#include "flat_slot_type.h"
 #include "flat_value.h"
 #include "flat_str.h"
 
@@ -275,6 +277,50 @@ static int split_param_list(char *inner, char out[][64], int max_out, int *out_c
     return 0;
 }
 
+static int parse_formal_token(const char *tok, const FgirProgram *prog, char *name_out,
+                              uint8_t *has_type_out, char *spec_out, size_t spec_sz, char *err,
+                              size_t err_sz) {
+    FlatSlotType ty;
+    int has = 0;
+    FlatSchemaCatalog cat;
+    int cat_ok = 0;
+
+    *has_type_out = 0;
+    if (spec_out && spec_sz > 0) {
+        spec_out[0] = '\0';
+    }
+    if (!tok || !name_out) {
+        return -1;
+    }
+    memset(&cat, 0, sizeof cat);
+    if (prog && prog->schema_count > 0 &&
+        flat_schema_build_catalog(prog->schemas, prog->schema_count, &cat, err, err_sz) == 0) {
+        cat_ok = 1;
+    }
+    if (flat_bind_parse_lhs(tok, name_out, 64, &ty, &has) != 0) {
+        snprintf(err, err_sz, "def: bad formal %s", tok);
+        return -1;
+    }
+    if (has) {
+        if (flat_slot_type_parse_spec(strchr(tok, ':') + 1, &ty, cat_ok ? &cat : NULL, err,
+                                        err_sz) != 0) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "def: bad formal type %s", tok);
+            }
+            return -1;
+        }
+        *has_type_out = 1;
+        if (spec_out && spec_sz > 0) {
+            const char *spec = strchr(tok, ':') + 1;
+            while (*spec && isspace((unsigned char)*spec)) {
+                spec++;
+            }
+            snprintf(spec_out, spec_sz, "%s", spec);
+        }
+    }
+    return 0;
+}
+
 int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *prog, char *err,
                                size_t err_size) {
     const char *p = line + 3;
@@ -282,8 +328,10 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
     const char *rp;
     const char *arrow;
     char inner[FGIR_MAX_LINE];
+    char raw_params[FGIR_MAX_FUNC_PARAMS][64];
     char name_buf[FGIR_MAX_FUNC_NAME];
     size_t n;
+    int pi;
 
     memset(fn, 0, sizeof *fn);
     while (*p && isspace((unsigned char)*p)) {
@@ -317,9 +365,16 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
         return -1;
     }
     snprintf(inner, sizeof inner, "%.*s", (int)(rp - lp - 1), lp + 1);
-    if (split_param_list(inner, fn->params, FGIR_MAX_FUNC_PARAMS, &fn->param_count) != 0) {
+    if (split_param_list(inner, raw_params, FGIR_MAX_FUNC_PARAMS, &fn->param_count) != 0) {
         snprintf(err, err_size, "def: too many parameters");
         return -1;
+    }
+    for (pi = 0; pi < fn->param_count; pi++) {
+        if (parse_formal_token(raw_params[pi], prog, fn->params[pi],
+                                &fn->param_has_type[pi], fn->param_type_spec[pi],
+                                sizeof fn->param_type_spec[pi], err, err_size) != 0) {
+            return -1;
+        }
     }
     arrow = strstr(rp + 1, "->");
     if (!arrow) {
@@ -330,19 +385,48 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
     while (*arrow && isspace((unsigned char)*arrow)) {
         arrow++;
     }
-   {
-        char ret[64];
+    {
+        char ret_tok[64];
+        FlatSlotType rty;
+        int rhas = 0;
         size_t rl = 0;
+
         while (arrow[rl] && !isspace((unsigned char)arrow[rl])) {
             rl++;
         }
-        if (rl == 0 || rl >= sizeof ret) {
+        if (rl == 0 || rl >= sizeof ret_tok) {
             snprintf(err, err_size, "def: bad return name");
             return -1;
         }
-        memcpy(ret, arrow, rl);
-        ret[rl] = '\0';
-        snprintf(fn->return_name, sizeof fn->return_name, "%s", ret);
+        memcpy(ret_tok, arrow, rl);
+        ret_tok[rl] = '\0';
+        if (flat_bind_parse_lhs(ret_tok, fn->return_name, sizeof fn->return_name, &rty, &rhas) !=
+            0) {
+            snprintf(err, err_size, "def: bad return name");
+            return -1;
+        }
+        fn->return_has_type = (uint8_t)(rhas ? 1 : 0);
+        fn->return_type_spec[0] = '\0';
+        if (rhas) {
+            FlatSchemaCatalog cat;
+            int cat_ok = 0;
+            const char *spec = strchr(ret_tok, ':') + 1;
+
+            memset(&cat, 0, sizeof cat);
+            if (prog && prog->schema_count > 0 &&
+                flat_schema_build_catalog(prog->schemas, prog->schema_count, &cat, err,
+                                          err_size) == 0) {
+                cat_ok = 1;
+            }
+            if (flat_slot_type_parse_spec(spec, &rty, cat_ok ? &cat : NULL, err, err_size) != 0) {
+                snprintf(err, err_size, "def: bad return type");
+                return -1;
+            }
+            while (*spec && isspace((unsigned char)*spec)) {
+                spec++;
+            }
+            snprintf(fn->return_type_spec, sizeof fn->return_type_spec, "%s", spec);
+        }
     }
     snprintf(fn->executor_label, sizeof fn->executor_label, "%s", prog->default_executor);
     snprintf(fn->impl_label, sizeof fn->impl_label, "%s%s", FLAT_FUNC_IMPL_PREFIX, fn->name);
@@ -764,6 +848,8 @@ static int lower_one_call_vm(FgirProgram *prog, FgirBlock *b, int at, const Fgir
         }
         ins_init_assign(&expanded[n++], line);
     }
+    snprintf(line, sizeof line, "__fl_funcIndex = %d", flat_func_index(prog, fn->name));
+    ins_init_assign(&expanded[n++], line);
     memcpy(&expanded[n], call, sizeof *call);
     expanded[n].kind = FGIR_FUNC_CALL_VM;
     n++;
@@ -870,6 +956,8 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     ins_init_assign(&expanded[n++], line);
     snprintf(line, sizeof line, "__fl_funcVcxSlots = %u", (unsigned)fn->func_vcx_slots);
     ins_init_assign(&expanded[n++], line);
+    snprintf(line, sizeof line, "__fl_funcIndex = %d", flat_func_index(prog, fn->name));
+    ins_init_assign(&expanded[n++], line);
     if (build_param_in_names_list(fn->param_count, pin_list, sizeof pin_list - 23) != 0) {
         snprintf(err, err_size, "param_in list too long");
         return -1;
@@ -891,8 +979,9 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     ins_init_assign(&expanded[n++], line);
     snprintf(line, sizeof line,
              "V.varsCopyByNames(%s, %s, "
-             "['__fl_returnVar','__fl_calleReturnVar','__fl_funcVcxSlots','__fl_paramSrcNames'], "
-             "['returnVar','calleReturnVar','funcVcxSlots','paramSrcNames'])",
+             "['__fl_returnVar','__fl_calleReturnVar','__fl_funcVcxSlots','__fl_paramSrcNames',"
+             "'__fl_funcIndex'], "
+             "['returnVar','calleReturnVar','funcVcxSlots','paramSrcNames','__fl_funcIndex'])",
              FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR);
     ins_init_assign(&expanded[n++], line);
     if (arg_count > 0) {

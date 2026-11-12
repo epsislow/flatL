@@ -183,6 +183,8 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("vcx", "callInstr", "vcx.callInstr()"),
     META_SIG("vcx", "dSchemaAllow", "vcx.dSchemaAllow(ctx, allow)"),
     META_SIG("vcx", "dSchemaList", "vcx.dSchemaList(ctx, list)"),
+    META_SIG("vcx", "bindCallParams", "vcx.bindCallParams(instrCtx, dstCtx)"),
+    META_SIG("vcx", "copyCallReturn", "vcx.copyCallReturn(srcCtx, dstCtx, instrCtx)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

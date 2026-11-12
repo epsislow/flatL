@@ -176,6 +176,8 @@ int flat_native_vcx_vars_max(FlatNativeCtx *ctx);
 int flat_native_vcx_destroy(FlatNativeCtx *ctx);
 int flat_native_vcx_call_instr(FlatNativeCtx *ctx);
 int flat_native_vcx_vars_copy_by_names(FlatNativeCtx *ctx);
+int flat_native_vcx_bind_call_params(FlatNativeCtx *ctx);
+int flat_native_vcx_copy_call_return(FlatNativeCtx *ctx);
 int flat_native_vcx_dschema_allow(FlatNativeCtx *ctx);
 int flat_native_vcx_dschema_list(FlatNativeCtx *ctx);
 

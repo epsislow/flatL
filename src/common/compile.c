@@ -911,11 +911,20 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                     const FgirFunction *fn = &prog->functions[fi];
                     int bi;
 
+                    int pj;
                     snprintf(ftab[fi].name, sizeof ftab[fi].name, "%s", fn->name);
                     snprintf(ftab[fi].return_name, sizeof ftab[fi].return_name, "%s",
                              fn->return_name);
                     ftab[fi].param_count = (uint8_t)fn->param_count;
                     ftab[fi].func_vcx_slots = fn->func_vcx_slots;
+                    ftab[fi].return_has_type = fn->return_has_type;
+                    snprintf(ftab[fi].return_type_spec, sizeof ftab[fi].return_type_spec, "%s",
+                             fn->return_type_spec);
+                    for (pj = 0; pj < fn->param_count; pj++) {
+                        ftab[fi].param_has_type[pj] = fn->param_has_type[pj];
+                        snprintf(ftab[fi].param_type_spec[pj], sizeof ftab[fi].param_type_spec[pj],
+                                 "%s", fn->param_type_spec[pj]);
+                    }
                     for (bi = 0; bi < prog->block_count; bi++) {
                         if (strcmp(prog->blocks[bi].label, fn->impl_label) == 0) {
                             ftab[fi].impl_block_id = block_ids[bi];
@@ -1045,10 +1054,19 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                 const FgirFunction *fn = &prog->functions[fi];
                 int bi;
 
+                int pj;
                 snprintf(ftab[fi].name, sizeof ftab[fi].name, "%s", fn->name);
                 snprintf(ftab[fi].return_name, sizeof ftab[fi].return_name, "%s", fn->return_name);
                 ftab[fi].param_count = (uint8_t)fn->param_count;
                 ftab[fi].func_vcx_slots = fn->func_vcx_slots;
+                ftab[fi].return_has_type = fn->return_has_type;
+                snprintf(ftab[fi].return_type_spec, sizeof ftab[fi].return_type_spec, "%s",
+                         fn->return_type_spec);
+                for (pj = 0; pj < fn->param_count; pj++) {
+                    ftab[fi].param_has_type[pj] = fn->param_has_type[pj];
+                    snprintf(ftab[fi].param_type_spec[pj], sizeof ftab[fi].param_type_spec[pj],
+                             "%s", fn->param_type_spec[pj]);
+                }
                 for (bi = 0; bi < prog->block_count; bi++) {
                     if (strcmp(prog->blocks[bi].label, fn->impl_label) == 0) {
                         ftab[fi].impl_block_id = block_ids[bi];

@@ -100,6 +100,10 @@ typedef struct {
     char return_name[64];
     char params[FGIR_MAX_FUNC_PARAMS][64];
     int param_count;
+    uint8_t param_has_type[FGIR_MAX_FUNC_PARAMS];
+    char param_type_spec[FGIR_MAX_FUNC_PARAMS][48];
+    uint8_t return_has_type;
+    char return_type_spec[48];
     char executor_label[FGIR_MAX_LABEL];
     uint32_t func_vcx_slots;
     int is_global_executor;

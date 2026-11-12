@@ -10,7 +10,7 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 6u
+#define FLAT_FB_FORMAT_VERSION 7u
 #define FLAT_FB_HEADER_SIZE 32 /* v6: + schm_off at 28; v5 was 28 without schm */
 #define FLAT_FB_HEADER_SIZE_V5 28
 #define FLAT_FB_HEADER_SIZE_V4 24
@@ -37,6 +37,10 @@ typedef struct {
     uint8_t param_count;
     char return_name[64];
     uint32_t func_vcx_slots;
+    uint8_t param_has_type[FGIR_MAX_FUNC_PARAMS];
+    char param_type_spec[FGIR_MAX_FUNC_PARAMS][48];
+    uint8_t return_has_type;
+    char return_type_spec[48];
 } FlatFbFunctionEntry;
 
 typedef struct {

@@ -1,0 +1,11 @@
+suite = "types"
+id = 98
+desc = "T6 typed def mixed formals and return"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "5"
+# mixed formal b is untyped; return out:u16 via copyCallReturn

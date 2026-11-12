@@ -1,6 +1,6 @@
 # Typed bind, schemas, and slot contracts (T0 draft)
 
-**Status:** **T1–T5** and **T4+** (`m.calc` / typed `io.in_*`) implemented in `flvm`; typed **`def`** remains **T6**.  
+**Status:** **T1–T6** in `flvm` (through typed **`def`**, **`O.set`**, **`O.set2`** path engine).  
 **Overview:** [STRICT_TYPES.md](./STRICT_TYPES.md)  
 **Roadmap:** [`.cursor/plans/strict-types-schemas-roadmap.plan.md`](../.cursor/plans/strict-types-schemas-roadmap.plan.md)  
 **Ideas sketch:** [`.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt`](../.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt) (aligned)  
@@ -125,7 +125,7 @@ Copy VCX copies **frozen** and **const** flags per slot. Frozen or **const** slo
 - **Homogeneous operands:** if any slot in **`expr`** is typed numeric, all names in **`expr`** must match that contract (**`type.calc.type`**).
 - **`io.in_num` / `io.inln` / `io.in_bool`** — optional **`, "type"`** after prompt; **`type.io.expect`** / **`type.io.len`**.
 - **`foreach(coll, item, '#block')`:** for `coll:<stock>[]`, **`item`** follows element schema `<stock>`.
-- **`def f(a:u8, b) -> out:u16`:** mixed typed/untyped formals — **T6** + `.fmod` metadata.
+- **`def f(a:u8, b) -> out:u16`:** mixed typed/untyped formals; types in **FFUN** (`.fb` v7); apel invalid → **`type.call.arg`** / **`type.assign.range`** at param bind.
 
 Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
 
@@ -142,12 +142,12 @@ Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
 | **T4** | **Done:** `name:/expr`, `V.dSchemaAllow`, `V.dSchemaList` |
 | **T5** | **Done:** `const`, `freeze()`, ctxout guard, VCX copy of flags |
 | **T4+** | **Done:** `m.calc` arg 2, typed `io.in_*`, `type.calc.*` / `type.io.*` |
-| **T6** | Typed `def`, optional native sugar, `O.set2` path parity |
+| **T6** | **Done:** typed `def`, `O.set`/`O.set2` path parity (`vcx.bindCallParams`, `vcx.copyCallReturn`) |
 
 ---
 
 ## 11. Panic prefix `type.*` (selection)
 
-See plan §10 for full table. Examples: `type.assign.incompatible`, `type.assign.range`, `type.assign.range.i64`, `type.assign.list.len`, `type.schema.field.unknown`, `type.assign.retype`, `type.freeze.assign`, `type.compare.incompatible`, `type.path.index`, `type.call.arg` (future).
+See plan §10 for full table. Examples: `type.assign.incompatible`, `type.assign.range`, `type.assign.range.i64`, `type.assign.list.len`, `type.schema.field.unknown`, `type.assign.retype`, `type.freeze.assign`, `type.compare.incompatible`, `type.path.index`, `type.call.arg` (typed `def` param bind, T6).
 
 User-facing messages prefer **expected** / **assigned**, not lhs/rhs.

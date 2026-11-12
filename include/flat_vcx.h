@@ -121,4 +121,15 @@ int flat_vcx_dschema_list(FlatVcxRuntime *rt, uint32_t ctx_id, const FlatValue *
 int flat_vcx_dynamic_schema_permit(FlatVcxRuntime *rt, const char *schema_name, char *panic,
                                    size_t panic_sz);
 
+#include "fb_format.h"
+
+int flat_vcx_bind_call_params(FlatVcxRuntime *rt, uint32_t instr_id, uint32_t dst_id,
+                              const FlatBytecode *bc, FlatCollectionPool *coll,
+                              FlatStringPool *pool, FlatFileTable *files, FlatMemLiveStats *live,
+                              char *panic_detail, size_t panic_sz);
+int flat_vcx_copy_call_return(FlatVcxRuntime *rt, uint32_t src_ctx_id, uint32_t dst_ctx_id,
+                              uint32_t instr_id, const FlatBytecode *bc,
+                              FlatCollectionPool *coll, FlatStringPool *pool, FlatFileTable *files,
+                              FlatMemLiveStats *live, char *panic_detail, size_t panic_sz);
+
 #endif

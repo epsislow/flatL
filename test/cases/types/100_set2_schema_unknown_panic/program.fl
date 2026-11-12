@@ -1,0 +1,11 @@
+use native obj with O
+<stock>:
+  qty: u16
+<var>:
+  stocks: <stock>[2]
+
+#main
+  bag:<var> = {}
+  bag.stocks = [{ qty: 1 }]
+  O.set2(bag.stocks[0].extra, 1) -> bag
+  OK

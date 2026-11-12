@@ -1323,6 +1323,35 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
     if (argc != fn->param_count) {
         return -1;
     }
+    for (i = 0; i < (int)argc; i++) {
+        if (fn->param_has_type[i] && fn->param_type_spec[i][0] != '\0') {
+            char tmp[24];
+            FlatValue argv;
+            FlatSlotType contract;
+            FlatValue checked;
+            char chk[64];
+
+            snprintf(tmp, sizeof tmp, "__fl_tmp_%d", i);
+            if (vm_get_var_copy(st, tmp, &argv) != 0) {
+                return -1;
+            }
+            flat_slot_type_clear(&contract);
+            if (flat_slot_type_parse_spec(fn->param_type_spec[i], &contract, &bc->schemas, panic,
+                                          sizeof panic) != 0) {
+                flat_value_release(st->coll, st->pool, &argv);
+                return -1;
+            }
+            checked = argv;
+            if (flat_slot_type_check_value(&contract, &argv, st->pool, st->coll, &bc->schemas,
+                                           &checked, chk, sizeof chk) != 0) {
+                flat_value_release(st->coll, st->pool, &argv);
+                snprintf(st->panic_reason, sizeof st->panic_reason, "%s",
+                         chk[0] ? chk : "type.call.arg");
+                return vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            }
+            flat_value_release(st->coll, st->pool, &argv);
+        }
+    }
     callee_ret = (const char *)(payload + pos);
     pos += strlen(callee_ret) + 1;
     if (pos >= psz) {
@@ -1361,6 +1390,13 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
     }
     flat_value_set_number(&nv, (double)fn->func_vcx_slots);
     if (flat_vcx_set_named_var(st->vcx, instr_id, "funcVcxSlots", &nv, st->coll, st->pool,
+                                  &st->files, &st->live, panic, sizeof panic) != 0) {
+        flat_value_release(st->coll, st->pool, &nv);
+        return -1;
+    }
+    flat_value_release(st->coll, st->pool, &nv);
+    flat_value_set_number(&nv, (double)fi);
+    if (flat_vcx_set_named_var(st->vcx, instr_id, "__fl_funcIndex", &nv, st->coll, st->pool,
                                   &st->files, &st->live, panic, sizeof panic) != 0) {
         flat_value_release(st->coll, st->pool, &nv);
         return -1;

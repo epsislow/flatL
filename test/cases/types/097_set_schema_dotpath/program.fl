@@ -1,0 +1,11 @@
+use native obj with O
+<stock>:
+  qty: u16
+<var>:
+  hold: <stock>
+
+#main
+  row:<var> = {}
+  O.set(row, 'hold.qty', 7) -> row
+  io.outln(row.hold.qty)
+  OK

@@ -2,6 +2,7 @@
 #include "flat_native_util.h"
 #include "flat_vcx.h"
 #include "flat_value.h"
+#include "fb_format.h"
 
 #define VCX_NAME_LIST_MAX 64
 
@@ -608,6 +609,69 @@ int flat_native_vcx_vars_copy_by_names(FlatNativeCtx *ctx) {
                                     ctx->file_tbl, ctx->mem_live, ctx->panic_detail,
                                     sizeof ctx->panic_detail) != 0) {
         return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.varsCopyByNames");
+    }
+    if (ctx->io_status) {
+        *ctx->io_status = FLAT_IO_OK;
+    }
+    return 0;
+}
+
+int flat_native_vcx_bind_call_params(FlatNativeCtx *ctx) {
+    FlatVcxRuntime *rt = rt_from(ctx);
+    char inner[256];
+    char *instr_e;
+    char *dst_e;
+    uint32_t instr_id;
+    uint32_t dst_id;
+
+    if (!rt || !ctx->bc) {
+        return vcx_fail(ctx, "vcx.bindCallParams");
+    }
+    ctx->panic_detail[0] = '\0';
+    snprintf(inner, sizeof inner, "%s", ctx->inner ? ctx->inner : "");
+    if (split_two_args(inner, &instr_e, &dst_e) != 0) {
+        return vcx_fail(ctx, "vcx.bindCallParams.arg");
+    }
+    if (parse_ctx_id(ctx, instr_e, &instr_id) != 0 || parse_ctx_id(ctx, dst_e, &dst_id) != 0) {
+        return vcx_fail(ctx, "vcx.bindCallParams.arg");
+    }
+    if (flat_vcx_bind_call_params(rt, instr_id, dst_id, ctx->bc, ctx->coll, ctx->pool,
+                                  ctx->file_tbl, ctx->mem_live, ctx->panic_detail,
+                                  sizeof ctx->panic_detail) != 0) {
+        return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.bindCallParams");
+    }
+    if (ctx->io_status) {
+        *ctx->io_status = FLAT_IO_OK;
+    }
+    return 0;
+}
+
+int flat_native_vcx_copy_call_return(FlatNativeCtx *ctx) {
+    FlatVcxRuntime *rt = rt_from(ctx);
+    char inner[256];
+    char *src_e;
+    char *dst_e;
+    char *instr_e;
+    uint32_t src_id;
+    uint32_t dst_id;
+    uint32_t instr_id;
+
+    if (!rt || !ctx->bc) {
+        return vcx_fail(ctx, "vcx.copyCallReturn");
+    }
+    ctx->panic_detail[0] = '\0';
+    snprintf(inner, sizeof inner, "%s", ctx->inner ? ctx->inner : "");
+    if (split_three_args(inner, &src_e, &dst_e, &instr_e) != 0) {
+        return vcx_fail(ctx, "vcx.copyCallReturn.arg");
+    }
+    if (parse_ctx_id(ctx, src_e, &src_id) != 0 || parse_ctx_id(ctx, dst_e, &dst_id) != 0 ||
+        parse_ctx_id(ctx, instr_e, &instr_id) != 0) {
+        return vcx_fail(ctx, "vcx.copyCallReturn.arg");
+    }
+    if (flat_vcx_copy_call_return(rt, src_id, dst_id, instr_id, ctx->bc, ctx->coll, ctx->pool,
+                                  ctx->file_tbl, ctx->mem_live, ctx->panic_detail,
+                                  sizeof ctx->panic_detail) != 0) {
+        return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.copyCallReturn");
     }
     if (ctx->io_status) {
         *ctx->io_status = FLAT_IO_OK;
