@@ -418,64 +418,6 @@ int flat_slot_type_format_spec(const FlatSlotType *t, const FlatSchemaCatalog *c
     return 0;
 }
 
-/* Interim until VAL_I64/VAL_U64: integers must be exact in IEEE double (±(2^53−1)). */
-#define FLAT_I64_SAFE_MAX 9007199254740991.0
-#define FLAT_I64_SAFE_MIN (-9007199254740991.0)
-
-static int is_int_in_range(double d, long long minv, long long maxv) {
-    double ip;
-    if (isnan(d) || isinf(d)) {
-        return 0;
-    }
-    if (modf(d, &ip) != 0.0) {
-        return 0;
-    }
-    if (ip < (double)minv || ip > (double)maxv) {
-        return 0;
-    }
-    return 1;
-}
-
-static int is_u64_interim_value(double d) {
-    int64_t qi;
-    double ip;
-
-    if (isnan(d) || isinf(d)) {
-        return 0;
-    }
-    if (modf(d, &ip) != 0.0) {
-        return 0;
-    }
-    if (d < 0.0 || d > FLAT_I64_SAFE_MAX) {
-        return 0;
-    }
-    qi = (int64_t)d;
-    if ((double)qi != d || qi < 0) {
-        return 0;
-    }
-    return 1;
-}
-
-static int is_s64_interim_value(double d) {
-    int64_t qi;
-    double ip;
-
-    if (isnan(d) || isinf(d)) {
-        return 0;
-    }
-    if (modf(d, &ip) != 0.0) {
-        return 0;
-    }
-    if (d < FLAT_I64_SAFE_MIN || d > FLAT_I64_SAFE_MAX) {
-        return 0;
-    }
-    qi = (int64_t)d;
-    if ((double)qi != d) {
-        return 0;
-    }
-    return 1;
-}
-
 static size_t value_string_bytes(const FlatValue *val, const FlatStringPool *pool,
                                  const uint8_t **out_ptr) {
     if (!val) {

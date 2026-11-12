@@ -163,7 +163,7 @@ static int mem_slot_arg_err(FlatNativeCtx *ctx, const char *code) {
     if (ctx->io_status) {
         *ctx->io_status = FLAT_IO_ERR;
     }
-    if (ctx->panic_detail && code) {
+    if (code && code[0] != '\0') {
         snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", code);
     }
     return -1;
