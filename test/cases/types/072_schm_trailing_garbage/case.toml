@@ -1,0 +1,7 @@
+suite = "types"
+id = 72
+desc = "reject SCHM with trailing garbage at load"
+kind = "exec"
+cmd = "sh -c '{root}/bin/flc -o {tmp}/ok.fb {case}/program.fl && printf \"\\xff\" >> {tmp}/ok.fb && printf \"\" | {root}/bin/flvm {tmp}/ok.fb'"
+expect_exit = 1
+stderr_contains = "invalid SCHM"

@@ -44,6 +44,8 @@ Two contexts may bind the same name to different contracts without conflict.
 
 **Lists:** `products:t255[]` = unbounded count, elements `t255`. `selected:<stock>[4] = []` = max 4, may start empty.
 
+**List slot (variable):** `xs:<stock>[4] = []` — the slot type is a **list of `<stock>`** capped at **4** items (`list_max` snapshot at bind). Assign `xs = [a, b, …]` checks length → **`type.assign.list.len`**. This is **not** path index syntax; `xs[0] = row` is a path on an existing list slot.
+
 **No implicit conversion** at assign/COW — use **`math.convert`** / **`list.convert`** / **`str.convert`** (`m.` / `L.` / `str.` aliases).
 
 ---

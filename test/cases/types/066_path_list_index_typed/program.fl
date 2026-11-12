@@ -1,0 +1,9 @@
+<stock>:
+  qty: u16
+<bag>:
+  stocks: <stock>[2]
+#main
+  row:<bag> = {}
+  bad:<stock> = {qty: 70000}
+  row.stocks[0] = bad
+  OK

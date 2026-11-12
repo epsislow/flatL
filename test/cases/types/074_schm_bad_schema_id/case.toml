@@ -1,0 +1,7 @@
+suite = "types"
+id = 74
+desc = "reject SCHM with schema_id out of catalog range"
+kind = "exec"
+cmd = "sh -c '{root}/bin/flc -o {tmp}/ok.fb {case}/program.fl && python3 {case}/patch.py {tmp}/ok.fb && printf \"\" | {root}/bin/flvm {tmp}/ok.fb'"
+expect_exit = 1
+stderr_contains = "invalid SCHM"

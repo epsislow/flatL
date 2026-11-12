@@ -163,9 +163,6 @@ int flat_assign_lhs_has_path(const char *lhs);
 int flat_assign_path_build_expr(const char *lhs, char *path_expr, size_t path_sz, char *root_bind,
                                 size_t root_bind_sz);
 
-int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count,
-                          const char (*names)[64], FlatStringPool *pool, FlatCollectionPool *coll);
-
 typedef enum {
     FLAT_IO_OK = 0,
     FLAT_IO_ERR = 1,
@@ -205,6 +202,8 @@ int flat_json_parse_bools_io(const char *s, FlatValue *out, FlatStringPool *pool
                              FlatCollectionPool *coll);
 int flat_json_stringify(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
                         char *out, size_t out_size);
+int flat_json_values_structural_equal(const FlatValue *a, const FlatValue *b, FlatStringPool *pool,
+                                      FlatCollectionPool *coll);
 int flat_json_list_is_homogeneous_numbers(const FlatCollectionPool *coll, uint32_t list_id);
 int flat_json_list_is_homogeneous_strings(const FlatCollectionPool *coll, uint32_t list_id);
 int flat_json_fprint_list_io(FILE *out, const FlatValue *v, FlatStringPool *pool,

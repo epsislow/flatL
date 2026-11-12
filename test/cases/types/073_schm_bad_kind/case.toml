@@ -1,0 +1,7 @@
+suite = "types"
+id = 73
+desc = "reject SCHM with invalid field kind byte"
+kind = "exec"
+cmd = "sh -c '{root}/bin/flc -o {tmp}/ok.fb {case}/program.fl && python3 {case}/patch.py {tmp}/ok.fb && printf \"\" | {root}/bin/flvm {tmp}/ok.fb'"
+expect_exit = 1
+stderr_contains = "invalid SCHM"

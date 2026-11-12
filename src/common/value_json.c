@@ -932,6 +932,29 @@ int flat_json_stringify(const FlatValue *v, FlatStringPool *pool, FlatCollection
     return 0;
 }
 
+int flat_json_values_structural_equal(const FlatValue *a, const FlatValue *b, FlatStringPool *pool,
+                                      FlatCollectionPool *coll) {
+    char ja[4096];
+    char jb[4096];
+
+    if (!a || !b) {
+        return 0;
+    }
+    if (a->tag != VAL_LIST && a->tag != VAL_OBJECT) {
+        return 0;
+    }
+    if (b->tag != VAL_LIST && b->tag != VAL_OBJECT) {
+        return 0;
+    }
+    if (flat_json_stringify(a, pool, coll, ja, sizeof ja) != 0) {
+        return 0;
+    }
+    if (flat_json_stringify(b, pool, coll, jb, sizeof jb) != 0) {
+        return 0;
+    }
+    return strcmp(ja, jb) == 0;
+}
+
 int flat_json_list_is_homogeneous_numbers(const FlatCollectionPool *coll, uint32_t list_id) {
     int len = 0;
     int i;

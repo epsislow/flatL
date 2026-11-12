@@ -33,7 +33,8 @@ typedef struct {
     FlatSlotTypeKind kind;
     uint8_t aux; /* tN → N; t → 127 */
     uint16_t schema_id;
-    uint16_t list_max; /* LIST schema field: 0 = unbounded */
+    uint16_t list_max; /* schema field or list slot: 0 = unbounded [] */
+    uint8_t list_slot; /* 1 when variable slot is a LIST (e.g. xs:<stock>[4]) */
     char dynamic_expr[FLAT_VAR_NAME_MAX + 1]; /* FLAT_SLOT_TYPE_DYNAMIC */
 } FlatSlotType;
 
@@ -58,5 +59,13 @@ int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *va
                                char *panic, size_t panic_sz);
 
 void flat_slot_type_clear(FlatSlotType *t);
+
+/* Guard eval: 1 = true, 0 = false, -1 = panic (type.compare.incompatible, …). */
+int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count,
+                          const char (*names)[64], FlatStringPool *pool, FlatCollectionPool *coll,
+                          const uint8_t *var_has_slot_type, const FlatSlotType *var_slot_types,
+                          char *panic, size_t panic_sz);
+
+int flat_slot_type_is_scalar(const FlatSlotType *t);
 
 #endif

@@ -1989,14 +1989,37 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             for (gi = 0; gi < st.var_count; gi++) {
                 guard_vals[gi] = st.vars[gi].val;
             }
-            if (!flat_value_eval_guard(expr, guard_vals, st.var_count, guard_names, st.pool,
-                                       st.coll)) {
-                if (bt == 0) {
-                    return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL,
-                                     opts);
+            {
+                char guard_panic[64];
+                int grc;
+                uint8_t guard_has_ty[FLAT_MAX_VARS];
+                FlatSlotType guard_slot_ty[FLAT_MAX_VARS];
+                int gvi;
+
+                for (gvi = 0; gvi < st.var_count; gvi++) {
+                    guard_has_ty[gvi] = st.vars[gvi].has_slot_type;
+                    if (st.vars[gvi].has_slot_type) {
+                        guard_slot_ty[gvi] = st.vars[gvi].slot_type;
+                    } else {
+                        flat_slot_type_clear(&guard_slot_ty[gvi]);
+                    }
                 }
-                ip = bt;
-                continue;
+                grc = flat_value_eval_guard(expr, guard_vals, st.var_count, guard_names, st.pool,
+                                           st.coll, guard_has_ty, guard_slot_ty, guard_panic,
+                                           sizeof guard_panic);
+                if (grc < 0) {
+                    return vm_jump_panic_any(&st, bc, &ip,
+                                           guard_panic[0] ? guard_panic : "type.compare.incompatible",
+                                           trace);
+                }
+                if (!grc) {
+                    if (bt == 0) {
+                        return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL,
+                                         opts);
+                    }
+                    ip = bt;
+                    continue;
+                }
             }
             ip += 2u + payload_size;
             continue;

@@ -553,10 +553,24 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
         }
         if (steps[step_i].kind == FLAT_PATH_STEP_INDEX) {
             uint32_t new_id;
+            FlatValue checked = *val;
+            const FlatValue *write_val_idx = val;
+            char panic[64];
+
             if (cur.tag != VAL_LIST) {
                 return -2;
             }
-            if (flat_list_set_copy(pool, str_pool, cur.u.coll_id, steps[step_i].index, val,
+            if (cur_contract && cur_contract->kind != FLAT_SLOT_TYPE_NONE &&
+                flat_slot_type_check_value(
+                    cur_contract, val, str_pool, pool,
+                    typed && typed->schemas ? (const FlatSchemaCatalog *)typed->schemas : NULL,
+                    &checked, panic, sizeof panic) != 0) {
+                return type_panic_write(typed, panic[0] ? panic : "type.assign.incompatible");
+            }
+            if (cur_contract && cur_contract->kind != FLAT_SLOT_TYPE_NONE) {
+                write_val_idx = &checked;
+            }
+            if (flat_list_set_copy(pool, str_pool, cur.u.coll_id, steps[step_i].index, write_val_idx,
                                    &new_id) != 0) {
                 return -1;
             }

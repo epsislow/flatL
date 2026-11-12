@@ -1,6 +1,7 @@
 #include "flat_obj_path.h"
 #include "flat_str.h"
 #include "flat_value.h"
+#include "flat_slot_type.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -576,7 +577,9 @@ static int literal_to_value(const char *lit, FlatValue *out) {
 }
 
 int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, const char (*names)[64],
-                          FlatStringPool *pool, FlatCollectionPool *coll) {
+                          FlatStringPool *pool, FlatCollectionPool *coll,
+                          const uint8_t *var_has_slot_type, const FlatSlotType *var_slot_types,
+                          char *panic, size_t panic_sz) {
     char buf[512];
     char *oppos = NULL;
     char *lhs;
@@ -584,9 +587,13 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     int op = 0;
     FlatValue lv;
     FlatValue rv;
-    int li;
+    int li = -1;
+    int ri = -1;
     size_t i;
 
+    if (panic && panic_sz > 0) {
+        panic[0] = '\0';
+    }
     if (!expr) {
         return 0;
     }
@@ -627,8 +634,9 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     lhs = trim(buf);
     rhs = trim(oppos + (op <= 2 ? 2 : 1));
 
+    li = find_var_index(lhs, var_count, names);
+    ri = find_var_index(rhs, var_count, names);
     if (flat_value_parse_assign_rhs(lhs, &lv, pool, coll, vars, var_count, names) != 0) {
-        li = find_var_index(lhs, var_count, names);
         if (li >= 0) {
             lv = vars[li];
         } else if (literal_to_value(lhs, &lv) != 0) {
@@ -637,9 +645,8 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     }
     if (flat_value_parse_assign_rhs(rhs, &rv, pool, coll, vars, var_count, names) != 0) {
         if (literal_to_value(rhs, &rv) != 0) {
-            li = find_var_index(rhs, var_count, names);
-            if (li >= 0) {
-                rv = vars[li];
+            if (ri >= 0) {
+                rv = vars[ri];
             } else {
                 return 0;
             }
@@ -647,6 +654,19 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     }
 
     if (op == 0) {
+        if (var_has_slot_type && var_slot_types && li >= 0 && ri >= 0 &&
+            var_has_slot_type[li] && var_has_slot_type[ri] &&
+            flat_slot_type_is_scalar(&var_slot_types[li]) &&
+            flat_slot_type_is_scalar(&var_slot_types[ri]) &&
+            !flat_slot_type_equals(&var_slot_types[li], &var_slot_types[ri])) {
+            if (panic && panic_sz > 0) {
+                snprintf(panic, panic_sz, "type.compare.incompatible");
+            }
+            return -1;
+        }
+        if ((lv.tag == VAL_LIST || lv.tag == VAL_OBJECT) && (rv.tag == VAL_LIST || rv.tag == VAL_OBJECT)) {
+            return flat_json_values_structural_equal(&lv, &rv, pool, coll) ? 1 : 0;
+        }
         return flat_value_equals(&lv, &rv, pool);
     }
     if (lv.tag == VAL_NUMBER && rv.tag == VAL_NUMBER) {

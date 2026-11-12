@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <limits.h>
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,11 +45,56 @@ static int parse_unsigned_type(const char *spec, FlatSlotType *out) {
   return -1;
 }
 
+static int parse_bracket_list_max(const char *rest, uint16_t *max_out, const char **rest_out, char *err,
+                                 size_t err_sz) {
+    char *endptr;
+    const char *p;
+    unsigned long maxn;
+
+    if (!rest || rest[0] != '[') {
+        return -1;
+    }
+    p = rest + 1;
+    if (*p == ']') {
+        p++;
+        maxn = 0;
+    } else {
+        if (!isdigit((unsigned char)*p)) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "invalid list bound");
+            }
+            return -1;
+        }
+        maxn = strtoul(p, &endptr, 10);
+        if (endptr == p || maxn == 0 || maxn > UINT16_MAX || *endptr != ']') {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "invalid list bound");
+            }
+            return -1;
+        }
+        p = endptr + 1;
+    }
+    if (*p != '\0') {
+        if (err && err_sz) {
+            snprintf(err, err_sz, "invalid list syntax");
+        }
+        return -1;
+    }
+    *max_out = (uint16_t)maxn;
+    if (rest_out) {
+        *rest_out = p;
+    }
+    return 0;
+}
+
 static int parse_type_spec(const char *spec, FlatSlotType *out) {
     const char *p;
     int n;
 
     if (!spec || !spec[0] || !out) {
+        return -1;
+    }
+    if (strchr(spec, '[') != NULL) {
         return -1;
     }
     memset(out, 0, sizeof *out);
@@ -183,16 +229,20 @@ int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSch
             }
             return -1;
         }
-        if (rest[0] == '[') {
-            if (err && err_sz) {
-                snprintf(err, err_sz, "list schema bind not supported: %s", spec);
-            }
-            return -1;
-        }
         while (*rest && isspace((unsigned char)*rest)) {
             rest++;
         }
-        if (*rest != '\0') {
+        if (*rest == '[') {
+            uint16_t lmax = 0;
+            if (parse_bracket_list_max(rest, &lmax, &rest, err, err_sz) != 0) {
+                if (err && err_sz && !err[0]) {
+                    snprintf(err, err_sz, "invalid schema list type: %s", spec);
+                }
+                return -1;
+            }
+            out->list_slot = 1;
+            out->list_max = lmax;
+        } else if (*rest != '\0') {
             if (err && err_sz) {
                 snprintf(err, err_sz, "invalid schema type: %s", spec);
             }
@@ -223,7 +273,13 @@ int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSch
         out->kind = FLAT_SLOT_TYPE_DYNAMIC;
         return 0;
     }
-    return parse_type_spec(spec, out) != 0 ? -1 : 0;
+    if (parse_type_spec(spec, out) != 0) {
+        if (err && err_sz) {
+            snprintf(err, err_sz, "invalid type: %s", spec);
+        }
+        return -1;
+    }
+    return 0;
 }
 
 int flat_bind_validate_t1_lhs(const char *lhs, char *err, size_t err_sz) {
@@ -269,7 +325,7 @@ int flat_slot_type_equals(const FlatSlotType *a, const FlatSlotType *b) {
         return a->aux == b->aux;
     }
     if (a->kind == FLAT_SLOT_TYPE_SCHEMA) {
-        return a->schema_id == b->schema_id;
+        return a->schema_id == b->schema_id && a->list_max == b->list_max && a->list_slot == b->list_slot;
     }
     if (a->kind == FLAT_SLOT_TYPE_DYNAMIC) {
         return strcmp(a->dynamic_expr, b->dynamic_expr) == 0;
@@ -363,15 +419,49 @@ static size_t value_string_bytes(const FlatValue *val, const FlatStringPool *poo
     return 0;
 }
 
+int flat_slot_type_is_scalar(const FlatSlotType *t) {
+    if (!t) {
+        return 0;
+    }
+    switch (t->kind) {
+    case FLAT_SLOT_TYPE_U8:
+    case FLAT_SLOT_TYPE_U16:
+    case FLAT_SLOT_TYPE_U32:
+    case FLAT_SLOT_TYPE_U64:
+    case FLAT_SLOT_TYPE_S8:
+    case FLAT_SLOT_TYPE_S16:
+    case FLAT_SLOT_TYPE_S32:
+    case FLAT_SLOT_TYPE_S64:
+    case FLAT_SLOT_TYPE_F32:
+    case FLAT_SLOT_TYPE_F64:
+    case FLAT_SLOT_TYPE_B:
+    case FLAT_SLOT_TYPE_T:
+    case FLAT_SLOT_TYPE_TN:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *val,
                                FlatStringPool *pool, FlatCollectionPool *coll,
                                const FlatSchemaCatalog *schemas, FlatValue *inout_val,
                                char *panic, size_t panic_sz) {
     double d;
     size_t slen;
+    FlatSchemaField list_field;
 
     if (!contract || contract->kind == FLAT_SLOT_TYPE_NONE) {
         return 0;
+    }
+    if (contract->list_slot && contract->kind == FLAT_SLOT_TYPE_SCHEMA && schemas) {
+        memset(&list_field, 0, sizeof list_field);
+        list_field.flags = FLAT_SCH_FIELD_LIST;
+        list_field.slot.kind = FLAT_SLOT_TYPE_SCHEMA;
+        list_field.slot.schema_id = contract->schema_id;
+        list_field.slot.list_max = contract->list_max;
+        return flat_schema_check_field_value(&list_field, val, pool, coll, schemas, inout_val,
+                                             panic, panic_sz);
     }
     if (contract->kind == FLAT_SLOT_TYPE_DYNAMIC) {
         snprintf(panic, panic_sz, "type.assign.incompatible");

@@ -579,6 +579,7 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 schm_len = (size_t)(fsize - schm_off);
             }
             if (flat_fb_parse_schm_section(buf + schm_off, schm_len, &out->schemas) != 0) {
+                memset(&out->schemas, 0, sizeof out->schemas);
                 free(buf);
                 fprintf(stderr, "flvm: invalid SCHM section\n");
                 return -1;

@@ -150,9 +150,35 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 | `a:t8 = "hi"` | Max **8** UTF-8 bytes on bind |
 | `items:l = [1]` / `doc:o = {}` | Open LIST / OBJECT container |
 
-**Supported type tokens (T1):** `u8`…`u64`, `s8`…`s64`, `f32`, `f64`, `b`, `t` (same as **`t127`**), `t1`…`t127`, `l`, `o`.
+**Supported type tokens (T1):** see table below and [TYPED_BIND.md §3](./TYPED_BIND.md#3-type-catalog-v1).
 
-**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.range.i64` (`u64`/`s64` outside exact-integer `double` range), `type.assign.incompatible`, `type.assign.string.len`, `type.assign.retype` (change `:type` without `free`).
+#### Strict type tokens (T1) — limits
+
+| Token | Meaning | Limit / range at assign |
+|-------|---------|-------------------------|
+| `u8` | unsigned 8-bit | `0` … `255` |
+| `u16` | unsigned 16-bit | `0` … `65535` |
+| `u32` | unsigned 32-bit | `0` … `4294967295` |
+| `u64` | unsigned 64-bit (interim) | exact integers `0` … `2^53−1` in `double` |
+| `s8` | signed 8-bit | `−128` … `127` |
+| `s16` | signed 16-bit | `−32768` … `32767` |
+| `s32` | signed 32-bit | `−2^31` … `2^31−1` |
+| `s64` | signed 64-bit (interim) | exact integers `±(2^53−1)` in `double` |
+| `f32`, `f64` | float | any `VAL_NUMBER` (no narrowing) |
+| `b` | bool | `true` / `false` |
+| `t` | short string | alias **`t127`** — max **127** UTF-8 bytes |
+| `tX` | bounded string | **`X`** = max UTF-8 bytes, **`1` ≤ X ≤ `127`** (`t8`, `t255` invalid) |
+| `l` | open list | any `VAL_LIST` (no element check) |
+| `o` | open object | any `VAL_OBJECT` |
+| `<schema>` | closed object | keys ⊆ schema; missing → `null` on `{}` |
+| `<schema>[N]` | schema list **field** | max **`N`** elements (`0` = unbounded `[]` in spec) |
+| `xs:<schema>[N]` | list **slot** | variable holds `VAL_LIST` of `<schema>`; max length **`N`** |
+
+**String alias:** `t` without a number is **`t127`** (same cap as `FLAT_INLINE_STR_MAX` for quoted literals).
+
+**List slots vs paths:** in `name:<stock>[4] = …`, the **`[4]`** is part of the **type** (capacity), not `name[4]` path syntax. Real paths use `.` or `[` **after** the type, e.g. `row.stocks[0]`, `xs[0] = s` when `xs` is already `:<stock>[N]`.
+
+**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.range.i64` (`u64`/`s64` outside exact-integer `double` range), `type.assign.incompatible`, `type.assign.string.len`, `type.assign.list.len`, `type.assign.retype` (change `:type` without `free`), `type.compare.incompatible` (typed scalar compare).
 
 **Compile:** **`:/expr`** on ASSIGN lhs is allowed; runtime reads STRING each run. **`<schema>`** on static lhs requires a **`<schema>:`** declaration; unknown schema → `type.schema.unknown` (compile) or `type.assign.schema.unknown` (dynamic STRING).
 
@@ -190,7 +216,7 @@ Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — i
 | `const n:u16 = 1` | Immutable slot |
 | `freeze(cfg)` | Frozen until `free` |
 
-**Comparison:** mixed logical types → `==` is **false** today. Typed scalar compare panics — **T4** (`json.stringify` for LIST/OBJECT).
+**Comparison (T4):** mixed logical types → `==` is **false** without panic. Two typed **scalars** with different contracts → **`type.compare.incompatible`**. Two **LIST** / **OBJECT** values → structural compare via **`json.stringify`** (no panic for shape mismatch).
 
 **Phases:** T0 docs → **T1** → **T2** (schemas) → … — [TYPED_BIND.md §10](./TYPED_BIND.md#10-implementation-phases).
 

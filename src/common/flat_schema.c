@@ -739,6 +739,62 @@ int flat_fb_write_schm_section(FILE *f, const FlatSchemaCatalog *cat) {
     return 0;
 }
 
+static int schm_slot_kind_valid(FlatSlotTypeKind kind) {
+    return kind >= FLAT_SLOT_TYPE_U8 && kind <= FLAT_SLOT_TYPE_SCHEMA;
+}
+
+static int schm_validate_catalog(const FlatSchemaCatalog *cat) {
+    int i;
+    int j;
+    int k;
+
+    if (!cat || cat->count < 0 || cat->count > FLAT_SCHEMA_MAX) {
+        return -1;
+    }
+    for (i = 0; i < cat->count; i++) {
+        const FlatSchemaDef *def = &cat->defs[i];
+        if (def->name[0] == '\0') {
+            return -1;
+        }
+        if (def->field_count < 0 || def->field_count > FLAT_SCHEMA_FIELD_MAX) {
+            return -1;
+        }
+        for (j = 0; j < def->field_count; j++) {
+            const FlatSchemaField *fld = &def->fields[j];
+            if (fld->key[0] == '\0') {
+                return -1;
+            }
+            if (!schm_slot_kind_valid(fld->slot.kind)) {
+                return -1;
+            }
+            if (fld->flags != FLAT_SCH_FIELD_NONE && fld->flags != FLAT_SCH_FIELD_LIST) {
+                return -1;
+            }
+            if (fld->slot.kind == FLAT_SLOT_TYPE_TN) {
+                if (fld->slot.aux == 0 || fld->slot.aux > FLAT_SLOT_TYPE_AUX_T_DEFAULT) {
+                    return -1;
+                }
+            } else if (fld->slot.kind == FLAT_SLOT_TYPE_T) {
+                if (fld->slot.aux != 0 && fld->slot.aux != FLAT_SLOT_TYPE_AUX_T_DEFAULT) {
+                    return -1;
+                }
+            } else if (fld->slot.aux != 0) {
+                return -1;
+            }
+            if (fld->slot.kind == FLAT_SLOT_TYPE_SCHEMA &&
+                fld->slot.schema_id >= (uint16_t)cat->count) {
+                return -1;
+            }
+            for (k = j + 1; k < def->field_count; k++) {
+                if (strcmp(fld->key, def->fields[k].key) == 0) {
+                    return -1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
 int flat_fb_parse_schm_section(const uint8_t *sec, size_t sec_len, FlatSchemaCatalog *out) {
     size_t pos = 0;
     uint32_t magic;
@@ -808,6 +864,18 @@ int flat_fb_parse_schm_section(const uint8_t *sec, size_t sec_len, FlatSchemaCat
             pos += 2;
             fld->flags = sec[pos++];
         }
+    }
+    if (pos != sec_len) {
+        memset(out, 0, sizeof *out);
+        return -1;
+    }
+    if (out->count != (int)scount) {
+        memset(out, 0, sizeof *out);
+        return -1;
+    }
+    if (schm_validate_catalog(out) != 0) {
+        memset(out, 0, sizeof *out);
+        return -1;
     }
     return 0;
 }

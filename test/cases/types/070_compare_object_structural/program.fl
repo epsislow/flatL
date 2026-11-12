@@ -1,0 +1,6 @@
+#main
+  x:o = {v: 1}
+  y:o = {v: 1}
+  x == y
+  io.outln('match')
+  OK

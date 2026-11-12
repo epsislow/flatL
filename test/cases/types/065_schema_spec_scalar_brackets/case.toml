@@ -1,0 +1,7 @@
+suite = "types"
+id = 65
+desc = "compile reject t4[] in schema field"
+kind = "exec"
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "invalid type"

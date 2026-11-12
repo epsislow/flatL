@@ -86,20 +86,72 @@ int flat_assign_split_line(char *line_buf, char **bind_out, char **value_out,
     return (*bind_out)[0] != '\0' && (*value_out)[0] != '\0' ? 0 : -1;
 }
 
-int flat_assign_lhs_has_path(const char *lhs) {
-    const char *sep;
+/* First `.` or `[` that starts a value path (not `<schema>[N]` list-slot type suffix). */
+static const char *lhs_path_start(const char *lhs) {
+    const char *colon;
+    const char *p;
 
     if (!lhs) {
-        return 0;
+        return NULL;
     }
-    sep = strpbrk(lhs, ".[");
-    return sep != NULL;
+    colon = strchr(lhs, ':');
+    if (!colon) {
+        return strpbrk(lhs, ".[");
+    }
+    p = colon + 1;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p == '<') {
+        const char *end = strchr(p, '>');
+        if (!end) {
+            return NULL;
+        }
+        p = end + 1;
+        while (*p && isspace((unsigned char)*p)) {
+            p++;
+        }
+        if (*p == '[') {
+            const char *rb = strchr(p, ']');
+            if (!rb) {
+                return NULL;
+            }
+            p = rb + 1;
+            while (*p && isspace((unsigned char)*p)) {
+                p++;
+            }
+        }
+        return strpbrk(p, ".[");
+    }
+    if (*p == '/') {
+        while (*p && !isspace((unsigned char)*p)) {
+            p++;
+        }
+        while (*p && isspace((unsigned char)*p)) {
+            p++;
+        }
+        return strpbrk(p, ".[");
+    }
+    if (*p == '\0') {
+        return NULL;
+    }
+    while (*p && !isspace((unsigned char)*p) && *p != '.' && *p != '[') {
+        p++;
+    }
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    return strpbrk(p, ".[");
+}
+
+int flat_assign_lhs_has_path(const char *lhs) {
+    return lhs_path_start(lhs) != NULL;
 }
 
 int flat_assign_path_build_expr(const char *lhs, char *path_expr, size_t path_sz, char *root_bind,
                                 size_t root_bind_sz) {
-    const char *dot;
     const char *colon;
+    const char *dot;
     const char *suffix;
     const char *name_end;
     size_t name_len;
@@ -108,16 +160,16 @@ int flat_assign_path_build_expr(const char *lhs, char *path_expr, size_t path_sz
     if (!lhs || !path_expr || path_sz == 0) {
         return -1;
     }
-    suffix = strpbrk(lhs, ".[");
+    suffix = lhs_path_start(lhs);
     if (!suffix) {
         return -1;
     }
-    dot = strchr(lhs, '.');
     colon = strchr(lhs, ':');
+    dot = strchr(lhs, '.');
     name_end = suffix;
     if (colon && dot && colon < dot) {
         name_end = colon;
-    } else if (colon && !dot && colon < suffix) {
+    } else if (colon && colon < suffix) {
         name_end = colon;
     }
     name_len = (size_t)(name_end - lhs);

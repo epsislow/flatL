@@ -1,0 +1,6 @@
+<inner>:
+  q: u8
+<outer>:
+  x: <inner>
+#main
+  OK

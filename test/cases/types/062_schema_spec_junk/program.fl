@@ -1,0 +1,6 @@
+<stock>:
+  qty: u16
+<root>:
+  items: <stock>[10]junk
+#main
+  OK

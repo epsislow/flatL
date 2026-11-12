@@ -1,0 +1,6 @@
+<stock>:
+  qty: u16
+<root>:
+  stocks: <stock>[65537]
+#main
+  OK
