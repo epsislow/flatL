@@ -110,11 +110,24 @@ Lexical rules (summary):
 
 See [doc_src/TOOLCHAIN.md — flatl](doc_src/TOOLCHAIN.md#flatl-driver-optional-ux).
 
-## `.fb` binary layout (v1.1)
+## `.fb` binary layout
 
-1. **Magic** — `0x46 0x4C 0x41 0x54` (`FLAT`)
-2. **Block directory** — count + entries (block id/hash, byte offset)
-3. **Bytecode stream** — opcode + payload (e.g. guard `#or` handler IP)
+**Current emit:** **`flc`** writes **format v6** (`FLAT_FB_FORMAT_VERSION` in `include/fb_format.h`). **`flvm`** still loads **v3–v6** (older images on disk keep working).
+
+| Version | Header | Tail sections (after bytecode) |
+|---------|--------|--------------------------------|
+| **v3** | 20 B | optional **FNAT** (native manifest) |
+| **v4** | 24 B | **BLBL** block labels, **FNUN** native units |
+| **v5** | 28 B | **FFUN** user `def` metadata (`func:callVM`) |
+| **v6** | 32 B | **SCHM** schema catalog (`<schema>:` in source → `schema_id` at runtime) |
+
+**History:** v5 was the first layout with **FFUN**; v6 only adds **`schm_off`** (byte offset 28) and the **SCHM** blob — same opcodes and FFUN layout as v5. Programs without typed schemas still use v6 with an empty SCHM.
+
+Normative detail: [doc_src/TOOLCHAIN.md — fbdump](doc_src/TOOLCHAIN.md#fbdump) · [SPECIFICATION.md §3](doc_src/SPECIFICATION.md). Quick picture:
+
+1. **Magic** — `FLAT` + version byte + block count + section offsets  
+2. **Bytecode** + **BLBL** / **FNUN** / **FFUN** / **SCHM** (as applicable)  
+3. Per-instruction stream — opcode + payload (e.g. ASSIGN text, guard `#or` target)
 
 ## Opcodes
 

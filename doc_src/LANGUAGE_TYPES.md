@@ -164,7 +164,7 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 | `s16` | signed 16-bit | `−32768` … `32767` |
 | `s32` | signed 32-bit | `−2^31` … `2^31−1` |
 | `s64` | signed 64-bit (interim) | exact integers `±(2^53−1)` in `double` |
-| `f32`, `f64` | float | any `VAL_NUMBER` (no narrowing) |
+| `f32`, `f64` | float | any `VAL_NUMBER` at assign (see below) |
 | `b` | bool | `true` / `false` |
 | `t` | short string | alias **`t127`** — max **127** UTF-8 bytes |
 | `tX` | bounded string | **`X`** = max UTF-8 bytes, **`1` ≤ X ≤ `127`** (`t8`, `t255` invalid) |
@@ -173,6 +173,8 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 | `<schema>` | closed object | keys ⊆ schema; missing → `null` on `{}` |
 | `<schema>[N]` | schema list **field** | max **`N`** elements (`0` = unbounded `[]` in spec) |
 | `xs:<schema>[N]` | list **slot** | variable holds `VAL_LIST` of `<schema>`; max length **`N`** |
+
+**`f32` / `f64` (interim):** slots are **logical** float contracts only. Storage is still one IEEE-754 **`double`** per `VAL_NUMBER`; assign checks **`tag == VAL_NUMBER`** only — no range, no `float` rounding, and no distinction between **`f32`** and **`f64`** until a future VM/AOT split (`num_stor` / narrowing rules in the types roadmap). Use integers (`u*`/`s*`) when you need hard bounds today.
 
 **String alias:** `t` without a number is **`t127`** (same cap as `FLAT_INLINE_STR_MAX` for quoted literals).
 
