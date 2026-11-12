@@ -1,0 +1,8 @@
+suite = "types"
+id = 90
+desc = "m.calc without arg2; check at assign -> u32"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

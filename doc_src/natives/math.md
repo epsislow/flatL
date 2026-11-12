@@ -57,6 +57,7 @@ Evaluate a **STRING** expression and return a **NUMBER**. Use this when you need
 | Call | Returns |
 |------|---------|
 | `calc(expr)` | **NUMBER** — result of evaluating **expr** |
+| `calc(expr, "u8")` | **NUMBER** — same, but range-checked for the given **numeric** type (`type.calc.range` on overflow) |
 
 **Argument `expr`:** a **STRING** (literal `'…'` / `"…"`, or a variable holding STRING / REF). The string body is the expression text (no surrounding quotes).
 

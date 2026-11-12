@@ -1,0 +1,6 @@
+<cfg>:
+  flag: b
+#main
+  box:<cfg> = { flag: false }
+  freeze(box)
+  box.flag = true

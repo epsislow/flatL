@@ -1,0 +1,6 @@
+#main
+  x:u8 = 5
+  freeze(x)
+  free(x)
+  x:u16 = 12
+  OK

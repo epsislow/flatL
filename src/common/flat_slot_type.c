@@ -419,6 +419,27 @@ static size_t value_string_bytes(const FlatValue *val, const FlatStringPool *poo
     return 0;
 }
 
+int flat_slot_type_is_numeric(const FlatSlotType *t) {
+    if (!t) {
+        return 0;
+    }
+    switch (t->kind) {
+    case FLAT_SLOT_TYPE_U8:
+    case FLAT_SLOT_TYPE_U16:
+    case FLAT_SLOT_TYPE_U32:
+    case FLAT_SLOT_TYPE_U64:
+    case FLAT_SLOT_TYPE_S8:
+    case FLAT_SLOT_TYPE_S16:
+    case FLAT_SLOT_TYPE_S32:
+    case FLAT_SLOT_TYPE_S64:
+    case FLAT_SLOT_TYPE_F32:
+    case FLAT_SLOT_TYPE_F64:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 int flat_slot_type_is_scalar(const FlatSlotType *t) {
     if (!t) {
         return 0;

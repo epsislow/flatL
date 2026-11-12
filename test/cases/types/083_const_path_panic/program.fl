@@ -1,0 +1,5 @@
+<point>:
+  x: u8
+#main
+  const p:<point> = { x: 1 }
+  p.x = 2

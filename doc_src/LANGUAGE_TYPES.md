@@ -210,13 +210,31 @@ Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — i
 
 **GUARD** expressions may use **dotted paths** (e.g. `row.qty == null`).
 
-### Planned (T3+)
+### T4 dynamic bind (recap)
 
 | Form | Meaning |
 |------|---------|
-| `s:/typeStr` | Dynamic type |
-| `const n:u16 = 1` | Immutable slot |
-| `freeze(cfg)` | Frozen until `free` |
+| `s:/typeStr` | Dynamic type from STRING at each assign (`V.dSchemaAllow` / `V.dSchemaList`) |
+
+### T5 constants and freeze
+
+| Form | Meaning |
+|------|---------|
+| `const n:u16 = 1` | Immutable slot from first bind; re-assign → `type.const.assign` |
+| `cfg:<schema> = {}` … `freeze(cfg)` | Mutable until `freeze(name)`; then assign/path → `type.freeze.assign` |
+| `freeze(name)` | Same level as `free(name)`; flag on **(VCX, slot)** |
+| `free(var)` | Clears value, type contract, frozen, and const |
+
+**I/O:** `io.ctxout` / `io.ctxerr` on a **const** or **frozen** variable → `type.freeze.ctx`. **VCX** copy operations preserve frozen/const bits per slot.
+
+### T4+ typed calc and I/O
+
+| Form | Meaning |
+|------|---------|
+| `m.calc('a+b', 'u8')` | Check result in calc; overflow → `type.calc.range` |
+| `m.calc('a+b') -> s:u32` | Check at assign when no 2nd arg |
+| `io.in_num('p', 'u8')` | Read number in range; else `type.io.expect` |
+| `io.inln('p', 't4')` | Line length ≤ 4; else `type.io.len` |
 
 **Comparison (T4):** mixed logical types → `==` is **false** without panic. Two typed **scalars** with different contracts → **`type.compare.incompatible`**. Two **LIST** / **OBJECT** values → structural compare via **`json.stringify`** (no panic for shape mismatch).
 

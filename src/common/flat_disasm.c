@@ -37,6 +37,8 @@ static const char *disasm_opcode_name(uint8_t opcode) {
         return "NATIVE";
     case OP_FREE:
         return "FREE";
+    case OP_FREEZE:
+        return "FREEZE";
     case OP_PANIC_RESET:
         return "PANIC_RESET";
     case OP_PANIC_REASON:
@@ -179,6 +181,7 @@ static void print_payload(FILE *out, uint8_t opcode, const uint8_t *payload, uin
         }
         break;
     case OP_FREE:
+    case OP_FREEZE:
     case OP_PANIC_REASON:
     case OP_IO:
         if (psz > 0) {

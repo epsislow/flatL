@@ -1,6 +1,6 @@
 # Typed bind, schemas, and slot contracts (T0 draft)
 
-**Status:** **T1–T4 implemented** in `flc`/`flvm` (typed `m.calc` / typed I/O remain T5+).  
+**Status:** **T1–T5** and **T4+** (`m.calc` / typed `io.in_*`) implemented in `flvm`; typed **`def`** remains **T6**.  
 **Overview:** [STRICT_TYPES.md](./STRICT_TYPES.md)  
 **Roadmap:** [`.cursor/plans/strict-types-schemas-roadmap.plan.md`](../.cursor/plans/strict-types-schemas-roadmap.plan.md)  
 **Ideas sketch:** [`.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt`](../.cursor/my_ideas/strict_types_in_flatl_and_schemas_sketch.txt) (aligned)  
@@ -109,19 +109,23 @@ API today: **`json.stringify`**, **`json.parse_object`** ([natives/json.md](./na
 
 | Mechanism | Meaning |
 |-----------|---------|
-| **`const name:type = expr`** | Immutable from first bind |
-| **`name:type = expr`** then **`freeze(name)`** | Mutable until **`freeze(name)`** |
-| **`freeze(name)`** | Slot flag (pair with **`free(name)`**); not `mem.freeze` |
+| **`const name:type = expr`** | Immutable from first bind; **`:type` required** at compile; any re-assign or path write → **`type.const.assign`** |
+| **`name:type = expr`** then **`freeze(name)`** | Mutable until **`freeze(name)`**; then same as frozen |
+| **`freeze(name)`** | Slot flag (pair with **`free(name)`**); not `mem.freeze`; undeclared name → compile error |
 
-Copy VCX copies frozen flag per slot. Frozen + **`io.ctxout`** → panic.
+**`free(var)`** clears frozen and const flags together with the slot type contract.
+
+Copy VCX copies **frozen** and **const** flags per slot. Frozen or **const** slot used in **`io.ctxout`** / **`io.ctxerr`** → **`type.freeze.ctx`**.
 
 ---
 
-## 9. `foreach`, `m.calc`, `def` (planned)
+## 9. `m.calc`, typed I/O, `def`
 
+- **`m.calc(expr, "u32")`** — optional numeric type as 2nd arg; overflow → **`type.calc.range`**; bad type name → **`type.calc.type`**. Without arg 2, **`-> sum:u32`** checks at assign.
+- **Homogeneous operands:** if any slot in **`expr`** is typed numeric, all names in **`expr`** must match that contract (**`type.calc.type`**).
+- **`io.in_num` / `io.inln` / `io.in_bool`** — optional **`, "type"`** after prompt; **`type.io.expect`** / **`type.io.len`**.
 - **`foreach(coll, item, '#block')`:** for `coll:<stock>[]`, **`item`** follows element schema `<stock>`.
-- **`m.calc(expr)`** optional 2nd arg type; without it result is NUMBER; **`-> sum:u32`** checks at assign; typed vars in expr must share same numeric type.
-- **`def f(a:u8, b) -> out:u16`:** mixed typed/untyped formals — future + `.fmod` metadata.
+- **`def f(a:u8, b) -> out:u16`:** mixed typed/untyped formals — **T6** + `.fmod` metadata.
 
 Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
 
@@ -136,9 +140,9 @@ Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
 | **T2** | **Done:** `<schema>:` blocks, **`var:<schema>`**, SCHM in **`.fb` v6**, null-fill on `{}`, compile checks (`type.schema.cycle`, `type.schema.unknown`), runtime `type.schema.field.unknown` |
 | **T3** | **Done:** `var.field = …`, `var:<schema>.field = …`, typed `O.set2`, schema on path, nested null-fill on write |
 | **T4** | **Done:** `name:/expr`, `V.dSchemaAllow`, `V.dSchemaList` |
-| **T4+** | typed `m.calc` / I/O |
-| **T5** | `const`, `freeze()` |
-| **T6** | Typed `def`, optional native sugar |
+| **T5** | **Done:** `const`, `freeze()`, ctxout guard, VCX copy of flags |
+| **T4+** | **Done:** `m.calc` arg 2, typed `io.in_*`, `type.calc.*` / `type.io.*` |
+| **T6** | Typed `def`, optional native sugar, `O.set2` path parity |
 
 ---
 

@@ -191,3 +191,50 @@ int flat_assign_path_build_expr(const char *lhs, char *path_expr, size_t path_sz
     }
     return 0;
 }
+
+int flat_assign_strip_const_prefix(char *line_buf, int *is_const_out) {
+    char *p;
+    size_t rest_len;
+
+    if (!line_buf) {
+        return -1;
+    }
+    if (is_const_out) {
+        *is_const_out = 0;
+    }
+    p = trim_mut(line_buf);
+    if (strncmp(p, "const", 5) != 0) {
+        return 0;
+    }
+    if (p[5] != '\0' && !isspace((unsigned char)p[5])) {
+        return 0;
+    }
+    p += 5;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    rest_len = strlen(p);
+    memmove(line_buf, p, rest_len + 1);
+    if (is_const_out) {
+        *is_const_out = 1;
+    }
+    return 0;
+}
+
+int flat_assign_lhs_has_type_in_bind(const char *lhs) {
+    const char *colon;
+    const char *p;
+
+    if (!lhs) {
+        return 0;
+    }
+    colon = strchr(lhs, ':');
+    if (!colon) {
+        return 0;
+    }
+    p = colon + 1;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    return *p != '\0';
+}

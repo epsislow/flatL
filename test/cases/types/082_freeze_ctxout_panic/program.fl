@@ -1,0 +1,4 @@
+#main
+  buf = mem.ref_empty()
+  freeze(buf)
+  io.ctxout(buf)

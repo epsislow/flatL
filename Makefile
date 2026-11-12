@@ -35,9 +35,9 @@ VM_EXTRA_LIBS = -ldl
 PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
                 $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so $(BINDIR)/libflat_obj.so
 PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/value_parse.c src/common/value_ops.c \
-               src/common/value_pool.c src/common/value_collection.c src/common/value_live.c \
-               src/common/flat_assign.c src/common/flat_obj_path.c src/common/flat_schema.c \
-               src/common/flat_slot_type.c src/common/flat_str.c
+               src/common/value_json.c src/common/value_pool.c src/common/value_collection.c \
+               src/common/value_live.c src/common/flat_assign.c src/common/flat_obj_path.c \
+               src/common/flat_schema.c src/common/flat_slot_type.c src/common/flat_str.c
 PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c src/lib/flat_math_calc.c \

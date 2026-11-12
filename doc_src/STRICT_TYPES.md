@@ -1,6 +1,6 @@
 # Strict types & object schemas (overview)
 
-**Status:** **T4** — **T3** plus **dynamic bind** (`payload:/typeString`), **VCX schema policy** (`V.dSchemaAllow`, `V.dSchemaList`). `const`, `freeze`, typed `m.calc` / I/O remain **T5+**.
+**Status:** **T5** — strict types through **`freeze`/`const`**. **T4+** adds **`m.calc(expr, "u8")`**, homogeneous typed operands in calc, and optional type arg on **`io.in_num` / `io.inln` / `io.in_bool`**. Typed **`def`** remains **T6**.
 
 | Doc | Role |
 |-----|------|
@@ -136,6 +136,16 @@ The STRING is read **each time** the line runs. Schemes in STRING are filtered b
 
 ---
 
+## 8.1 Typed `m.calc` and I/O (T4+)
+
+**`m.calc(expr)`** — unchanged (NUMBER). **`m.calc(expr, "u32")`** — result checked in the native (overflow → **`type.calc.range`**). Without arg 2, use **`-> slot:u32`** for the same check at assign.
+
+If any variable in **`expr`** has a **numeric** slot contract, **every** variable in **`expr`** must share the **same** contract (else **`type.calc.type`**). Untyped-only expressions keep legacy rules.
+
+**I/O:** optional second argument type string — **`io.in_num('Price:', 'u8')`**, **`io.inln('Name:', 't8')`**, **`io.in_bool('ok?', 'b')`**. After read, value is validated (`type.io.expect`, **`type.io.len`** for `tN`). Assign to a typed **`->`** target still uses assign checks.
+
+---
+
 ## 9. `const` and `freeze()`
 
 ```text
@@ -144,8 +154,11 @@ cfg:<config> = {}
 freeze(cfg)
 ```
 
-- **`const`** — immutable from first bind (not `:=:`).
-- **`freeze(name)`** — pair with **`free(name)`**; flag on **slot**; copy VCX copies frozen bit.
+- **`const name:type = expr`** — immutable from first bind (compile-time requires **`:type`**; not `:=:`). Re-assign or path write → **`type.const.assign`**.
+- **`freeze(name)`** — pair with **`free(name)`** at the same language level (not `mem.freeze`); flag on **(VCX, slot)**. After freeze, assign / path write → **`type.freeze.assign`**.
+- **`free(var)`** — clears value, static type contract, **`slot_frozen`**, and **`slot_const`** (re-bind allowed).
+- **I/O context** — binding frozen or **const** variables into **`io.ctxout`** / **`io.ctxerr`** → **`type.freeze.ctx`** (same code for both flags).
+- **VCX copy** — `V.copy` / stage restore copies **frozen** and **const** bits per slot.
 
 ---
 
@@ -158,6 +171,8 @@ freeze(cfg)
 | **T2** | **Done:** SCHM, `<schema>:`, `var:<schema>`, null-fill on `{}`, `type.schema.*` panics |
 | **T3** | **Done:** path assign, compound LHS, typed `O.set2`, nested schema materialize |
 | **T4** | **Done:** `:/expr`, `dSchema*` |
-| **T5+** | `m.calc` typed, `def` typed, `const`, `freeze` |
+| **T5** | **Done:** `const`, `freeze()`, `free` clears flags, ctxout guard, VCX copy |
+| **T4+** | **Done:** `m.calc` arg 2, `io.in_*` type arg, `type.calc.*` / `type.io.*` |
+| **T6** | `def` typed, `O.set2` full path parity |
 
 Specimens and T0 tests: `test/cases/types_t0/`.

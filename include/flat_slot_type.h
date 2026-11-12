@@ -68,4 +68,7 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count,
 
 int flat_slot_type_is_scalar(const FlatSlotType *t);
 
+/* u* / s* / f* only (for m.calc homogeneity). */
+int flat_slot_type_is_numeric(const FlatSlotType *t);
+
 #endif

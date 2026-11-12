@@ -10,5 +10,9 @@ Cases **058–061** cover interim **`u64`/`s64`** exact-integer limits (`2^53−
 Cases **062–065** cover strict **schema field** type specs at compile time.
 Cases **066–071** cover typed **path index**, **list slots** `xs:<schema>[N]`, and **compare** guards.
 Cases **072–075** cover corrupt **SCHM** in `.fb` at **`flvm` load** (`invalid SCHM section`).
+Cases **076–086** cover **T5** **`const`**, **`freeze()`**, **`free`** clearing flags, compile rejects, **`io.ctxout`** on frozen ref, and path assign on const/frozen schema objects.
+Cases **087–093** cover **T4+** **`m.calc(expr, "u8")`**, homogeneous typed vars, overflow → **`type.calc.range`**, and invalid type arg → **`type.calc.type`**.
+Cases **094–095** cover **T4+** typed **`io.inln(prompt, "tN")`** (`type.io.len`).
 
 Panic cases use `expect_exit = 1` and `stderr_contains = "type.*"` (or `invalid SCHM` for load tests).
+Compile-only rejects use `kind = "exec"` on **`flc`** (e.g. **080–081**).

@@ -1,0 +1,10 @@
+suite = "types"
+id = 93
+desc = "m.calc mixed typed/untyped vars in expr"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "type.calc.type"
+stdout_contains = "unhandled PANIC"

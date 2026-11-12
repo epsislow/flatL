@@ -1,6 +1,7 @@
 #include "flat_math_calc.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
+#include "flat_slot_type.h"
 #include "flat_value.h"
 
 #include <math.h>
@@ -14,16 +15,21 @@
 
 static int split_two_args(char *inner, char **left, char **right) {
     int depth = 0;
+    char quote = 0;
     char *p;
 
     for (p = inner; *p; p++) {
-        if (*p == '[' || *p == '(') {
+        if (!quote && (*p == '\'' || *p == '"')) {
+            quote = *p;
+        } else if (quote && *p == quote) {
+            quote = 0;
+        } else if (!quote && (*p == '[' || *p == '(')) {
             depth++;
-        } else if (*p == ']' || *p == ')') {
+        } else if (!quote && (*p == ']' || *p == ')')) {
             if (depth > 0) {
                 depth--;
             }
-        } else if (*p == ',' && depth == 0) {
+        } else if (!quote && depth == 0 && *p == ',') {
             *p = '\0';
             *left = flat_native_trim(inner);
             *right = flat_native_trim(p + 1);
@@ -432,18 +438,58 @@ static int string_from_value(FlatNativeCtx *ctx, const FlatValue *v, char *buf, 
     return -1;
 }
 
+static int type_spec_from_expr(FlatNativeCtx *ctx, const char *expr, FlatSlotType *out) {
+    FlatValue v;
+    char spec[96];
+    const FlatSchemaCatalog *cat;
+
+    if (!ctx || !expr || !out) {
+        return -1;
+    }
+    if (parse_expr(ctx, expr, &v) != 0) {
+        return -1;
+    }
+    if (string_from_value(ctx, &v, spec, sizeof spec) != 0) {
+        return -1;
+    }
+    cat = ctx->bc ? &ctx->bc->schemas : NULL;
+    if (flat_slot_type_parse_spec(spec, out, cat, NULL, 0) != 0) {
+        return -1;
+    }
+    if (!flat_slot_type_is_numeric(out)) {
+        return -1;
+    }
+    return 0;
+}
+
 int flat_native_math_calc(FlatNativeCtx *ctx) {
     FlatValue src;
+    char inner_buf[4096];
     char expr[4096];
+    char *expr_e;
+    char *type_e = NULL;
     double result;
     FlatMathCalcErr err;
+    char type_panic[64];
+    FlatSlotType result_ty;
+    int has_result_ty = 0;
 
     if (!ctx || !ctx->out || !ctx->io_status) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
     *ctx->io_status = FLAT_IO_OK;
-    if (parse_expr(ctx, ctx->inner, &src) != 0) {
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
+    expr_e = flat_native_trim(inner_buf);
+    if (split_two_args(inner_buf, &expr_e, &type_e) == 0 && type_e && type_e[0] != '\0') {
+        if (type_spec_from_expr(ctx, type_e, &result_ty) != 0) {
+            *ctx->io_status = FLAT_IO_ERR;
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.calc.type");
+            return -1;
+        }
+        has_result_ty = 1;
+    }
+    if (parse_expr(ctx, expr_e, &src) != 0) {
         return calc_set_panic_arg(ctx);
     }
     if (string_from_value(ctx, &src, expr, sizeof expr) != 0) {
@@ -452,12 +498,44 @@ int flat_native_math_calc(FlatNativeCtx *ctx) {
     if (expr[0] == '\0') {
         return calc_set_panic_arg(ctx);
     }
-    err = flat_math_calc_eval(expr, ctx->vars, ctx->var_count, ctx->var_names, ctx->pool,
-                              ctx->coll, &result);
+    err = flat_math_calc_eval_strict(expr, ctx->vars, ctx->var_count, ctx->var_names, ctx->pool,
+                                     ctx->coll, ctx->var_slot_types, ctx->var_has_slot_type,
+                                     &result, type_panic, sizeof type_panic);
     if (err != FLAT_MATH_CALC_OK) {
         *ctx->io_status = FLAT_IO_ERR;
-        calc_set_panic(ctx, err);
+        if (err == FLAT_MATH_CALC_TYPE_STRICT) {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s",
+                     type_panic[0] ? type_panic : "type.calc.type");
+        } else {
+            calc_set_panic(ctx, err);
+        }
         return -1;
+    }
+    if (has_result_ty) {
+        FlatValue nv;
+        FlatValue staged;
+        char chk[64];
+        const FlatSchemaCatalog *cat = ctx->bc ? &ctx->bc->schemas : NULL;
+
+        flat_value_set_number(&nv, result);
+        staged = nv;
+        if (flat_slot_type_check_value(&result_ty, &nv, ctx->pool, ctx->coll, cat, &staged, chk,
+                                       sizeof chk) != 0) {
+            const char *reason = "type.calc.range";
+            if (chk[0] != '\0' && strncmp(chk, "type.assign.", 12) == 0) {
+                reason = "type.calc.range";
+            } else if (chk[0] != '\0') {
+                reason = chk;
+            }
+            *ctx->io_status = FLAT_IO_ERR;
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", reason);
+            return -1;
+        }
+        if (staged.tag == VAL_NUMBER) {
+            return flat_value_set_number(ctx->out, staged.u.number);
+        }
+        *ctx->out = staged;
+        return 0;
     }
     return flat_value_set_number(ctx->out, result);
 }

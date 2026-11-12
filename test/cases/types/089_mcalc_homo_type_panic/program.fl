@@ -1,0 +1,6 @@
+use native math with m
+
+#main
+  a:u8 = 1
+  b:u16 = 2
+  m.calc('a + b') -> s

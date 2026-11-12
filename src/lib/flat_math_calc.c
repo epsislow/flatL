@@ -1,6 +1,7 @@
 #include "flat_math_calc.h"
 #include "flat_native_util.h"
 #include "flat_obj_path.h"
+#include "flat_slot_type.h"
 
 #include <ctype.h>
 #include <math.h>
@@ -16,6 +17,11 @@ typedef struct {
     FlatStringPool *pool;
     FlatCollectionPool *coll;
     FlatMathCalcErr err;
+    const FlatSlotType *var_slot_types;
+    const uint8_t *var_has_slot_type;
+    int homo_set;
+    FlatSlotType homo;
+    char type_panic[64];
 } CalcParser;
 
 static void set_err(CalcParser *cp, FlatMathCalcErr e) {
@@ -99,6 +105,41 @@ static int finite_result(double x, CalcParser *cp) {
     return 0;
 }
 
+static void calc_type_panic(CalcParser *cp) {
+    if (!cp) {
+        return;
+    }
+    cp->err = FLAT_MATH_CALC_TYPE_STRICT;
+    snprintf(cp->type_panic, sizeof cp->type_panic, "%s", "type.calc.type");
+}
+
+static void calc_var_slot_contract(CalcParser *cp, int vi) {
+    const FlatSlotType *st;
+
+    if (!cp || vi < 0 || !cp->var_has_slot_type || !cp->var_slot_types) {
+        return;
+    }
+    if (!cp->var_has_slot_type[vi]) {
+        if (cp->homo_set) {
+            calc_type_panic(cp);
+        }
+        return;
+    }
+    st = &cp->var_slot_types[vi];
+    if (!flat_slot_type_is_numeric(st)) {
+        calc_type_panic(cp);
+        return;
+    }
+    if (cp->homo_set) {
+        if (!flat_slot_type_equals(st, &cp->homo)) {
+            calc_type_panic(cp);
+        }
+        return;
+    }
+    cp->homo = *st;
+    cp->homo_set = 1;
+}
+
 static double parse_atom(CalcParser *cp) {
     double v;
     char name[64];
@@ -123,6 +164,10 @@ static double parse_atom(CalcParser *cp) {
         vi = flat_native_find_var(name, cp->var_count, cp->var_names);
         if (vi < 0) {
             set_err(cp, FLAT_MATH_CALC_UNKNOWN_VAR);
+            return 0.0;
+        }
+        calc_var_slot_contract(cp, vi);
+        if (cp->err == FLAT_MATH_CALC_TYPE_STRICT) {
             return 0.0;
         }
         skip_ws(cp);
@@ -299,6 +344,9 @@ const char *flat_math_calc_reason(FlatMathCalcErr err, char *buf, size_t buf_sz)
     case FLAT_MATH_CALC_RANGE:
         sub = "math.calc.range";
         break;
+    case FLAT_MATH_CALC_TYPE_STRICT:
+        sub = "type.calc.type";
+        break;
     default:
         sub = "math.calc";
         break;
@@ -309,15 +357,35 @@ const char *flat_math_calc_reason(FlatMathCalcErr err, char *buf, size_t buf_sz)
     return sub;
 }
 
+static FlatMathCalcErr calc_run(CalcParser *cp, double *out) {
+    double r;
+
+    if (!cp || !out) {
+        return FLAT_MATH_CALC_SYNTAX;
+    }
+    r = parse_expr(cp);
+    if (cp->err != FLAT_MATH_CALC_OK) {
+        return cp->err;
+    }
+    if (!at_end(cp)) {
+        return FLAT_MATH_CALC_SYNTAX;
+    }
+    if (finite_result(r, cp) != 0) {
+        return cp->err;
+    }
+    *out = r;
+    return FLAT_MATH_CALC_OK;
+}
+
 FlatMathCalcErr flat_math_calc_eval(const char *expr, const FlatValue *vars, int var_count,
                                     const char (*var_names)[64], FlatStringPool *pool,
                                     FlatCollectionPool *coll, double *out) {
     CalcParser cp;
-    double r;
 
     if (!expr || !out) {
         return FLAT_MATH_CALC_SYNTAX;
     }
+    memset(&cp, 0, sizeof cp);
     cp.p = expr;
     cp.vars = vars;
     cp.var_count = var_count;
@@ -325,16 +393,32 @@ FlatMathCalcErr flat_math_calc_eval(const char *expr, const FlatValue *vars, int
     cp.pool = pool;
     cp.coll = coll;
     cp.err = FLAT_MATH_CALC_OK;
-    r = parse_expr(&cp);
-    if (cp.err != FLAT_MATH_CALC_OK) {
-        return cp.err;
-    }
-    if (!at_end(&cp)) {
+    return calc_run(&cp, out);
+}
+
+FlatMathCalcErr flat_math_calc_eval_strict(
+    const char *expr, const FlatValue *vars, int var_count, const char (*var_names)[64],
+    FlatStringPool *pool, FlatCollectionPool *coll, const FlatSlotType *var_slot_types,
+    const uint8_t *var_has_slot_type, double *out, char *type_panic, size_t type_panic_sz) {
+    CalcParser cp;
+    FlatMathCalcErr err;
+
+    if (!expr || !out) {
         return FLAT_MATH_CALC_SYNTAX;
     }
-    if (finite_result(r, &cp) != 0) {
-        return cp.err;
+    memset(&cp, 0, sizeof cp);
+    cp.p = expr;
+    cp.vars = vars;
+    cp.var_count = var_count;
+    cp.var_names = var_names;
+    cp.pool = pool;
+    cp.coll = coll;
+    cp.var_slot_types = var_slot_types;
+    cp.var_has_slot_type = var_has_slot_type;
+    cp.err = FLAT_MATH_CALC_OK;
+    err = calc_run(&cp, out);
+    if (err == FLAT_MATH_CALC_TYPE_STRICT && type_panic && type_panic_sz > 0) {
+        snprintf(type_panic, type_panic_sz, "%s", cp.type_panic[0] ? cp.type_panic : "type.calc.type");
     }
-    *out = r;
-    return FLAT_MATH_CALC_OK;
+    return err;
 }

@@ -1,0 +1,10 @@
+suite = "types"
+id = 91
+desc = "m.calc result checked on typed arrow bind"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "type.assign.range"
+stdout_contains = "unhandled PANIC"

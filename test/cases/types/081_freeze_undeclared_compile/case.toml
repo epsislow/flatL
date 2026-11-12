@@ -1,0 +1,7 @@
+suite = "types"
+id = 81
+desc = "compile rejects freeze() on undeclared name"
+kind = "exec"
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "freeze of undeclared"

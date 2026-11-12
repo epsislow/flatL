@@ -320,6 +320,18 @@ static int ep_bind_from_value(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint 
             snprintf(name, sizeof name, "%s", ctx->inner ? ctx->inner : "");
             flat_native_trim(name);
             vi = flat_native_find_var(name, ctx->var_count, ctx->var_names);
+            if (vi >= 0 && (allow_out || allow_err)) {
+                if (ctx->var_slot_frozen && ctx->var_slot_frozen[vi]) {
+                    ctx_panic(io, "type.freeze.ctx");
+                    *st = FLAT_IO_PANIC_CTX;
+                    return -1;
+                }
+                if (ctx->var_slot_const && ctx->var_slot_const[vi]) {
+                    ctx_panic(io, "type.freeze.ctx");
+                    *st = FLAT_IO_PANIC_CTX;
+                    return -1;
+                }
+            }
             ep->kind = EP_REF;
             ep->ref_id = v->u.ref_id;
             ep->var_idx = vi;

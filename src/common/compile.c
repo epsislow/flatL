@@ -73,6 +73,7 @@ static int varset_add_assign_lhs(VarSet *vs, const char *text) {
 
     (void)value;
     snprintf(buf, sizeof buf, "%s", text);
+    (void)flat_assign_strip_const_prefix(buf, NULL);
     if (flat_assign_split_line(buf, &bind, &value, &form) != 0) {
         return 0;
     }
@@ -177,6 +178,19 @@ static int validate_free_in_program(const FgirProgram *prog, char *err, size_t e
                 }
                 if (!varset_has_name(&vs, var)) {
                     snprintf(err, err_size, "free of undeclared variable %s in %s", var,
+                             b->label);
+                    rc = -1;
+                }
+            }
+            if (ins->kind == FGIR_FREEZE) {
+                char var[64];
+                if (flat_parse_freeze_varname(ins->text, var, sizeof var) != 0) {
+                    snprintf(err, err_size, "invalid freeze: %s", ins->text);
+                    rc = -1;
+                    break;
+                }
+                if (!varset_has_name(&vs, var)) {
+                    snprintf(err, err_size, "freeze of undeclared variable %s in %s", var,
                              b->label);
                     rc = -1;
                 }
@@ -431,6 +445,18 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             FlatAssignSplitForm form;
 
             snprintf(assign_chk, sizeof assign_chk, "%s", ins->text);
+            {
+                int is_const = 0;
+
+                if (flat_assign_strip_const_prefix(assign_chk, &is_const) != 0) {
+                    snprintf(err, err_size, "invalid assignment: %s", ins->text);
+                    return -1;
+                }
+                if (is_const && !flat_assign_lhs_has_type_in_bind(assign_chk)) {
+                    snprintf(err, err_size, "const bind requires :type: %s", ins->text);
+                    return -1;
+                }
+            }
             if (flat_assign_split_line(assign_chk, &bind, &value, &form) != 0) {
                 snprintf(err, err_size, "invalid assignment: %s", ins->text);
                 return -1;
@@ -473,6 +499,19 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             plen = (uint8_t)(strlen(var) + 1);
             if (emit_instr(code, OP_FREE, var, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case FGIR_FREEZE: {
+            char var[64];
+            uint8_t plen;
+            if (flat_parse_freeze_varname(ins->text, var, sizeof var) != 0) {
+                snprintf(err, err_size, "invalid freeze: %s", ins->text);
+                return -1;
+            }
+            plen = (uint8_t)(strlen(var) + 1);
+            if (emit_instr(code, OP_FREEZE, var, plen) != 0) {
                 return -1;
             }
             break;

@@ -1,0 +1,5 @@
+#main
+  v:u16 = 1
+  v:u16 = 999
+  freeze(v)
+  OK

@@ -96,6 +96,7 @@ Pass the query as a **string literal** (recommended): `io.docs('#H')`, `io.docs(
 | `io.in(prompt?)` | One character | STRING (len 1) |
 | `io.inln(prompt?)` | One line (no `\n` in value) | STRING |
 | `io.in_num(prompt?)` | One line + parse | NUMBER |
+| `io.in_num(prompt, "u8")` | Same + type check after parse | NUMBER (in range) |
 | `io.in_bool(prompt?)` | One line + parse | BOOL |
 
 **Optional prompt:** one STRING argument — written to **stdout** before read; omitted = no prompt.

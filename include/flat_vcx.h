@@ -20,6 +20,8 @@ typedef struct FlatVcxVar {
     uint8_t has_slot_type;
     uint8_t slot_dynamic; /* bind via name:/expr */
     char slot_dynamic_expr[FLAT_VAR_NAME_MAX + 1];
+    uint8_t slot_frozen; /* freeze(name) — no assign/path until free */
+    uint8_t slot_const;  /* const name:type = — no reassign until free */
 } FlatVcxVar;
 
 #define FLAT_VCX_DSCHEMA_LIST_MAX 32

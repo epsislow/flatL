@@ -1,0 +1,10 @@
+suite = "types"
+id = 92
+desc = "m.calc second arg must be numeric type"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "type.calc.type"
+stdout_contains = "unhandled PANIC"

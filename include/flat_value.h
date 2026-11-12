@@ -159,6 +159,10 @@ typedef enum {
 int flat_assign_split_line(char *line_buf, char **bind_out, char **value_out,
                            FlatAssignSplitForm *form_out);
 
+/* If line starts with `const` (word), strip it and set *is_const_out=1. */
+int flat_assign_strip_const_prefix(char *line_buf, int *is_const_out);
+int flat_assign_lhs_has_type_in_bind(const char *lhs);
+
 int flat_assign_lhs_has_path(const char *lhs);
 int flat_assign_path_build_expr(const char *lhs, char *path_expr, size_t path_sz, char *root_bind,
                                 size_t root_bind_sz);

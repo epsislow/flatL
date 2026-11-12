@@ -1,0 +1,7 @@
+suite = "types"
+id = 80
+desc = "compile rejects const without :type"
+kind = "exec"
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "const bind requires"

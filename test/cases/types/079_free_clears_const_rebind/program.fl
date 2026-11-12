@@ -1,0 +1,5 @@
+#main
+  const a:u8 = 7
+  free(a)
+  a:u16 = 300
+  OK

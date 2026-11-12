@@ -126,6 +126,53 @@ int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz) {
     return 0;
 }
 
+int flat_parse_freeze_varname(const char *line, char *var_out, size_t var_sz) {
+    const char *p;
+    const char *start;
+    const char *end;
+
+    if (!line || !var_out || var_sz == 0) {
+        return -1;
+    }
+    if (!starts_with_kw(line, "freeze")) {
+        return -1;
+    }
+    p = line + 6;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '(') {
+        return -1;
+    }
+    p++;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    start = p;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-')) {
+        p++;
+    }
+    end = p;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != ')' || end == start) {
+        return -1;
+    }
+    p++;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '\0') {
+        return -1;
+    }
+    snprintf(var_out, var_sz, "%.*s", (int)(end - start), start);
+    if (strcmp(var_out, "null") == 0 || strcmp(var_out, "true") == 0 || strcmp(var_out, "false") == 0) {
+        return -1;
+    }
+    return 0;
+}
+
 int flat_parse_panic_reset_line(const char *line) {
     const char *p;
 
@@ -212,6 +259,11 @@ int flat_parse_panic_reason_bind(const char *line, char *var_out, size_t var_sz)
 static int is_free_line(const char *line) {
     char tmp[64];
     return flat_parse_free_varname(line, tmp, sizeof tmp) == 0;
+}
+
+static int is_freeze_line(const char *line) {
+    char tmp[64];
+    return flat_parse_freeze_varname(line, tmp, sizeof tmp) == 0;
 }
 
 static int is_panic_reset_line(const char *line) {
@@ -310,6 +362,9 @@ static FgirInstrKind classify(const char *line) {
     }
     if (flat_native_is_call_line(line)) {
         return FGIR_IO;
+    }
+    if (is_freeze_line(line)) {
+        return FGIR_FREEZE;
     }
     if (is_free_line(line)) {
         return FGIR_FREE;

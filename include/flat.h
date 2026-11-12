@@ -22,7 +22,8 @@ typedef enum {
     OP_NEXT          = 0x0F, /* next for/for-each iteration (was OP_RETURN in loop body) */
     OP_CALL_FUNCTION = 0x10, /* u16 func_index + u8 argc + u8 global + ret\\0 + formal names\\0… */
     OP_PANIC_RESET   = 0x11,
-    OP_PANIC_REASON  = 0x12  /* bind var name NUL-terminated */
+    OP_PANIC_REASON  = 0x12, /* bind var name NUL-terminated */
+    OP_FREEZE        = 0x13  /* var name\\0 — slot_frozen on VCX */
 } OpCode;
 
 /* Line modifiers on native / assign-native lines (see SPECIFICATION.md). */

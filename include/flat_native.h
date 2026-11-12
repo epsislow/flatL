@@ -199,6 +199,8 @@ typedef struct {
     int var_count;
     const FlatSlotType *var_slot_types;
     const uint8_t *var_has_slot_type;
+    const uint8_t *var_slot_frozen;
+    const uint8_t *var_slot_const;
     const char (*var_names)[64];
     const char *inner;
     FlatValue *out;

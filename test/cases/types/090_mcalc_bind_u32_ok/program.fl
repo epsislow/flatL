@@ -1,0 +1,7 @@
+use native math with m
+
+#main
+  a:u8 = 40
+  b:u8 = 2
+  m.calc('a + b') -> sum:u32
+  OK
