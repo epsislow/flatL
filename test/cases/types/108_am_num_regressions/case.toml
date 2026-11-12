@@ -1,0 +1,7 @@
+suite = "types"
+id = 108
+desc = "AM-NUM exact 64-bit comparisons, overflow, integer coercion and f32 literals"
+kind = "exec"
+cmd = "gcc -Wall -Wextra -std=c11 -I{root}/include {case}/program.c {root}/src/common/flat_number.c -lm -o {tmp}/am_num_test && {tmp}/am_num_test"
+expect_exit = 0
+stdout_contains = "AM-NUM regression checks passed"

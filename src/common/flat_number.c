@@ -225,23 +225,22 @@ static int whole_i64(const FlatValue *v, int64_t *out) {
 }
 
 static int is_exact_int(double d, int64_t *out_i) {
-    double t;
-    if (isnan(d) || isinf(d)) {
+    /* A double can represent -2^63 exactly, but +2^63 is already outside
+       the signed 64-bit range.  Never use a rounded INT64_MAX-as-double
+       comparison here: it is equal to 2^63. */
+    if (!isfinite(d) || trunc(d) != d || d < -0x1p63 || d >= 0x1p63) {
         return 0;
     }
-    t = floor(d);
-    if (fabs(d - t) > 0.0) {
-        if (fabs(d - t) > 1e-15 * (fabs(d) + 1.0)) {
-            return 0;
-        }
-    }
-    if (d > (double)INT64_MAX || d < (double)INT64_MIN) {
+    *out_i = (int64_t)d;
+    return 1;
+}
+
+static int is_exact_uint(double d, uint64_t *out_u) {
+    /* 2^64 is exactly representable as double and is the exclusive limit. */
+    if (!isfinite(d) || trunc(d) != d || d < 0.0 || d >= 0x1p64) {
         return 0;
     }
-    *out_i = (int64_t)t;
-    if ((double)*out_i != d && fabs(d - (double)*out_i) > 1e-12 * (fabs(d) + 1.0)) {
-        return 0;
-    }
+    *out_u = (uint64_t)d;
     return 1;
 }
 
@@ -276,48 +275,104 @@ int flat_number_has_nan(const FlatValue *v) {
     return isnan(v->u.number.payload.f64) ? 1 : 0;
 }
 
+/* Exact numeric ordering without routing 64-bit integers through double. */
+static int compare_u64_double(uint64_t u, double d) {
+    uint64_t whole;
+    if (isnan(d)) return 0;
+    if (d < 0.0) return 1;
+    if (d >= 0x1p64) return -1;
+    whole = (uint64_t)d; /* safe: 0 <= d < 2^64 */
+    if (u < whole) return -1;
+    if (u > whole) return 1;
+    if (d > (double)whole) return -1; /* same integer part, positive fraction */
+    return 0;
+}
+
+static int compare_i64_double(int64_t i, double d) {
+    int64_t whole;
+    if (isnan(d)) return 0;
+    if (d < -0x1p63) return 1;
+    if (d >= 0x1p63) return -1;
+    whole = (int64_t)d; /* safe: -2^63 <= d < 2^63 */
+    if (i < whole) return -1;
+    if (i > whole) return 1;
+    if (d > (double)whole) return -1;
+    if (d < (double)whole) return 1;
+    return 0;
+}
+
+static int compare_whole(const FlatValue *a, const FlatValue *b) {
+    uint64_t au, bu;
+    int64_t ai, bi;
+    int a_unsigned = whole_u64(a, &au) == 0;
+    int b_unsigned = whole_u64(b, &bu) == 0;
+    if (a_unsigned && b_unsigned) return au < bu ? -1 : au > bu ? 1 : 0;
+    if (!a_unsigned && !b_unsigned) {
+        (void)whole_i64(a, &ai);
+        (void)whole_i64(b, &bi);
+        return ai < bi ? -1 : ai > bi ? 1 : 0;
+    }
+    if (a_unsigned) {
+        (void)whole_i64(b, &bi);
+        if (bi < 0) return 1;
+        bu = (uint64_t)bi;
+        return au < bu ? -1 : au > bu ? 1 : 0;
+    }
+    (void)whole_i64(a, &ai);
+    if (ai < 0) return -1;
+    au = (uint64_t)ai;
+    return au < bu ? -1 : au > bu ? 1 : 0;
+}
+
+/* Returns -1/0/1 for a<b/a==b/a>b. */
+static int flat_number_compare_value(const FlatValue *a, const FlatValue *b) {
+    uint64_t u;
+    int64_t i;
+    double d;
+    int a_whole = flat_number_class(a) == FLAT_NUM_CLASS_WHOLE;
+    int b_whole = flat_number_class(b) == FLAT_NUM_CLASS_WHOLE;
+    if (a_whole && b_whole) return compare_whole(a, b);
+    if (!a_whole && !b_whole) {
+        double da = flat_number_as_f64(a);
+        double db = flat_number_as_f64(b);
+        return da < db ? -1 : da > db ? 1 : 0;
+    }
+    if (a_whole) {
+        d = flat_number_as_f64(b);
+        if (whole_u64(a, &u) == 0) return compare_u64_double(u, d);
+        (void)whole_i64(a, &i);
+        return compare_i64_double(i, d);
+    }
+    d = flat_number_as_f64(a);
+    if (whole_u64(b, &u) == 0) return -compare_u64_double(u, d);
+    (void)whole_i64(b, &i);
+    return -compare_i64_double(i, d);
+}
+
 int flat_number_equals(const FlatValue *a, const FlatValue *b) {
-    double da;
-    double db;
-    if (!flat_number_is_number(a) || !flat_number_is_number(b)) {
+    if (!flat_number_is_number(a) || !flat_number_is_number(b) ||
+        flat_number_has_nan(a) || flat_number_has_nan(b)) {
         return 0;
     }
-    if (flat_number_has_nan(a) || flat_number_has_nan(b)) {
-        return 0;
-    }
-    da = flat_number_as_f64(a);
-    db = flat_number_as_f64(b);
-    return da == db;
+    return flat_number_compare_value(a, b) == 0;
 }
 
 int flat_number_compare_rel(const FlatValue *a, const FlatValue *b, int op, char *panic,
                             size_t panic_sz) {
-    double da;
-    double db;
-    if (!flat_number_is_number(a) || !flat_number_is_number(b)) {
-        return 0;
-    }
+    int cmp;
+    if (!flat_number_is_number(a) || !flat_number_is_number(b)) return 0;
     if (flat_number_has_nan(a) || flat_number_has_nan(b)) {
-        if (panic && panic_sz > 0) {
-            snprintf(panic, panic_sz, "type.compare.nan");
-        }
+        if (panic && panic_sz > 0) snprintf(panic, panic_sz, "type.compare.nan");
         return -2;
     }
-    da = flat_number_as_f64(a);
-    db = flat_number_as_f64(b);
+    cmp = flat_number_compare_value(a, b);
     switch (op) {
-    case 0:
-        return da == db ? 1 : 0;
-    case 1:
-        return da >= db ? 1 : 0;
-    case 2:
-        return da <= db ? 1 : 0;
-    case 3:
-        return da > db ? 1 : 0;
-    case 4:
-        return da < db ? 1 : 0;
-    default:
-        return 0;
+    case 0: return cmp == 0;
+    case 1: return cmp >= 0;
+    case 2: return cmp <= 0;
+    case 3: return cmp > 0;
+    case 4: return cmp < 0;
+    default: return 0;
     }
 }
 
@@ -415,15 +470,16 @@ int flat_number_coerce_for_slot(const FlatValue *src, FlatSlotTypeKind kind, Fla
         }
         d = flat_number_as_f64(src);
         if (flat_number_class(src) == FLAT_NUM_CLASS_DECIMAL) {
-            if (!is_exact_int(d, &as_i) || as_i < 0) {
+            if (!is_exact_uint(d, &u)) {
                 snprintf(panic, panic_sz, "type.assign.incompatible");
                 return -1;
             }
-            if (fabs(d) > 9007199254740991.0) {
+            /* Preserve the language's safe-integer rule for untyped decimal
+               inputs. Full-width values must arrive as typed whole literals. */
+            if (d > 9007199254740991.0) {
                 snprintf(panic, panic_sz, "type.assign.range.i64");
                 return -1;
             }
-            u = (uint64_t)as_i;
         } else {
             snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;
@@ -498,9 +554,12 @@ static int parse_digits_u64(const char *s, uint64_t *out) {
         if (!isdigit((unsigned char)*s)) {
             return -1;
         }
-        v = v * 10u + (uint64_t)(*s - '0');
-        if (v < (uint64_t)(*s - '0')) {
-            return -1;
+        {
+            uint64_t digit = (uint64_t)(*s - '0');
+            if (v > (UINT64_MAX - digit) / 10u) {
+                return -1;
+            }
+            v = v * 10u + digit;
         }
         s++;
     }
@@ -537,7 +596,11 @@ static int parse_digits_i64(const char *s, int64_t *out) {
     if (u > (uint64_t)INT64_MAX + 1u) {
         return -1;
     }
-    *out = -(int64_t)u;
+    if (u == (uint64_t)INT64_MAX + 1u) {
+        *out = INT64_MIN;
+    } else {
+        *out = -(int64_t)u;
+    }
     return 0;
 }
 
@@ -629,10 +692,11 @@ int flat_number_parse_for_slot_kind(const char *token, FlatSlotTypeKind kind, Fl
         }
         if (kind == FLAT_SLOT_TYPE_F32) {
             float f;
-            if (!f64_exact_in_f32(d, &f)) {
-                snprintf(panic, panic_sz, "type.assign.loss");
+            if (!isfinite(d) || d > (double)FLT_MAX || d < -(double)FLT_MAX) {
+                snprintf(panic, panic_sz, "type.assign.range");
                 return -1;
             }
+            f = (float)d;
             flat_number_set_decimal_f32(out, f);
         } else {
             flat_number_set_decimal_f64(out, d);

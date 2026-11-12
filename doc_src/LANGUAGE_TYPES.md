@@ -16,7 +16,7 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 | Type | Examples in source | VM tag |
 |------|-------------------|--------|
 | **BOOL** | `ok = true`, `ok = false` | `VAL_BOOL` |
-| **NUMBER** | `n = 42`, `n = -3.5` | `VAL_NUMBER` (IEEE-754 `double`) |
+| **NUMBER** | `n = 42`, `n = -3.5` | `VAL_NUMBER` (AM-NUM: whole/decimal with explicit storage metadata) |
 | **STRING** | `'hello'`, `"path"`, long data via ref | `VAL_STR_INLINE` or `VAL_STR_REF` |
 | **LIST** | `[1, 'a', { x: 1 }]`, `__list__()` | `VAL_LIST` (pool id) |
 | **NULL** | literal **`null`**, `json.parse('null')`, `json.parse('')` | **`VAL_NULL`** (not `VAL_EMPTY`; guards `x == null`) |
@@ -159,12 +159,12 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 | `u8` | unsigned 8-bit | `0` … `255` |
 | `u16` | unsigned 16-bit | `0` … `65535` |
 | `u32` | unsigned 32-bit | `0` … `4294967295` |
-| `u64` | unsigned 64-bit (interim) | exact integers `0` … `2^53−1` in `double` |
+| `u64` | unsigned 64-bit | exact `uint64_t` storage; untyped decimal sources remain limited by `double` precision |
 | `s8` | signed 8-bit | `−128` … `127` |
 | `s16` | signed 16-bit | `−32768` … `32767` |
 | `s32` | signed 32-bit | `−2^31` … `2^31−1` |
-| `s64` | signed 64-bit (interim) | exact integers `±(2^53−1)` in `double` |
-| `f32`, `f64` | float | any `VAL_NUMBER` at assign (see below) |
+| `s64` | signed 64-bit | exact `int64_t` storage; untyped decimal sources remain limited by `double` precision |
+| `f32`, `f64` | float | stored as IEEE-754 `float` / `double`; assignment narrowing is checked |
 | `b` | bool | `true` / `false` |
 | `t` | short string | alias **`t127`** — max **127** UTF-8 bytes |
 | `tN` | bounded string | **`N`** octeți max la assign, **`1 ≤ N ≤ 8192`** (ex. `t255`, `t8192`); peste cap → **`type.assign.string.len`** |
@@ -175,21 +175,21 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 | `<schema>[N]` | schema list **field** | max **`N`** elements (`0` = unbounded `[]` in spec) |
 | `xs:<schema>[N]` | list **slot** | variable holds `VAL_LIST` of `<schema>`; max length **`N`** |
 
-**`f32` / `f64` (interim):** slots are **logical** float contracts only. Storage is still one IEEE-754 **`double`** per `VAL_NUMBER`; assign checks **`tag == VAL_NUMBER`** only — no range, no `float` rounding, and no distinction between **`f32`** and **`f64`** until a future VM/AOT split (`num_stor` / narrowing rules in the types roadmap). Use integers (`u*`/`s*`) when you need hard bounds today.
+**AM-NUM storage:** `VAL_NUMBER` carries `num_class` (`whole` / `decimal`) and `num_stor`. Whole values use exact signed or unsigned integer storage (`u8`…`u64`, `s8`…`s64`); decimal values use `f32` or `f64` storage. An explicit literal suffix such as `0.1:f32` rounds to IEEE-754 `float`; assigning an existing `f64` value to an `f32` slot remains loss-checked.
 
 **String alias:** `t` without a number is **`t127`** (same cap as `FLAT_INLINE_STR_MAX` for quoted literals).
 
 **List slots vs paths:** in `name:<stock>[4] = …`, the **`[4]`** is part of the **type** (capacity), not `name[4]` path syntax. Real paths use `.` or `[` **after** the type, e.g. `row.stocks[0]`, `xs[0] = s` when `xs` is already `:<stock>[N]`.
 
-**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.range.i64` (`u64`/`s64` outside exact-integer `double` range), `type.assign.incompatible`, `type.assign.string.len`, `type.assign.list.len`, `type.assign.retype` (change `:type` without `free`), `type.compare.incompatible` (typed scalar compare).
+**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.range.i64` (legacy untyped decimal source outside the exactly representable integer range), `type.assign.incompatible`, `type.assign.string.len`, `type.assign.list.len`, `type.assign.retype` (change `:type` without `free`), `type.compare.incompatible` (typed scalar compare).
 
 **Compile:** **`:/expr`** on ASSIGN lhs is allowed; runtime reads STRING each run. **`<schema>`** on static lhs requires a **`<schema>:`** declaration; unknown schema → `type.schema.unknown` (compile) or `type.assign.schema.unknown` (dynamic STRING).
 
-Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — integers are range-checked, not narrowed in storage.
+Logical kinds in §1 still apply; **NUMBER** remains one VM tag (`VAL_NUMBER`), but its payload uses the AM-NUM storage descriptor.
 
-**`u64` / `s64` (interim):** only integers in **`±(2^53−1)`** (`9007199254740991`) that are **exact** in `double`; larger nominal `u64`/`s64` literals or values → **`type.assign.range.i64`** until dedicated 64-bit storage (AOT).
+**`u64` / `s64`:** explicitly suffixed integer literals (for example `18446744073709551615:u64`) are parsed and stored as exact 64-bit integers. An untyped decimal literal is still parsed through `double`, so it cannot express every integer above **`2^53−1`** exactly. Use a `:u64` or `:s64` suffix when the full 64-bit range matters.
 
-**AM-NUM (v0.5.0, implemented):** single tag **`VAL_NUMBER`** with **`num_class`** (`whole` / `decimal`) and **`num_stor`** (`u8`…`u64`, `s8`…`s64`, `f32`, `f64`). Literale **`value:type`** (ex. `18446744073709551615:u64`). Netipizat = **`decimal`/`f64`**. **`u64`/`s64`** din `double` fără sufix: max exact **`2^53−1`** → altfel **`type.assign.range.i64`**; peste acel prag folosește sufixul. Compare **`==`** / relații pe **valoare matematică** între NUMBER; **`NaN`** → **`type.compare.nan`**. Plan: `strict-types-schemas-roadmap.plan.md` §13.
+**AM-NUM (v0.5.0):** one tag **`VAL_NUMBER`** with **`num_class`** (`whole` / `decimal`) and **`num_stor`** (`u8`…`u64`, `s8`…`s64`, `f32`, `f64`). Typed literals use **`value:type`** (for example `18446744073709551615:u64`). Untyped numeric literals default to **`decimal`/`f64`**. Numeric equality and relational comparisons preserve exact whole-number ordering, including mixed signed/unsigned values; **`NaN`** comparisons raise **`type.compare.nan`**.
 
 ### T2 (schema objects) — done
 

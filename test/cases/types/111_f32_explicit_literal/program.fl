@@ -1,0 +1,4 @@
+#main
+  x:f32 = 0.1:f32
+  io.outln(x)
+  OK
