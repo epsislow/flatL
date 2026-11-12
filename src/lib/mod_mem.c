@@ -2,6 +2,8 @@
 #include "flat_native_mod.h"
 #include "flat_mem_stats.h"
 #include "flat_native.h"
+#include "flat_obj_path.h"
+#include "flat_slot_type.h"
 #include "flat_value.h"
 
 #include <stdio.h>
@@ -155,6 +157,116 @@ int flat_native_mem_type_of(FlatNativeCtx *ctx) {
     kind = mem_logical_type_name(src.tag);
     *ctx->io_status = FLAT_IO_OK;
     return flat_value_set_str_inline(ctx->out, kind, strlen(kind));
+}
+
+static int mem_slot_arg_err(FlatNativeCtx *ctx, const char *code) {
+    if (ctx->io_status) {
+        *ctx->io_status = FLAT_IO_ERR;
+    }
+    if (ctx->panic_detail && code) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", code);
+    }
+    return -1;
+}
+
+static int mem_resolve_slot_lvalue(FlatNativeCtx *ctx, const char *native_name, int *root_vi,
+                                   FlatSlotType *contract, int *has_contract) {
+    FlatPathTypedCtx ptc;
+    FlatSlotLocErr loc = FLAT_SLOT_LOC_OK;
+
+    if (!ctx || !ctx->inner || ctx->inner[0] == '\0') {
+        return mem_slot_arg_err(ctx, native_name);
+    }
+    if (!ctx->vars || !ctx->var_names) {
+        return mem_slot_arg_err(ctx, native_name);
+    }
+    memset(&ptc, 0, sizeof ptc);
+    if (ctx->bc) {
+        ptc.schemas = &ctx->bc->schemas;
+    }
+    ptc.var_slot_types = ctx->var_slot_types;
+    ptc.var_has_slot_type = ctx->var_has_slot_type;
+    if (flat_path_resolve_slot_lvalue(ctx->inner, ctx->pool, ctx->coll, ctx->vars, ctx->var_count,
+                                      ctx->var_names, &ptc, root_vi, contract, has_contract,
+                                      &loc) != 0) {
+        if (loc == FLAT_SLOT_LOC_MISSING) {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s.missing", native_name);
+        } else {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s.path", native_name);
+        }
+        if (ctx->io_status) {
+            *ctx->io_status = FLAT_IO_ERR;
+        }
+        return -1;
+    }
+    return 0;
+}
+
+int flat_native_mem_slot_type(FlatNativeCtx *ctx) {
+    int root_vi;
+    FlatSlotType contract;
+    int has_contract = 0;
+    char spec[128];
+
+    if (!ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    if (mem_resolve_slot_lvalue(ctx, "mem.slot_type", &root_vi, &contract, &has_contract) != 0) {
+        return -1;
+    }
+    if (!has_contract) {
+        snprintf(spec, sizeof spec, "none");
+    } else if (flat_slot_type_format_spec(
+                   &contract, ctx->bc ? &ctx->bc->schemas : NULL, spec, sizeof spec) != 0) {
+        return mem_slot_arg_err(ctx, "mem.slot_type");
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_str_inline(ctx->out, spec, strlen(spec));
+}
+
+int flat_native_mem_slot_frozen(FlatNativeCtx *ctx) {
+    int root_vi;
+    FlatSlotType contract;
+    int has_contract = 0;
+    int frozen = 0;
+
+    if (!ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    (void)contract;
+    (void)has_contract;
+    if (mem_resolve_slot_lvalue(ctx, "mem.slot_frozen", &root_vi, &contract, &has_contract) != 0) {
+        return -1;
+    }
+    if (ctx->var_slot_frozen && ctx->var_slot_frozen[root_vi]) {
+        frozen = 1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_bool(ctx->out, frozen);
+}
+
+int flat_native_mem_slot_const(FlatNativeCtx *ctx) {
+    int root_vi;
+    FlatSlotType contract;
+    int has_contract = 0;
+    int is_const = 0;
+
+    if (!ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    (void)contract;
+    (void)has_contract;
+    if (mem_resolve_slot_lvalue(ctx, "mem.slot_const", &root_vi, &contract, &has_contract) != 0) {
+        return -1;
+    }
+    if (ctx->var_slot_const && ctx->var_slot_const[root_vi]) {
+        is_const = 1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_bool(ctx->out, is_const);
 }
 
 int flat_native_mem_ref_empty(FlatNativeCtx *ctx) {

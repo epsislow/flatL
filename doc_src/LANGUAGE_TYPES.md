@@ -167,6 +167,7 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 | `f32`, `f64` | float | any `VAL_NUMBER` at assign (see below) |
 | `b` | bool | `true` / `false` |
 | `t` | short string | alias **`t127`** — max **127** UTF-8 bytes |
+| `tN` | bounded string | **`N`** octeți max la assign, **`1 ≤ N ≤ 8192`** (ex. `t255`, `t8192`); peste cap → **`type.assign.string.len`** |
 | `tX` | bounded string | **`X`** = max UTF-8 bytes, **`1` ≤ X ≤ `127`** (`t8`, `t255` invalid) |
 | `l` | open list | any `VAL_LIST` (no element check) |
 | `o` | open object | any `VAL_OBJECT` |

@@ -1,0 +1,8 @@
+#main
+  n:u8 = 3
+  loose = 1
+  mem.slot_type(n) == 'u8'
+  mem.slot_type(loose) == 'none'
+  mem.slot_type(n) -> spec
+  spec == 'u8'
+  io.outln('mem-slot-type-ok')

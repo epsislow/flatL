@@ -53,6 +53,40 @@ Returns the **logical** type (not VM storage detail). Inline STRING and STRING R
 
 There is **no** separate **`date`** type — datetimes are **`string`** or epoch **`number`**.
 
+### Slot contract (`slot_type`, `slot_frozen`, `slot_const`)
+
+These read **bind metadata** on the **active VCX** (same storage as assign / `O.set2`), not the logical value type. Compare with **`type_of(v)`** above.
+
+| Call | Args | Returns | Panic |
+|------|------|---------|-------|
+| `slot_type(expr)` | Variable or **lvalue path** (`row`, `row.hold.qty`, `xs[0]`) | STRING | **`mem.slot_type`** — empty arg; **`mem.slot_type.missing`** — unknown root name; **`mem.slot_type.path`** — bad path or unknown schema field |
+| `slot_frozen(expr)` | Same lvalue forms | bool | **`mem.slot_frozen.missing`**, **`mem.slot_frozen.path`** |
+| `slot_const(expr)` | Same lvalue forms | bool | **`mem.slot_const.missing`**, **`mem.slot_const.path`** |
+
+**`slot_type`** results (contract text, not `VAL_*`):
+
+| Result | Meaning |
+|--------|---------|
+| `none` | No `:type` on that slot (untyped variable, or nestrict object field without schema) |
+| `u8`, `t127`, `t8192`, … | Scalar / string caps (alias **`t`** → **`t127`**) |
+| `<stock>`, `<bag>[10]` | Schema bind or schema list slot |
+| `/expr` | Dynamic type (`:/expr` in source) when still stored as dynamic |
+
+Path introspection walks **schema** only (read-only): missing nested values do **not** need to exist (e.g. `row.hold.qty` before `hold` is assigned). Unknown field on a typed schema → panic (same as assign).
+
+**`slot_frozen`** / **`slot_const`** reflect flags on the **root** variable of the expression (e.g. `freeze(row)` makes `mem.slot_frozen(row.hold.qty)` true). Nested schema fields have no separate freeze/const flags.
+
+```text
+<stock>:
+  qty: u16
+#main
+  row:<stock> = {}
+  mem.slot_type(row.hold.qty) == 'u16'
+  mem.slot_type(row.hold.qty) -> s
+  io.outln(s)
+  OK
+```
+
 ### Introspection (NUMBER)
 
 Argument lists must be empty `()` unless noted above.

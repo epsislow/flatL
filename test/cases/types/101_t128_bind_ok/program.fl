@@ -1,0 +1,4 @@
+#main
+  s:t128 = 'abcd'
+  io.outln(s)
+  OK

@@ -10,7 +10,7 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 7u
+#define FLAT_FB_FORMAT_VERSION 8u
 #define FLAT_FB_HEADER_SIZE 32 /* v6: + schm_off at 28; v5 was 28 without schm */
 #define FLAT_FB_HEADER_SIZE_V5 28
 #define FLAT_FB_HEADER_SIZE_V4 24

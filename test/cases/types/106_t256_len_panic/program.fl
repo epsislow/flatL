@@ -1,0 +1,4 @@
+use native str with S
+#main
+  s:t255 = S.repeat('x', 256)
+  OK

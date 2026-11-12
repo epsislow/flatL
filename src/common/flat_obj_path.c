@@ -664,6 +664,210 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
     return -1;
 }
 
+static int parse_slot_path_steps(const char *expr, FlatStringPool *pool, FlatCollectionPool *coll,
+                                 FlatValue *vars, int var_count, const char (*var_names)[64],
+                                 int *out_root_vi, FlatPathStep *steps, int *out_nsteps,
+                                 FlatPathErr *err_out) {
+    char ident[64];
+    const char *p;
+    int n = 0;
+    int vi;
+
+    if (err_out) {
+        *err_out = FLAT_PATH_OK;
+    }
+    p = skip_ws(expr);
+    if (parse_ident_segment(&p, ident, sizeof ident) != 0) {
+        if (err_out) {
+            *err_out = FLAT_PATH_SYNTAX;
+        }
+        return -1;
+    }
+    vi = find_var_index(ident, var_count, var_names);
+    if (vi < 0) {
+        if (err_out) {
+            *err_out = FLAT_PATH_MISSING;
+        }
+        return -1;
+    }
+    *out_root_vi = vi;
+    for (;;) {
+        p = skip_ws(p);
+        if (*p == '\0') {
+            *out_nsteps = n;
+            return 0;
+        }
+        if (*p == '.') {
+            if (n >= FLAT_OBJ_PATH_MAX_SEG) {
+                if (err_out) {
+                    *err_out = FLAT_PATH_SYNTAX;
+                }
+                return -1;
+            }
+            steps[n].kind = FLAT_PATH_STEP_FIELD;
+            if (parse_field_suffix(&p, steps[n].key, sizeof steps[n].key) != 0) {
+                if (err_out) {
+                    *err_out = FLAT_PATH_SYNTAX;
+                }
+                return -1;
+            }
+            n++;
+            continue;
+        }
+        if (*p == '[') {
+            p++;
+            if (n >= FLAT_OBJ_PATH_MAX_SEG) {
+                if (err_out) {
+                    *err_out = FLAT_PATH_SYNTAX;
+                }
+                return -1;
+            }
+            steps[n].kind = FLAT_PATH_STEP_INDEX;
+            if (parse_bracket_index(&p, pool, coll, vars, var_count, var_names, &steps[n].index,
+                                    err_out) != 0) {
+                return -1;
+            }
+            n++;
+            continue;
+        }
+        if (err_out) {
+            *err_out = FLAT_PATH_SYNTAX;
+        }
+        return -1;
+    }
+}
+
+static int resolve_path_contract(const FlatPathStep *steps, int step_i, int nsteps,
+                                 const FlatSlotType *cur_contract, const FlatSchemaCatalog *cat,
+                                 FlatSlotType *out, const FlatPathTypedCtx *typed) {
+    if (!steps || !out) {
+        return -1;
+    }
+    if (step_i >= nsteps) {
+        if (cur_contract) {
+            *out = *cur_contract;
+        } else {
+            flat_slot_type_clear(out);
+        }
+        return 0;
+    }
+    if (steps[step_i].kind == FLAT_PATH_STEP_FIELD) {
+        const FlatSchemaDef *schema_def = flat_schema_def_for_contract(cat, cur_contract);
+        const FlatSchemaField *field = NULL;
+        FlatSlotType next;
+
+        if (step_i == nsteps - 1) {
+            if (schema_def) {
+                if (!flat_schema_field_lookup(schema_def, steps[step_i].key, &field)) {
+                    return type_panic_write(typed, "type.schema.field.unknown");
+                }
+                *out = field->slot;
+                if (field->flags & FLAT_SCH_FIELD_LIST) {
+                    out->list_slot = 1;
+                }
+                return 0;
+            }
+            flat_slot_type_clear(out);
+            return 0;
+        }
+        flat_slot_type_clear(&next);
+        if (schema_def) {
+            if (!flat_schema_field_lookup(schema_def, steps[step_i].key, &field)) {
+                return type_panic_write(typed, "type.schema.field.unknown");
+            }
+            next = field->slot;
+        } else {
+            flat_slot_type_clear(&next);
+        }
+        return resolve_path_contract(steps, step_i + 1, nsteps, &next, cat, out, typed);
+    }
+    if (steps[step_i].kind == FLAT_PATH_STEP_INDEX) {
+        if (step_i == nsteps - 1) {
+            if (cur_contract) {
+                *out = *cur_contract;
+            } else {
+                flat_slot_type_clear(out);
+            }
+            return 0;
+        }
+        return resolve_path_contract(steps, step_i + 1, nsteps, cur_contract, cat, out, typed);
+    }
+    return -1;
+}
+
+int flat_path_resolve_slot_lvalue(const char *expr, FlatStringPool *pool, FlatCollectionPool *coll,
+                                  FlatValue *vars, int var_count, const char (*var_names)[64],
+                                  const FlatPathTypedCtx *typed, int *out_root_vi,
+                                  FlatSlotType *out_contract, int *out_has_contract,
+                                  FlatSlotLocErr *err_out) {
+    FlatPathStep steps[FLAT_OBJ_PATH_MAX_SEG];
+    int nsteps = 0;
+    int root_vi = -1;
+    FlatPathErr perr = FLAT_PATH_OK;
+    FlatSlotType root_contract;
+    const FlatSchemaCatalog *cat;
+    int rc;
+    char panic_buf[64];
+    FlatPathTypedCtx local_typed;
+
+    if (err_out) {
+        *err_out = FLAT_SLOT_LOC_OK;
+    }
+    if (!expr || !vars || !var_names || !out_root_vi || !out_contract || !out_has_contract) {
+        if (err_out) {
+            *err_out = FLAT_SLOT_LOC_PATH;
+        }
+        return -1;
+    }
+    flat_slot_type_clear(out_contract);
+    *out_has_contract = 0;
+    if (parse_slot_path_steps(expr, pool, coll, vars, var_count, var_names, &root_vi, steps,
+                              &nsteps, &perr) != 0) {
+        if (err_out) {
+            *err_out = perr == FLAT_PATH_MISSING ? FLAT_SLOT_LOC_MISSING : FLAT_SLOT_LOC_PATH;
+        }
+        return -1;
+    }
+    *out_root_vi = root_vi;
+    flat_slot_type_clear(&root_contract);
+    if (typed && typed->var_has_slot_type && typed->var_slot_types &&
+        typed->var_has_slot_type[root_vi]) {
+        root_contract = typed->var_slot_types[root_vi];
+        *out_has_contract = 1;
+    }
+    if (nsteps == 0) {
+        *out_contract = root_contract;
+        return 0;
+    }
+    cat = typed && typed->schemas ? typed->schemas : NULL;
+    memset(&local_typed, 0, sizeof local_typed);
+    local_typed.schemas = cat;
+    local_typed.type_panic = panic_buf;
+    local_typed.type_panic_sz = sizeof panic_buf;
+    panic_buf[0] = '\0';
+    if (typed) {
+        local_typed.var_slot_types = typed->var_slot_types;
+        local_typed.var_has_slot_type = typed->var_has_slot_type;
+    }
+    rc = resolve_path_contract(steps, 0, nsteps,
+                               out_has_contract ? &root_contract : NULL, cat, out_contract,
+                               &local_typed);
+    if (rc == -4) {
+        if (err_out) {
+            *err_out = FLAT_SLOT_LOC_PATH;
+        }
+        return -1;
+    }
+    if (rc != 0) {
+        if (err_out) {
+            *err_out = FLAT_SLOT_LOC_PATH;
+        }
+        return -1;
+    }
+    *out_has_contract = out_contract->kind != FLAT_SLOT_TYPE_NONE;
+    return 0;
+}
+
 int flat_path_set2(FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *vars, int var_count,
                    const char (*var_names)[64], const char *path_expr, const FlatValue *val,
                    uint32_t *out_root_obj, FlatPathErr *err_out, const FlatPathTypedCtx *typed) {

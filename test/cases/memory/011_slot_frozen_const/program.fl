@@ -1,0 +1,9 @@
+#main
+  const fixed:u16 = 9
+  v:u8 = 1
+  freeze(v)
+  mem.slot_const(fixed)
+  mem.slot_frozen(v)
+  mem.slot_const(v) == false
+  mem.slot_frozen(fixed) == false
+  io.outln('mem-slot-flags-ok')

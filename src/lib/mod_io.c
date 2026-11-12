@@ -606,16 +606,36 @@ int flat_native_io_inln(FlatNativeCtx *ctx) {
     if (*ctx->io_status != FLAT_IO_OK) {
         return 0;
     }
-    if (flat_value_set_str_inline(&outv, linebuf, strlen(linebuf)) != 0) {
-        return -1;
+    {
+        size_t ln = strlen(linebuf);
+        if (ln <= FLAT_INLINE_STR_MAX) {
+            if (flat_value_set_str_inline(&outv, linebuf, ln) != 0) {
+                return -1;
+            }
+        } else {
+            uint32_t sid;
+            if (!ctx->pool || flat_pool_alloc_copy(ctx->pool, linebuf, ln, &sid) != 0) {
+                return -1;
+            }
+            if (flat_value_set_str_ref(&outv, sid) != 0) {
+                return -1;
+            }
+        }
     }
     if (io_apply_expect_type(ctx, &outv, &expect, has_expect) != 0) {
+        flat_value_release(ctx->coll, ctx->pool, &outv);
         return -1;
     }
-    if (outv.tag == VAL_STR_INLINE) {
-        return flat_value_set_str_inline(ctx->out, outv.u.ins.bytes, outv.u.ins.len);
+    flat_value_retain(ctx->coll, ctx->pool, &outv);
+  if (outv.tag == VAL_STR_INLINE) {
+        if (flat_value_set_str_inline(ctx->out, outv.u.ins.bytes, outv.u.ins.len) != 0) {
+            flat_value_release(ctx->coll, ctx->pool, &outv);
+            return -1;
+        }
+    } else {
+        *ctx->out = outv;
     }
-    *ctx->out = outv;
+    flat_value_release(ctx->coll, ctx->pool, &outv);
     return 0;
 }
 

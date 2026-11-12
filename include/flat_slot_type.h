@@ -31,7 +31,7 @@ typedef enum {
 
 typedef struct {
     FlatSlotTypeKind kind;
-    uint8_t aux; /* tN → N; t → 127 */
+    uint16_t aux; /* tN → N (1..8192); t → 127 */
     uint16_t schema_id;
     uint16_t list_max; /* schema field or list slot: 0 = unbounded [] */
     uint8_t list_slot; /* 1 when variable slot is a LIST (e.g. xs:<stock>[4]) */
@@ -39,6 +39,7 @@ typedef struct {
 } FlatSlotType;
 
 #define FLAT_SLOT_TYPE_AUX_T_DEFAULT 127u
+#define FLAT_SLOT_TYPE_AUX_T_MAX 8192u
 
 /* Parse LHS bind (after assign split). *has_type_out = 1 if :type present. */
 int flat_bind_parse_lhs(const char *lhs, char *name_out, size_t name_sz, FlatSlotType *type_out,
@@ -70,5 +71,9 @@ int flat_slot_type_is_scalar(const FlatSlotType *t);
 
 /* u* / s* / f* only (for m.calc homogeneity). */
 int flat_slot_type_is_numeric(const FlatSlotType *t);
+
+/* Write source-style spec (e.g. u8, t127, <stock>[4], /expr). Returns 0 or -1. */
+int flat_slot_type_format_spec(const FlatSlotType *t, const FlatSchemaCatalog *cat, char *out,
+                               size_t out_sz);
 
 #endif

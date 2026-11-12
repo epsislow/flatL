@@ -1,0 +1,12 @@
+<doc>:
+  label: t255
+  body: t1024
+
+#main
+  d:<doc> = {}
+  d.label = 'hello'
+  payload = 'p'
+  d.body = payload
+  io.outln(d.label)
+  io.outln(d.body)
+  OK

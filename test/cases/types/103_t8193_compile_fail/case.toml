@@ -1,0 +1,7 @@
+suite = "types"
+id = 103
+desc = "T7 t8193 rejected at compile"
+kind = "exec"
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "invalid type"

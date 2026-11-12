@@ -1,0 +1,5 @@
+#main
+  io.inln('x', 't1024') -> got:t1024
+  marker:u16 = 1000
+  io.outln(marker)
+  OK

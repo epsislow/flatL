@@ -1,0 +1,15 @@
+suite = "memory"
+id = 12
+desc = "mem.slot_type missing variable panics"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "mem.slot_type.missing"
+
+[flatl]
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "mem.slot_type.missing"

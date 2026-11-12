@@ -226,12 +226,12 @@ bin/flc -o /tmp/x.fb --dump-bc examples/order_flow.fl
 
 ### What gets printed
 
-1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**; **v6** adds **`schm_off`** → **SCHM**; **v7** extends **FFUN** with typed-`def` parameter/return type specs).  
+1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**; **v6** **SCHM**; **v7** typed **FFUN**; **v8** **SCHM** field **aux** = **uint16** pentru `t`/`tN` **≤ 8192**).  
 2. **Block directory** — block id, code offset, resolved **BLBL** name when present (`#main` = id 0).  
 3. **Per-block bytecode** — for each instruction: IP, opcode name (`0xNN`), payload size, decoded payload per [SPECIFICATION.md §3](./SPECIFICATION.md#3-fb-binary-layout-v12).  
 4. **Optional native manifest** — FNUN units + FNAT (same as `flvm` lazy load metadata).  
 5. **FFUN** (v5; **v7** typed) — user `def` table: name, impl/executor block ids, `param_count`, return slot name, `func_vcx_slots`, then per-param and return **type spec** strings (empty = untyped). Consumed at runtime for **`vcx.bindCallParams`** (T6).
-6. **SCHM** (v6) — schema definitions (`schema_id` order); required when the program uses **`name:<schema>`**. **`flvm`** parses the section **strictly**: the buffer must be fully consumed (no trailing bytes), each field kind/flags/`schema_id` must be valid, and duplicate field keys in one schema are rejected → **`flvm: invalid SCHM section`** (exit before run).
+6. **SCHM** (v6; **v8** string aux) — schema definitions (`schema_id` order). **v6–v7:** câmp descriptor cu **aux 8-bit** (max **`t127`** în schemă). **v8:** **aux 16-bit** ( **`t8192`** ). Load **v6–v7** cu flvm nou rămâne valid. Validare strictă → **`flvm: invalid SCHM section`**.
 
 Unknown or future opcodes (e.g. **`OP_CALL_FUNCTION`** in AM-1) print as hex with a clear label.
 

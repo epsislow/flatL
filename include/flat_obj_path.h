@@ -74,4 +74,17 @@ double flat_path_resolve_number(const char *name, const char **rest,
 
 const char *flat_path_reason(FlatPathErr err, const char *ctx, char *buf, size_t buf_sz);
 
+typedef enum {
+    FLAT_SLOT_LOC_OK = 0,
+    FLAT_SLOT_LOC_MISSING,
+    FLAT_SLOT_LOC_PATH
+} FlatSlotLocErr;
+
+/* Resolve slot contract / root vi for lvalue expr (var or dotted path). */
+int flat_path_resolve_slot_lvalue(const char *expr, FlatStringPool *pool, FlatCollectionPool *coll,
+                                  FlatValue *vars, int var_count, const char (*var_names)[64],
+                                  const FlatPathTypedCtx *typed, int *out_root_vi,
+                                  FlatSlotType *out_contract, int *out_has_contract,
+                                  FlatSlotLocErr *err_out);
+
 #endif

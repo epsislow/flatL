@@ -37,7 +37,7 @@ Two contexts may bind the same name to different contracts without conflict.
 | Integer | `u8`…`u64`, `s8`…`s64` | Range at assign; **`u64`/`s64`**: exact integers only up to **`2^53−1`** (`type.assign.range.i64` beyond) |
 | Float | `f32`, `f64` | Same check as `f64` today (any `VAL_NUMBER`); precision at AOT — [LANGUAGE_TYPES.md §6](./LANGUAGE_TYPES.md#6-static-slot-contracts-strict-types). `f8`, `q4p4` **deferred** |
 | Bool | `b` | `true` / `false` |
-| String | `t` (= **`t127`**), `tN` (N ≤ 127) | Length at assign |
+| String | `t` (= **`t127`**), `tN` (**`1…8192`**) | Length at assign; REF OK peste 127 octeți |
 | List | `l`, `o[]`, `l[]`, `elemType[]`, `elemType[N]` | `[N]` = max length, snapshot at bind |
 | Object open | `o` | Add fields on assign; read missing field → panic |
 | Schema | `<name>` | Closed at root; null-fill on `{}` |

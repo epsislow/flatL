@@ -1,6 +1,6 @@
 # Strict types & object schemas (overview)
 
-**Status:** **T6** — **`O.set` / `O.set2`** path parity with assign; **`def f(a:u8, …) -> out:u16`** (FFUN v7 metadata, **`vcx.bindCallParams`** / **`vcx.copyCallReturn`**). Prior: **T5** freeze/const; **T4+** typed **`m.calc`** / I/O.
+**Status:** **T7** — **`tN` până la `t8192`**, SCHM **`.fb` v8** (aux 16-bit). **T6:** `O.set`/`set2`, typed **`def`** (FFUN v7). **T5** freeze/const; **T4+** typed **`m.calc`** / I/O.
 
 | Doc | Role |
 |-----|------|
@@ -174,5 +174,6 @@ freeze(cfg)
 | **T5** | **Done:** `const`, `freeze()`, `free` clears flags, ctxout guard, VCX copy |
 | **T4+** | **Done:** `m.calc` arg 2, `io.in_*` type arg, `type.calc.*` / `type.io.*` |
 | **T6** | **Done:** typed **`def`** (mixed formals, typed return), **`O.set`** on schema root var + dot path, **`O.set2`** full path |
+| **T7** | **Done:** **`tN` 1…8192**, SCHM **v8** aux 16-bit; **`io.inln`** REF peste 127 octeți |
 
 Specimens and T0 tests: `test/cases/types_t0/`.

@@ -1,0 +1,10 @@
+<stock>:
+  qty: u16
+<var>:
+  hold: <stock>
+
+#main
+  row:<var> = {}
+  mem.slot_type(row) == '<var>'
+  mem.slot_type(row.hold.qty) == 'u16'
+  io.outln('mem-slot-path-ok')

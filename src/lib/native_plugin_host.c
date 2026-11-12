@@ -43,6 +43,9 @@ static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_REF_EMPTY, flat_native_mem_ref_empty);
     flat_native_plugin_register(FLAT_NATIVE_MEM_REF_FROM, flat_native_mem_ref_from);
     flat_native_plugin_register(FLAT_NATIVE_MEM_TYPE_OF, flat_native_mem_type_of);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_SLOT_TYPE, flat_native_mem_slot_type);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_SLOT_FROZEN, flat_native_mem_slot_frozen);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_SLOT_CONST, flat_native_mem_slot_const);
 }
 
 static void register_embedded_date(void) {

@@ -93,6 +93,7 @@ const FlatSchemaDef *flat_schema_def_for_contract(const FlatSchemaCatalog *cat,
 
 size_t flat_fb_schm_section_size(const FlatSchemaCatalog *cat);
 int flat_fb_write_schm_section(FILE *f, const FlatSchemaCatalog *cat);
-int flat_fb_parse_schm_section(const uint8_t *sec, size_t sec_len, FlatSchemaCatalog *out);
+int flat_fb_parse_schm_section(const uint8_t *sec, size_t sec_len, int format_version,
+                               FlatSchemaCatalog *out);
 
 #endif

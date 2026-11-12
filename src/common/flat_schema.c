@@ -692,7 +692,7 @@ size_t flat_fb_schm_section_size(const FlatSchemaCatalog *cat) {
         n += 2;
         for (j = 0; j < cat->defs[i].field_count; j++) {
             const FlatSchemaField *f = &cat->defs[i].fields[j];
-            n += 2 + strlen(f->key) + 1 + 1 + 2 + 2 + 1;
+            n += 2 + strlen(f->key) + 1 + 2 + 2 + 2 + 1;
         }
     }
     return n;
@@ -722,14 +722,14 @@ int flat_fb_write_schm_section(FILE *f, const FlatSchemaCatalog *cat) {
             const FlatSchemaField *fld = &d->fields[j];
             uint16_t kl = (uint16_t)strlen(fld->key);
             uint8_t kind = (uint8_t)fld->slot.kind;
-            uint8_t aux = fld->slot.aux;
+            uint16_t aux = fld->slot.aux;
             uint16_t sid = fld->slot.schema_id;
             uint16_t lmax = fld->slot.list_max;
             uint8_t flags = fld->flags;
             if (fwrite(&kl, 2, 1, f) != 1 || fwrite(fld->key, 1, kl, f) != kl) {
                 return -1;
             }
-            if (fwrite(&kind, 1, 1, f) != 1 || fwrite(&aux, 1, 1, f) != 1 ||
+            if (fwrite(&kind, 1, 1, f) != 1 || fwrite(&aux, 2, 1, f) != 1 ||
                 fwrite(&sid, 2, 1, f) != 1 || fwrite(&lmax, 2, 1, f) != 1 ||
                 fwrite(&flags, 1, 1, f) != 1) {
                 return -1;
@@ -771,7 +771,7 @@ static int schm_validate_catalog(const FlatSchemaCatalog *cat) {
                 return -1;
             }
             if (fld->slot.kind == FLAT_SLOT_TYPE_TN) {
-                if (fld->slot.aux == 0 || fld->slot.aux > FLAT_SLOT_TYPE_AUX_T_DEFAULT) {
+                if (fld->slot.aux == 0 || fld->slot.aux > FLAT_SLOT_TYPE_AUX_T_MAX) {
                     return -1;
                 }
             } else if (fld->slot.kind == FLAT_SLOT_TYPE_T) {
@@ -795,7 +795,8 @@ static int schm_validate_catalog(const FlatSchemaCatalog *cat) {
     return 0;
 }
 
-int flat_fb_parse_schm_section(const uint8_t *sec, size_t sec_len, FlatSchemaCatalog *out) {
+int flat_fb_parse_schm_section(const uint8_t *sec, size_t sec_len, int format_version,
+                               FlatSchemaCatalog *out) {
     size_t pos = 0;
     uint32_t magic;
     uint16_t scount;
@@ -844,20 +845,26 @@ int flat_fb_parse_schm_section(const uint8_t *sec, size_t sec_len, FlatSchemaCat
         def->field_count = (int)fc;
         for (fi = 0; fi < (int)fc; fi++) {
             uint16_t kl;
+            size_t fld_tail = (format_version >= 8) ? 8u : 7u;
             FlatSchemaField *fld = &def->fields[fi];
             if (pos + 2 > sec_len) {
                 return -1;
             }
             read_u16(sec + pos, &kl);
             pos += 2;
-            if (pos + kl + 7 > sec_len || kl > FLAT_OBJ_KEY_MAX) {
+            if (pos + kl + fld_tail > sec_len || kl > FLAT_OBJ_KEY_MAX) {
                 return -1;
             }
             memcpy(fld->key, sec + pos, kl);
             fld->key[kl] = '\0';
             pos += kl;
             fld->slot.kind = (FlatSlotTypeKind)sec[pos++];
-            fld->slot.aux = sec[pos++];
+            if (format_version >= 8) {
+                read_u16(sec + pos, &fld->slot.aux);
+                pos += 2;
+            } else {
+                fld->slot.aux = sec[pos++];
+            }
             read_u16(sec + pos, &fld->slot.schema_id);
             pos += 2;
             read_u16(sec + pos, &fld->slot.list_max);

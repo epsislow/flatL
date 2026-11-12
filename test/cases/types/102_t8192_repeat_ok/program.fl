@@ -1,0 +1,7 @@
+use native str with S
+
+#main
+  payload = S.repeat('x', 8192)
+  buf:t8192 = payload
+  io.outln(S.len(buf))
+  OK

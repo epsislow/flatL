@@ -1,0 +1,14 @@
+suite = "memory"
+id = 10
+desc = "mem.slot_type schema variable and dot path"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "mem-slot-path-ok"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "mem-slot-path-ok"

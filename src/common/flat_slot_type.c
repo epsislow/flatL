@@ -88,9 +88,6 @@ static int parse_bracket_list_max(const char *rest, uint16_t *max_out, const cha
 }
 
 static int parse_type_spec(const char *spec, FlatSlotType *out) {
-    const char *p;
-    int n;
-
     if (!spec || !spec[0] || !out) {
         return -1;
     }
@@ -124,19 +121,15 @@ static int parse_type_spec(const char *spec, FlatSlotType *out) {
         return 0;
     }
     if (spec[0] == 't' && isdigit((unsigned char)spec[1])) {
-        n = atoi(spec + 1);
-        if (n <= 0 || n > 127) {
-            return -1;
-        }
-        p = spec + 1;
-        while (*p && isdigit((unsigned char)*p)) {
-            p++;
-        }
-        if (*p != '\0') {
+        unsigned long maxn;
+        char *endp;
+
+        maxn = strtoul(spec + 1, &endp, 10);
+        if (endp == spec + 1 || *endp != '\0' || maxn == 0 || maxn > FLAT_SLOT_TYPE_AUX_T_MAX) {
             return -1;
         }
         out->kind = FLAT_SLOT_TYPE_TN;
-        out->aux = (uint8_t)n;
+        out->aux = (uint16_t)maxn;
         return 0;
     }
     return parse_unsigned_type(spec, out);
@@ -337,6 +330,91 @@ void flat_slot_type_clear(FlatSlotType *t) {
     if (t) {
         memset(t, 0, sizeof *t);
     }
+}
+
+int flat_slot_type_format_spec(const FlatSlotType *t, const FlatSchemaCatalog *cat, char *out,
+                               size_t out_sz) {
+    const char *scalar = NULL;
+
+    if (!out || out_sz == 0) {
+        return -1;
+    }
+    if (!t || t->kind == FLAT_SLOT_TYPE_NONE) {
+        snprintf(out, out_sz, "none");
+        return 0;
+    }
+    if (t->kind == FLAT_SLOT_TYPE_DYNAMIC) {
+        snprintf(out, out_sz, "/%s", t->dynamic_expr);
+        return 0;
+    }
+    if (t->kind == FLAT_SLOT_TYPE_SCHEMA) {
+        const char *sname = "<?>";
+        if (cat && t->schema_id < (uint16_t)cat->count) {
+            sname = cat->defs[t->schema_id].name;
+        }
+        if (t->list_slot || t->list_max > 0) {
+            if (t->list_max > 0) {
+                snprintf(out, out_sz, "<%s>[%u]", sname, (unsigned)t->list_max);
+            } else {
+                snprintf(out, out_sz, "<%s>[]", sname);
+            }
+        } else {
+            snprintf(out, out_sz, "<%s>", sname);
+        }
+        return 0;
+    }
+    switch (t->kind) {
+    case FLAT_SLOT_TYPE_U8:
+        scalar = "u8";
+        break;
+    case FLAT_SLOT_TYPE_U16:
+        scalar = "u16";
+        break;
+    case FLAT_SLOT_TYPE_U32:
+        scalar = "u32";
+        break;
+    case FLAT_SLOT_TYPE_U64:
+        scalar = "u64";
+        break;
+    case FLAT_SLOT_TYPE_S8:
+        scalar = "s8";
+        break;
+    case FLAT_SLOT_TYPE_S16:
+        scalar = "s16";
+        break;
+    case FLAT_SLOT_TYPE_S32:
+        scalar = "s32";
+        break;
+    case FLAT_SLOT_TYPE_S64:
+        scalar = "s64";
+        break;
+    case FLAT_SLOT_TYPE_F32:
+        scalar = "f32";
+        break;
+    case FLAT_SLOT_TYPE_F64:
+        scalar = "f64";
+        break;
+    case FLAT_SLOT_TYPE_B:
+        scalar = "b";
+        break;
+    case FLAT_SLOT_TYPE_T:
+        snprintf(out, out_sz, "t%u", (unsigned)FLAT_SLOT_TYPE_AUX_T_DEFAULT);
+        return 0;
+    case FLAT_SLOT_TYPE_TN:
+        snprintf(out, out_sz, "t%u", (unsigned)t->aux);
+        return 0;
+    case FLAT_SLOT_TYPE_L:
+        scalar = "l";
+        break;
+    case FLAT_SLOT_TYPE_O:
+        scalar = "o";
+        break;
+    default:
+        snprintf(out, out_sz, "none");
+        return 0;
+    }
+    snprintf(out, out_sz, "%s", scalar);
+    return 0;
 }
 
 /* Interim until VAL_I64/VAL_U64: integers must be exact in IEEE double (±(2^53−1)). */
