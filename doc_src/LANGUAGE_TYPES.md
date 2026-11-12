@@ -152,11 +152,15 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 
 **Supported type tokens (T1):** `u8`…`u64`, `s8`…`s64`, `f32`, `f64`, `b`, `t` (same as **`t127`**), `t1`…`t127`, `l`, `o`.
 
-**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.incompatible`, `type.assign.string.len`, `type.assign.retype` (change `:type` without `free`).
+**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.range.i64` (`u64`/`s64` outside exact-integer `double` range), `type.assign.incompatible`, `type.assign.string.len`, `type.assign.retype` (change `:type` without `free`).
 
 **Compile:** **`:/expr`** on ASSIGN lhs is allowed; runtime reads STRING each run. **`<schema>`** on static lhs requires a **`<schema>:`** declaration; unknown schema → `type.schema.unknown` (compile) or `type.assign.schema.unknown` (dynamic STRING).
 
 Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — integers are range-checked, not narrowed in storage.
+
+**`u64` / `s64` (interim):** only integers in **`±(2^53−1)`** (`9007199254740991`) that are **exact** in `double`; larger nominal `u64`/`s64` literals or values → **`type.assign.range.i64`** until dedicated 64-bit storage (AOT).
+
+**Future (plan AM-NUM, not implemented):** stay on single tag **`VAL_NUMBER`**; add internal **`num_class`** (`whole` / `decimal`) and **`num_stor`** (`uint64_t`, `int64_t`, `float`, `double`, …). No separate `VAL_WHOLE` / `VAL_DECIMAL`. See repository plan `strict-types-schemas-roadmap.plan.md` §13.
 
 ### T2 (schema objects) — done
 

@@ -1,0 +1,9 @@
+suite = "types"
+id = 58
+desc = "u64/s64 at max exact double safe integer"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "9007199254740991"

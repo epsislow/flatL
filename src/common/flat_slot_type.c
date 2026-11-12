@@ -283,6 +283,10 @@ void flat_slot_type_clear(FlatSlotType *t) {
     }
 }
 
+/* Interim until VAL_I64/VAL_U64: integers must be exact in IEEE double (±(2^53−1)). */
+#define FLAT_I64_SAFE_MAX 9007199254740991.0
+#define FLAT_I64_SAFE_MIN (-9007199254740991.0)
+
 static int is_int_in_range(double d, long long minv, long long maxv) {
     double ip;
     if (isnan(d) || isinf(d)) {
@@ -292,6 +296,46 @@ static int is_int_in_range(double d, long long minv, long long maxv) {
         return 0;
     }
     if (ip < (double)minv || ip > (double)maxv) {
+        return 0;
+    }
+    return 1;
+}
+
+static int is_u64_interim_value(double d) {
+    int64_t qi;
+    double ip;
+
+    if (isnan(d) || isinf(d)) {
+        return 0;
+    }
+    if (modf(d, &ip) != 0.0) {
+        return 0;
+    }
+    if (d < 0.0 || d > FLAT_I64_SAFE_MAX) {
+        return 0;
+    }
+    qi = (int64_t)d;
+    if ((double)qi != d || qi < 0) {
+        return 0;
+    }
+    return 1;
+}
+
+static int is_s64_interim_value(double d) {
+    int64_t qi;
+    double ip;
+
+    if (isnan(d) || isinf(d)) {
+        return 0;
+    }
+    if (modf(d, &ip) != 0.0) {
+        return 0;
+    }
+    if (d < FLAT_I64_SAFE_MIN || d > FLAT_I64_SAFE_MAX) {
+        return 0;
+    }
+    qi = (int64_t)d;
+    if ((double)qi != d) {
         return 0;
     }
     return 1;
@@ -419,12 +463,8 @@ int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *va
             snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;
         }
-        if (val->u.number < 0.0 || val->u.number > 18446744073709551615.0) {
-            snprintf(panic, panic_sz, "type.assign.range");
-            return -1;
-        }
-        if (modf(val->u.number, &d) != 0.0) {
-            snprintf(panic, panic_sz, "type.assign.range");
+        if (!is_u64_interim_value(val->u.number)) {
+            snprintf(panic, panic_sz, "type.assign.range.i64");
             return -1;
         }
         return 0;
@@ -463,8 +503,8 @@ int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *va
             snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;
         }
-        if (!is_int_in_range(val->u.number, (long long)INT64_MIN, (long long)INT64_MAX)) {
-            snprintf(panic, panic_sz, "type.assign.range");
+        if (!is_s64_interim_value(val->u.number)) {
+            snprintf(panic, panic_sz, "type.assign.range.i64");
             return -1;
         }
         return 0;

@@ -34,7 +34,7 @@ Two contexts may bind the same name to different contracts without conflict.
 
 | Kind | Forms | Notes |
 |------|--------|--------|
-| Integer | `u8`…`u64`, `s8`…`s64` | Range at assign |
+| Integer | `u8`…`u64`, `s8`…`s64` | Range at assign; **`u64`/`s64`**: exact integers only up to **`2^53−1`** (`type.assign.range.i64` beyond) |
 | Float | `f32`, `f64` | `f8`, `q4p4` **deferred** |
 | Bool | `b` | `true` / `false` |
 | String | `t` (= **`t127`**), `tN` (N ≤ 127) | Length at assign |
@@ -142,6 +142,6 @@ Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
 
 ## 11. Panic prefix `type.*` (selection)
 
-See plan §10 for full table. Examples: `type.assign.incompatible`, `type.assign.range`, `type.assign.list.len`, `type.schema.field.unknown`, `type.assign.retype`, `type.freeze.assign`, `type.compare.incompatible`, `type.path.index`, `type.call.arg` (future).
+See plan §10 for full table. Examples: `type.assign.incompatible`, `type.assign.range`, `type.assign.range.i64`, `type.assign.list.len`, `type.schema.field.unknown`, `type.assign.retype`, `type.freeze.assign`, `type.compare.incompatible`, `type.path.index`, `type.call.arg` (future).
 
 User-facing messages prefer **expected** / **assigned**, not lhs/rhs.

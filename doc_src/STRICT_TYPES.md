@@ -35,7 +35,7 @@ There is **no** global `use strict types`.
 
 | Kind | Example | Notes |
 |------|---------|--------|
-| Unsigned / signed int | `u8`, `s16`, `u32`, … | Range checked on bind |
+| Unsigned / signed int | `u8`, `s16`, `u32`, … | Range checked on bind; **`u64`/`s64`**: exact integers only up to **`2^53−1`** ([LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md)) |
 | Float | `f32`, `f64` | `f8`, `q4p4` deferred |
 | Bool | `b` | |
 | String | `t` (= **`t127`**), `t8`, `t255` | Max length on bind |
