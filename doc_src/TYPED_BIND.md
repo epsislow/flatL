@@ -80,7 +80,7 @@ Two contexts may bind the same name to different contracts without conflict.
 | `<config>` with `db: o` | Only declared root fields; under **`db`** any keys OK |
 
 **LHS compound:** `o:<var>.a = 3` may create slot + schema + null-fill + set.  
-**Dynamic:** `payload:/payloadSchema` — STRING read each run; scheme policy via **`V.dSchemaAllow(ctx, …)`**, **`V.dSchemaList(ctx, list)`** with `"<schema>"` entries.
+**Dynamic:** `payload:/payloadSchema` — STRING read each run; scheme policy via **`V.dSchemaAllow(ctx, …)`**, **`V.dSchemaList(ctx, list)`** with `"<schema>"` entries. After **`dSchemaList`**, **`[]`** means **deny all** schema names (not “allow all”). See [natives/vcx.md](./natives/vcx.md) § Typed dynamic binds.
 
 ---
 

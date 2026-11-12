@@ -690,8 +690,12 @@ int flat_vcx_dynamic_schema_permit(FlatVcxRuntime *rt, const char *schema_name, 
         snprintf(panic, panic_sz, "type.assign.dynamic.denied");
         return -1;
     }
-    if (!act->dschema_list_active || act->dschema_list_count <= 0) {
+    if (!act->dschema_list_active) {
         return 0;
+    }
+    if (act->dschema_list_count <= 0) {
+        snprintf(panic, panic_sz, "type.assign.dynamic.denied");
+        return -1;
     }
     for (i = 0; i < act->dschema_list_count; i++) {
         if (strcmp(act->dschema_list[i], schema_name) == 0) {

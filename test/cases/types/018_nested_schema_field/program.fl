@@ -6,4 +6,6 @@
 
 #main
   row:<var> = { hold: {} }
+  row.hold.qty = 12
+  io.outln(row.hold.qty)
   OK

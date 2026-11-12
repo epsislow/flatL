@@ -120,7 +120,7 @@ payloadSchema = "<var>"
 payload:/payloadSchema = {}
 ```
 
-The STRING is read **each time** the line runs. Schemes in STRING are filtered by **`V.dSchemaAllow(ctx, …)`** and **`V.dSchemaList(ctx, list)`** (entries like `"<var>"`).
+The STRING is read **each time** the line runs. Schemes in STRING are filtered by **`V.dSchemaAllow(ctx, …)`** and **`V.dSchemaList(ctx, list)`** (entries like `"<var>"`). Once **`dSchemaList`** has run, an **empty** list **`[]`** is a **fail-closed** whitelist (no schema permitted); see [natives/vcx.md](./natives/vcx.md).
 
 ---
 

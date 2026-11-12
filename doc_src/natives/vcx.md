@@ -136,7 +136,7 @@ For **`name:/typeExpr`** where the STRING may name a **`<schema>`** (T4), each V
 | Native | Role |
 |--------|------|
 | **`V.dSchemaAllow(ctx, allow)`** | **`allow = 0`** — dynamic STRING with any **`<schema>`** → **`type.assign.dynamic.denied`**. Atomics (`u8`, `t4`, `o`, …) still allowed. **`allow = 1`** — schemas allowed subject to list (default for new contexts). |
-| **`V.dSchemaList(ctx, list)`** | **`[]`** — any **declared** schema allowed (with **`allow(1)`**). Nonempty — only listed entries (`"<stock>"`, …, angle brackets required); other schemas → **`type.assign.dynamic.denied`**. |
+| **`V.dSchemaList(ctx, list)`** | After this call, a **whitelist** is in effect (even when **`list`** is **`[]`**). **`[]`** — **no** schema names are allowed → any dynamic bind to a **`<schema>`** → **`type.assign.dynamic.denied`** (fail-closed). Nonempty — only listed entries (`"<stock>"`, …, angle brackets required); other declared schemas → **`type.assign.dynamic.denied`**. Invalid list entries → **`vcx.dSchemaList.entry`**; the **previous** whitelist is unchanged. Before the first **`dSchemaList`** on a context, dynamic schema binds follow **`dSchemaAllow`** only (any declared schema when allow is 1). |
 
 Context **1** is the initial global context; use **`V.current()`** or literal **`1`** as **`ctx`**.
 

@@ -8,4 +8,5 @@
   myStock:<stock> = { qty: 2, product: "ab" }
   qq:<var> = {}
   qq.stocks = [myStock]
+  io.outln(qq.stocks)
   OK
