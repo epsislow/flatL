@@ -3,7 +3,3 @@
   io.inln() -> a
   io.inln() -> b
   OK
-
-#panic.any
-  io.outln('eof ok')
-  OK

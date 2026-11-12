@@ -12,3 +12,5 @@ stdout_contains = "true"
 [flatl]
 compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
 run = "printf 'yes\n' | {root}/bin/flatl run {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "true"

@@ -1,10 +1,10 @@
 suite = "io_ctx"
-id = 7
-desc = "io.out after free of active ctxout ref panics"
+id = 5
+desc = "io.ctxin(tout) panics io.context"
 kind = "pipeline"
 
 source = "program.fl"
 compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
 run = "{root}/bin/flvm {tmp}/out.fb"
-expect_exit = 0
-stdout_contains = "stale ok"
+expect_exit = 1
+stderr_contains = "unhandled PANIC: io.context"

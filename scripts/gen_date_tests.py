@@ -237,9 +237,9 @@ def main():
     w(72, "tilde_parse_auto", "~ parse_auto #.",
       "#main\n  ~ date.parse_auto('!!!') -> s   #.bad\n  io.outln('ok')\n  OK\n\n#or.#main.bad\n  io.outln('or')\n  OK",
       stdout="or")
-    w(73, "panic_any_str_to_date", "panic.any str.to_date",
-      "#main\n  str.to_date('bad') -> d\n  io.outln('skip')\n  OK\n\n#panic.any\n  io.outln('recovered')\n  OK",
-      stdout="recovered")
+    w(73, "str_to_date_panic", "str.to_date invalid panics (unhandled)",
+      "#main\n  str.to_date('bad') -> d\n  io.outln('bad')\n  OK",
+      exit_=1, stderr="unhandled PANIC: str.to_date")
     w(74, "add_then_format", "add then format chain",
       "#main\n  date.add('2026-09-30', '+1d') -> x\n  date.format(x, 'YYYY-MM-DD') -> d\n  io.outln(d)\n  OK",
       stdout="2026-10-01")

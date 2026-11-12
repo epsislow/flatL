@@ -12,3 +12,6 @@ stdout_contains_2 = "b"
 
 [flatl]
 crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "a"
+stdout_contains_2 = "b"

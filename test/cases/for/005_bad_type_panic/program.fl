@@ -3,9 +3,5 @@
   for(tag, i, '#step')
   OK
 
-#panic.any
-  io.outln('panic ok')
-  OK
-
 #step
   next

@@ -4,7 +4,3 @@
   free(buf)
   io.out('after free')
   OK
-
-#panic.any
-  io.outln('stale ok')
-  OK

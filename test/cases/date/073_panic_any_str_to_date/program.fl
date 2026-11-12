@@ -1,8 +1,0 @@
-#main
-  str.to_date('bad') -> d
-  io.outln('skip')
-  OK
-
-#panic.any
-  io.outln('recovered')
-  OK

@@ -12,3 +12,5 @@ stdout_contains = "99"
 [flatl]
 compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
 run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "99"

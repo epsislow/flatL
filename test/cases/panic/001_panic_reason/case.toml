@@ -12,3 +12,6 @@ stdout_contains_2 = "handled"
 
 [flatl]
 crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "for.ntimes_type"
+stdout_contains_2 = "handled"

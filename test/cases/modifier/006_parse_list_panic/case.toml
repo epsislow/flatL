@@ -1,14 +1,18 @@
 suite = "modifier"
 id = 6
-desc = "default panic recovered via #panic.any"
+desc = "json.parse_list invalid panics"
 kind = "pipeline"
 
 source = "program.fl"
 compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
 run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
-expect_exit = 0
-stdout_contains = "recovered"
+expect_exit = 1
+stderr_contains = "unhandled PANIC: json.parse_list"
+stdout_must_not_contain = "bad"
 
 [flatl]
 compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
 run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "unhandled PANIC: json.parse_list"
+stdout_must_not_contain = "bad"

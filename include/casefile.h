@@ -45,6 +45,18 @@ typedef struct {
     char flatl_crun[FLAT_CASE_MAX_CMD];
     char flatl_compile[FLAT_CASE_MAX_CMD];
     char flatl_run[FLAT_CASE_MAX_CMD];
+
+    /* Assert-uri pentru --flatl când există [flatl]: fără moștenire de la root. */
+    int flatl_expect_exit;
+    int flatl_expect_exit_set;
+    char flatl_stdout_contains[FLAT_CASE_MAX_DESC];
+    char flatl_stdout_contains_extra[FLAT_CASE_MAX_STDOUT_EXTRA][FLAT_CASE_MAX_DESC];
+    int flatl_stdout_contains_extra_count;
+    int flatl_stdout_contains_set;
+    char flatl_stdout_must_not_contain[FLAT_CASE_MAX_DESC];
+    int flatl_stdout_must_not_contain_set;
+    char flatl_stderr_contains[FLAT_CASE_MAX_DESC];
+    int flatl_stderr_contains_set;
 } FlatCase;
 
 typedef struct {

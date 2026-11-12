@@ -216,6 +216,15 @@ static void vm_clear_caught_panic(VmState *st) {
     }
 }
 
+static void vm_log_unhandled_panic_stderr(const char *reason) {
+    char line[160];
+    const char *r;
+
+    r = reason && reason[0] != '\0' ? reason : "panic";
+    snprintf(line, sizeof line, "flvm: unhandled PANIC: %s\n", r);
+    vm_write_stderr(line);
+}
+
 static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *reason,
                              int trace) {
     size_t i;
@@ -236,11 +245,7 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
             return 0;
         }
     }
-    {
-        char line[128];
-        snprintf(line, sizeof line, "flvm: unhandled PANIC: %s\n", reason);
-        vm_write_stderr(line);
-    }
+    vm_log_unhandled_panic_stderr(reason);
     if (st) {
         st->unhandled_panic = 1;
         snprintf(st->panic_reason, sizeof st->panic_reason, "%s", reason ? reason : "panic");

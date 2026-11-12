@@ -216,6 +216,8 @@ If no handler exists for that index, control falls through to **`#panic.any`** (
 
 The reason is updated on each PANIC routed to a handler (`#panic.*` / `#panic.any`). It is **not** cleared when the handler returns unless the program calls **`panicReset()`**.
 
+**Stderr:** only **unhandled** PANIC (no matching `#panic.*` handler) writes `flvm: unhandled PANIC: <reason>` to stderr. A **recovered** PANIC routed to a handler does **not** log to stderr (the program may use **`panicReason()`** or its own logging). With **`--trace`**, recovered routing may still log `[trace] panic reason=…` for debugging.
+
 Example:
 
 ```text

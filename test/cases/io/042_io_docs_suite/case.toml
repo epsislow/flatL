@@ -11,3 +11,4 @@ expect_exit = 0
 [flatl]
 compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
 run = "sh {case}/run_checks.sh {root} {tmp}/out.fb"
+expect_exit = 0

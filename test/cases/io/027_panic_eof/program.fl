@@ -1,7 +1,3 @@
 #main
   io.inln() -> x
   OK
-
-#panic.any
-  io.outln('eof')
-  OK

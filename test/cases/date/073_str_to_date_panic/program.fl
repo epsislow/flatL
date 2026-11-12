@@ -1,0 +1,4 @@
+#main
+  str.to_date('bad') -> d
+  io.outln('bad')
+  OK

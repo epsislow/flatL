@@ -2,7 +2,3 @@
   io.in_bool() -> ok
   io.outln('bad')
   OK
-
-#panic.any
-  io.outln('cancelled')
-  OK

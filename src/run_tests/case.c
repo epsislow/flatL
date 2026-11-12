@@ -53,6 +53,34 @@ static void apply_kv_flatl(FlatCase *c, const char *key, char *val) {
         snprintf(c->flatl_compile, sizeof c->flatl_compile, "%s", val);
     } else if (strcmp(key, "run") == 0) {
         snprintf(c->flatl_run, sizeof c->flatl_run, "%s", val);
+    } else if (strcmp(key, "expect_exit") == 0) {
+        c->flatl_expect_exit = atoi(val);
+        c->flatl_expect_exit_set = 1;
+    } else if (strncmp(key, "stdout_contains", 15) == 0) {
+        if (strcmp(key, "stdout_contains") == 0) {
+            snprintf(c->flatl_stdout_contains, sizeof c->flatl_stdout_contains, "%s", val);
+            c->flatl_stdout_contains_set = 1;
+        } else if (key[15] == '_' && key[16] != '\0') {
+            int n = atoi(key + 16);
+            int ix;
+            if (n >= 2 && n <= FLAT_CASE_MAX_STDOUT_EXTRA + 1) {
+                ix = n - 2;
+                snprintf(c->flatl_stdout_contains_extra[ix], sizeof c->flatl_stdout_contains_extra[ix],
+                         "%s", val);
+                if (c->flatl_stdout_contains_extra_count < ix + 1) {
+                    c->flatl_stdout_contains_extra_count = ix + 1;
+                }
+                if (!c->flatl_stdout_contains_set)
+                    c->flatl_stdout_contains_set = 1;
+            }
+        }
+    } else if (strcmp(key, "stdout_must_not_contain") == 0) {
+        snprintf(c->flatl_stdout_must_not_contain, sizeof c->flatl_stdout_must_not_contain, "%s",
+                 val);
+        c->flatl_stdout_must_not_contain_set = 1;
+    } else if (strcmp(key, "stderr_contains") == 0) {
+        snprintf(c->flatl_stderr_contains, sizeof c->flatl_stderr_contains, "%s", val);
+        c->flatl_stderr_contains_set = 1;
     }
 }
 
@@ -268,6 +296,44 @@ static int check_stdout_all(const FlatCase *c, const char *out, char *err, int e
         return -1;
     }
     return 0;
+}
+
+static int check_stdout_flatl(const FlatCase *c, const char *out, char *err, int err_size) {
+    int i;
+    if (c->flatl_stdout_contains_set &&
+        check_output(out, c->flatl_stdout_contains, err, err_size) != 0) {
+        return -1;
+    }
+    for (i = 0; i < c->flatl_stdout_contains_extra_count; i++) {
+        if (check_output(out, c->flatl_stdout_contains_extra[i], err, err_size) != 0) {
+            return -1;
+        }
+    }
+    if (c->flatl_stdout_must_not_contain_set && out &&
+        strstr(out, c->flatl_stdout_must_not_contain)) {
+        snprintf(err, (size_t)err_size, "output must not contain: %s",
+                 c->flatl_stdout_must_not_contain);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_exit_want(int code, int want, const char *what, char *err, int err_size) {
+    if (want < 0) {
+        return 0;
+    }
+    if (code != want) {
+        snprintf(err, (size_t)err_size, "%s exit %d want %d", what, code, want);
+        return -1;
+    }
+    return 0;
+}
+
+static int check_stderr_flatl(const FlatCase *c, const char *out, char *err, int err_size) {
+    if (!c->flatl_stderr_contains_set) {
+        return 0;
+    }
+    return check_output(out, c->flatl_stderr_contains, err, err_size);
 }
 
 static const char FLATL_COMPILE[] = "{root}/bin/flatl compile -o {tmp}/out.fb {src}";
@@ -529,17 +595,16 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                     timing->have_compile = 1;
                 }
             }
-            if (code != c->expect_exit) {
-                snprintf(err, (size_t)err_size, "flatl crun exit %d want %d", code,
-                         c->expect_exit);
+            if (check_exit_want(code, c->flatl_expect_exit_set ? c->flatl_expect_exit : -1,
+                                "flatl crun", err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
-            if (check_stdout_all(c, out, err, err_size) != 0) {
+            if (check_stdout_flatl(c, out, err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
-            if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+            if (check_stderr_flatl(c, out, err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
@@ -590,16 +655,16 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                 timing->run_ms = run_ms;
                 timing->have_run = 1;
             }
-            if (code != c->expect_exit) {
-                snprintf(err, (size_t)err_size, "flatl run exit %d want %d", code, c->expect_exit);
+            if (check_exit_want(code, c->flatl_expect_exit_set ? c->flatl_expect_exit : -1,
+                                "flatl run", err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
-            if (check_stdout_all(c, out, err, err_size) != 0) {
+            if (check_stdout_flatl(c, out, err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
-            if (check_output(out, c->stderr_contains, err, err_size) != 0) {
+            if (check_stderr_flatl(c, out, err, err_size) != 0) {
                 timing_finish(timing, t_case, measure);
                 return -1;
             }

@@ -11,3 +11,4 @@ expect_exit = 0
 [flatl]
 compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
 run = "printf '\n' | {root}/bin/flatl run {tmp}/out.fb"
+expect_exit = 0

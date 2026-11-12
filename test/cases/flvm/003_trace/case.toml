@@ -11,3 +11,5 @@ stderr_contains = "[trace]"
 
 [flatl]
 crun = "{root}/bin/flatl crun --trace -o {tmp}/out.fb {src}"
+expect_exit = 0
+stderr_contains = "[trace]"

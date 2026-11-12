@@ -11,3 +11,5 @@ stdout_contains = "7"
 
 [flatl]
 crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "7"

@@ -1,7 +1,3 @@
 #main
   io.in_num() -> n
   OK
-
-#panic.any
-  io.outln('parse')
-  OK
