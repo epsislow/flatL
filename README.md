@@ -2,7 +2,7 @@
 
 **flatL** is a label-driven language built on a **flat graph** instead of nested scopes. Programs are collections of linear **basic blocks** linked by explicit control flow: guards (`#or` handlers), `call`/`return`, and isolated panic handlers. The toolchain compiles human-readable source (`.fl`) into packed bytecode (`.fb`) executed by a small virtual machine (**flvm**).
 
-> **Toolchain v0.4.0** (`FLAT_TOOLCHAIN_VERSION` in `include/flat.h`)  
+> **Toolchain v0.5.0** (`FLAT_TOOLCHAIN_VERSION` in `include/flat.h`) — **AM-NUM**: `.fb` **v9**  
 > FGIR spec v1.0 · Binary & VM spec v1.2 (`.fb` v6 with FFUN and optional SCHM metadata)  
 > **Documentation is in English** — index: [doc_src/README.md](doc_src/README.md) · offline site: **`make docs`** + **`make fleditor-serve`** → [docs/doc_site/](docs/doc_site/index.html)
 

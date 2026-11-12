@@ -2,4 +2,5 @@
   a:u8 = 3
   b:u16 = 3
   a == b
+  io.outln('eq')
   OK

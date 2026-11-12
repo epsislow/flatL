@@ -1,0 +1,6 @@
+#main
+  for(-23, i, '#x')
+  OK
+
+#x
+  next

@@ -1,4 +1,5 @@
 /* VCX dSchema* natives — kept separate to avoid growing mod_vcx.c further. */
+#include "flat_number.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_vcx.h"
@@ -44,10 +45,10 @@ static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) 
     if (v.tag != VAL_NUMBER) {
         return -1;
     }
-    if (v.u.number != floor(v.u.number) || v.u.number < 0.0 || v.u.number > (double)UINT32_MAX) {
+    if (flat_number_as_f64(&v) != floor(flat_number_as_f64(&v)) || flat_number_as_f64(&v) < 0.0 || flat_number_as_f64(&v) > (double)UINT32_MAX) {
         return -1;
     }
-    *out_id = (uint32_t)v.u.number;
+    *out_id = (uint32_t)flat_number_as_f64(&v);
     return 0;
 }
 
@@ -89,10 +90,10 @@ int flat_native_vcx_dschema_allow(FlatNativeCtx *ctx) {
     if (parse_expr(ctx, b, &allow_v) != 0 || allow_v.tag != VAL_NUMBER) {
         return vcx_fail(ctx, "vcx.dSchemaAllow.arg");
     }
-    if (allow_v.u.number != 0.0 && allow_v.u.number != 1.0) {
+    if (flat_number_as_f64(&allow_v) != 0.0 && flat_number_as_f64(&allow_v) != 1.0) {
         return vcx_fail(ctx, "vcx.dSchemaAllow.arg");
     }
-    allow = allow_v.u.number != 0.0 ? 1 : 0;
+    allow = flat_number_as_f64(&allow_v) != 0.0 ? 1 : 0;
     if (flat_vcx_dschema_allow(rt, cid, allow, ctx->panic_detail, sizeof ctx->panic_detail) != 0) {
         return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.dSchemaAllow");
     }

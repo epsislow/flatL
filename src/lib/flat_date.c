@@ -1,4 +1,5 @@
 #include "flat_date.h"
+#include "flat_number.h"
 #include "flat_value.h"
 
 #include <ctype.h>
@@ -720,7 +721,7 @@ int flat_date_value_to_utc_sec(const FlatValue *v, FlatStringPool *pool, int64_t
         return -1;
     }
     if (v->tag == VAL_NUMBER) {
-        double n = v->u.number;
+        double n = flat_number_as_f64(v);
         if (n >= (double)MS_THRESHOLD || n <= -(double)MS_THRESHOLD) {
             *out_sec = (int64_t)(n / 1000.0);
         } else {

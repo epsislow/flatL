@@ -1,5 +1,7 @@
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
+#include "flat_number.h"
+#include "flat_slot_type.h"
 #include "flat_value.h"
 
 #include <ctype.h>
@@ -160,10 +162,10 @@ static int parse_whole_number(FlatNativeCtx *ctx, const char *expr, double *out)
     if (parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) {
         return -1;
     }
-    if (v.u.number != floor(v.u.number)) {
+    if (flat_number_as_f64(&v) != floor(flat_number_as_f64(&v))) {
         return -1;
     }
-    *out = v.u.number;
+    *out = flat_number_as_f64(&v);
     return 0;
 }
 
@@ -241,13 +243,46 @@ static size_t find_substr(const uint8_t *hay, size_t hlen, const uint8_t *needle
 }
 
 int flat_native_str_to_num(FlatNativeCtx *ctx) {
+    char inner_buf[4096];
+    char *left;
+    char *right;
     char token[512];
+    FlatSlotType expect;
     double n;
+    const FlatSchemaCatalog *cat;
 
     if (!ctx->out || !ctx->io_status) {
         return -1;
     }
     io_ok(ctx);
+    if (ctx->inner && ctx->inner[0] != '\0') {
+        FlatValue sval;
+        snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+        if (split_two_args(inner_buf, &left, &right) == 0 && right && right[0] != '\0') {
+            if (parse_expr(ctx, left, &sval) != 0) {
+                return io_err(ctx);
+            }
+            if (flat_value_get_cstr(&sval, ctx->pool, token, sizeof token) != 0) {
+                return io_err(ctx);
+            }
+            cat = ctx->bc ? &ctx->bc->schemas : NULL;
+            if (flat_slot_type_parse_spec(flat_native_trim(right), &expect, cat, NULL, 0) != 0) {
+                return io_err(ctx);
+            }
+            {
+                char panic[64];
+                if (flat_number_parse_for_slot_kind(flat_native_trim(token), expect.kind, ctx->out,
+                                                    panic, sizeof panic) != 0) {
+                    if (ctx->panic_detail[0] == '\0') {
+                        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s",
+                                 panic[0] ? panic : "type.io.expect");
+                    }
+                    return io_err(ctx);
+                }
+            }
+            return 0;
+        }
+    }
     if (string_from_inner(ctx, token, sizeof token) != 0) {
         return io_err(ctx);
     }

@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_native_mod.h"
+#include "flat_number.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
 
@@ -227,7 +229,7 @@ int flat_native_list_get(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    ix = (int)idx_v.u.number;
+    ix = (int)flat_number_as_f64(&idx_v);
     if (flat_list_get(ctx->coll, list_v.u.coll_id, ix, ctx->out) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
@@ -321,7 +323,7 @@ int flat_native_list_insert(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_insert_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) !=
+    if (flat_list_insert_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)flat_number_as_f64(&idx_v), &item, &new_id) !=
         0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
@@ -360,7 +362,7 @@ int flat_native_list_set(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_set_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)idx_v.u.number, &item, &new_id) != 0) {
+    if (flat_list_set_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)flat_number_as_f64(&idx_v), &item, &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -456,7 +458,7 @@ int flat_native_list_remove_at(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_remove_at_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)idx_v.u.number, &new_id) != 0) {
+    if (flat_list_remove_at_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)flat_number_as_f64(&idx_v), &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -494,8 +496,8 @@ int flat_native_list_slice(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_slice_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)start_v.u.number,
-                             (int)end_v.u.number, &new_id) != 0) {
+    if (flat_list_slice_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)flat_number_as_f64(&start_v),
+                             (int)flat_number_as_f64(&end_v), &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -533,8 +535,8 @@ int flat_native_list_splice(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (flat_list_splice_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)start_v.u.number,
-                              (int)count_v.u.number, &new_id) != 0) {
+    if (flat_list_splice_copy(ctx->coll, ctx->pool, list_v.u.coll_id, (int)flat_number_as_f64(&start_v),
+                              (int)flat_number_as_f64(&count_v), &new_id) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -546,10 +548,10 @@ static int parse_whole_number_expr(FlatNativeCtx *ctx, const char *expr, double 
     if (parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) {
         return -1;
     }
-    if (v.u.number != floor(v.u.number)) {
+    if (flat_number_as_f64(&v) != floor(flat_number_as_f64(&v))) {
         return -1;
     }
-    *out = v.u.number;
+    *out = flat_number_as_f64(&v);
     return 0;
 }
 

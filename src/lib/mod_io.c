@@ -1,6 +1,7 @@
 #include "flat_io_ctx.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
+#include "flat_number.h"
 #include "flat_slot_type.h"
 #include "flat_value.h"
 #include "doc_lookup.h"
@@ -150,11 +151,14 @@ static int eval_io_arg(FlatNativeCtx *ctx, FlatValue *out) {
     }
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     flat_native_trim(inner_buf);
+    if (flat_value_parse_assign_rhs(inner_buf, out, ctx->pool, ctx->coll, ctx->vars,
+                                    ctx->var_count, ctx->var_names) == 0) {
+        return 0;
+    }
     if (flat_native_eval_call(ctx, inner_buf, out) == 0) {
         return 0;
     }
-    return flat_value_parse_assign_rhs(inner_buf, out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
+    return -1;
 }
 
 static int eval_io_arg_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
@@ -165,11 +169,14 @@ static int eval_io_arg_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out
     }
     snprintf(inner_buf, sizeof inner_buf, "%s", expr);
     flat_native_trim(inner_buf);
+    if (flat_value_parse_assign_rhs(inner_buf, out, ctx->pool, ctx->coll, ctx->vars,
+                                    ctx->var_count, ctx->var_names) == 0) {
+        return 0;
+    }
     if (flat_native_eval_call(ctx, inner_buf, out) == 0) {
         return 0;
     }
-    return flat_value_parse_assign_rhs(inner_buf, out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
+    return -1;
 }
 
 static int split_two_args(char *inner, char **left, char **right) {
@@ -660,7 +667,19 @@ int flat_native_io_in_num(FlatNativeCtx *ctx) {
     if (*ctx->io_status != FLAT_IO_OK) {
         return 0;
     }
-    if (parse_in_line_num(linebuf, ctx->out, ctx->io_status) != 0) {
+    if (has_expect && flat_slot_type_is_scalar(&expect) &&
+        (expect.kind == FLAT_SLOT_TYPE_U8 || expect.kind == FLAT_SLOT_TYPE_U16 ||
+         expect.kind == FLAT_SLOT_TYPE_U32 || expect.kind == FLAT_SLOT_TYPE_U64 ||
+         expect.kind == FLAT_SLOT_TYPE_S8 || expect.kind == FLAT_SLOT_TYPE_S16 ||
+         expect.kind == FLAT_SLOT_TYPE_S32 || expect.kind == FLAT_SLOT_TYPE_S64 ||
+         expect.kind == FLAT_SLOT_TYPE_F32 || expect.kind == FLAT_SLOT_TYPE_F64)) {
+        char panic[64];
+        if (flat_number_parse_for_slot_kind(linebuf, expect.kind, ctx->out, panic, sizeof panic) !=
+            0) {
+            io_set_type_io_panic(ctx, panic[0] ? panic : "type.io.expect");
+            return -1;
+        }
+    } else if (parse_in_line_num(linebuf, ctx->out, ctx->io_status) != 0) {
         return 0;
     }
     if (*ctx->io_status != FLAT_IO_OK) {

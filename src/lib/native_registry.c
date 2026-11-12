@@ -1,6 +1,7 @@
 #include "flat_native.h"
 #include "flat_native_util.h"
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -346,6 +347,33 @@ int flat_native_split_call(const char *line, uint16_t *out_id, char *inner, size
     return flat_native_lookup(mod, func, out_id);
 }
 
+static int looks_like_typed_number_literal(const char *line) {
+    const char *colon;
+    const char *p;
+
+    if (!line) {
+        return 0;
+    }
+    colon = strchr(line, '(');
+    if (colon) {
+        return 0;
+    }
+    colon = strrchr(line, ':');
+    if (!colon || colon == line) {
+        return 0;
+    }
+    for (p = line; p < colon; p++) {
+        if (!(isdigit((unsigned char)*p) || *p == '.' || *p == '-' || *p == '+' || *p == 'e' ||
+              *p == 'E')) {
+            return 0;
+        }
+    }
+    if (colon[1] == '\0') {
+        return 0;
+    }
+    return 1;
+}
+
 int flat_native_is_call_line(const char *line) {
     char mod[64];
     char func[32];
@@ -354,6 +382,9 @@ int flat_native_is_call_line(const char *line) {
     const char *p;
 
     if (!line) {
+        return 0;
+    }
+    if (looks_like_typed_number_literal(line)) {
         return 0;
     }
     lp = strchr(line, '(');

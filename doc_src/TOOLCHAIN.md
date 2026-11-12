@@ -226,7 +226,7 @@ bin/flc -o /tmp/x.fb --dump-bc examples/order_flow.fl
 
 ### What gets printed
 
-1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**; **v6** **SCHM**; **v7** typed **FFUN**; **v8** **SCHM** field **aux** = **uint16** pentru `t`/`tN` **≤ 8192**).  
+1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**; **v6** **SCHM**; **v7** typed **FFUN**; **v8** **SCHM** field **aux** = **uint16** pentru `t`/`tN` **≤ 8192**; **v9** emit toolchain **AM-NUM** / recompile repo — aceleași secțiuni ca v8, versiune bump obligatoriu la **0.5.0**).  
 2. **Block directory** — block id, code offset, resolved **BLBL** name when present (`#main` = id 0).  
 3. **Per-block bytecode** — for each instruction: IP, opcode name (`0xNN`), payload size, decoded payload per [SPECIFICATION.md §3](./SPECIFICATION.md#3-fb-binary-layout-v12).  
 4. **Optional native manifest** — FNUN units + FNAT (same as `flvm` lazy load metadata).  

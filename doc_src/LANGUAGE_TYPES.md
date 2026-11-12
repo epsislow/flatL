@@ -189,7 +189,7 @@ Logical kinds in §1 still apply; **NUMBER** remains IEEE-754 **`double`** — i
 
 **`u64` / `s64` (interim):** only integers in **`±(2^53−1)`** (`9007199254740991`) that are **exact** in `double`; larger nominal `u64`/`s64` literals or values → **`type.assign.range.i64`** until dedicated 64-bit storage (AOT).
 
-**Future (plan AM-NUM, not implemented):** stay on single tag **`VAL_NUMBER`**; add internal **`num_class`** (`whole` / `decimal`) and **`num_stor`** (`uint64_t`, `int64_t`, `float`, `double`, …). No separate `VAL_WHOLE` / `VAL_DECIMAL`. See repository plan `strict-types-schemas-roadmap.plan.md` §13.
+**AM-NUM (v0.5.0, implemented):** single tag **`VAL_NUMBER`** with **`num_class`** (`whole` / `decimal`) and **`num_stor`** (`u8`…`u64`, `s8`…`s64`, `f32`, `f64`). Literale **`value:type`** (ex. `18446744073709551615:u64`). Netipizat = **`decimal`/`f64`**. **`u64`/`s64`** din `double` fără sufix: max exact **`2^53−1`** → altfel **`type.assign.range.i64`**; peste acel prag folosește sufixul. Compare **`==`** / relații pe **valoare matematică** între NUMBER; **`NaN`** → **`type.compare.nan`**. Plan: `strict-types-schemas-roadmap.plan.md` §13.
 
 ### T2 (schema objects) — done
 

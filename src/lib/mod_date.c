@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_date.h"
+#include "flat_number.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
@@ -336,7 +338,7 @@ int flat_native_date_from_seconds(FlatNativeCtx *ctx) {
     if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
         return io_err(ctx);
     }
-    sec = (int64_t)v.u.number;
+    sec = (int64_t)flat_number_as_f64(&v);
     if (flat_date_iso_z_from_sec(sec, out, sizeof out) != 0) {
         return io_err(ctx);
     }
@@ -348,7 +350,8 @@ int flat_native_date_to_ms(FlatNativeCtx *ctx) {
         return -1;
     }
     if (ctx->out->tag == VAL_NUMBER) {
-        ctx->out->u.number *= 1000.0;
+        double d = flat_number_as_f64(ctx->out) * 1000.0;
+        flat_value_set_number(ctx->out, d);
     }
     return 0;
 }
@@ -366,7 +369,7 @@ int flat_native_date_from_ms(FlatNativeCtx *ctx) {
     if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
         return io_err(ctx);
     }
-    sec = (int64_t)(v.u.number / 1000.0);
+    sec = (int64_t)(flat_number_as_f64(&v) / 1000.0);
     if (flat_date_iso_z_from_sec(sec, out, sizeof out) != 0) {
         return io_err(ctx);
     }
@@ -403,7 +406,7 @@ int flat_native_date_sec_to_time(FlatNativeCtx *ctx) {
     if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
         return io_err(ctx);
     }
-    sec = (int)v.u.number;
+    sec = (int)flat_number_as_f64(&v);
     if (flat_date_sec_to_time(sec, out, sizeof out) != 0) {
         return io_err(ctx);
     }

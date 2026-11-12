@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_native_mod.h"
+#include "flat_number.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
 
@@ -25,7 +27,7 @@ static int number_from_inner(FlatNativeCtx *ctx, double *out_num) {
     if (src.tag != VAL_NUMBER) {
         return -1;
     }
-    *out_num = src.u.number;
+    *out_num = flat_number_as_f64(&src);
     return 0;
 }
 

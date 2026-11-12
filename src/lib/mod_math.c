@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_math_calc.h"
+#include "flat_number.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_slot_type.h"
@@ -56,7 +58,7 @@ static int number_from_expr(FlatNativeCtx *ctx, const char *expr, double *out_nu
     if (parse_expr(ctx, expr, &src) != 0 || src.tag != VAL_NUMBER) {
         return -1;
     }
-    *out_num = src.u.number;
+    *out_num = flat_number_as_f64(&src);
     return 0;
 }
 
@@ -125,6 +127,7 @@ static int list_to_numbers(FlatNativeCtx *ctx, const FlatValue *list_val, double
                            int max_nums, int *out_count) {
     int len;
     int i;
+    FlatValue ref;
 
     if (!list_val || list_val->tag != VAL_LIST || !out_count) {
         return -1;
@@ -135,6 +138,7 @@ static int list_to_numbers(FlatNativeCtx *ctx, const FlatValue *list_val, double
     if (len > max_nums) {
         return -1;
     }
+    memset(&ref, 0, sizeof ref);
     for (i = 0; i < len; i++) {
         FlatValue elem;
         if (flat_list_get(ctx->coll, list_val->u.coll_id, i, &elem) != 0) {
@@ -143,7 +147,12 @@ static int list_to_numbers(FlatNativeCtx *ctx, const FlatValue *list_val, double
         if (elem.tag != VAL_NUMBER) {
             return -1;
         }
-        nums[i] = elem.u.number;
+        if (i == 0) {
+            ref = elem;
+        } else if (!flat_number_descriptor_equal(&ref, &elem)) {
+            return -2;
+        }
+        nums[i] = flat_number_as_f64(&elem);
     }
     *out_count = len;
     return 0;
@@ -166,8 +175,16 @@ static int unary_list_agg(FlatNativeCtx *ctx, double (*fn)(const double *, int))
     if (!ctx->out || !ctx->io_status || !fn) {
         return -1;
     }
+    int lr;
+
     *ctx->io_status = FLAT_IO_OK;
-    if (list_from_inner(ctx, ctx->inner, nums, FLAT_LIST_MAX_ELEMS, &n) != 0) {
+    lr = list_from_inner(ctx, ctx->inner, nums, FLAT_LIST_MAX_ELEMS, &n);
+    if (lr == -2) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.agg.type");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (lr != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -532,7 +549,7 @@ int flat_native_math_calc(FlatNativeCtx *ctx) {
             return -1;
         }
         if (staged.tag == VAL_NUMBER) {
-            return flat_value_set_number(ctx->out, staged.u.number);
+            return flat_value_set_number(ctx->out, flat_number_as_f64(&staged));
         }
         *ctx->out = staged;
         return 0;

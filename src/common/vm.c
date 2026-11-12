@@ -9,6 +9,7 @@
 #include "flat_mem_stats.h"
 #include "flat_native.h"
 #include "flat_str.h"
+#include "flat_number.h"
 #include "flat_value.h"
 #include "flat_vcx.h"
 #include "flat_slot_type.h"
@@ -386,7 +387,7 @@ static uint32_t vm_resolve_call_instr_ctx(void) {
     {
         int vi = find_var(g_vm_call_instr, FLAT_FUNC_RESERVED_INSTR_VAR);
         if (vi >= 0 && g_vm_call_instr->vars[vi].val.tag == VAL_NUMBER) {
-            uint32_t id = vm_number_to_u32(g_vm_call_instr->vars[vi].val.u.number);
+            uint32_t id = vm_number_to_u32(flat_number_as_f64(&g_vm_call_instr->vars[vi].val));
             if (id >= 1u) {
                 return id;
             }
@@ -400,7 +401,7 @@ static uint32_t vm_resolve_call_instr_ctx(void) {
                              g_vm_call_instr->coll, g_vm_call_instr->pool, &g_vm_call_instr->files,
                              panic, sizeof panic) == 0 &&
             v.tag == VAL_NUMBER) {
-            uint32_t id = vm_number_to_u32(v.u.number);
+            uint32_t id = vm_number_to_u32(flat_number_as_f64(&v));
             flat_value_release(g_vm_call_instr->coll, g_vm_call_instr->pool, &v);
             if (id >= 1u) {
                 return id;
@@ -538,7 +539,7 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
             flat_io_ctx_var_updated(st->io_ctx, i, use);
         }
         if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && use->tag == VAL_NUMBER) {
-            uint32_t iid = vm_number_to_u32(use->u.number);
+            uint32_t iid = vm_number_to_u32(flat_number_as_f64(use));
             if (iid >= 1u) {
                 flat_vm_instr_stack_push(iid);
             }
@@ -605,7 +606,7 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
     }
     st->var_count++;
     if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && use->tag == VAL_NUMBER) {
-        uint32_t iid = vm_number_to_u32(use->u.number);
+        uint32_t iid = vm_number_to_u32(flat_number_as_f64(use));
         if (iid >= 1u) {
             flat_vm_instr_stack_push(iid);
         }
@@ -1004,7 +1005,13 @@ static void set_var_from_number(VmState *st, const char *name, double n) {
 }
 
 static int for_limit_from_double(double d, int *out_iters) {
-    if (isnan(d) || isinf(d) || d <= 0.0) {
+    if (isnan(d) || isinf(d)) {
+        return -2;
+    }
+    if (d < 0.0) {
+        return -3;
+    }
+    if (d == 0.0) {
         *out_iters = 0;
         return 0;
     }
@@ -1025,7 +1032,11 @@ static int eval_for_ntimes(VmState *st, const char *token, int *out_iters) {
     trim(buf);
     d = strtod(buf, &end);
     if (end != buf && *end == '\0') {
-        if (for_limit_from_double(d, out_iters) != 0) {
+        int fl = for_limit_from_double(d, out_iters);
+        if (fl == -3) {
+            return -3;
+        }
+        if (fl != 0) {
             return -2;
         }
         return 0;
@@ -1037,8 +1048,14 @@ static int eval_for_ntimes(VmState *st, const char *token, int *out_iters) {
     if (st->vars[vi].val.tag != VAL_NUMBER) {
         return -2;
     }
-    if (for_limit_from_double(st->vars[vi].val.u.number, out_iters) != 0) {
-        return -2;
+    {
+        int fl = for_limit_from_double(flat_number_as_f64(&st->vars[vi].val), out_iters);
+        if (fl == -3) {
+            return -3;
+        }
+        if (fl != 0) {
+            return -2;
+        }
     }
     return 0;
 }
@@ -1088,7 +1105,8 @@ static int setup_for(VmState *st, const FlatBytecode *bc, uint32_t *ip, const ch
     }
     ev = eval_for_ntimes(st, limit_tok, &iters);
     if (ev != 0) {
-        if (vm_jump_panic_any(st, bc, ip, "for.ntimes_type", trace) == 0) {
+        const char *preason = (ev == -3) ? "for.ntimes.negative" : "for.ntimes_type";
+        if (vm_jump_panic_any(st, bc, ip, preason, trace) == 0) {
             return 2;
         }
         return 0;
@@ -1628,7 +1646,7 @@ static int vm_resolve_loop_block_ip(VmState *st, const FlatBytecode *bc, const c
     }
     if (v.tag == VAL_NUMBER) {
         uint32_t bid = 0;
-        if (vm_number_to_u32_block_id(v.u.number, &bid) != 0) {
+        if (vm_number_to_u32_block_id(flat_number_as_f64(&v), &bid) != 0) {
             rc = -3;
             goto done;
         }
@@ -1704,7 +1722,7 @@ static int vm_eval_block_id_expr(VmState *st, const char *expr, uint32_t *out_id
         rc = -2;
         goto done;
     }
-    if (vm_number_to_u32_block_id(v.u.number, out_id) != 0) {
+    if (vm_number_to_u32_block_id(flat_number_as_f64(&v), out_id) != 0) {
         rc = -3;
         goto done;
     }

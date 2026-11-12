@@ -1,3 +1,4 @@
+#include "flat_number.h"
 #include "flat_obj_path.h"
 #include "flat_str.h"
 #include "flat_value.h"
@@ -336,26 +337,43 @@ static int parse_quoted_string_at(const char **p, FlatValue *out, FlatStringPool
 }
 
 static int parse_number_at(const char **p, FlatValue *out) {
-    char tmp[64];
-    char *end = NULL;
-    double v;
+    char tmp[128];
+    char panic[48];
+    FlatSlotTypeKind sk;
+    int hs = 0;
     size_t i = 0;
     const char *s = *p;
 
-    while (*s && (isdigit((unsigned char)*s) || *s == '.' || *s == '-' || *s == '+') &&
-           i + 1 < sizeof tmp) {
-        tmp[i++] = *s++;
+    {
+        int seen_colon = 0;
+        while (*s && i + 1 < sizeof tmp) {
+            if (!seen_colon) {
+                if (isdigit((unsigned char)*s) || *s == '.' || *s == '-' || *s == '+' || *s == 'e' ||
+                    *s == 'E') {
+                    tmp[i++] = *s++;
+                } else if (*s == ':') {
+                    seen_colon = 1;
+                    tmp[i++] = *s++;
+                } else {
+                    break;
+                }
+            } else if (isalnum((unsigned char)*s)) {
+                tmp[i++] = *s++;
+            } else {
+                break;
+            }
+        }
     }
     tmp[i] = '\0';
     if (i == 0) {
         return -1;
     }
-    v = strtod(tmp, &end);
-    if (end == tmp || (end && *end != '\0')) {
+    panic[0] = '\0';
+    if (flat_number_parse_literal_with_optional_suffix(tmp, out, &sk, &hs, panic, sizeof panic) != 0) {
         return -1;
     }
     *p = s;
-    return flat_value_set_number(out, v);
+    return 0;
 }
 
 static int parse_paren_call(const char *rhs, FlatValue *out, FlatStringPool *pool,
@@ -564,6 +582,18 @@ static int literal_to_value(const char *lit, FlatValue *out) {
     if (strcmp(lit, "null") == 0) {
         return flat_value_set_null(out);
     }
+    {
+        FlatSlotTypeKind sk;
+        int hs = 0;
+        char pbuf[48];
+        if (flat_number_parse_literal_with_optional_suffix(lit, out, &sk, &hs, pbuf,
+                                                           sizeof pbuf) == 0) {
+            return 0;
+        }
+        if (pbuf[0] && strstr(lit, ":")) {
+            return -1;
+        }
+    }
     if (try_parse_number(lit, &num) == 0) {
         return flat_value_set_number(out, num);
     }
@@ -653,6 +683,26 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
         }
     }
 
+    if (lv.tag == VAL_NUMBER && rv.tag == VAL_NUMBER) {
+        int cr;
+        if (var_has_slot_type && var_slot_types && li >= 0 && ri >= 0 &&
+            var_has_slot_type[li] && var_has_slot_type[ri] &&
+            flat_slot_type_is_scalar(&var_slot_types[li]) &&
+            flat_slot_type_is_scalar(&var_slot_types[ri]) &&
+            !flat_slot_type_equals(&var_slot_types[li], &var_slot_types[ri]) &&
+            (var_slot_types[li].kind == FLAT_SLOT_TYPE_B ||
+             var_slot_types[ri].kind == FLAT_SLOT_TYPE_B)) {
+            if (panic && panic_sz > 0) {
+                snprintf(panic, panic_sz, "type.compare.incompatible");
+            }
+            return -1;
+        }
+        cr = flat_number_compare_rel(&lv, &rv, op, panic, panic_sz);
+        if (cr == -2) {
+            return -1;
+        }
+        return cr ? 1 : 0;
+    }
     if (op == 0) {
         if (var_has_slot_type && var_slot_types && li >= 0 && ri >= 0 &&
             var_has_slot_type[li] && var_has_slot_type[ri] &&
@@ -668,9 +718,6 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
             return flat_json_values_structural_equal(&lv, &rv, pool, coll) ? 1 : 0;
         }
         return flat_value_equals(&lv, &rv, pool);
-    }
-    if (lv.tag == VAL_NUMBER && rv.tag == VAL_NUMBER) {
-        return flat_value_compare_number(&lv, rv.u.number, op);
     }
     return 0;
 }

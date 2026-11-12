@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_native_mod.h"
+#include "flat_number.h"
 #include "flat_native_util.h"
 #include "flat_vcx.h"
 #include "flat_value.h"
@@ -77,7 +79,7 @@ static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) 
     if (v.tag != VAL_NUMBER) {
         return -1;
     }
-    if (vcx_number_to_uint32_strict(v.u.number, out_id) != 0) {
+    if (vcx_number_to_uint32_strict(flat_number_as_f64(&v), out_id) != 0) {
         return -1;
     }
     if (*out_id < 1u) {
@@ -345,7 +347,7 @@ int flat_native_vcx_create(FlatNativeCtx *ctx) {
     if (inner[0] == '\0' || parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
         return vcx_fail(ctx, "vcx.create.arg");
     }
-    if (vcx_number_to_uint32_strict(capv.u.number, &cap) != 0 || cap < 1u) {
+    if (vcx_number_to_uint32_strict(flat_number_as_f64(&capv), &cap) != 0 || cap < 1u) {
         return vcx_fail(ctx, "vcx.create.arg");
     }
     if (flat_vcx_create(rt, cap, &new_id, ctx->panic_detail, sizeof ctx->panic_detail) != 0) {
@@ -372,7 +374,7 @@ int flat_native_vcx_create_auto(FlatNativeCtx *ctx) {
         if (parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
             return vcx_fail(ctx, "vcx.createAuto.arg");
         }
-        if (vcx_number_to_uint32_strict(capv.u.number, &seed) != 0) {
+        if (vcx_number_to_uint32_strict(flat_number_as_f64(&capv), &seed) != 0) {
             return vcx_fail(ctx, "vcx.createAuto.arg");
         }
         if (seed < 1u) {

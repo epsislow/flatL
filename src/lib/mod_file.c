@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_file.h"
+#include "flat_number.h"
 #include "flat_io_ctx.h"
 #include "flat_memstream.h"
 #include "flat_native_mod.h"
@@ -151,10 +153,10 @@ int flat_native_file_read(FlatNativeCtx *ctx) {
         if (parse_expr(ctx, right, &n) != 0 || n.tag != VAL_NUMBER) {
             return -1;
         }
-        if (n.u.number < 0) {
+        if (flat_number_as_f64(&n) < 0) {
             return -1;
         }
-        max_read = (size_t)n.u.number;
+        max_read = (size_t)flat_number_as_f64(&n);
     } else {
         left = flat_native_trim(inner_buf);
     }
@@ -445,7 +447,7 @@ int flat_native_file_setpos(FlatNativeCtx *ctx) {
         return -1;
     }
     {
-        long off = (long)n.u.number;
+        long off = (long)flat_number_as_f64(&n);
         int whence = off < 0 ? SEEK_END : SEEK_SET;
         if (fseek(fp, off, whence) != 0) {
             return -1;
@@ -477,7 +479,7 @@ int flat_native_file_setposrel(FlatNativeCtx *ctx) {
         return -1;
     }
     fp = flat_file_fp(ctx->file_tbl, fid);
-    if (!fp || fseek(fp, (long)n.u.number, SEEK_CUR) != 0) {
+    if (!fp || fseek(fp, (long)flat_number_as_f64(&n), SEEK_CUR) != 0) {
         return -1;
     }
     *ctx->io_status = FLAT_IO_OK;

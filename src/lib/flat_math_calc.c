@@ -1,3 +1,4 @@
+#include "flat_number.h"
 #include "flat_math_calc.h"
 #include "flat_native_util.h"
 #include "flat_obj_path.h"
@@ -185,7 +186,7 @@ static double parse_atom(CalcParser *cp) {
             set_err(cp, FLAT_MATH_CALC_TYPE);
             return 0.0;
         }
-        return cp->vars[vi].u.number;
+        return flat_number_as_f64(&cp->vars[vi]);
     }
     if (parse_number(cp, &v) != 0) {
         return 0.0;

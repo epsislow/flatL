@@ -113,13 +113,13 @@ static int eval_arg_value(FlatNativeCtx *ctx, FlatValue *out) {
         strcmp(trimmed, "terr") == 0) {
         if (strcmp(trimmed, "tin") == 0) {
             out->tag = VAL_EMPTY;
-            out->u.number = 1; /* sentinel: tin */
+            out->u.ref_id = 1; /* sentinel: tin */
         } else if (strcmp(trimmed, "tout") == 0) {
             out->tag = VAL_EMPTY;
-            out->u.number = 2;
+            out->u.ref_id = 2;
         } else {
             out->tag = VAL_EMPTY;
-            out->u.number = 3;
+            out->u.ref_id = 3;
         }
         return 0;
     }
@@ -277,21 +277,21 @@ static int ep_bind_from_value(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint 
 
     ep_clear(ep);
     if (v->tag == VAL_EMPTY) {
-        if (v->u.number == 1) {
+        if (v->u.ref_id == 1) {
             if (!allow_in) {
                 goto invalid;
             }
             ep->kind = EP_TIN;
             return 0;
         }
-        if (v->u.number == 2) {
+        if (v->u.ref_id == 2) {
             if (!allow_out) {
                 goto invalid;
             }
             ep->kind = EP_TOUT;
             return 0;
         }
-        if (v->u.number == 3) {
+        if (v->u.ref_id == 3) {
             if (!allow_err) {
                 goto invalid;
             }

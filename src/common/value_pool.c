@@ -1,3 +1,4 @@
+#include "flat_number.h"
 #include "flat_value.h"
 
 #include <stdlib.h>
@@ -295,8 +296,7 @@ int flat_value_set_number(FlatValue *v, double n) {
     if (!v) {
         return -1;
     }
-    v->tag = VAL_NUMBER;
-    v->u.number = n;
+    flat_number_init_legacy_double(v, n);
     return 0;
 }
 
@@ -380,7 +380,7 @@ int flat_value_equals(const FlatValue *a, const FlatValue *b, const FlatStringPo
     case VAL_BOOL:
         return a->u.boolean == b->u.boolean;
     case VAL_NUMBER:
-        return a->u.number == b->u.number;
+        return flat_number_equals(a, b);
     case VAL_LIST:
     case VAL_OBJECT:
         return a->u.coll_id == b->u.coll_id;
@@ -400,25 +400,19 @@ int flat_value_set_null(FlatValue *v) {
 }
 
 int flat_value_compare_number(const FlatValue *v, double rhs, int op) {
-    double n;
+    FlatValue tmp;
+    char panic[32];
+    int rc;
+
     if (!v || v->tag != VAL_NUMBER) {
         return 0;
     }
-    n = v->u.number;
-    switch (op) {
-    case 0:
-        return n == rhs;
-    case 1:
-        return n >= rhs;
-    case 2:
-        return n <= rhs;
-    case 3:
-        return n > rhs;
-    case 4:
-        return n < rhs;
-    default:
+    flat_number_init_legacy_double(&tmp, rhs);
+    rc = flat_number_compare_rel(v, &tmp, op, panic, sizeof panic);
+    if (rc == -2) {
         return 0;
     }
+    return rc ? 1 : 0;
 }
 
 int flat_value_get_cstr(const FlatValue *v, const FlatStringPool *pool, char *buf, size_t buf_size) {

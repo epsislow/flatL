@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_native_mod.h"
+#include "flat_number.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
 
@@ -61,7 +63,7 @@ static int list_to_numbers(FlatNativeCtx *ctx, const FlatValue *list_val, double
         if (elem.tag != VAL_NUMBER) {
             return -1;
         }
-        nums[i] = elem.u.number;
+        nums[i] = flat_number_as_f64(&elem);
     }
     *out_count = len;
     return 0;
@@ -172,7 +174,7 @@ static int binary_var_stdev(FlatNativeCtx *ctx, int is_stdev) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    div = div_v.u.number;
+    div = flat_number_as_f64(&div_v);
     if (div <= 0.0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;

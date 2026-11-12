@@ -1,4 +1,6 @@
+#include "flat_number.h"
 #include "flat_vcx.h"
+#include "flat_number.h"
 #include "flat_schema.h"
 #include "flat_value.h"
 #include "flat_schema.h"
@@ -308,7 +310,7 @@ int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectio
     case VAL_BOOL:
         return flat_value_set_bool(dst, src->u.boolean);
     case VAL_NUMBER:
-        return flat_value_set_number(dst, src->u.number);
+        return flat_value_set_number(dst, flat_number_as_f64(src));
     case VAL_NULL:
         return flat_value_set_null(dst);
     case VAL_STR_INLINE:
@@ -1497,7 +1499,7 @@ int flat_vcx_bind_call_params(FlatVcxRuntime *rt, uint32_t instr_id, uint32_t ds
         snprintf(panic_detail, panic_sz, "vcx.bindCallParams.meta");
         return -1;
     }
-    fi = (uint32_t)idxv.u.number;
+    fi = (uint32_t)flat_number_as_f64(&idxv);
     flat_value_release(coll, pool, &idxv);
     if (fi >= bc->function_count) {
         snprintf(panic_detail, panic_sz, "vcx.bindCallParams.meta");
@@ -1585,7 +1587,7 @@ int flat_vcx_copy_call_return(FlatVcxRuntime *rt, uint32_t src_ctx_id, uint32_t 
         snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.meta");
         return -1;
     }
-    fi = (uint32_t)idxv.u.number;
+    fi = (uint32_t)flat_number_as_f64(&idxv);
     flat_value_release(coll, pool, &idxv);
     if (fi >= bc->function_count) {
         snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.meta");

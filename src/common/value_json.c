@@ -1,5 +1,7 @@
+#include "flat_number.h"
 #include "flat_value.h"
 
+#include "flat_number.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -876,7 +878,7 @@ static int stringify_value(const FlatValue *v, FlatStringPool *pool, FlatCollect
                append_char(buf, pos, max, 'l') || append_char(buf, pos, max, 's') ||
                append_char(buf, pos, max, 'e');
     case VAL_NUMBER:
-        snprintf(tmp, sizeof tmp, "%.17g", v->u.number);
+        snprintf(tmp, sizeof tmp, "%.17g", flat_number_as_f64(v));
         for (size_t i = 0; tmp[i]; i++) {
             if (append_char(buf, pos, max, tmp[i]) != 0) {
                 return -1;
@@ -1009,7 +1011,7 @@ int flat_json_fprint_list_io(FILE *out, const FlatValue *v, FlatStringPool *pool
             if (i > 0) {
                 fputc(',', out);
             }
-            fprintf(out, "%.17g", el.u.number);
+            fprintf(out, "%.17g", flat_number_as_f64(&el));
         }
         return 0;
     }

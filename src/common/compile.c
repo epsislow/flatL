@@ -7,6 +7,7 @@
 #include "flat_line_label.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
+#include "flat_number.h"
 #include "flat_slot_type.h"
 #include "flat_schema.h"
 
@@ -634,6 +635,10 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             if (ins->for_limit[0] == '\0' || ins->foreach_item[0] == '\0' ||
                 ins->foreach_block[0] == '\0') {
                 snprintf(err, err_size, "invalid for: %s", ins->text);
+                return -1;
+            }
+            if (flat_number_is_negative_literal_token(ins->for_limit)) {
+                snprintf(err, err_size, "for: negative ntimes literal: %s", ins->text);
                 return -1;
             }
             if (tgt < 0) {

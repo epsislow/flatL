@@ -39,7 +39,17 @@ typedef struct {
     FlatValueTag tag;
     union {
         int boolean;
-        double number;
+        struct {
+            uint8_t num_class;
+            uint8_t num_stor;
+            uint16_t _pad;
+            union {
+                double f64;
+                float f32;
+                uint64_t u64;
+                int64_t i64;
+            } payload;
+        } number;
         struct {
             char bytes[FLAT_INLINE_STR_MAX + 1];
             size_t len;
@@ -178,7 +188,7 @@ typedef enum {
 
 int flat_parse_bool_token(const char *token, int *out_bool);
 int flat_parse_bool_cancel_token(const char *token);
-int flat_parse_number_token(const char *token, double *out_num);
+int flat_parse_number_token(const char *token, double *out_num); /* legacy: writes f64 bits only */
 
 int flat_io_exec_line(const char *line, FlatStringPool *pool, FlatCollectionPool *coll,
                       FlatValue *vars, int var_count, const char (*var_names)[64],

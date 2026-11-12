@@ -1,3 +1,4 @@
+#include "flat_number.h"
 #include "flat_value.h"
 
 #include <stdio.h>
@@ -98,7 +99,7 @@ static void flat_value_fprint_impl(FILE *out, const FlatValue *v, const FlatStri
         fputs(v->u.boolean ? "true" : "false", out);
         break;
     case VAL_NUMBER:
-        fprintf(out, "%.17g", v->u.number);
+        flat_number_fprint_decimal(out, v);
         break;
     case VAL_STR_INLINE:
         if (raw_strings && depth == 0) {

@@ -1,3 +1,4 @@
+#include "flat_number.h"
 #include "flat_obj_path.h"
 #include "flat_schema.h"
 #include "flat_slot_type.h"
@@ -297,7 +298,7 @@ static int parse_bracket_index(const char **p, FlatStringPool *pool, FlatCollect
         }
         return -1;
     }
-    n = floor(idx_v.u.number);
+    n = floor(flat_number_as_f64(&idx_v));
     if (n < 0) {
         if (err_out) {
             *err_out = FLAT_PATH_INDEX;
@@ -966,7 +967,7 @@ double flat_path_resolve_number(const char *name, const char **rest,
             return 0.0;
         }
         *rest = p;
-        return cur.u.number;
+        return flat_number_as_f64(&cur);
     }
     if (flat_path_read_suffixes(&p, &cur, pool, (FlatCollectionPool *)coll, (FlatValue *)vars,
                                 var_count, var_names, &local) != 0) {
@@ -982,7 +983,7 @@ double flat_path_resolve_number(const char *name, const char **rest,
         return 0.0;
     }
     *rest = p;
-    return cur.u.number;
+    return flat_number_as_f64(&cur);
 }
 
 const char *flat_path_reason(FlatPathErr err, const char *ctx, char *buf, size_t buf_sz) {
