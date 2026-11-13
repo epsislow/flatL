@@ -14,6 +14,8 @@ Cases **076–086** cover **T5** **`const`**, **`freeze()`**, **`free`** clearin
 Cases **087–093** cover **T4+** **`m.calc(expr, "u8")`**, homogeneous typed vars, overflow → **`type.calc.range`**, and invalid type arg → **`type.calc.type`**.
 Cases **094–095** cover **T4+** typed **`io.inln(prompt, "tN")`** (`type.io.len`).
 Cases **096–100** cover **T6** typed **`O.set2`** / **`O.set`**, **`def a:u8 … -> out:u16`**, and param overflow at call bind.
+Cases **113–119** cover **T6** typed **`def` at call**: caller **`u32` → formal `u8`** (value in range / at 255 / 256 panic), return **`-> r:u32`** with formal **`u16`**, typed return overflow in body, multi-return with wider call LHS.
+Cases **120–134** cover **T6** typed **`def`** across **`u*`/`s*`/`f*`** at call: negative into **`u8`**, **`u16`→`s8`**, **`f64`/`f32`→integer**, integer→**`f32`**, fractional→integer panic, typed return across the same families.
 Cases **101–106** cover **T7** **`t128`…`t8192`**, schema **`t255`**, compile reject **`t8193`**, **`io.inln` + `t1024`**, **`type.assign.string.len`** on overflow.
 
 Panic cases use `expect_exit = 1` and `stderr_contains = "type.*"` (or `invalid SCHM` for load tests).

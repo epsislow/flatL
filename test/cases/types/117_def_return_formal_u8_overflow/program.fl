@@ -1,0 +1,12 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+
+func:executor #fl_executor.unique.scope
+
+def bad() -> out:u8
+  out = 256
+  return
+
+#main
+  bad() -> r
+  OK

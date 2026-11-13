@@ -1,0 +1,13 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+
+func:executor #fl_executor.unique.scope
+
+def take(a:u8) -> r
+  r = a
+  return
+
+#main
+  x:u32 = 256
+  take(x) -> y
+  OK

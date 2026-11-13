@@ -1312,8 +1312,8 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
     uint16_t fi;
     uint8_t argc;
     uint8_t is_global;
-    const char *callee_ret;
     const char *formal;
+    const char *callee_rets[FGIR_MAX_FUNC_RETURNS];
     size_t pos = 0;
     const FlatFbFunctionEntry *fn;
     uint32_t calle_id;
@@ -1322,6 +1322,7 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
     char panic[64];
     FlatValue nv;
     int i;
+    uint8_t return_slot_count = 0;
 
     (void)trace;
     if (!st->vcx || !bc->functions || bc->function_count == 0) {
@@ -1370,10 +1371,19 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
             flat_value_release(st->coll, st->pool, &argv);
         }
     }
-    callee_ret = (const char *)(payload + pos);
-    pos += strlen(callee_ret) + 1;
-    if (pos >= psz) {
-        return -1;
+    return_slot_count = fn->return_count;
+    if (return_slot_count == 0) {
+        return_slot_count = 1;
+    }
+    for (i = 0; i < (int)return_slot_count; i++) {
+        if (pos >= psz) {
+            return -1;
+        }
+        callee_rets[i] = (const char *)(payload + pos);
+        if (callee_rets[i][0] == '\0') {
+            return -1;
+        }
+        pos += strlen(callee_rets[i]) + 1;
     }
     (void)is_global;
 
@@ -1396,15 +1406,28 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
         return -1;
     }
     flat_value_release(st->coll, st->pool, &nv);
-    flat_value_set_str_inline(&nv, fn->return_name, strlen(fn->return_name));
-    if (flat_vcx_set_named_var(st->vcx, instr_id, "returnVar", &nv, st->coll, st->pool, &st->files,
-                                  &st->live, panic, sizeof panic) != 0) {
-        return -1;
-    }
-    flat_value_set_str_inline(&nv, callee_ret, strlen(callee_ret));
-    if (flat_vcx_set_named_var(st->vcx, instr_id, "calleReturnVar", &nv, st->coll, st->pool,
-                                  &st->files, &st->live, panic, sizeof panic) != 0) {
-        return -1;
+    if (return_slot_count > 1) {
+        int ri;
+        for (ri = 0; ri < (int)return_slot_count; ri++) {
+            char slot[24];
+            snprintf(slot, sizeof slot, "calleReturn_%d", ri);
+            flat_value_set_str_inline(&nv, callee_rets[ri], strlen(callee_rets[ri]));
+            if (flat_vcx_set_named_var(st->vcx, instr_id, slot, &nv, st->coll, st->pool, &st->files,
+                                          &st->live, panic, sizeof panic) != 0) {
+                return -1;
+            }
+        }
+    } else {
+        flat_value_set_str_inline(&nv, fn->return_name, strlen(fn->return_name));
+        if (flat_vcx_set_named_var(st->vcx, instr_id, "returnVar", &nv, st->coll, st->pool,
+                                      &st->files, &st->live, panic, sizeof panic) != 0) {
+            return -1;
+        }
+        flat_value_set_str_inline(&nv, callee_rets[0], strlen(callee_rets[0]));
+        if (flat_vcx_set_named_var(st->vcx, instr_id, "calleReturnVar", &nv, st->coll, st->pool,
+                                      &st->files, &st->live, panic, sizeof panic) != 0) {
+            return -1;
+        }
     }
     flat_value_set_number(&nv, (double)fn->func_vcx_slots);
     if (flat_vcx_set_named_var(st->vcx, instr_id, "funcVcxSlots", &nv, st->coll, st->pool,

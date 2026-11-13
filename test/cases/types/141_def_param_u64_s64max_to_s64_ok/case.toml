@@ -1,0 +1,9 @@
+suite = "types"
+id = 141
+desc = "T6 def param s64: u64 at s64 max (2^63-1)"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "9223372036854775807"

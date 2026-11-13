@@ -1,0 +1,13 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+
+func:executor #fl_executor.global.scope
+
+def echo(v) -> out:u8
+  out = v
+  return
+
+#main
+  x:s16 = -1
+  echo(x) -> r
+  OK

@@ -8,6 +8,7 @@
 #define FGIR_MAX_LABEL 128
 #define FGIR_MAX_FUNCTIONS 256
 #define FGIR_MAX_FUNC_PARAMS 16
+#define FGIR_MAX_FUNC_RETURNS 8
 #define FGIR_MAX_FUNC_NAME 64
 #define FGIR_MAX_LINE 512
 #define FGIR_MAX_BLOCKS 1024
@@ -77,7 +78,9 @@ typedef struct {
     char line_label[64];
     char func_name[FGIR_MAX_FUNC_NAME];
     char func_args[FGIR_MAX_LINE];
-    char func_ret[64];
+    char func_ret[FGIR_MAX_LINE];
+    int func_ret_count;
+    char func_rets[FGIR_MAX_FUNC_RETURNS][64];
 } FgirInstr;
 
 typedef struct {
@@ -98,12 +101,16 @@ typedef struct {
     char name[FGIR_MAX_FUNC_NAME];
     char impl_label[FGIR_MAX_LABEL];
     char return_name[64];
+    int return_count;
+    char return_names[FGIR_MAX_FUNC_RETURNS][64];
     char params[FGIR_MAX_FUNC_PARAMS][64];
     int param_count;
     uint8_t param_has_type[FGIR_MAX_FUNC_PARAMS];
     char param_type_spec[FGIR_MAX_FUNC_PARAMS][48];
     uint8_t return_has_type;
     char return_type_spec[48];
+    uint8_t return_has_type_arr[FGIR_MAX_FUNC_RETURNS];
+    char return_type_spec_arr[FGIR_MAX_FUNC_RETURNS][48];
     char executor_label[FGIR_MAX_LABEL];
     uint32_t func_vcx_slots;
     int is_global_executor;

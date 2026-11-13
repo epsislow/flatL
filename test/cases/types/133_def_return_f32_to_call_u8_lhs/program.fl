@@ -1,0 +1,13 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+
+func:executor #fl_executor.global.scope
+
+def bump() -> out:f32
+  out = 7
+  return
+
+#main
+  bump() -> r:u8
+  io.outln(r)
+  OK

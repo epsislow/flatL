@@ -744,13 +744,23 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             payload[pos++] = (uint8_t)fn->param_count;
             payload[pos++] = (uint8_t)(fn->is_global_executor ? 1 : 0);
             {
-                size_t rl = strlen(ins->func_ret) + 1;
-                if (pos + rl > sizeof payload) {
-                    snprintf(err, err_size, "call vm payload too long");
-                    return -1;
+                int ri;
+                for (ri = 0; ri < fn->return_count; ri++) {
+                    size_t rl;
+                    const char *cr =
+                        (ri < ins->func_ret_count) ? ins->func_rets[ri] : fn->return_names[ri];
+                    if (cr[0] == '\0') {
+                        snprintf(err, err_size, "call vm: bad return bind %s", fn->name);
+                        return -1;
+                    }
+                    rl = strlen(cr) + 1;
+                    if (pos + rl > sizeof payload) {
+                        snprintf(err, err_size, "call vm payload too long");
+                        return -1;
+                    }
+                    memcpy(payload + pos, cr, rl);
+                    pos += rl;
                 }
-                memcpy(payload + pos, ins->func_ret, rl);
-                pos += rl;
             }
             for (pi = 0; pi < fn->param_count; pi++) {
                 size_t nl = strlen(fn->params[pi]) + 1;
@@ -917,7 +927,17 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                     int bi;
 
                     int pj;
+                    int rj;
                     snprintf(ftab[fi].name, sizeof ftab[fi].name, "%s", fn->name);
+                    ftab[fi].return_count = (uint8_t)fn->return_count;
+                    for (rj = 0; rj < fn->return_count; rj++) {
+                        snprintf(ftab[fi].return_names[rj], sizeof ftab[fi].return_names[rj], "%s",
+                                 fn->return_names[rj]);
+                        ftab[fi].return_has_type_arr[rj] = fn->return_has_type_arr[rj];
+                        snprintf(ftab[fi].return_type_spec_arr[rj],
+                                 sizeof ftab[fi].return_type_spec_arr[rj], "%s",
+                                 fn->return_type_spec_arr[rj]);
+                    }
                     snprintf(ftab[fi].return_name, sizeof ftab[fi].return_name, "%s",
                              fn->return_name);
                     ftab[fi].param_count = (uint8_t)fn->param_count;
@@ -1060,7 +1080,17 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                 int bi;
 
                 int pj;
+                int rj;
                 snprintf(ftab[fi].name, sizeof ftab[fi].name, "%s", fn->name);
+                ftab[fi].return_count = (uint8_t)fn->return_count;
+                for (rj = 0; rj < fn->return_count; rj++) {
+                    snprintf(ftab[fi].return_names[rj], sizeof ftab[fi].return_names[rj], "%s",
+                             fn->return_names[rj]);
+                    ftab[fi].return_has_type_arr[rj] = fn->return_has_type_arr[rj];
+                    snprintf(ftab[fi].return_type_spec_arr[rj],
+                             sizeof ftab[fi].return_type_spec_arr[rj], "%s",
+                             fn->return_type_spec_arr[rj]);
+                }
                 snprintf(ftab[fi].return_name, sizeof ftab[fi].return_name, "%s", fn->return_name);
                 ftab[fi].param_count = (uint8_t)fn->param_count;
                 ftab[fi].func_vcx_slots = fn->func_vcx_slots;

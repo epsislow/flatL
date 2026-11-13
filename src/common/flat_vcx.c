@@ -310,7 +310,9 @@ int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectio
     case VAL_BOOL:
         return flat_value_set_bool(dst, src->u.boolean);
     case VAL_NUMBER:
-        return flat_value_set_number(dst, flat_number_as_f64(src));
+        /* Preserve AM-NUM (whole u64/s64 etc.); do not round via double. */
+        *dst = *src;
+        return 0;
     case VAL_NULL:
         return flat_value_set_null(dst);
     case VAL_STR_INLINE:
@@ -1523,27 +1525,40 @@ int flat_vcx_bind_call_params(FlatVcxRuntime *rt, uint32_t instr_id, uint32_t ds
             return -1;
         }
     }
-    if (fn->return_has_type && fn->return_name[0] != '\0' && fn->return_type_spec[0] != '\0') {
-        int rvi = ctx_find_var(dst, fn->return_name);
-        FlatSlotType rty;
-        flat_slot_type_clear(&rty);
-        if (flat_slot_type_parse_spec(fn->return_type_spec, &rty, schemas, panic_detail,
-                                      panic_sz) != 0) {
-            return -1;
+    {
+        int ri;
+        uint8_t rc = fn->return_count;
+        if (rc == 0) {
+            rc = 1;
         }
-        flat_value_set_null(&nullv);
-        if (rvi < 0) {
-            if (ctx_set_var(rt, dst, fn->return_name, &nullv, coll, pool, files, live, panic_detail,
-                            panic_sz) != 0) {
-                return -1;
+        for (ri = 0; ri < (int)rc; ri++) {
+            if (!fn->return_has_type_arr[ri] || fn->return_type_spec_arr[ri][0] == '\0' ||
+                fn->return_names[ri][0] == '\0') {
+                continue;
             }
-            rvi = ctx_find_var(dst, fn->return_name);
-        }
-        if (rvi >= 0) {
-            dst->vars[rvi].slot_type = rty;
-            dst->vars[rvi].has_slot_type = 1;
-            dst->vars[rvi].slot_dynamic = 0;
-            dst->vars[rvi].slot_dynamic_expr[0] = '\0';
+            {
+                int rvi = ctx_find_var(dst, fn->return_names[ri]);
+                FlatSlotType rty;
+                flat_slot_type_clear(&rty);
+                if (flat_slot_type_parse_spec(fn->return_type_spec_arr[ri], &rty, schemas,
+                                              panic_detail, panic_sz) != 0) {
+                    return -1;
+                }
+                flat_value_set_null(&nullv);
+                if (rvi < 0) {
+                    if (ctx_set_var(rt, dst, fn->return_names[ri], &nullv, coll, pool, files, live,
+                                    panic_detail, panic_sz) != 0) {
+                        return -1;
+                    }
+                    rvi = ctx_find_var(dst, fn->return_names[ri]);
+                }
+                if (rvi >= 0) {
+                    dst->vars[rvi].slot_type = rty;
+                    dst->vars[rvi].has_slot_type = 1;
+                    dst->vars[rvi].slot_dynamic = 0;
+                    dst->vars[rvi].slot_dynamic_expr[0] = '\0';
+                }
+            }
         }
     }
     if (rt->active_ix == dst_ix && rt->bind_attached) {
@@ -1594,24 +1609,53 @@ int flat_vcx_copy_call_return(FlatVcxRuntime *rt, uint32_t src_ctx_id, uint32_t 
         return -1;
     }
     fn = &bc->functions[fi];
-    if (flat_vcx_get_var(rt, instr_id, "returnVar", &ret_src_n, coll, pool, files, panic_detail,
-                         panic_sz) != 0 ||
-        flat_vcx_get_var(rt, instr_id, "calleReturnVar", &ret_dst_n, coll, pool, files,
-                         panic_detail, panic_sz) != 0) {
-        return -1;
-    }
-    if (vcx_value_to_name(&ret_src_n, pool, src_name, sizeof src_name) != 0 ||
-        vcx_value_to_name(&ret_dst_n, pool, dst_name, sizeof dst_name) != 0) {
+    if (fn->return_count > 1) {
+        int ri;
+        uint8_t rc = fn->return_count;
+
+        for (ri = 0; ri < (int)rc; ri++) {
+            char slot[24];
+            FlatValue dst_n;
+            char dst_name[FLAT_VAR_NAME_MAX + 1];
+
+            snprintf(slot, sizeof slot, "calleReturn_%d", ri);
+            if (flat_vcx_get_var(rt, instr_id, slot, &dst_n, coll, pool, files, panic_detail,
+                                 panic_sz) != 0) {
+                return -1;
+            }
+            if (vcx_value_to_name(&dst_n, pool, dst_name, sizeof dst_name) != 0) {
+                flat_value_release(coll, pool, &dst_n);
+                snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.name");
+                return -1;
+            }
+            flat_value_release(coll, pool, &dst_n);
+            if (vcx_bind_one(rt, dst, dst_name, src, fn->return_names[ri],
+                             fn->return_has_type_arr[ri], fn->return_type_spec_arr[ri], schemas,
+                             coll, pool, files, live, panic_detail, panic_sz) != 0) {
+                return -1;
+            }
+        }
+    } else {
+        if (flat_vcx_get_var(rt, instr_id, "returnVar", &ret_src_n, coll, pool, files, panic_detail,
+                             panic_sz) != 0 ||
+            flat_vcx_get_var(rt, instr_id, "calleReturnVar", &ret_dst_n, coll, pool, files,
+                             panic_detail, panic_sz) != 0) {
+            return -1;
+        }
+        if (vcx_value_to_name(&ret_src_n, pool, src_name, sizeof src_name) != 0 ||
+            vcx_value_to_name(&ret_dst_n, pool, dst_name, sizeof dst_name) != 0) {
+            flat_value_release(coll, pool, &ret_src_n);
+            flat_value_release(coll, pool, &ret_dst_n);
+            snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.name");
+            return -1;
+        }
         flat_value_release(coll, pool, &ret_src_n);
         flat_value_release(coll, pool, &ret_dst_n);
-        snprintf(panic_detail, panic_sz, "vcx.copyCallReturn.name");
-        return -1;
-    }
-    flat_value_release(coll, pool, &ret_src_n);
-    flat_value_release(coll, pool, &ret_dst_n);
-    if (vcx_bind_one(rt, dst, dst_name, src, src_name, fn->return_has_type, fn->return_type_spec,
-                     schemas, coll, pool, files, live, panic_detail, panic_sz) != 0) {
-        return -1;
+        if (vcx_bind_one(rt, dst, dst_name, src, src_name, fn->return_has_type,
+                         fn->return_type_spec, schemas, coll, pool, files, live, panic_detail,
+                         panic_sz) != 0) {
+            return -1;
+        }
     }
     if (rt->active_ix == dst_ix && rt->bind_attached) {
         refresh_bind_from_active(rt);

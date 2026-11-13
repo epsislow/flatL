@@ -1,0 +1,15 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+
+func:executor #fl_executor.unique.scope
+
+def small() -> lo:u8, hi:u16
+  lo = 5
+  hi = 1000
+  return
+
+#main
+  small() -> a, b
+  io.outln(a)
+  io.outln(b)
+  OK

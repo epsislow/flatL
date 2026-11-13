@@ -51,6 +51,36 @@ io.outln(r)
 
 Lowering (strategy A) builds an instruction context (`__call_instr_vcx`), copies call metadata, and `call`s the executor block. The executor reads that context via **`V.callInstr()`** (VM call stack for strategy B / nested calls; strategy A uses the same native with fallback to `__call_instr_vcx`).
 
+### Multiple return values (AM-2)
+
+A `def` may declare **up to 8** formal return slots (comma-separated after `->`). The call site must bind the **same number** of caller variables.
+
+```flat
+def parseRow(line) -> row, err, ok
+  row = line
+  err = ''
+  ok = true
+  return
+
+parseRow('x') -> r, e, flag
+r, e, flag = parseRow('y')
+```
+
+| Form | Example |
+|------|---------|
+| Arrow | `pair() -> a, b` |
+| Assign | `a, b = pair()` |
+
+Rules:
+
+- Return names on `def` are **formal slots** in the function VCX (unique) or caller VCX (global); the call lists **existing** caller variable names.
+- **Typed returns:** `def f() -> lo:u8, hi:u16` — same FFUN / **`vcx.copyCallReturn`** checks as a single typed return (**`type.call.return`** on failure).
+- **Arity mismatch** at compile → **`call.function.return.count`**. Formal return names must not match a parameter name (**`def.return.name.param`**).
+- **`.fb` FFUN v10+** stores `return_count` and per-return type strings; **v9** loaders still work (one return). New programs compile to **format version 10**.
+- User **natives** with multi-return are **not** supported yet (only user `def`).
+
+Tests: `test/cases/func/019`–`023`, `test/cases/types/112`.
+
 ### `func:varSlots` and `V.createAuto` (unique executor only)
 
 With **`#executor.unique.scope`**, each call runs the body on a dedicated child VCX created by **`V.createAuto(funcVcxSlots)`** in `blocks/executor.fl`. The value **`funcVcxSlots`** in FFUN / on `instrVcx` is only an **initial capacity seed** (not a fixed limit).

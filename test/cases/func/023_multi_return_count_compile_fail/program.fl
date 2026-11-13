@@ -1,0 +1,13 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+
+func:executor #fl_executor.unique.scope
+
+def pair() -> a, b
+  a = 1
+  b = 2
+  return
+
+#main
+  pair() -> onlyOne
+  OK

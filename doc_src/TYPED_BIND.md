@@ -125,9 +125,65 @@ Copy VCX copies **frozen** and **const** flags per slot. Frozen or **const** slo
 - **Homogeneous operands:** if any slot in **`expr`** is typed numeric, all names in **`expr`** must match that contract (**`type.calc.type`**).
 - **`io.in_num` / `io.inln` / `io.in_bool`** — optional **`, "type"`** after prompt; **`type.io.expect`** / **`type.io.len`**.
 - **`foreach(coll, item, '#block')`:** for `coll:<stock>[]`, **`item`** follows element schema `<stock>`.
-- **`def f(a:u8, b) -> out:u16`:** mixed typed/untyped formals; types in **FFUN** (`.fb` v7); apel invalid → **`type.call.arg`** / **`type.assign.range`** at param bind.
+- **`def f(a:u8, b) -> out:u16`:** mixed typed/untyped formals; types on the function are recorded at compile; bad values at call → **`type.call.arg`** / **`type.assign.range`** (same family as typed assign).
 
 Sugar **`a:s16`** in native args — **deferred** (use **`m.convert`**).
+
+### 9.1 Typed `def` at call — parameters and returns
+
+This section is for **callers** of user functions: what flatL checks when you pass arguments or receive return values. See also [USER_FUNCTIONS.md](./USER_FUNCTIONS.md) (including multi-return).
+
+**Rule of thumb:** the **only** type contracts enforced at a user function call are those on the **`def`** line (typed formals and typed return slots). The VM does **not** compare “caller variable type” vs “formal type” as two labels. It takes the **value** and applies the same typed-bind rules as for **`name:type =`** (numeric range, exact integers where required, **`type.assign.loss`** for **`f32`**, and so on).
+
+There is **no** syntax for types inside the argument list — only expressions:
+
+```text
+f(expr1, expr2)          ; OK
+f(x:u32, y)              ; not supported (deferred sugar)
+```
+
+A typed variable in the caller (e.g. **`x:u32 = 5`**) is just an expression. Passing **`x`** does **not** mean “bind as u32”; it means “use the **current value** of **`x`**” and, if formal **`a:u8`** is typed, check whether that value fits **`u8`** (coerce when allowed, panic otherwise).
+
+#### Parameters
+
+| Caller | `def` formal | What flatL does |
+|--------|----------------|-----------------|
+| `f(5)` | `a:u8` | Value **5** checked against **`u8`**; OK if in range |
+| `x:u32 = 5`, `f(x)` | `a:u8` | Value **5** checked against **`u8`** — **not** “u32 vs u8 conflict” |
+| `x:u32 = 40000`, `f(x)` | `a:u8` | Value out of range → panic (e.g. **`type.assign.range`**, reported as **`type.call.arg`**) |
+| `f(big)` | `b` (untyped) | No typed check on that formal |
+| Wrong kind (e.g. list into `u8`) | typed formal | **`type.assign.incompatible`** / **`type.call.arg`** |
+
+**Not done today (and not planned):** reject a call because the **source variable** has a **wider** typed slot than the formal (e.g. forbid **`u32` → `u8`** even when the value is **5**). If the value fits the formal contract, the call proceeds.
+
+#### Returns
+
+| Call form | `def` return | What flatL does |
+|-----------|----------------|-----------------|
+| `g() -> r` | `out:u16` | Return value checked against **`out:u16`**, stored in **`r`** |
+| `g() -> r:u32` | `out:u16` | **`r:u32`** is caller syntax (like typed assign on the LHS); lowering uses the name **`r`**. Enforcement is still against the **formal return type on `def`**, not a second “call-site return type” contract |
+| Multi: `h() -> a, b` | `lo:u8, hi:u16` | One check per return slot on **`def`**; caller names **`a`**, **`b`** only |
+
+**Same as parameters:** no comparison “caller slot type vs formal return type”. Only **value vs typed formal** (per return slot). Untyped return formals copy without that typed gate.
+
+#### Parameters vs returns (behaviour)
+
+| | **Parameters** | **Returns** |
+|---|----------------|-------------|
+| Types that matter at runtime | Typed formals on **`def`** | Typed return slots on **`def`** |
+| What you write at call | Expressions in **`(...)`** | Names after **`->`** or left of **`=`** (multi-return); optional **`name:type`** on those names |
+| Typed variable in caller | Value of var → formal check | N/A for args; on return, only the **name** binds the result |
+| Formal untyped | No typed check on that parameter | No typed check on that return |
+| Precision / range | Same as typed assign (no silent wrap on **`u8`**, no inexact **`f32`**, and so on) | **Same rules** when the return slot is typed |
+| Global vs unique executor | Same typed rules when entering the function | **Unique:** explicit return copy with typed checks. **Global:** body runs in caller VCX; return often appears as assign (e.g. **`r = out`**) after the call — value already produced under formal names in the body |
+
+#### Numeric values (AM-NUM)
+
+Caller slot types such as **`u32`** store integers with **width metadata**, not “everything is **`f64`**”. At the function boundary, flatL still runs the **typed-bind** pipeline on the **value**: allowed narrowing/coercion with range and exactness rules; failure → panic. That applies **equally** to arguments and to typed returns.
+
+**Summary:** parameters and returns are **symmetric**: **`def`** owns the contract; the call site supplies **values** (args) and **destination names** (returns). Typed slots in the caller are **not** a separate contract layer at the call boundary.
+
+**Tests:** `test/cases/types/098`–`099`, `112`–`134` (typed `def` at call: wide caller vars, range, `u*`/`s*`/`f*` crossings, return LHS wider than formal, multi-return).
 
 ---
 

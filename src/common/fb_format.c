@@ -305,57 +305,143 @@ static int parse_ffun_section(const uint8_t *sec, size_t sec_len, int format_ver
         pos += 4;
         funs[i].param_count = sec[pos];
         pos += 1;
-        if (pos + 2 > sec_len) {
-            goto fail;
-        }
-        rl = read_u16_le(sec + pos);
-        pos += 2;
-        if (rl >= sizeof funs[i].return_name || pos + rl + 4 > sec_len) {
-            goto fail;
-        }
-        memcpy(funs[i].return_name, sec + pos, rl);
-        funs[i].return_name[rl] = '\0';
-        pos += rl;
-        funs[i].func_vcx_slots = read_u32_le(sec + pos);
-        pos += 4;
-        if (format_version >= 7) {
-            int pi;
-            for (pi = 0; pi < (int)funs[i].param_count; pi++) {
-                uint16_t tl;
+        if (format_version >= 10) {
+            uint8_t rc;
+            int ri;
+            if (pos + 1 > sec_len) {
+                goto fail;
+            }
+            rc = sec[pos++];
+            if (rc == 0 || rc > FGIR_MAX_FUNC_RETURNS) {
+                goto fail;
+            }
+            funs[i].return_count = rc;
+            for (ri = 0; ri < (int)rc; ri++) {
+                uint16_t rnl;
                 if (pos + 2 > sec_len) {
                     goto fail;
                 }
-                tl = read_u16_le(sec + pos);
+                rnl = read_u16_le(sec + pos);
                 pos += 2;
-                funs[i].param_has_type[pi] = 0;
-                funs[i].param_type_spec[pi][0] = '\0';
-                if (tl > 0) {
-                    if (tl >= sizeof funs[i].param_type_spec[pi] || pos + tl > sec_len) {
+                if (rnl == 0 || rnl >= sizeof funs[i].return_names[ri] || pos + rnl > sec_len) {
+                    goto fail;
+                }
+                memcpy(funs[i].return_names[ri], sec + pos, rnl);
+                funs[i].return_names[ri][rnl] = '\0';
+                pos += rnl;
+            }
+            if (pos + 4 > sec_len) {
+                goto fail;
+            }
+            funs[i].func_vcx_slots = read_u32_le(sec + pos);
+            pos += 4;
+            {
+                int pi;
+                for (pi = 0; pi < (int)funs[i].param_count; pi++) {
+                    uint16_t tl;
+                    if (pos + 2 > sec_len) {
                         goto fail;
                     }
-                    memcpy(funs[i].param_type_spec[pi], sec + pos, tl);
-                    funs[i].param_type_spec[pi][tl] = '\0';
-                    funs[i].param_has_type[pi] = 1;
-                    pos += tl;
+                    tl = read_u16_le(sec + pos);
+                    pos += 2;
+                    funs[i].param_has_type[pi] = 0;
+                    funs[i].param_type_spec[pi][0] = '\0';
+                    if (tl > 0) {
+                        if (tl >= sizeof funs[i].param_type_spec[pi] || pos + tl > sec_len) {
+                            goto fail;
+                        }
+                        memcpy(funs[i].param_type_spec[pi], sec + pos, tl);
+                        funs[i].param_type_spec[pi][tl] = '\0';
+                        funs[i].param_has_type[pi] = 1;
+                        pos += tl;
+                    }
                 }
             }
-            {
+            for (ri = 0; ri < (int)rc; ri++) {
                 uint16_t rtl;
                 if (pos + 2 > sec_len) {
                     goto fail;
                 }
                 rtl = read_u16_le(sec + pos);
                 pos += 2;
-                funs[i].return_has_type = 0;
-                funs[i].return_type_spec[0] = '\0';
+                funs[i].return_has_type_arr[ri] = 0;
+                funs[i].return_type_spec_arr[ri][0] = '\0';
                 if (rtl > 0) {
-                    if (rtl >= sizeof funs[i].return_type_spec || pos + rtl > sec_len) {
+                    if (rtl >= sizeof funs[i].return_type_spec_arr[ri] || pos + rtl > sec_len) {
                         goto fail;
                     }
-                    memcpy(funs[i].return_type_spec, sec + pos, rtl);
-                    funs[i].return_type_spec[rtl] = '\0';
-                    funs[i].return_has_type = 1;
+                    memcpy(funs[i].return_type_spec_arr[ri], sec + pos, rtl);
+                    funs[i].return_type_spec_arr[ri][rtl] = '\0';
+                    funs[i].return_has_type_arr[ri] = 1;
                     pos += rtl;
+                }
+            }
+            snprintf(funs[i].return_name, sizeof funs[i].return_name, "%s", funs[i].return_names[0]);
+            funs[i].return_has_type = funs[i].return_has_type_arr[0];
+            snprintf(funs[i].return_type_spec, sizeof funs[i].return_type_spec, "%s",
+                     funs[i].return_type_spec_arr[0]);
+        } else {
+            if (pos + 2 > sec_len) {
+                goto fail;
+            }
+            rl = read_u16_le(sec + pos);
+            pos += 2;
+            if (rl >= sizeof funs[i].return_name || pos + rl + 4 > sec_len) {
+                goto fail;
+            }
+            memcpy(funs[i].return_name, sec + pos, rl);
+            funs[i].return_name[rl] = '\0';
+            pos += rl;
+            funs[i].return_count = 1;
+            snprintf(funs[i].return_names[0], sizeof funs[i].return_names[0], "%s",
+                     funs[i].return_name);
+            funs[i].func_vcx_slots = read_u32_le(sec + pos);
+            pos += 4;
+            if (format_version >= 7) {
+                int pi;
+                for (pi = 0; pi < (int)funs[i].param_count; pi++) {
+                    uint16_t tl;
+                    if (pos + 2 > sec_len) {
+                        goto fail;
+                    }
+                    tl = read_u16_le(sec + pos);
+                    pos += 2;
+                    funs[i].param_has_type[pi] = 0;
+                    funs[i].param_type_spec[pi][0] = '\0';
+                    if (tl > 0) {
+                        if (tl >= sizeof funs[i].param_type_spec[pi] || pos + tl > sec_len) {
+                            goto fail;
+                        }
+                        memcpy(funs[i].param_type_spec[pi], sec + pos, tl);
+                        funs[i].param_type_spec[pi][tl] = '\0';
+                        funs[i].param_has_type[pi] = 1;
+                        pos += tl;
+                    }
+                }
+                {
+                    uint16_t rtl;
+                    if (pos + 2 > sec_len) {
+                        goto fail;
+                    }
+                    rtl = read_u16_le(sec + pos);
+                    pos += 2;
+                    funs[i].return_has_type = 0;
+                    funs[i].return_type_spec[0] = '\0';
+                    funs[i].return_has_type_arr[0] = 0;
+                    funs[i].return_type_spec_arr[0][0] = '\0';
+                    if (rtl > 0) {
+                        if (rtl >= sizeof funs[i].return_type_spec || pos + rtl > sec_len) {
+                            goto fail;
+                        }
+                        memcpy(funs[i].return_type_spec, sec + pos, rtl);
+                        funs[i].return_type_spec[rtl] = '\0';
+                        funs[i].return_has_type = 1;
+                        funs[i].return_has_type_arr[0] = 1;
+                        snprintf(funs[i].return_type_spec_arr[0],
+                                 sizeof funs[i].return_type_spec_arr[0], "%s",
+                                 funs[i].return_type_spec);
+                        pos += rtl;
+                    }
                 }
             }
         }
@@ -793,13 +879,24 @@ size_t flat_fb_ffun_section_size(uint16_t count, const FlatFbFunctionEntry *entr
     }
     for (i = 0; i < (int)count; i++) {
         size_t nl = strlen(entries[i].name);
-        size_t rl = strlen(entries[i].return_name);
         int pi;
-        n += 2 + nl + 4 + 4 + 1 + 2 + rl + 4;
+        int ri;
+        uint8_t rc = entries[i].return_count;
+        if (rc == 0) {
+            rc = 1;
+        }
+        n += 2 + nl + 4 + 4 + 1 + 1;
+        for (ri = 0; ri < (int)rc; ri++) {
+            n += 2 + strlen(entries[i].return_names[ri]);
+        }
+        n += 4;
         for (pi = 0; pi < (int)entries[i].param_count; pi++) {
             n += 2 + strlen(entries[i].param_type_spec[pi]);
         }
-        n += 2 + strlen(entries[i].return_type_spec);
+        for (ri = 0; ri < (int)rc; ri++) {
+            n += 2 + strlen(entries[i].return_type_spec_arr[ri]);
+        }
+        (void)nl;
     }
     return n;
 }
@@ -817,7 +914,11 @@ int flat_fb_write_ffun_section(FILE *f, uint16_t count, const FlatFbFunctionEntr
     }
     for (i = 0; i < (int)count; i++) {
         uint16_t nl = (uint16_t)strlen(entries[i].name);
-        uint16_t rl = (uint16_t)strlen(entries[i].return_name);
+        uint8_t rc = entries[i].return_count;
+        int ri;
+        if (rc == 0) {
+            rc = 1;
+        }
         if (write_bytes(f, &nl, 2) != 0 || write_bytes(f, entries[i].name, nl) != 0) {
             return -1;
         }
@@ -831,8 +932,16 @@ int flat_fb_write_ffun_section(FILE *f, uint16_t count, const FlatFbFunctionEntr
                 return -1;
             }
         }
-        if (write_bytes(f, &rl, 2) != 0 || write_bytes(f, entries[i].return_name, rl) != 0 ||
-            write_bytes(f, &entries[i].func_vcx_slots, 4) != 0) {
+        if (write_bytes(f, &rc, 1) != 0) {
+            return -1;
+        }
+        for (ri = 0; ri < (int)rc; ri++) {
+            uint16_t rnl = (uint16_t)strlen(entries[i].return_names[ri]);
+            if (write_bytes(f, &rnl, 2) != 0 || write_bytes(f, entries[i].return_names[ri], rnl) != 0) {
+                return -1;
+            }
+        }
+        if (write_bytes(f, &entries[i].func_vcx_slots, 4) != 0) {
             return -1;
         }
         for (pi = 0; pi < (int)entries[i].param_count; pi++) {
@@ -844,12 +953,12 @@ int flat_fb_write_ffun_section(FILE *f, uint16_t count, const FlatFbFunctionEntr
                 return -1;
             }
         }
-        {
-            uint16_t rtl = (uint16_t)strlen(entries[i].return_type_spec);
+        for (ri = 0; ri < (int)rc; ri++) {
+            uint16_t rtl = (uint16_t)strlen(entries[i].return_type_spec_arr[ri]);
             if (write_bytes(f, &rtl, 2) != 0) {
                 return -1;
             }
-            if (rtl > 0 && write_bytes(f, entries[i].return_type_spec, rtl) != 0) {
+            if (rtl > 0 && write_bytes(f, entries[i].return_type_spec_arr[ri], rtl) != 0) {
                 return -1;
             }
         }

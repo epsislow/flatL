@@ -1,0 +1,8 @@
+suite = "func"
+id = 23
+desc = "AM-2: compile error when return arity mismatch"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+expect_exit = 1
+stderr_contains = "call.function.return.count"

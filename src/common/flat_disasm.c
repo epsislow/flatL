@@ -324,8 +324,20 @@ static void print_ffun(FILE *out, const FlatBytecode *bc) {
         if (eb >= 0) {
             exec = label_for_block_index(bc, eb);
         }
-        fprintf(out, "  [%d] %s params=%u return=%s vcx_slots=%" PRIu32 "\n", i, f->name,
-                (unsigned)f->param_count, f->return_name, f->func_vcx_slots);
+        {
+            int ri;
+            uint8_t rc = f->return_count;
+            if (rc == 0) {
+                rc = 1;
+            }
+            fprintf(out, "  [%d] %s params=%u returns=%u vcx_slots=%" PRIu32 "\n", i, f->name,
+                    (unsigned)f->param_count, (unsigned)rc, f->func_vcx_slots);
+            fprintf(out, "      return names:");
+            for (ri = 0; ri < (int)rc; ri++) {
+                fprintf(out, " %s", f->return_names[ri][0] ? f->return_names[ri] : f->return_name);
+            }
+            fputc('\n', out);
+        }
         fprintf(out, "      impl_block_id=%" PRIu32, f->impl_block_id);
         if (impl) {
             fprintf(out, " (%s)", impl);
