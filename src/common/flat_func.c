@@ -24,6 +24,17 @@ static int join_strings(char *out, size_t out_sz, const char *a, const char *mid
     return 0;
 }
 
+static int assign_param_in_line(char *line, size_t line_sz, int i, const char *rhs) {
+    char lhs[32];
+    int n;
+
+    n = snprintf(lhs, sizeof lhs, "param_in_%d", i);
+    if (n < 0 || (size_t)n >= sizeof lhs) {
+        return -1;
+    }
+    return flat_str_assign_line(line, line_sz, lhs, rhs);
+}
+
 static int concat2(char *out, size_t out_sz, const char *a, const char *b) {
     return join_strings(out, out_sz, a, "", b);
 }
@@ -831,9 +842,18 @@ static int emit_call_arg_slots(FgirInstr *expanded, int *n, int arg_count,
     }
     for (i = 0; i < arg_count; i++) {
         if (is_simple_var_ref(arg_parts[i])) {
-            snprintf(line, line_sz, "param_in_%d = %s", i, arg_parts[i]);
+            if (assign_param_in_line(line, line_sz, i, arg_parts[i]) != 0) {
+                snprintf(err, err_size, "lowered param_in assign too long");
+                return -1;
+            }
         } else {
-            snprintf(line, line_sz, "param_in_%d = __fl_tmp_%d", i, i);
+            char rhs[32];
+            int rn = snprintf(rhs, sizeof rhs, "__fl_tmp_%d", i);
+            if (rn < 0 || (size_t)rn >= sizeof rhs ||
+                assign_param_in_line(line, line_sz, i, rhs) != 0) {
+                snprintf(err, err_size, "lowered param_in assign too long");
+                return -1;
+            }
         }
         ins_init_assign(&expanded[(*n)++], line);
     }
@@ -985,7 +1005,10 @@ static int lower_one_call_vm(FgirProgram *prog, FgirBlock *b, int at, const Fgir
     }
     for (i = 0; i < arg_count; i++) {
         if (is_simple_var_ref(arg_parts[i])) {
-            snprintf(line, sizeof line, "__fl_tmp_%d = %s", i, arg_parts[i]);
+            if (flat_str_assign_fl_tmp(line, sizeof line, i, arg_parts[i]) != 0) {
+                snprintf(err, err_size, "lowered tmp assign too long");
+                return -1;
+            }
             ins_init_assign(&expanded[n++], line);
         } else if (flat_str_assign_fl_tmp(line, sizeof line, i, arg_parts[i]) != 0) {
             snprintf(err, err_size, "lowered tmp assign too long");

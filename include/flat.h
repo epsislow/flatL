@@ -2,7 +2,7 @@
 #define FLAT_H
 
 #define FLAT_MAGIC "FLAT"
-#define FLAT_TOOLCHAIN_VERSION "0.5.1"
+#define FLAT_TOOLCHAIN_VERSION "0.5.0"
 
 typedef enum {
     OP_ASSIGN  = 0x01,
