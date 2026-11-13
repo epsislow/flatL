@@ -1,0 +1,100 @@
+-- Same game as guess_number.fl, bounded with for(1000, ...) — no `jump`.
+-- `return` leaves the loop (win/quit); `next` in `#or.*` handlers advances the for.
+-- Run:  bin/flc examples/guess_number/guess_number_no_jumps.fl -o /tmp/guess.fb && bin/flvm /tmp/guess.fb
+
+use "../../blocks/executor.fl" as #fl_
+use native vcx with V
+use native math with m
+
+func:executor #fl_executor.global.scope
+
+#main
+  date.now() -> seed
+  m.calc('seed %% 100 + 1') -> secret
+  score = 1000
+  last = 0
+  hint = 0
+  io.outln('Guess the number between 1 and 100.')
+  io.outln('Type 0 at any time to quit.')
+  io.outln('(for-loop edition: at most 1000 turns)')
+  for(1000, attempt, '#round')
+  OK
+
+#round
+  io.in_num('Your guess: ') -> g
+
+  g == 0 #.q0
+  io.outln('Bye')
+  io.outln(score)
+  return
+
+#or.#round.q0
+  g == secret #.sec
+  io.outln('Bravo! You found it!')
+  io.outln(score)
+  return
+
+#or.sec
+  g < 1 #.rngLo
+  io.outln('Enter an integer from 1 to 100 (or 0 to quit).')
+  io.outln(score)
+  next
+
+#or.rngLo
+  g > 100 #.rngHi
+  io.outln('Enter an integer from 1 to 100 (or 0 to quit).')
+  io.outln(score)
+  next
+
+#or.rngHi
+  call #wrong_penalty
+  m.calc('score - 8') -> score
+
+  g < secret #.low
+  hint = 1
+  io.outln('Higher.')
+  last = g
+  call #show_score_clamp
+  next
+
+#or.low
+  hint = -1
+  io.outln('Lower.')
+  last = g
+  call #show_score_clamp
+  next
+
+#show_score_clamp
+  score < 1 #.clamp
+  score = 1
+  io.outln(score)
+  return
+
+#or.#show_score_clamp.clamp
+  io.outln(score)
+  return
+
+#wrong_penalty
+  hint == 1 #.h1
+  call #pen_higher
+
+#or.#wrong_penalty.h1
+  hint == -1 #.hm1
+  call #pen_lower
+
+#or.hm1
+  return
+
+#pen_higher
+  g < last #.badHi
+  m.calc('score - 25') -> score
+
+#or.#pen_higher.badHi
+  return
+
+#pen_lower
+  g > last #.badLo
+  m.calc('score - 25') -> score
+
+#or.#pen_lower.badLo
+  return
