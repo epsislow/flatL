@@ -320,6 +320,41 @@ static int line_mod_allowed(FgirInstrKind kind, const char *text) {
     return 0;
 }
 
+/* Comparison guards: ==, != is not a guard, <, >, <=, >= (outside quotes). */
+static int line_is_comparison_guard(const char *line) {
+    const char *p;
+    int in_s = 0;
+    int in_d = 0;
+
+    if (!line) {
+        return 0;
+    }
+    for (p = line; *p; p++) {
+        if (*p == '\'' && !in_d) {
+            in_s = !in_s;
+        } else if (*p == '"' && !in_s) {
+            in_d = !in_d;
+        } else if (!in_s && !in_d) {
+            if (p[0] == '=' && p[1] == '=') {
+                return 1;
+            }
+            if (p[0] == '>' && p[1] == '=') {
+                return 1;
+            }
+            if (p[0] == '<' && p[1] == '=') {
+                return 1;
+            }
+            if (p[0] == '>' && p[1] != '=') {
+                return 1;
+            }
+            if (p[0] == '<' && p[1] != '=') {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 static FgirInstrKind classify(const char *line) {
     if (strcmp(line, "OK") == 0) {
         return FGIR_OK;
@@ -369,7 +404,7 @@ static FgirInstrKind classify(const char *line) {
     if (is_free_line(line)) {
         return FGIR_FREE;
     }
-    if (strstr(line, "==") != NULL) {
+    if (line_is_comparison_guard(line)) {
         return FGIR_GUARD;
     }
     if (strchr(line, '=') != NULL) {

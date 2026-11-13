@@ -1,0 +1,8 @@
+suite = "types"
+id = 143
+desc = "AM-NUM visible: relational guards on u64 near 2^63-1"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

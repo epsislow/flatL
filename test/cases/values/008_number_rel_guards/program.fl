@@ -1,0 +1,24 @@
+#main
+  a = 5
+  b = 10
+  a < b
+  b > a
+  a <= 5
+  b >= 10
+  a == 5
+  OK
+
+#or.#main.2
+  FAIL
+
+#or.#main.3
+  FAIL
+
+#or.#main.4
+  FAIL
+
+#or.#main.5
+  FAIL
+
+#or.#main.6
+  FAIL

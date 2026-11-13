@@ -1,0 +1,123 @@
+-- Number guessing game (1-100). Unlimited tries; score stays positive.
+
+use "../blocks/executor.fl" as #fl_
+use native vcx with V
+use native math with m
+
+func:executor #fl_executor.global.scope
+
+#main
+  date.now() -> seed
+  m.calc('seed %% 100 + 1') -> secret
+  score = 1000
+  last = 0
+  hint = 0
+  io.outln('Guess the number between 1 and 100.')
+  io.outln('Type 0 at any time to quit.')
+  jump #turn
+
+#turn
+  io.in_num('Your guess: ') -> g
+
+  g == 0 #.q0
+  jump #quit
+
+  jump #check_secret
+
+#or.#turn.q0
+  jump #check_secret
+
+#check_secret
+  g == secret #.sec
+  jump #win
+
+  jump #range_check
+
+#or.#check_secret.sec
+  jump #range_check
+
+#range_check
+  g < 1 #.rngLo
+  jump #bad_range
+
+  jump #range_hi
+
+#or.#range_check.rngLo
+  jump #range_hi
+
+#range_hi
+  g > 100 #.rngHi
+  jump #bad_range
+
+  jump #after_guess
+
+#or.#range_hi.rngHi
+  jump #after_guess
+
+#after_guess
+  call #wrong_penalty
+  m.calc('score - 8') -> score
+
+  g < secret #.low
+  hint = 1
+  io.outln('Higher.')
+  jump #finish_turn
+
+#or.#after_guess.low
+  hint = -1
+  io.outln('Lower.')
+  jump #finish_turn
+
+#wrong_penalty
+  hint == 1 #.h1
+  jump #pen_when_higher
+
+#or.#wrong_penalty.h1
+  jump #wrong_tail
+
+#wrong_tail
+  hint == -1 #.hm1
+  jump #pen_when_lower
+
+#or.#wrong_tail.hm1
+  return
+
+#pen_when_higher
+  g < last #.badHi
+  m.calc('score - 25') -> score
+
+#or.#pen_when_higher.badHi
+  return
+
+#pen_when_lower
+  g > last #.badLo
+  m.calc('score - 25') -> score
+
+#or.#pen_when_lower.badLo
+  return
+
+#finish_turn
+  last = g
+  score < 1 #.clamp
+  score = 1
+  io.outln(score)
+  jump #turn
+
+#or.#finish_turn.clamp
+  io.outln(score)
+  jump #turn
+
+#bad_range
+  io.outln('Enter an integer from 1 to 100 (or 0 to quit).')
+  io.outln(score)
+  jump #turn
+
+#quit
+  io.outln('Bye')
+  io.outln(score)
+  OK
+
+#win
+  io.outln('Bravo! You found it!')
+  io.outln(score)
+  OK

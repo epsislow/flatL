@@ -440,7 +440,7 @@ Conceptual bytecode for `#main`:
 
 - Block headers: `#name` or `#name(a, b)`; exactly one `#main`.
 - Lines under a block are instructions; full-line `--` comments and `--<` … `-->` blocks skipped.
-- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `for(...)`, `call #…`, **`call block` *expr***, `jump #…`, lines with `==` (guard), else `assign`.
+- Classification: `OK`, `FAIL`, `PANIC`, `return`, `foreach(...)`, `for(...)`, `call #…`, **`call block` *expr***, `jump #…`, lines with **`==`**, **`<`**, **`>`**, **`<=`**, **`>=`** (guard), else `assign`.
 
 **Compile-time linking:**
 
@@ -456,7 +456,7 @@ Loads `.fb`, starts at `#main`, dispatches opcodes. **No full expression parser*
 | Mechanism | Behavior |
 |-----------|----------|
 | **Variables** | v0.2: tagged **BOOL**, **NUMBER**, **STRING** (INLINE ≤127 B or REF pool + slice views). Details: [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md). |
-| **Guard** | Supports `true`/`false` literals, `var == true/false/'text'`, and `var == other`. On false: jump to `#or` handler IP or exit 2 if unmapped. |
+| **Guard** | Relational: **`==`**, **`<`**, **`>`**, **`<=`**, **`>=`** (numeric exact compare via AM-NUM where applicable; strings/other only on **`==`**). On false: jump to `#or` handler IP or exit 2 if unmapped. |
 | **Call** | Push return IP, jump to target block; clears “entered via jump” flag. |
 | **Call block** | Source line **`call block` *expr*** — *expr* is evaluated at run time to a **whole NUMBER** **block id** (see block directory); same call/return stack as **`call #…`**. PANIC: **`call.block.arg`**, **`call.block.id`**, **`call.block.notfound`**, **`call.block.limit`**. Details: [CALL_BLOCK.md](./CALL_BLOCK.md). |
 | **Jump** | Set IP to target block; **clear** active `for`/`foreach` frames; mark entry as via jump (no call frame). |

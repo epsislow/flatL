@@ -9,6 +9,7 @@
     "blocks/executor.fl",
     "or.fl",
     "obj.fl",
-    "obj2.fl"
+    "obj2.fl",
+    "guess_number/guess_number.fl"
   ]
 }
