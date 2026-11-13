@@ -1,6 +1,7 @@
 #include "vm.h"
 #include "fgir.h"
 #include "flat_func.h"
+#include "flat_func_tag.h"
 #include "flat_date.h"
 #include "flat_file.h"
 #include "flat_io_ctx.h"
@@ -9,6 +10,7 @@
 #include "flat_mem_stats.h"
 #include "flat_native.h"
 #include "flat_native_tag.h"
+#include "flat_native_util.h"
 #include "flat_str.h"
 #include "flat_number.h"
 #include "flat_value.h"
@@ -1356,6 +1358,88 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
     argc = payload[2];
     is_global = payload[3];
     pos = 4;
+    if (fi == FLAT_FUNC_CALL_FI_DYNAMIC) {
+        const char *fname;
+        const char *tag_expr;
+        char spec[256];
+        char canon[256];
+        FlatValue tv;
+        int call_has_tag = 1;
+
+        if (pos >= psz) {
+            return -1;
+        }
+        fname = (const char *)(payload + pos);
+        pos += strlen(fname) + 1;
+        if (pos >= psz) {
+            return -1;
+        }
+        tag_expr = (const char *)(payload + pos);
+        pos += strlen(tag_expr) + 1;
+        spec[0] = '\0';
+        memset(&tv, 0, sizeof tv);
+        if (tag_expr[0] != '\0') {
+            char tbuf[512];
+            size_t scratch_n = st->var_slots_max > 0 ? st->var_slots_max : 1u;
+            FlatValue *vals = calloc(scratch_n, sizeof *vals);
+            char (*names)[64] = calloc(scratch_n, 64);
+            int vi;
+            int eval_ok = 0;
+
+            if (!vals || !names) {
+                free(vals);
+                free(names);
+                return -1;
+            }
+            var_names_table(st, names);
+            for (vi = 0; vi < st->var_count; vi++) {
+                vals[vi] = st->vars[vi].val;
+            }
+            snprintf(tbuf, sizeof tbuf, "%s", tag_expr);
+            flat_native_trim(tbuf);
+            if (flat_value_parse_assign_rhs(tbuf, &tv, st->pool, st->coll, vals, st->var_count,
+                                            names) == 0) {
+                eval_ok = 1;
+            }
+            free(vals);
+            free(names);
+            if (!eval_ok) {
+                snprintf(st->panic_reason, sizeof st->panic_reason, "%s", "type.tag.arg");
+                return vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            }
+            if (tv.tag != VAL_STR_INLINE && tv.tag != VAL_STR_REF) {
+                snprintf(st->panic_reason, sizeof st->panic_reason, "%s", "type.tag.arg");
+                flat_value_release(st->coll, st->pool, &tv);
+                return vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            }
+            if (tv.tag == VAL_STR_INLINE) {
+                memcpy(spec, tv.u.ins.bytes, tv.u.ins.len);
+                spec[tv.u.ins.len] = '\0';
+            } else {
+                size_t len = 0;
+                const uint8_t *p = flat_pool_read(st->pool, tv.u.ref_id, &len);
+                if (!p || len >= sizeof spec) {
+                    flat_value_release(st->coll, st->pool, &tv);
+                    return -1;
+                }
+                memcpy(spec, p, len);
+                spec[len] = '\0';
+            }
+            flat_value_release(st->coll, st->pool, &tv);
+        }
+        if (spec[0] == '\0') {
+            call_has_tag = 1;
+            canon[0] = '\0';
+        } else if (flat_func_tag_canonical_from_runtime_string(spec, canon, sizeof canon) != 0) {
+            snprintf(st->panic_reason, sizeof st->panic_reason, "%s", "type.tag.not_accepted");
+            return vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+        }
+        fi = flat_fb_resolve_function_index(bc, fname, argc, call_has_tag, canon, st->panic_reason,
+                                            sizeof st->panic_reason);
+        if (fi == UINT16_MAX || fi >= bc->function_count) {
+            return vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+        }
+    }
     if (fi >= bc->function_count) {
         return -1;
     }

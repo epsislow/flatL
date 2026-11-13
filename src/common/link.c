@@ -4,6 +4,7 @@
 
 #include "flat_guard.h"
 #include "flat_func.h"
+#include "flat_func_tag.h"
 #include "flat_link.h"
 #include "fgir.h"
 #include "flat_native_use.h"
@@ -1131,6 +1132,9 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     }
     flat_func_reclassify_program(out);
     if (flat_native_use_validate_program(out, err, err_size) != 0) {
+        return -1;
+    }
+    if (flat_func_resolve_call_sites(out, err, err_size) != 0) {
         return -1;
     }
     if (flat_func_lower_program(out, err, err_size) != 0) {

@@ -49,6 +49,33 @@ add(2, 3) -> r
 io.outln(r)
 ```
 
+### Overload by tag (v2.0, AM-TAGURI)
+
+Multiple `def` lines may share the same name when **arity** and/or **tag set** differ. Tags are **author-defined tokens** (not limited to numeric type names).
+
+| Declarație | Tag set |
+|------------|---------|
+| `def f(a, b) -> r` | fără tag (sau echivalent `def f(a, b ; ) -> r` — **o singură** variantă fără tag) |
+| `def f(a, b ; "fast") -> r` | tag literal const obligatoriu pe linia `def` |
+| `def f(a, b ; "")` | **eroare compile** — `type.tag.arg` |
+
+Apel:
+
+```flat
+pick(4 ; "fast") -> a
+pick(4 ; "slow") -> b
+pick(4) -> c              # varianta fără tag, dacă există
+pick(4 ; tags) -> d       # tag variabil: necesită `func:callVM 1` (rezolvare în VM)
+```
+
+- Potrivire: `(nume, arity, tag_set_canonic)` — tokenii se **sortează alfabetic** la compile (ca la natives).
+- Duplicate `(nume, arity, tag_set)` → **`type.def.overload.duplicate`**.
+- Apel fără `;` când există doar variante cu tag → **`type.tag.not_accepted`**.
+- **FFUN** în `.fb` **format v12**: fiecare intrare include `def_tag_has_section` + `tag_canonical`.
+- Apeluri cu tag **dinamic** (`func:callVM 1` + `OP_CALL_FUNCTION` index `0xFFFF`): VM evaluează expresia tag și alege intrarea FFUN.
+
+Tests: `test/cases/func/024`–`025`, `test/cases/types/159`–`162`.
+
 Lowering (strategy A) builds an instruction context (`__call_instr_vcx`), copies call metadata, and `call`s the executor block. The executor reads that context via **`V.callInstr()`** (VM call stack for strategy B / nested calls; strategy A uses the same native with fallback to `__call_instr_vcx`).
 
 ### Multiple return values (AM-2)

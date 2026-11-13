@@ -81,6 +81,10 @@ typedef struct {
     char func_ret[FGIR_MAX_LINE];
     int func_ret_count;
     char func_rets[FGIR_MAX_FUNC_RETURNS][64];
+    uint8_t func_call_has_tag_section;
+    char func_call_tag_expr[FGIR_MAX_LINE];
+    int func_resolved_index;
+    uint8_t func_call_dynamic_tag;
 } FgirInstr;
 
 typedef struct {
@@ -116,6 +120,9 @@ typedef struct {
     uint32_t func_vcx_slots;
     int is_global_executor;
     int call_via_vm; /* 1 = OP_CALL_FUNCTION at call sites (func:callVM 1 zone) */
+    uint8_t def_tag_has_section;
+    char def_tag_expr[FGIR_MAX_LINE];
+    char def_tag_canonical[256];
 } FgirFunction;
 
 typedef struct {

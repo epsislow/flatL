@@ -27,5 +27,7 @@ const FgirFunction *flat_func_find(const FgirProgram *prog, const char *name);
 int flat_func_index(const FgirProgram *prog, const char *name);
 int flat_func_check_call_returns(const FgirFunction *fn, const FgirInstr *call, char *err,
                                  size_t err_size);
+const FgirFunction *flat_func_at(const FgirProgram *prog, int index);
+int flat_func_split_param_list(char *inner, char out[][64], int max_out, int *out_count);
 
 #endif

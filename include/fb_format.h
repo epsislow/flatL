@@ -10,7 +10,7 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 11u
+#define FLAT_FB_FORMAT_VERSION 12u
 #define FLAT_FB_HEADER_SIZE_V11 36 /* v11: jbmx_off at bytes 32–35 */
 #define FLAT_FB_HEADER_SIZE 32     /* v3–v10 header (load) */
 #define FLAT_FB_JBMX_MAGIC 0x584d424au /* 'JBMX' LE */
@@ -47,6 +47,8 @@ typedef struct {
     char return_type_spec[48];
     uint8_t return_has_type_arr[FGIR_MAX_FUNC_RETURNS];
     char return_type_spec_arr[FGIR_MAX_FUNC_RETURNS][48];
+    uint8_t def_tag_has_section;
+    char def_tag_canonical[256];
 } FlatFbFunctionEntry;
 
 typedef struct {

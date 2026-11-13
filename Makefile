@@ -52,7 +52,8 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_d
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
                 src/lib/mod_vcx_dschema.c $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c src/common/flat_native_tag_common.c
-VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c \
+VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
+          src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
           src/common/flat_slot_type.c src/common/flat_schema.c src/common/flat_dynamic_bind.c \
@@ -65,9 +66,9 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/com
           $(STR_SRC) $(NATIVE_VM_SRC)
 FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
-               src/common/flat_assign.c src/common/flat_slot_type.c src/common/flat_schema.c \
-               src/common/flat_number.c src/common/value_pool.c src/common/value_collection.c \
-               src/common/value_live.c \
+               src/common/flat_func_tag.c src/common/flat_assign.c src/common/flat_slot_type.c \
+               src/common/flat_schema.c src/common/flat_number.c src/common/value_pool.c \
+               src/common/value_collection.c src/common/value_live.c \
                src/common/line_label.c src/common/flat_jump_block.c \
            src/common/native_use.c src/common/flat_native_tag_validate.c \
            $(FLAT_TIME_SRC) \

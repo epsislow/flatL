@@ -380,6 +380,27 @@ static int parse_ffun_section(const uint8_t *sec, size_t sec_len, int format_ver
             funs[i].return_has_type = funs[i].return_has_type_arr[0];
             snprintf(funs[i].return_type_spec, sizeof funs[i].return_type_spec, "%s",
                      funs[i].return_type_spec_arr[0]);
+            if (format_version >= 12) {
+                uint16_t tgl;
+                if (pos + 1 > sec_len) {
+                    goto fail;
+                }
+                funs[i].def_tag_has_section = sec[pos++];
+                if (pos + 2 > sec_len) {
+                    goto fail;
+                }
+                tgl = read_u16_le(sec + pos);
+                pos += 2;
+                funs[i].def_tag_canonical[0] = '\0';
+                if (tgl > 0) {
+                    if (tgl >= sizeof funs[i].def_tag_canonical || pos + tgl > sec_len) {
+                        goto fail;
+                    }
+                    memcpy(funs[i].def_tag_canonical, sec + pos, tgl);
+                    funs[i].def_tag_canonical[tgl] = '\0';
+                    pos += tgl;
+                }
+            }
         } else {
             if (pos + 2 > sec_len) {
                 goto fail;
@@ -1005,6 +1026,7 @@ size_t flat_fb_ffun_section_size(uint16_t count, const FlatFbFunctionEntry *entr
         for (ri = 0; ri < (int)rc; ri++) {
             n += 2 + strlen(entries[i].return_type_spec_arr[ri]);
         }
+        n += 1 + 2 + strlen(entries[i].def_tag_canonical);
         (void)nl;
     }
     return n;
@@ -1068,6 +1090,19 @@ int flat_fb_write_ffun_section(FILE *f, uint16_t count, const FlatFbFunctionEntr
                 return -1;
             }
             if (rtl > 0 && write_bytes(f, entries[i].return_type_spec_arr[ri], rtl) != 0) {
+                return -1;
+            }
+        }
+        {
+            uint8_t th = entries[i].def_tag_has_section;
+            uint16_t tgl = (uint16_t)strlen(entries[i].def_tag_canonical);
+            if (write_bytes(f, &th, 1) != 0) {
+                return -1;
+            }
+            if (write_bytes(f, &tgl, 2) != 0) {
+                return -1;
+            }
+            if (tgl > 0 && write_bytes(f, entries[i].def_tag_canonical, tgl) != 0) {
                 return -1;
             }
         }

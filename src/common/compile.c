@@ -1,5 +1,6 @@
 #include "fgir.h"
 #include "flat_func.h"
+#include "flat_func_tag.h"
 #include "flat.h"
 #include "flat_value.h"
 #include "fb_format.h"
@@ -721,19 +722,52 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             break;
         }
         case FGIR_FUNC_CALL_VM: {
-            const FgirFunction *fn = flat_func_find(prog, ins->func_name);
+            const FgirFunction *fn = NULL;
             uint8_t payload[255];
             size_t pos = 0;
             uint16_t fi;
             int pi;
             uint8_t plen;
+            uint8_t argc = 0;
 
+            if (ins->func_resolved_index >= 0) {
+                fn = flat_func_at(prog, ins->func_resolved_index);
+            } else if (!ins->func_call_dynamic_tag) {
+                fn = flat_func_find(prog, ins->func_name);
+            }
+            if (ins->func_call_dynamic_tag) {
+                char argbuf[FGIR_MAX_LINE];
+                char argtok[FGIR_MAX_FUNC_PARAMS][64];
+                int ac = 0;
+
+                snprintf(argbuf, sizeof argbuf, "%s", ins->func_args);
+                if (flat_func_split_param_list(argbuf, argtok, FGIR_MAX_FUNC_PARAMS, &ac) != 0) {
+                    snprintf(err, err_size, "call vm: too many arguments");
+                    return -1;
+                }
+                argc = (uint8_t)ac;
+                for (pi = 0; pi < prog->function_count; pi++) {
+                    if (strcmp(prog->functions[pi].name, ins->func_name) == 0 &&
+                        prog->functions[pi].param_count == (int)argc) {
+                        fn = &prog->functions[pi];
+                        break;
+                    }
+                }
+                fi = (uint16_t)FLAT_FUNC_CALL_FI_DYNAMIC;
+            } else {
+                if (!fn) {
+                    snprintf(err, err_size, "call vm: unknown function %s", ins->func_name);
+                    return -1;
+                }
+                fi = (uint16_t)(ins->func_resolved_index >= 0 ? ins->func_resolved_index
+                                                             : flat_func_index(prog, ins->func_name));
+                argc = (uint8_t)fn->param_count;
+            }
             if (!fn) {
                 snprintf(err, err_size, "call vm: unknown function %s", ins->func_name);
                 return -1;
             }
-            fi = (uint16_t)flat_func_index(prog, ins->func_name);
-            if (fi >= (uint16_t)prog->function_count) {
+            if (fi != FLAT_FUNC_CALL_FI_DYNAMIC && fi >= (uint16_t)prog->function_count) {
                 snprintf(err, err_size, "call vm: bad function index");
                 return -1;
             }
@@ -742,8 +776,20 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             memcpy(payload + pos, &fi, 2);
             pos += 2;
-            payload[pos++] = (uint8_t)fn->param_count;
+            payload[pos++] = argc;
             payload[pos++] = (uint8_t)(fn->is_global_executor ? 1 : 0);
+            if (fi == FLAT_FUNC_CALL_FI_DYNAMIC) {
+                size_t nl = strlen(ins->func_name) + 1;
+                size_t tl = strlen(ins->func_call_tag_expr) + 1;
+                if (pos + nl + tl > sizeof payload) {
+                    snprintf(err, err_size, "call vm payload too long");
+                    return -1;
+                }
+                memcpy(payload + pos, ins->func_name, nl);
+                pos += nl;
+                memcpy(payload + pos, ins->func_call_tag_expr, tl);
+                pos += tl;
+            }
             {
                 int ri;
                 for (ri = 0; ri < fn->return_count; ri++) {
@@ -837,6 +883,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
     if (flat_native_tag_validate_program(prog, err, err_size) != 0) {
+        return -1;
+    }
+    if (flat_func_tag_validate_program(prog, err, err_size) != 0) {
         return -1;
     }
     if (flat_func_validate_program(prog, err, err_size) != 0) {
@@ -956,6 +1005,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                         snprintf(ftab[fi].param_type_spec[pj], sizeof ftab[fi].param_type_spec[pj],
                                  "%s", fn->param_type_spec[pj]);
                     }
+                    ftab[fi].def_tag_has_section = fn->def_tag_has_section;
+                    snprintf(ftab[fi].def_tag_canonical, sizeof ftab[fi].def_tag_canonical, "%s",
+                             fn->def_tag_canonical);
                     for (bi = 0; bi < prog->block_count; bi++) {
                         if (strcmp(prog->blocks[bi].label, fn->impl_label) == 0) {
                             ftab[fi].impl_block_id = block_ids[bi];
@@ -1130,6 +1182,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
                     snprintf(ftab[fi].param_type_spec[pj], sizeof ftab[fi].param_type_spec[pj],
                              "%s", fn->param_type_spec[pj]);
                 }
+                ftab[fi].def_tag_has_section = fn->def_tag_has_section;
+                snprintf(ftab[fi].def_tag_canonical, sizeof ftab[fi].def_tag_canonical, "%s",
+                         fn->def_tag_canonical);
                 for (bi = 0; bi < prog->block_count; bi++) {
                     if (strcmp(prog->blocks[bi].label, fn->impl_label) == 0) {
                         ftab[fi].impl_block_id = block_ids[bi];

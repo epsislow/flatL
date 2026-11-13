@@ -1,6 +1,7 @@
 #include "fgir.h"
 #include "flat_value.h"
 #include "flat_func.h"
+#include "flat_func_tag.h"
 #include "flat_line_label.h"
 #include "flat_link.h"
 #include "flat_native.h"
@@ -840,6 +841,15 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 return -1;
             }
             open_fn_idx = out->function_count++;
+            if (flat_func_check_new_def_overload(out, open_fn_idx, err, err_size) != 0) {
+                out->function_count--;
+                char detail[FGIR_MAX_LINE];
+
+                snprintf(detail, sizeof detail, "%s", err);
+                snprintf(err, err_size, "%s:%d: %s", path, line_no, detail);
+                fclose(f);
+                return -1;
+            }
             if (out->block_count >= FGIR_MAX_BLOCKS) {
                 snprintf(err, err_size, "%s:%d: too many blocks", path, line_no);
                 fclose(f);
