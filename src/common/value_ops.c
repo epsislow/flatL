@@ -606,6 +606,27 @@ static int literal_to_value(const char *lit, FlatValue *out) {
     return -1;
 }
 
+static int guard_schema_lt_at(const char *line, const char *p) {
+    while (p > line && isspace((unsigned char)p[-1])) {
+        p--;
+    }
+    return p > line && p[-1] == ':';
+}
+
+static size_t guard_skip_schema_angle(const char *line, size_t i) {
+    if (!line[i] || line[i] != '<' || !guard_schema_lt_at(line, &line[i])) {
+        return i;
+    }
+    i++;
+    while (line[i] && line[i] != '>') {
+        i++;
+    }
+    if (line[i] == '>') {
+        i++;
+    }
+    return i;
+}
+
 int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, const char (*names)[64],
                           FlatStringPool *pool, FlatCollectionPool *coll,
                           const uint8_t *var_has_slot_type, const FlatSlotType *var_slot_types,
@@ -620,6 +641,7 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     int li = -1;
     int ri = -1;
     size_t i;
+    size_t blen;
 
     if (panic && panic_sz > 0) {
         panic[0] = '\0';
@@ -629,29 +651,35 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     }
     snprintf(buf, sizeof buf, "%s", expr);
     trim(buf);
+    blen = strlen(buf);
 
-    for (i = 0; buf[i]; i++) {
-        if (i + 1 < strlen(buf) && buf[i] == '=' && buf[i + 1] == '=') {
+    for (i = 0; i < blen; i++) {
+        size_t after = guard_skip_schema_angle(buf, i);
+        if (after > i) {
+            i = after - 1;
+            continue;
+        }
+        if (i + 1 < blen && buf[i] == '=' && buf[i + 1] == '=') {
             oppos = &buf[i];
             op = 0;
             break;
         }
-        if (i + 1 < strlen(buf) && buf[i] == '>' && buf[i + 1] == '=') {
+        if (i + 1 < blen && buf[i] == '>' && buf[i + 1] == '=') {
             oppos = &buf[i];
             op = 1;
             break;
         }
-        if (i + 1 < strlen(buf) && buf[i] == '<' && buf[i + 1] == '=') {
+        if (i + 1 < blen && buf[i] == '<' && buf[i + 1] == '=') {
             oppos = &buf[i];
             op = 2;
             break;
         }
-        if (buf[i] == '>' && (i + 1 >= strlen(buf) || buf[i + 1] != '=')) {
+        if (buf[i] == '>' && (i + 1 >= blen || buf[i + 1] != '=')) {
             oppos = &buf[i];
             op = 3;
             break;
         }
-        if (buf[i] == '<' && (i + 1 >= strlen(buf) || buf[i + 1] != '=')) {
+        if (buf[i] == '<' && (i + 1 >= blen || buf[i + 1] != '=')) {
             oppos = &buf[i];
             op = 4;
             break;

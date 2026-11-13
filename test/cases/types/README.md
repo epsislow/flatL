@@ -11,6 +11,7 @@ Cases **062–065** cover strict **schema field** type specs at compile time.
 Cases **066–071** cover typed **path index**, **list slots** `xs:<schema>[N]`, and **compare** guards.
 Cases **072–075** cover corrupt **SCHM** in `.fb` at **`flvm` load** (`invalid SCHM section`).
 Cases **076–086** cover **T5** **`const`**, **`freeze()`**, **`free`** clearing flags, compile rejects, **`io.ctxout`** on frozen ref, and path assign on const/frozen schema objects.
+Cases **148–150** cover **T5** **`V.varsCopy` / `V.varsCopyByNames`**: **`slot_const`** / **`slot_frozen`** metadata copied with values; reassign still panics in the destination VCX.
 Cases **087–093** cover **T4+** **`m.calc(expr, "u8")`**, homogeneous typed vars, overflow → **`type.calc.range`**, and invalid type arg → **`type.calc.type`**.
 Cases **094–095** cover **T4+** typed **`io.inln(prompt, "tN")`** (`type.io.len`).
 Cases **096–100** cover **T6** typed **`O.set2`** / **`O.set`**, **`def a:u8 … -> out:u16`**, and param overflow at call bind.

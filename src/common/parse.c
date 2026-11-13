@@ -321,34 +321,61 @@ static int line_mod_allowed(FgirInstrKind kind, const char *text) {
     return 0;
 }
 
+/* Typed bind uses `:<schema>`; do not treat those angle brackets as relational ops. */
+static int schema_lt_at(const char *line, const char *p) {
+    while (p > line && isspace((unsigned char)p[-1])) {
+        p--;
+    }
+    return p > line && p[-1] == ':';
+}
+
+static size_t skip_schema_angle_token(const char *line, size_t i) {
+    if (!line[i] || line[i] != '<' || !schema_lt_at(line, &line[i])) {
+        return i;
+    }
+    i++;
+    while (line[i] && line[i] != '>') {
+        i++;
+    }
+    if (line[i] == '>') {
+        i++;
+    }
+    return i;
+}
+
 /* Comparison guards: ==, != is not a guard, <, >, <=, >= (outside quotes). */
 static int line_is_comparison_guard(const char *line) {
-    const char *p;
+    size_t i;
     int in_s = 0;
     int in_d = 0;
 
     if (!line) {
         return 0;
     }
-    for (p = line; *p; p++) {
-        if (*p == '\'' && !in_d) {
+    for (i = 0; line[i]; i++) {
+        if (line[i] == '\'' && !in_d) {
             in_s = !in_s;
-        } else if (*p == '"' && !in_s) {
+        } else if (line[i] == '"' && !in_s) {
             in_d = !in_d;
         } else if (!in_s && !in_d) {
-            if (p[0] == '=' && p[1] == '=') {
+            size_t after = skip_schema_angle_token(line, i);
+            if (after > i) {
+                i = after - 1;
+                continue;
+            }
+            if (line[i] == '=' && line[i + 1] == '=') {
                 return 1;
             }
-            if (p[0] == '>' && p[1] == '=') {
+            if (line[i] == '>' && line[i + 1] == '=') {
                 return 1;
             }
-            if (p[0] == '<' && p[1] == '=') {
+            if (line[i] == '<' && line[i + 1] == '=') {
                 return 1;
             }
-            if (p[0] == '>' && p[1] != '=') {
+            if (line[i] == '>' && line[i + 1] != '=') {
                 return 1;
             }
-            if (p[0] == '<' && p[1] != '=') {
+            if (line[i] == '<' && line[i + 1] != '=') {
                 return 1;
             }
         }

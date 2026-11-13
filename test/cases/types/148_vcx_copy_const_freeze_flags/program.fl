@@ -1,0 +1,13 @@
+use native vcx with V
+
+#main
+  const fixed:u16 = 100
+  warm:u8 = 3
+  freeze(warm)
+  dst = V.create(10)
+  V.varsCopy(1, dst)
+  V.set(dst)
+  mem.slot_const(fixed)
+  mem.slot_frozen(warm)
+  io.outln('vcx-copy-flags-ok')
+  OK

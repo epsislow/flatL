@@ -1,0 +1,8 @@
+use native vcx with V
+
+#main
+  const k:u8 = 7
+  dst = V.create(8)
+  V.varsCopyByNames(1, dst, ['k'], ['k'])
+  V.set(dst)
+  k:u8 = 8

@@ -1,0 +1,9 @@
+use native vcx with V
+
+#main
+  n:u8 = 1
+  freeze(n)
+  dst = V.create(8)
+  V.varsCopyByNames(1, dst, ['n'], ['n'])
+  V.set(dst)
+  n:u8 = 2

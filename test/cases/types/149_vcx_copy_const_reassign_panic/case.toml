@@ -1,0 +1,10 @@
+suite = "types"
+id = 149
+desc = "reassign on const slot after V.varsCopyByNames panics"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "type.const.assign"
+stdout_contains = "unhandled PANIC"
