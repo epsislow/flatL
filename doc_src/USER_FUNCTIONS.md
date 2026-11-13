@@ -76,6 +76,26 @@ pick(4 ; tags) -> d       # tag variabil: necesită `func:callVM 1` (rezolvare �
 
 Tests: `test/cases/func/024`–`025`, `test/cases/types/159`–`162`.
 
+### Multi-body sugar (v2.1)
+
+Poți grupa overload-uri pe **tag** sub un singur „head” `def`, cu **clauze** după primul corp:
+
+```flat
+def pick(x ; "fast") -> r
+  r = x
+  return
+  (; "slow") -> r
+  m.calc('x * 3') -> r
+  return
+```
+
+- `flc` desugarează la **aceleași** intrări FFUN ca la v2.0 (mai multe `def` implicite).
+- Clauza: **`(; "tag") -> return…`** — fără parametri în paranteze; **tag** și **nume return** trebuie să coincidă cu head-ul (altfel `def.clause.return.*`).
+- `;( )` pe clauză = variantă **fără tag** (aceeași regulă ca v2.0).
+- Tag duplicat în același sugar → **`type.def.overload.duplicate`**.
+
+Tests: `test/cases/func/026`–`027`.
+
 Lowering (strategy A) builds an instruction context (`__call_instr_vcx`), copies call metadata, and `call`s the executor block. The executor reads that context via **`V.callInstr()`** (VM call stack for strategy B / nested calls; strategy A uses the same native with fallback to `__call_instr_vcx`).
 
 ### Multiple return values (AM-2)

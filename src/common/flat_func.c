@@ -382,6 +382,186 @@ static int split_def_param_tag(char *paren_inner, char **params_out, char **tag_
     return 0;
 }
 
+int flat_func_is_def_clause_line(const char *line) {
+    char buf[FGIR_MAX_LINE];
+    const char *p;
+    const char *q;
+
+    if (!line) {
+        return 0;
+    }
+    snprintf(buf, sizeof buf, "%s", line);
+    p = flat_native_trim(buf);
+    if (p[0] != '(') {
+        return 0;
+    }
+    if (!strstr(p, "->")) {
+        return 0;
+    }
+    q = p + 1;
+    while (*q && isspace((unsigned char)*q)) {
+        q++;
+    }
+    return (*q == ';');
+}
+
+static int returns_match_proto(const FgirFunction *fn, const FgirFunction *proto, char *err,
+                               size_t err_sz) {
+    int ri;
+
+    if (fn->return_count != proto->return_count) {
+        snprintf(err, err_sz, "def.clause.return.count");
+        return -1;
+    }
+    for (ri = 0; ri < fn->return_count; ri++) {
+        if (strcmp(fn->return_names[ri], proto->return_names[ri]) != 0) {
+            snprintf(err, err_sz, "def.clause.return.name");
+            return -1;
+        }
+        if (fn->return_has_type_arr[ri] != proto->return_has_type_arr[ri]) {
+            snprintf(err, err_sz, "def.clause.return.type");
+            return -1;
+        }
+        if (strcmp(fn->return_type_spec_arr[ri], proto->return_type_spec_arr[ri]) != 0) {
+            snprintf(err, err_sz, "def.clause.return.type");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static void copy_def_proto_header(FgirFunction *fn, const FgirFunction *proto) {
+    int pi;
+
+    snprintf(fn->name, sizeof fn->name, "%s", proto->name);
+    fn->param_count = proto->param_count;
+    for (pi = 0; pi < proto->param_count; pi++) {
+        snprintf(fn->params[pi], sizeof fn->params[pi], "%s", proto->params[pi]);
+        fn->param_has_type[pi] = proto->param_has_type[pi];
+        snprintf(fn->param_type_spec[pi], sizeof fn->param_type_spec[pi], "%s",
+                 proto->param_type_spec[pi]);
+    }
+    snprintf(fn->executor_label, sizeof fn->executor_label, "%s", proto->executor_label);
+    fn->is_global_executor = proto->is_global_executor;
+    fn->call_via_vm = proto->call_via_vm;
+}
+
+int flat_func_parse_def_clause_line(const char *line, FgirFunction *fn, const FgirFunction *proto,
+                                    FgirProgram *prog, char *err, size_t err_size) {
+    char buf[FGIR_MAX_LINE];
+    char *p;
+    const char *lp;
+    const char *rp;
+    const char *arrow;
+    char inner_work[FGIR_MAX_LINE];
+    char *params_part;
+    char *tag_part;
+    int def_has_tag = 0;
+
+    if (!line || !fn || !proto || !prog) {
+        return -1;
+    }
+    memset(fn, 0, sizeof *fn);
+    copy_def_proto_header(fn, proto);
+
+    snprintf(buf, sizeof buf, "%s", line);
+    p = flat_native_trim(buf);
+    lp = strchr(p, '(');
+    if (!lp) {
+        snprintf(err, err_size, "def.clause: bad syntax");
+        return -1;
+    }
+    rp = strchr(lp, ')');
+    if (!rp || rp <= lp) {
+        snprintf(err, err_size, "def.clause: bad syntax");
+        return -1;
+    }
+    snprintf(inner_work, sizeof inner_work, "%.*s", (int)(rp - lp - 1), lp + 1);
+    split_def_param_tag(inner_work, &params_part, &tag_part, &def_has_tag);
+    if (params_part && params_part[0] != '\0') {
+        snprintf(err, err_size, "def.clause: parameters not allowed");
+        return -1;
+    }
+    if (!def_has_tag) {
+        snprintf(err, err_size, "def.clause: missing tag section");
+        return -1;
+    }
+    fn->def_tag_has_section = 1;
+    fn->def_tag_expr[0] = '\0';
+    fn->def_tag_canonical[0] = '\0';
+    if (tag_part && tag_part[0] != '\0') {
+        int trc;
+        char terr[64];
+
+        snprintf(fn->def_tag_expr, sizeof fn->def_tag_expr, "%s", tag_part);
+        terr[0] = '\0';
+        trc = flat_func_tag_canonical_from_literal(tag_part, fn->def_tag_canonical,
+                                                   sizeof fn->def_tag_canonical, terr, sizeof terr);
+        if (trc < 0) {
+            snprintf(err, err_size, "%s", terr[0] ? terr : "type.tag.arg");
+            return -1;
+        }
+        if (trc > 0) {
+            snprintf(err, err_size, "def tag must be const literal");
+            return -1;
+        }
+    }
+    arrow = strstr(rp + 1, "->");
+    if (!arrow) {
+        snprintf(err, err_size, "def.clause: requires -> return");
+        return -1;
+    }
+    arrow += 2;
+    while (*arrow && isspace((unsigned char)*arrow)) {
+        arrow++;
+    }
+    {
+        char ret_inner[FGIR_MAX_LINE];
+        char ret_toks[FGIR_MAX_FUNC_RETURNS][64];
+        int rc = 0;
+        int ri;
+
+        snprintf(ret_inner, sizeof ret_inner, "%s", arrow);
+        {
+            char *e = ret_inner + strlen(ret_inner);
+            while (e > ret_inner && isspace((unsigned char)*(e - 1))) {
+                e--;
+            }
+            *e = '\0';
+        }
+        if (ret_inner[0] == '\0') {
+            snprintf(err, err_size, "def.clause: bad return name");
+            return -1;
+        }
+        if (flat_func_split_param_list(ret_inner, ret_toks, FGIR_MAX_FUNC_RETURNS, &rc) != 0) {
+            snprintf(err, err_size, "def.clause: too many returns");
+            return -1;
+        }
+        if (rc <= 0 || rc > FGIR_MAX_FUNC_RETURNS) {
+            snprintf(err, err_size, "def.clause: bad return name");
+            return -1;
+        }
+        fn->return_count = rc;
+        for (ri = 0; ri < rc; ri++) {
+            if (parse_formal_token(ret_toks[ri], prog, fn->return_names[ri],
+                                   &fn->return_has_type_arr[ri], fn->return_type_spec_arr[ri],
+                                   sizeof fn->return_type_spec_arr[ri], err, err_size) != 0) {
+                return -1;
+            }
+        }
+        snprintf(fn->return_name, sizeof fn->return_name, "%s", fn->return_names[0]);
+        fn->return_has_type = fn->return_has_type_arr[0];
+        snprintf(fn->return_type_spec, sizeof fn->return_type_spec, "%s",
+                 fn->return_type_spec_arr[0]);
+    }
+    if (returns_match_proto(fn, proto, err, err_size) != 0) {
+        return -1;
+    }
+    snprintf(fn->impl_label, sizeof fn->impl_label, "%s%s_%d", FLAT_FUNC_IMPL_PREFIX, fn->name,
+             prog->function_count);
+    return 0;
+}
+
 int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *prog, char *err,
                                size_t err_size) {
     const char *p = line + 3;

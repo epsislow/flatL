@@ -29,5 +29,8 @@ int flat_func_check_call_returns(const FgirFunction *fn, const FgirInstr *call, 
                                  size_t err_size);
 const FgirFunction *flat_func_at(const FgirProgram *prog, int index);
 int flat_func_split_param_list(char *inner, char out[][64], int max_out, int *out_count);
+int flat_func_is_def_clause_line(const char *line);
+int flat_func_parse_def_clause_line(const char *line, FgirFunction *fn, const FgirFunction *proto,
+                                    FgirProgram *prog, char *err, size_t err_size);
 
 #endif

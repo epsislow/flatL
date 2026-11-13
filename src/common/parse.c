@@ -647,6 +647,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
     int in_block_comment = 0;
     int in_header = 1;
     int open_fn_idx = -1;
+    int open_fn_sugar_base = -1;
     int schema_cur = -1;
     int hdr;
 
@@ -812,6 +813,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 return -1;
             }
             open_fn_idx = -1;
+            open_fn_sugar_base = -1;
             if (flat_func_parse_header_line(p, out, path, line_no, err, err_size) < 0) {
                 fclose(f);
                 return -1;
@@ -826,6 +828,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 return -1;
             }
             open_fn_idx = -1;
+            open_fn_sugar_base = -1;
             if (out->function_count >= FGIR_MAX_FUNCTIONS) {
                 snprintf(err, err_size, "%s:%d: too many functions", path, line_no);
                 fclose(f);
@@ -841,8 +844,10 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 return -1;
             }
             open_fn_idx = out->function_count++;
+            open_fn_sugar_base = open_fn_idx;
             if (flat_func_check_new_def_overload(out, open_fn_idx, err, err_size) != 0) {
                 out->function_count--;
+                open_fn_sugar_base = -1;
                 char detail[FGIR_MAX_LINE];
 
                 snprintf(detail, sizeof detail, "%s", err);
@@ -868,6 +873,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 return -1;
             }
             open_fn_idx = -1;
+            open_fn_sugar_base = -1;
             if (out->block_count >= FGIR_MAX_BLOCKS) {
                 snprintf(err, err_size, "%s:%d: too many blocks", path, line_no);
                 fclose(f);
@@ -894,6 +900,50 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 }
                 out->main_index = cur;
             }
+            continue;
+        }
+        if (open_fn_idx >= 0 && open_fn_sugar_base >= 0 && flat_func_is_def_clause_line(p)) {
+            const FgirFunction *proto;
+            FgirFunction *fn;
+
+            if (finish_open_def(out, open_fn_idx, path, line_no, err, err_size) != 0) {
+                fclose(f);
+                return -1;
+            }
+            if (out->function_count >= FGIR_MAX_FUNCTIONS) {
+                snprintf(err, err_size, "%s:%d: too many functions", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            proto = &out->functions[open_fn_sugar_base];
+            fn = &out->functions[out->function_count];
+            if (flat_func_parse_def_clause_line(p, fn, proto, out, err, err_size) != 0) {
+                char detail[FGIR_MAX_LINE];
+
+                snprintf(detail, sizeof detail, "%s", err);
+                snprintf(err, err_size, "%s:%d: %s", path, line_no, detail);
+                fclose(f);
+                return -1;
+            }
+            open_fn_idx = out->function_count++;
+            if (flat_func_check_new_def_overload(out, open_fn_idx, err, err_size) != 0) {
+                out->function_count--;
+                char detail[FGIR_MAX_LINE];
+
+                snprintf(detail, sizeof detail, "%s", err);
+                snprintf(err, err_size, "%s:%d: %s", path, line_no, detail);
+                fclose(f);
+                return -1;
+            }
+            if (out->block_count >= FGIR_MAX_BLOCKS) {
+                snprintf(err, err_size, "%s:%d: too many blocks", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            cur = out->block_count++;
+            memset(&out->blocks[cur], 0, sizeof(out->blocks[cur]));
+            out->blocks[cur].jump_block_max_override = -1;
+            snprintf(out->blocks[cur].label, FGIR_MAX_LABEL, "%s", fn->impl_label);
             continue;
         }
         if (cur < 0) {
