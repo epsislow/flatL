@@ -1,4 +1,4 @@
 use native math with m
 
 #main
-  m.calc('1 + 1', 't4') -> x
+  m.calc('1 + 1' ; 'bogus') -> x

@@ -138,11 +138,11 @@ The STRING is read **each time** the line runs. Schemes in STRING are filtered b
 
 ## 8.1 Typed `m.calc` and I/O (T4+)
 
-**`m.calc(expr)`** — unchanged (NUMBER). **`m.calc(expr, "u32")`** — result checked in the native (overflow → **`type.calc.range`**). Without arg 2, use **`-> slot:u32`** for the same check at assign.
+**`m.calc(expr)`** — unchanged (NUMBER). **`m.calc(expr ; "u32")`** — verificare în native (overflow → **`type.calc.range`**). Fără tag, folosește **`-> slot:u32`**. Tag-uri: [TYPE_TAGS.md](./TYPE_TAGS.md).
 
 If any variable in **`expr`** has a **numeric** slot contract, **every** variable in **`expr`** must share the **same** contract (else **`type.calc.type`**). Untyped-only expressions keep legacy rules.
 
-**I/O:** optional second argument type string — **`io.in_num('Price:', 'u8')`**, **`io.inln('Name:', 't8')`**, **`io.in_bool('ok?', 'b')`**. After read, value is validated (`type.io.expect`, **`type.io.len`** for `tN`). Assign to a typed **`->`** target still uses assign checks.
+**I/O:** tag tip — **`io.in_num('Price:' ; 'u8')`**, **`io.inln('Name:' ; 't8')`**, **`io.in_bool('ok?' ; 'b')`**. După citire: `type.io.expect`, **`type.io.len`** pentru `tN`. Vezi [TYPE_TAGS.md](./TYPE_TAGS.md).
 
 ---
 

@@ -3,5 +3,5 @@ use native math with m
 #main
   a:u8 = 100
   b:u8 = 55
-  m.calc('a + b', 'u8') -> s:u8
+  m.calc('a + b' ; 'u8') -> s:u8
   OK

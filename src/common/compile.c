@@ -6,6 +6,7 @@
 #include "flat_guard.h"
 #include "flat_line_label.h"
 #include "flat_native.h"
+#include "flat_native_tag.h"
 #include "flat_native_use.h"
 #include "flat_number.h"
 #include "flat_slot_type.h"
@@ -833,6 +834,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
     if (flat_native_use_validate_program(prog, err, err_size) != 0) {
+        return -1;
+    }
+    if (flat_native_tag_validate_program(prog, err, err_size) != 0) {
         return -1;
     }
     if (flat_func_validate_program(prog, err, err_size) != 0) {

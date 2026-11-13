@@ -1,0 +1,8 @@
+use native math with m
+
+#main
+  a:u8 = 10
+  b:u8 = 20
+  tags = 'u8'
+  m.calc('a + b' ; tags) -> s:u8
+  OK

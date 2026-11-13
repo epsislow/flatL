@@ -1,5 +1,6 @@
 #include "flat_io_ctx.h"
 #include "flat_native_mod.h"
+#include "flat_native_tag.h"
 #include "flat_native_util.h"
 #include "flat_number.h"
 #include "flat_slot_type.h"
@@ -161,75 +162,6 @@ static int eval_io_arg(FlatNativeCtx *ctx, FlatValue *out) {
     return -1;
 }
 
-static int eval_io_arg_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    char inner_buf[4096];
-
-    if (!expr) {
-        return -1;
-    }
-    snprintf(inner_buf, sizeof inner_buf, "%s", expr);
-    flat_native_trim(inner_buf);
-    if (flat_value_parse_assign_rhs(inner_buf, out, ctx->pool, ctx->coll, ctx->vars,
-                                    ctx->var_count, ctx->var_names) == 0) {
-        return 0;
-    }
-    if (flat_native_eval_call(ctx, inner_buf, out) == 0) {
-        return 0;
-    }
-    return -1;
-}
-
-static int split_two_args(char *inner, char **left, char **right) {
-    int depth = 0;
-    char quote = 0;
-    char *p;
-
-    for (p = inner; *p; p++) {
-        if (!quote && (*p == '\'' || *p == '"')) {
-            quote = *p;
-        } else if (quote && *p == quote) {
-            quote = 0;
-        } else if (!quote && (*p == '[' || *p == '(')) {
-            depth++;
-        } else if (!quote && (*p == ']' || *p == ')')) {
-            if (depth > 0) {
-                depth--;
-            }
-        } else if (!quote && depth == 0 && *p == ',') {
-            *p = '\0';
-            *left = flat_native_trim(inner);
-            *right = flat_native_trim(p + 1);
-            return 0;
-        }
-    }
-    return -1;
-}
-
-static int io_string_from_value(FlatNativeCtx *ctx, const FlatValue *v, char *buf, size_t buf_sz) {
-    if (!v || !buf || buf_sz == 0) {
-        return -1;
-    }
-    if (v->tag == VAL_STR_INLINE) {
-        if (v->u.ins.len + 1 > buf_sz) {
-            return -1;
-        }
-        memcpy(buf, v->u.ins.bytes, v->u.ins.len);
-        buf[v->u.ins.len] = '\0';
-        return 0;
-    }
-    if (v->tag == VAL_STR_REF && ctx && ctx->pool) {
-        size_t len = 0;
-        const uint8_t *p = flat_pool_read(ctx->pool, v->u.ref_id, &len);
-        if (!p || len + 1 > buf_sz) {
-            return -1;
-        }
-        memcpy(buf, p, len);
-        buf[len] = '\0';
-        return 0;
-    }
-    return -1;
-}
-
 static int io_prompt_from_value(FlatNativeCtx *ctx, const FlatValue *v, char *prompt,
                                 size_t prompt_sz) {
     if (v->tag == VAL_STR_INLINE) {
@@ -257,29 +189,8 @@ static int io_prompt_from_value(FlatNativeCtx *ctx, const FlatValue *v, char *pr
     return -1;
 }
 
-static int io_type_spec_from_expr(FlatNativeCtx *ctx, const char *expr, FlatSlotType *out) {
-    FlatValue v;
-    char spec[96];
-    const FlatSchemaCatalog *cat;
-
-    if (!ctx || !expr || !out) {
-        return -1;
-    }
-    if (eval_io_arg_expr(ctx, expr, &v) != 0) {
-        return -1;
-    }
-    if (io_string_from_value(ctx, &v, spec, sizeof spec) != 0) {
-        return -1;
-    }
-    cat = ctx->bc ? &ctx->bc->schemas : NULL;
-    return flat_slot_type_parse_spec(spec, out, cat, NULL, 0);
-}
-
-static int io_parse_prompt_and_type(FlatNativeCtx *ctx, char *prompt, size_t prompt_sz,
-                                    FlatSlotType *expect, int *has_expect) {
-    char inner_buf[4096];
-    char *left;
-    char *right = NULL;
+static int io_parse_prompt_and_type(FlatNativeCtx *ctx, uint16_t native_id, char *prompt,
+                                    size_t prompt_sz, FlatSlotType *expect, int *has_expect) {
     FlatValue v;
 
     if (has_expect) {
@@ -288,21 +199,13 @@ static int io_parse_prompt_and_type(FlatNativeCtx *ctx, char *prompt, size_t pro
     if (prompt && prompt_sz > 0) {
         prompt[0] = '\0';
     }
-    if (!ctx || !ctx->inner || ctx->inner[0] == '\0') {
-        return 0;
+    if (!ctx) {
+        return -1;
     }
-    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
-  left = flat_native_trim(inner_buf);
-    if (split_two_args(inner_buf, &left, &right) == 0 && right && right[0] != '\0') {
-        if (eval_io_arg_expr(ctx, left, &v) != 0 || io_prompt_from_value(ctx, &v, prompt, prompt_sz) != 0) {
-            return -1;
-        }
-        if (io_type_spec_from_expr(ctx, right, expect) != 0) {
-            return -1;
-        }
-        if (has_expect) {
-            *has_expect = 1;
-        }
+    if (flat_native_tag_resolve_type(ctx, native_id, expect, has_expect) != 0) {
+        return -1;
+    }
+    if (!ctx->inner || ctx->inner[0] == '\0') {
         return 0;
     }
     if (eval_io_arg(ctx, &v) != 0) {
@@ -602,7 +505,8 @@ int flat_native_io_inln(FlatNativeCtx *ctx) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
-    if (io_parse_prompt_and_type(ctx, prompt, sizeof prompt, &expect, &has_expect) != 0) {
+    if (io_parse_prompt_and_type(ctx, FLAT_NATIVE_IO_INLN, prompt, sizeof prompt, &expect,
+                                 &has_expect) != 0) {
         io_set_type_io_panic(ctx, "type.io.expect");
         return -1;
     }
@@ -656,7 +560,8 @@ int flat_native_io_in_num(FlatNativeCtx *ctx) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
-    if (io_parse_prompt_and_type(ctx, prompt, sizeof prompt, &expect, &has_expect) != 0) {
+    if (io_parse_prompt_and_type(ctx, FLAT_NATIVE_IO_IN_NUM, prompt, sizeof prompt, &expect,
+                                 &has_expect) != 0) {
         io_set_type_io_panic(ctx, "type.io.expect");
         return -1;
     }
@@ -701,7 +606,8 @@ int flat_native_io_in_bool(FlatNativeCtx *ctx) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
-    if (io_parse_prompt_and_type(ctx, prompt, sizeof prompt, &expect, &has_expect) != 0) {
+    if (io_parse_prompt_and_type(ctx, FLAT_NATIVE_IO_IN_BOOL, prompt, sizeof prompt, &expect,
+                                 &has_expect) != 0) {
         io_set_type_io_panic(ctx, "type.io.expect");
         return -1;
     }

@@ -208,6 +208,7 @@ typedef struct {
     const uint8_t *var_slot_const;
     const char (*var_names)[64];
     const char *inner;
+    const char *tag_expr; /* NULL = no ';' section; "" = empty tag set */
     FlatValue *out;
     FlatIoStatus *io_status;
     FlatMemLiveStats *mem_live;

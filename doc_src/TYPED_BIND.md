@@ -121,7 +121,7 @@ Copy VCX copies **frozen** and **const** flags per slot. Frozen or **const** slo
 
 ## 9. `m.calc`, typed I/O, `def`
 
-- **`m.calc(expr, "u32")`** — optional numeric type as 2nd arg; overflow → **`type.calc.range`**; bad type name → **`type.calc.type`**. Without arg 2, **`-> sum:u32`** checks at assign.
+- **`m.calc(expr ; "u32")`** — tag tip numeric; overflow → **`type.calc.range`**; token invalid → **`type.tag.not_accepted`**. Fără `;`, **`-> sum:u32`** verifică la assign. Vezi [TYPE_TAGS.md](./TYPE_TAGS.md).
 - **Homogeneous operands:** if any slot in **`expr`** is typed numeric, all names in **`expr`** must match that contract (**`type.calc.type`**).
 - **`io.in_num` / `io.inln` / `io.in_bool`** — optional **`, "type"`** after prompt; **`type.io.expect`** / **`type.io.len`**.
 - **`foreach(coll, item, '#block')`:** for `coll:<stock>[]`, **`item`** follows element schema `<stock>`.

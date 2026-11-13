@@ -1,0 +1,8 @@
+use native math with m
+
+#main
+  a = 3
+  b = 4
+  tags = ''
+  m.calc('a + b' ; tags) -> s
+  OK

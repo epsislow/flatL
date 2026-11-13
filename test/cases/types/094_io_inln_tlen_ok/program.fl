@@ -1,3 +1,3 @@
 #main
-  io.inln('s', 't4') -> s:t4
+  io.inln('s' ; 't4') -> s:t4
   OK

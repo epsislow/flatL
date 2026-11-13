@@ -1,0 +1,3 @@
+#main
+  str.concat('a', 'b' ; 'u32') -> s
+  OK

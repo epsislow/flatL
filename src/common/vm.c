@@ -8,6 +8,7 @@
 #include "flat.h"
 #include "flat_mem_stats.h"
 #include "flat_native.h"
+#include "flat_native_tag.h"
 #include "flat_str.h"
 #include "flat_number.h"
 #include "flat_value.h"
@@ -692,6 +693,17 @@ static char *trim(char *s) {
     return s;
 }
 
+static void vm_native_attach_inner(FlatNativeCtx *ctx, char *inner_buf, const char *inner_src) {
+    char *operands;
+    char *tag_expr;
+    int has_tag;
+
+    snprintf(inner_buf, 4096, "%s", inner_src ? inner_src : "");
+    flat_native_split_operands_tag(inner_buf, &operands, &tag_expr, &has_tag);
+    ctx->inner = operands;
+    ctx->tag_expr = has_tag ? tag_expr : NULL;
+}
+
 static int rhs_is_native_call(const char *rhs) {
     return flat_native_is_call_line(rhs);
 }
@@ -923,6 +935,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         const FlatOptionalNativeDecl *ndecl = NULL;
         int ndecl_count = 0;
         char inner[4096];
+        char inner_part[4096];
         int invoke_rc;
         FlatNativeCtx ctx;
 
@@ -945,7 +958,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.vars = vals;
             ctx.var_count = st->var_count;
             ctx.var_names = names;
-            ctx.inner = inner;
+            vm_native_attach_inner(&ctx, inner_part, inner);
             ctx.out = &v;
             ctx.io_status = &ios;
             ctx.mem_live = &st->live;
@@ -959,7 +972,12 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.var_slot_frozen = frozen_flags;
             ctx.var_slot_const = const_flags;
             vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
-            invoke_rc = flat_native_invoke(native_id, &ctx);
+            if (flat_native_tag_reject_untagged_native(&ctx, native_id) != 0) {
+                ios = FLAT_IO_ERR;
+                invoke_rc = -1;
+            } else {
+                invoke_rc = flat_native_invoke(native_id, &ctx);
+            }
         }
         rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios,
                                  ctx.panic_detail, trace);
@@ -1776,6 +1794,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     size_t scratch_n;
     int i;
     int rc = 0;
+    char inner_work[4096];
 
     scratch_n = st->var_slots_max > 0 ? st->var_slots_max : 1u;
     vals = calloc(scratch_n, sizeof *vals);
@@ -1808,7 +1827,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.vars = vals;
     ctx.var_count = st->var_count;
     ctx.var_names = names;
-    ctx.inner = inner;
+    vm_native_attach_inner(&ctx, inner_work, inner);
     ctx.out = &result;
     ctx.io_status = &ios;
     ctx.mem_live = &st->live;
@@ -1824,6 +1843,12 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.panic_detail[0] = '\0';
     vm_native_decls_at_ip(bc, *ip, &ctx.doc_decls, &ctx.doc_decl_count);
     ios = FLAT_IO_OK;
+    if (flat_native_tag_reject_untagged_native(&ctx, native_id) != 0) {
+        ios = FLAT_IO_ERR;
+        rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, -1, ios, ctx.panic_detail,
+                                 trace);
+        goto done;
+    }
     {
         int invoke_rc = flat_native_invoke(native_id, &ctx);
         rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios,

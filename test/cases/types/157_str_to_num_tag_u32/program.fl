@@ -1,0 +1,3 @@
+#main
+  str.to_num('42' ; 'u32') -> n:u32
+  OK

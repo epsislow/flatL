@@ -1,0 +1,4 @@
+use native math with m
+
+#main
+  m.calc('1' ; "") -> x

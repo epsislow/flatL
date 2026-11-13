@@ -6,6 +6,7 @@
     { "id": "language-types", "label": "Language types", "file": "LANGUAGE_TYPES.md" },
     { "id": "strict-types", "label": "Strict types & schemas", "file": "STRICT_TYPES.md" },
     { "id": "typed-bind", "label": "Typed bind (normative draft)", "file": "TYPED_BIND.md" },
+    { "id": "type-tags", "label": "Call tags (;)", "file": "TYPE_TAGS.md" },
     { "id": "toolchain", "label": "Toolchain", "file": "TOOLCHAIN.md" },
     { "id": "user-functions", "label": "User functions", "file": "USER_FUNCTIONS.md" },
     { "id": "fmod-modules", "label": "Modules (.fmod)", "file": "FMOD_MODULES.md" },

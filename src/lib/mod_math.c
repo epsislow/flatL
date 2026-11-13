@@ -2,6 +2,7 @@
 #include "flat_math_calc.h"
 #include "flat_number.h"
 #include "flat_native_mod.h"
+#include "flat_native_tag.h"
 #include "flat_native_util.h"
 #include "flat_slot_type.h"
 #include "flat_value.h"
@@ -222,14 +223,48 @@ static double agg_max(const double *nums, int n) {
     return m;
 }
 
-static int binary_agg2(FlatNativeCtx *ctx, double (*fn)(double, double)) {
+static int stage_number_for_type(FlatNativeCtx *ctx, double result, const FlatSlotType *result_ty) {
+    FlatValue nv;
+    FlatValue staged;
+    char chk[64];
+    const FlatSchemaCatalog *cat = ctx->bc ? &ctx->bc->schemas : NULL;
+
+    flat_value_set_number(&nv, result);
+    staged = nv;
+    if (flat_slot_type_check_value(result_ty, &nv, ctx->pool, ctx->coll, cat, &staged, chk,
+                                   sizeof chk) != 0) {
+        const char *reason = "type.calc.range";
+        if (chk[0] != '\0' && strncmp(chk, "type.assign.", 12) == 0) {
+            reason = "type.calc.range";
+        } else if (chk[0] != '\0') {
+            reason = chk;
+        }
+        *ctx->io_status = FLAT_IO_ERR;
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", reason);
+        return -1;
+    }
+    if (staged.tag == VAL_NUMBER) {
+        return flat_value_set_number(ctx->out, flat_number_as_f64(&staged));
+    }
+    *ctx->out = staged;
+    return 0;
+}
+
+static int binary_agg2(FlatNativeCtx *ctx, uint16_t native_id, double (*fn)(double, double)) {
     char inner_buf[512];
     char *left;
     char *right;
     double a;
     double b;
+    double result;
+    FlatSlotType result_ty;
+    int has_result_ty = 0;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !fn) {
+        return -1;
+    }
+    if (flat_native_tag_resolve_type(ctx, native_id, &result_ty, &has_result_ty) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
@@ -242,7 +277,11 @@ static int binary_agg2(FlatNativeCtx *ctx, double (*fn)(double, double)) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    return flat_value_set_number(ctx->out, fn(a, b));
+    result = fn(a, b);
+    if (has_result_ty) {
+        return stage_number_for_type(ctx, result, &result_ty);
+    }
+    return flat_value_set_number(ctx->out, result);
 }
 
 static double fn_sum2(double a, double b) {
@@ -371,15 +410,15 @@ int flat_native_math_max(FlatNativeCtx *ctx) {
 }
 
 int flat_native_math_sum2(FlatNativeCtx *ctx) {
-    return binary_agg2(ctx, fn_sum2);
+    return binary_agg2(ctx, FLAT_NATIVE_MATH_SUM2, fn_sum2);
 }
 
 int flat_native_math_min2(FlatNativeCtx *ctx) {
-    return binary_agg2(ctx, fn_min2);
+    return binary_agg2(ctx, FLAT_NATIVE_MATH_MIN2, fn_min2);
 }
 
 int flat_native_math_max2(FlatNativeCtx *ctx) {
-    return binary_agg2(ctx, fn_max2);
+    return binary_agg2(ctx, FLAT_NATIVE_MATH_MAX2, fn_max2);
 }
 
 int flat_native_math_num_pi(FlatNativeCtx *ctx) {
@@ -455,36 +494,11 @@ static int string_from_value(FlatNativeCtx *ctx, const FlatValue *v, char *buf, 
     return -1;
 }
 
-static int type_spec_from_expr(FlatNativeCtx *ctx, const char *expr, FlatSlotType *out) {
-    FlatValue v;
-    char spec[96];
-    const FlatSchemaCatalog *cat;
-
-    if (!ctx || !expr || !out) {
-        return -1;
-    }
-    if (parse_expr(ctx, expr, &v) != 0) {
-        return -1;
-    }
-    if (string_from_value(ctx, &v, spec, sizeof spec) != 0) {
-        return -1;
-    }
-    cat = ctx->bc ? &ctx->bc->schemas : NULL;
-    if (flat_slot_type_parse_spec(spec, out, cat, NULL, 0) != 0) {
-        return -1;
-    }
-    if (!flat_slot_type_is_numeric(out)) {
-        return -1;
-    }
-    return 0;
-}
-
 int flat_native_math_calc(FlatNativeCtx *ctx) {
     FlatValue src;
     char inner_buf[4096];
     char expr[4096];
     char *expr_e;
-    char *type_e = NULL;
     double result;
     FlatMathCalcErr err;
     char type_panic[64];
@@ -498,13 +512,9 @@ int flat_native_math_calc(FlatNativeCtx *ctx) {
     *ctx->io_status = FLAT_IO_OK;
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     expr_e = flat_native_trim(inner_buf);
-    if (split_two_args(inner_buf, &expr_e, &type_e) == 0 && type_e && type_e[0] != '\0') {
-        if (type_spec_from_expr(ctx, type_e, &result_ty) != 0) {
-            *ctx->io_status = FLAT_IO_ERR;
-            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.calc.type");
-            return -1;
-        }
-        has_result_ty = 1;
+    if (flat_native_tag_resolve_type(ctx, FLAT_NATIVE_MATH_CALC, &result_ty, &has_result_ty) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
     }
     if (parse_expr(ctx, expr_e, &src) != 0) {
         return calc_set_panic_arg(ctx);

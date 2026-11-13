@@ -34,7 +34,8 @@ NATIVE_VM_MATH =
 VM_EXTRA_LIBS = -ldl
 PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
                 $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so $(BINDIR)/libflat_obj.so
-PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/value_parse.c src/common/value_ops.c \
+PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/flat_native_tag_common.c \
+               src/common/flat_native_tag_runtime.c src/common/value_parse.c src/common/value_ops.c \
                src/common/value_json.c src/common/flat_number.c src/common/value_pool.c \
                src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
                src/common/flat_obj_path.c src/common/flat_schema.c src/common/flat_slot_type.c \
@@ -50,7 +51,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_d
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
                 src/lib/mod_vcx_dschema.c $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
-NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c
+NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
@@ -58,6 +59,7 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/com
           src/common/value_ops.c src/common/flat_obj_path.c \
           src/common/flat_vcx.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
+          src/common/flat_native_tag_common.c src/common/flat_native_tag_runtime.c \
           src/common/value_json.c src/common/flat_file.c src/common/flat_io_ctx.c \
           src/common/flat_memstream.c \
           $(STR_SRC) $(NATIVE_VM_SRC)
@@ -67,12 +69,12 @@ FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/
                src/common/flat_number.c src/common/value_pool.c src/common/value_collection.c \
                src/common/value_live.c \
                src/common/line_label.c src/common/flat_jump_block.c \
-           src/common/native_use.c \
+           src/common/native_use.c src/common/flat_native_tag_validate.c \
            $(FLAT_TIME_SRC) \
            $(STR_SRC) $(NATIVE_FLC_SRC)
 FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \
            src/common/flat_func.c src/common/line_label.c src/common/flat_jump_block.c \
-            src/common/native_use.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
+            src/common/native_use.c src/common/flat_native_tag_validate.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 

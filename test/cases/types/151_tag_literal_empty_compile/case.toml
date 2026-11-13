@@ -1,0 +1,7 @@
+suite = "types"
+id = 151
+desc = "compile rejects literal empty tag STRING"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "type.tag.arg"

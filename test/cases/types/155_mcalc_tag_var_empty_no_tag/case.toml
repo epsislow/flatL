@@ -1,0 +1,8 @@
+suite = "types"
+id = 155
+desc = "runtime empty tag variable equals no tag"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

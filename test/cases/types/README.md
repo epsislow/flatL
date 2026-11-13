@@ -12,8 +12,9 @@ Cases **066–071** cover typed **path index**, **list slots** `xs:<schema>[N]`,
 Cases **072–075** cover corrupt **SCHM** in `.fb` at **`flvm` load** (`invalid SCHM section`).
 Cases **076–086** cover **T5** **`const`**, **`freeze()`**, **`free`** clearing flags, compile rejects, **`io.ctxout`** on frozen ref, and path assign on const/frozen schema objects.
 Cases **148–150** cover **T5** **`V.varsCopy` / `V.varsCopyByNames`**: **`slot_const`** / **`slot_frozen`** metadata copied with values; reassign still panics in the destination VCX.
-Cases **087–093** cover **T4+** **`m.calc(expr, "u8")`**, homogeneous typed vars, overflow → **`type.calc.range`**, and invalid type arg → **`type.calc.type`**.
-Cases **094–095** cover **T4+** typed **`io.inln(prompt, "tN")`** (`type.io.len`).
+Cases **087–093** cover **T4+** **`m.calc(expr ; "u8")`**, homogeneous typed vars, overflow → **`type.calc.range`**, invalid tag → **`type.tag.not_accepted`**.
+Cases **094–095** cover **T4+** typed **`io.inln(prompt ; "tN")`** (`type.io.len`).
+Cases **151–158** cover **AM-TAGURI v1**: compile `type.tag.arg` (`; ""`), `not_accepted` on natives fără tag, tag variabilă, `sum2`/`str.to_num`, `; )` gol.
 Cases **096–100** cover **T6** typed **`O.set2`** / **`O.set`**, **`def a:u8 … -> out:u16`**, and param overflow at call bind.
 Cases **113–119** cover **T6** typed **`def` at call**: caller **`u32` → formal `u8`** (value in range / at 255 / 256 panic), return **`-> r:u32`** with formal **`u16`**, typed return overflow in body, multi-return with wider call LHS.
 Cases **120–134** cover **T6** typed **`def`** across **`u*`/`s*`/`f*`** at call: negative into **`u8`**, **`u16`→`s8`**, **`f64`/`f32`→integer**, integer→**`f32`**, fractional→integer panic, typed return across the same families.
