@@ -1037,8 +1037,14 @@ int flat_fb_write_ffun_section(FILE *f, uint16_t count, const FlatFbFunctionEntr
     int i;
     int pi;
 
-    if (!f) {
+    if (!f || (count > 0 && !entries)) {
         return -1;
+    }
+    for (i = 0; i < (int)count; i++) {
+        if (entries[i].param_count > FGIR_MAX_FUNC_PARAMS ||
+            entries[i].return_count > FGIR_MAX_FUNC_RETURNS) {
+            return -1;
+        }
     }
     if (write_bytes(f, &magic, 4) != 0 || write_bytes(f, &count, 2) != 0) {
         return -1;

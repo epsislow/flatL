@@ -124,44 +124,45 @@ static int string_from_tag_expr_compile(const char *tag_expr, char *out, size_t 
     return 0;
 }
 
+static int compare_tag_token_rows(const void *a, const void *b) {
+    return strcmp((const char *)a, (const char *)b);
+}
+
 static int tokenize_sort(char tokens[][FLAT_TAG_TOKEN_LEN], int *count, const char *spec) {
     const char *p;
-    char buf[512];
     int n = 0;
 
     if (!spec || !count) {
         return -1;
     }
     *count = 0;
-    snprintf(buf, sizeof buf, "%s", spec);
-    p = buf;
+    p = spec;
+
     while (*p) {
+        size_t i = 0;
+
         while (*p && isspace((unsigned char)*p)) {
             p++;
         }
         if (!*p) {
             break;
         }
-        {
-            size_t i = 0;
-            while (*p && !isspace((unsigned char)*p)) {
-                if (i + 1 >= FLAT_TAG_TOKEN_LEN) {
-                    return -1;
-                }
-                tokens[n][i++] = *p++;
-            }
-            tokens[n][i] = '\0';
-            n++;
-            if (n >= FLAT_TAG_MAX_TOKENS) {
+        if (n >= FLAT_TAG_MAX_TOKENS) {
+            return -1;
+        }
+        while (*p && !isspace((unsigned char)*p)) {
+            if (i + 1 >= FLAT_TAG_TOKEN_LEN) {
                 return -1;
             }
+            tokens[n][i++] = *p++;
         }
+        tokens[n][i] = '\0';
+        n++;
     }
-    if (n == 0) {
-        *count = 0;
-        return 0;
+
+    if (n > 1) {
+        qsort(tokens, (size_t)n, sizeof tokens[0], compare_tag_token_rows);
     }
-    qsort(tokens, (size_t)n, sizeof tokens[0], (int (*)(const void *, const void *))strcmp);
     *count = n;
     return 0;
 }

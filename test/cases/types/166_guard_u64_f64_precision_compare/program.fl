@@ -1,0 +1,6 @@
+#main
+  integer:u64 = 9007199254740993:u64
+  rounded:f64 = 9007199254740992:f64
+  integer > rounded
+  rounded < integer
+  OK

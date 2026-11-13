@@ -1,0 +1,10 @@
+#main
+  integer:u32 = 16777217:u32
+  rounded:f32 = 16777216:f32
+  integer > rounded
+  rounded < integer
+  whole:u16 = 125
+  fraction:f32 = 125.5:f32
+  whole < fraction
+  fraction > whole
+  OK

@@ -1,0 +1,10 @@
+#main
+  negative:s8 = -1
+  zero:u8 = 0
+  positive:s16 = 200
+  wide:u32 = 201
+  zero > negative
+  negative < zero
+  positive < wide
+  wide > positive
+  OK

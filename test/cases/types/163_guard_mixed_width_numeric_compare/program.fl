@@ -1,0 +1,11 @@
+#main
+  a:u8 = 200
+  b:u16 = 201
+  a < b
+  b > a
+  a <= 200
+  b >= 201
+  same8:u8 = 42
+  same16:u16 = 42
+  same8 == same16
+  OK

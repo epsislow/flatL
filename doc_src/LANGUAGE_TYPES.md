@@ -32,7 +32,7 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 
 **`foreach`:** on a **LIST**, binds each element (any type). On a **STRING**, legacy comma-separated CSV iteration still works.
 
-**Mixed-type comparison** (`==`, `>=`, …): if types differ → result is **false** (no implicit coercion).
+**Mixed logical-type comparison** (`==`, `>=`, …): different logical value kinds do not implicitly coerce. In particular, STRING/BOOL/NULL are not converted to NUMBER. Strict numeric storage types (`u8`, `u16`, `s32`, `f32`, etc.) all use the logical `VAL_NUMBER` kind and are compared by their represented numeric values, even when their declared widths or signedness differ. Comparisons must preserve the exact values represented by both operands; they must not narrow or lose integer precision. See [STRICT_TYPES.md](./STRICT_TYPES.md) §8.
 
 **Datetimes (no `VAL_DATE`):** calendar values are **STRING**; absolute instants use **NUMBER** = **Unix seconds UTC** (`date.now()`, `date.parse_auto`, …). See [natives/date.md](./natives/date.md).
 
@@ -181,7 +181,7 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 
 **List slots vs paths:** in `name:<stock>[4] = …`, the **`[4]`** is part of the **type** (capacity), not `name[4]` path syntax. Real paths use `.` or `[` **after** the type, e.g. `row.stocks[0]`, `xs[0] = s` when `xs` is already `:<stock>[N]`.
 
-**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.range.i64` (legacy untyped decimal source outside the exactly representable integer range), `type.assign.incompatible`, `type.assign.string.len`, `type.assign.list.len`, `type.assign.retype` (change `:type` without `free`), `type.compare.incompatible` (typed scalar compare).
+**Panics (unhandled → exit 1):** `type.assign.range`, `type.assign.range.i64` (legacy untyped decimal source outside the exactly representable integer range), `type.assign.incompatible`, `type.assign.string.len`, `type.assign.list.len`, `type.assign.retype` (change `:type` without `free`), `type.compare.incompatible` (incompatible typed scalar comparison, such as different non-numeric scalar contracts or BOOL vs numeric).
 
 **Compile:** **`:/expr`** on ASSIGN lhs is allowed; runtime reads STRING each run. **`<schema>`** on static lhs requires a **`<schema>:`** declaration; unknown schema → `type.schema.unknown` (compile) or `type.assign.schema.unknown` (dynamic STRING).
 
@@ -237,7 +237,7 @@ Logical kinds in §1 still apply; **NUMBER** remains one VM tag (`VAL_NUMBER`), 
 | `io.in_num('p', 'u8')` | Read number in range; else `type.io.expect` |
 | `io.inln('p', 't4')` | Line length ≤ 4; else `type.io.len` |
 
-**Comparison (T4):** mixed logical types → `==` is **false** without panic. Two typed **scalars** with different contracts → **`type.compare.incompatible`**. Two **LIST** / **OBJECT** values → structural compare via **`json.stringify`** (no panic for shape mismatch).
+**Comparison (T4):** different logical value kinds do not implicitly coerce (`==` is false for ordinary mixed-kind values). Strict numeric types all use `VAL_NUMBER`, so different numeric contracts (for example `u8` vs `u16`, `s32` vs `u64`, or `u32` vs `f32`) compare by represented value and are not rejected merely because their contracts differ. The numeric comparison must preserve the exact value/order represented by both operands. Incompatible typed scalar contracts outside numeric comparison (for example `t8` vs `t16`, or BOOL vs numeric) raise **`type.compare.incompatible`**. Two **LIST** / **OBJECT** values → structural compare via **`json.stringify`** (no panic for shape mismatch).
 
 **Phases:** T0 docs → **T1** → **T2** (schemas) → … — [TYPED_BIND.md §10](./TYPED_BIND.md#10-implementation-phases).
 

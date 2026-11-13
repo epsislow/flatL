@@ -128,9 +128,13 @@ The STRING is read **each time** the line runs. Schemes in STRING are filtered b
 
 | Case | Rule |
 |------|------|
-| `a:u8` vs `b:u16` in `==` | Panic **`type.compare.incompatible`** |
+| Numeric slots with different contracts (e.g. `u8` vs `u16`) | Compare by numeric value, not by declared storage type; allowed when the represented values can be compared exactly |
+| Different non-numeric scalar contracts (e.g. `t8` vs `t16`) | Panic **`type.compare.incompatible`** |
+| BOOL vs numeric | Incompatible; no implicit conversion |
 | Two LIST/OBJECT values | Compare **`json.stringify(a)`** to **`json.stringify(b)`** |
 | **`===` (type + value)** | Deferred |
+
+Numeric strict types (`u8`…`u64`, `s8`…`s64`, `f32`, `f64`) share the logical NUMBER value kind. Guards compare their **represented numeric values**, not their declared storage widths or signedness. For example, `u8` and `u16` values can be compared directly. The comparison must preserve the exact value/order represented by both operands; it must not silently narrow an integer or lose precision through an intermediate `double`. BOOL is not treated as a numeric type for comparison.
 
 **Decode:** `row:<stock> = json.parse_object(s)` — validation on **assign** to typed slot; missing keys → `null`.
 

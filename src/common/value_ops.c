@@ -631,17 +631,18 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
                           FlatStringPool *pool, FlatCollectionPool *coll,
                           const uint8_t *var_has_slot_type, const FlatSlotType *var_slot_types,
                           char *panic, size_t panic_sz) {
-    char buf[512];
+    char *buf = NULL;
     char *oppos = NULL;
     char *lhs;
-    char *rhs;
     int op = 0;
+    int result = 0;
     FlatValue lv;
     FlatValue rv;
     int li = -1;
     int ri = -1;
     size_t i;
     size_t blen;
+    char quote = '\0';
 
     if (panic && panic_sz > 0) {
         panic[0] = '\0';
@@ -649,64 +650,101 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
     if (!expr) {
         return 0;
     }
-    snprintf(buf, sizeof buf, "%s", expr);
-    trim(buf);
-    blen = strlen(buf);
+
+    blen = strlen(expr);
+    if (blen == SIZE_MAX) {
+        return 0;
+    }
+    buf = (char *)malloc(blen + 1);
+    if (!buf) {
+        if (panic && panic_sz > 0) {
+            snprintf(panic, panic_sz, "memory.alloc");
+        }
+        return -1;
+    }
+    memcpy(buf, expr, blen + 1);
+    lhs = trim(buf);
+    blen = strlen(lhs);
 
     for (i = 0; i < blen; i++) {
-        size_t after = guard_skip_schema_angle(buf, i);
-        if (after > i) {
-            i = after - 1;
+        char c = lhs[i];
+
+        if (quote) {
+            if (c == '\\' && i + 1 < blen) {
+                i++;
+                continue;
+            }
+            if (c == quote) {
+                quote = '\0';
+            }
             continue;
         }
-        if (i + 1 < blen && buf[i] == '=' && buf[i + 1] == '=') {
-            oppos = &buf[i];
+        if (c == '"' || c == '\'') {
+            quote = c;
+            continue;
+        }
+
+        {
+            size_t after = guard_skip_schema_angle(lhs, i);
+            if (after > i) {
+                i = after - 1;
+                continue;
+            }
+        }
+
+        if (i + 1 < blen && c == '=' && lhs[i + 1] == '=') {
+            oppos = &lhs[i];
             op = 0;
             break;
         }
-        if (i + 1 < blen && buf[i] == '>' && buf[i + 1] == '=') {
-            oppos = &buf[i];
+        if (i + 1 < blen && c == '>' && lhs[i + 1] == '=') {
+            oppos = &lhs[i];
             op = 1;
             break;
         }
-        if (i + 1 < blen && buf[i] == '<' && buf[i + 1] == '=') {
-            oppos = &buf[i];
+        if (i + 1 < blen && c == '<' && lhs[i + 1] == '=') {
+            oppos = &lhs[i];
             op = 2;
             break;
         }
-        if (buf[i] == '>' && (i + 1 >= blen || buf[i + 1] != '=')) {
-            oppos = &buf[i];
+        if (c == '>' && (i + 1 >= blen || lhs[i + 1] != '=')) {
+            oppos = &lhs[i];
             op = 3;
             break;
         }
-        if (buf[i] == '<' && (i + 1 >= blen || buf[i + 1] != '=')) {
-            oppos = &buf[i];
+        if (c == '<' && (i + 1 >= blen || lhs[i + 1] != '=')) {
+            oppos = &lhs[i];
             op = 4;
             break;
         }
     }
-    if (!oppos) {
-        return 0;
-    }
-    *oppos = '\0';
-    lhs = trim(buf);
-    rhs = trim(oppos + (op <= 2 ? 2 : 1));
 
-    li = find_var_index(lhs, var_count, names);
-    ri = find_var_index(rhs, var_count, names);
-    if (flat_value_parse_assign_rhs(lhs, &lv, pool, coll, vars, var_count, names) != 0) {
-        if (li >= 0) {
-            lv = vars[li];
-        } else if (literal_to_value(lhs, &lv) != 0) {
-            return 0;
-        }
+    if (!oppos) {
+        goto done;
     }
-    if (flat_value_parse_assign_rhs(rhs, &rv, pool, coll, vars, var_count, names) != 0) {
-        if (literal_to_value(rhs, &rv) != 0) {
-            if (ri >= 0) {
-                rv = vars[ri];
-            } else {
-                return 0;
+
+    *oppos = '\0';
+    {
+        char *left_expr = trim(lhs);
+        char *right_expr = trim(oppos + (op <= 2 ? 2 : 1));
+
+        li = find_var_index(left_expr, var_count, names);
+        ri = find_var_index(right_expr, var_count, names);
+
+        if (flat_value_parse_assign_rhs(left_expr, &lv, pool, coll, vars, var_count, names) != 0) {
+            if (li >= 0) {
+                lv = vars[li];
+            } else if (literal_to_value(left_expr, &lv) != 0) {
+                goto done;
+            }
+        }
+        if (flat_value_parse_assign_rhs(right_expr, &rv, pool, coll, vars, var_count, names) != 0) {
+            if (literal_to_value(right_expr, &rv) != 0) {
+                if (ri >= 0) {
+                    rv = vars[ri];
+                } else {
+                    goto done;
+                }
             }
         }
     }
@@ -723,14 +761,18 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
             if (panic && panic_sz > 0) {
                 snprintf(panic, panic_sz, "type.compare.incompatible");
             }
-            return -1;
+            result = -1;
+            goto done;
         }
         cr = flat_number_compare_rel(&lv, &rv, op, panic, panic_sz);
         if (cr == -2) {
-            return -1;
+            result = -1;
+            goto done;
         }
-        return cr ? 1 : 0;
+        result = cr ? 1 : 0;
+        goto done;
     }
+
     if (op == 0) {
         if (var_has_slot_type && var_slot_types && li >= 0 && ri >= 0 &&
             var_has_slot_type[li] && var_has_slot_type[ri] &&
@@ -740,12 +782,18 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
             if (panic && panic_sz > 0) {
                 snprintf(panic, panic_sz, "type.compare.incompatible");
             }
-            return -1;
+            result = -1;
+            goto done;
         }
-        if ((lv.tag == VAL_LIST || lv.tag == VAL_OBJECT) && (rv.tag == VAL_LIST || rv.tag == VAL_OBJECT)) {
-            return flat_json_values_structural_equal(&lv, &rv, pool, coll) ? 1 : 0;
+        if ((lv.tag == VAL_LIST || lv.tag == VAL_OBJECT) &&
+            (rv.tag == VAL_LIST || rv.tag == VAL_OBJECT)) {
+            result = flat_json_values_structural_equal(&lv, &rv, pool, coll) ? 1 : 0;
+        } else {
+            result = flat_value_equals(&lv, &rv, pool);
         }
-        return flat_value_equals(&lv, &rv, pool);
     }
-    return 0;
+
+done:
+    free(buf);
+    return result;
 }
