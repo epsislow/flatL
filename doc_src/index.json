@@ -2,6 +2,7 @@
   "title": "flatL documentation",
   "sections": [
     { "id": "specification", "label": "Specification", "file": "SPECIFICATION.md" },
+    { "id": "jump-block-max", "label": "Jump entry limits", "file": "JUMP_BLOCK_MAX.md" },
     { "id": "language-types", "label": "Language types", "file": "LANGUAGE_TYPES.md" },
     { "id": "strict-types", "label": "Strict types & schemas", "file": "STRICT_TYPES.md" },
     { "id": "typed-bind", "label": "Typed bind (normative draft)", "file": "TYPED_BIND.md" },

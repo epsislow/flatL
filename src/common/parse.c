@@ -6,6 +6,7 @@
 #include "flat_native.h"
 #include "flat_str.h"
 #include "flat_schema.h"
+#include "flat_jump_block.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -413,10 +414,20 @@ static FgirInstrKind classify(const char *line) {
     return FGIR_ASSIGN;
 }
 
-static int parse_block_header(char *line, FgirBlock *b) {
+static int parse_block_header(char *line, FgirBlock *b, char *err, size_t err_size) {
     char *p = line + 1;
     char *paren = strchr(p, '(');
+    int override_set = 0;
+    uint32_t override = 0;
+
     b->param_count = 0;
+    b->jump_block_max_override = -1;
+    if (flat_block_header_strip_jump_block_max(line, &override_set, &override, err, err_size) != 0) {
+        return -1;
+    }
+    if (override_set) {
+        b->jump_block_max_override = (int32_t)override;
+    }
     if (paren) {
         *paren = '\0';
         snprintf(b->label, sizeof b->label, "#%s", trim(p));
@@ -715,6 +726,27 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             if (line_is_use_directive(p)) {
                 continue;
             }
+            {
+                uint32_t jbmax = 0;
+                int jr = flat_parse_jump_block_max_directive(p, &jbmax, err, err_size);
+                if (jr < 0) {
+                    char detail[256];
+                    snprintf(detail, sizeof detail, "%s", err);
+                    snprintf(err, err_size, "%s:%d: %s", path, line_no, detail);
+                    fclose(f);
+                    return -1;
+                }
+                if (jr > 0) {
+                    if (out->jump_block_max_global_set) {
+                        snprintf(err, err_size, "%s:%d: duplicate jump:blockMax", path, line_no);
+                        fclose(f);
+                        return -1;
+                    }
+                    out->jump_block_max_global = jbmax;
+                    out->jump_block_max_global_set = 1;
+                    continue;
+                }
+            }
             if (strncmp(p, "mod(", 4) == 0 || strncmp(p, "export", 6) == 0 ||
                 strncmp(p, "func:", 5) == 0) {
                 if (flat_func_parse_header_line(p, out, path, line_no, err, err_size) < 0) {
@@ -788,6 +820,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             }
             cur = out->block_count++;
             memset(&out->blocks[cur], 0, sizeof out->blocks[cur]);
+            out->blocks[cur].jump_block_max_override = -1;
             snprintf(out->blocks[cur].label, FGIR_MAX_LABEL, "%s", fn->impl_label);
             continue;
         }
@@ -804,8 +837,10 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 return -1;
             }
             cur = out->block_count++;
-            if (parse_block_header(p, &out->blocks[cur]) != 0) {
-                snprintf(err, err_size, "%s:%d: bad block header", path, line_no);
+            if (parse_block_header(p, &out->blocks[cur], err, err_size) != 0) {
+                char detail[256];
+                snprintf(detail, sizeof detail, "%s", err[0] ? err : "bad block header");
+                snprintf(err, err_size, "%s:%d: %s", path, line_no, detail);
                 fclose(f);
                 return -1;
             }

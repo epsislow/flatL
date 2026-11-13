@@ -1,0 +1,14 @@
+jump:blockMax 1
+
+#main
+  jump #loop
+
+#loop
+  jump #loop
+  OK
+
+#panic.any
+  panicReason() -> r
+  io.outln(r)
+  io.outln('handled')
+  OK

@@ -8,6 +8,7 @@
 #include "fgir.h"
 #include "flat_native_use.h"
 #include "flat_schema.h"
+#include "flat_jump_block.h"
 #include "flat_port.h"
 
 #include <ctype.h>
@@ -585,6 +586,19 @@ static int scan_header_uses(const char *path, const FlatLinkOptions *opts, FlatU
             if (strncmp(p, "func:", 5) == 0 || strncmp(p, "mod(", 4) == 0 || strncmp(p, "export", 6) == 0) {
                 continue;
             }
+            {
+                uint32_t jb = 0;
+                char jb_err[128];
+                jb_err[0] = '\0';
+                if (flat_parse_jump_block_max_directive(p, &jb, jb_err, sizeof jb_err) > 0) {
+                    continue;
+                }
+                if (jb_err[0] != '\0') {
+                    snprintf(err, err_size, "%s:%d: %s", path, line_no, jb_err);
+                    fclose(f);
+                    return -1;
+                }
+            }
             if (flat_schema_header_missing_colon(p, sname, sizeof sname)) {
                 snprintf(err, err_size, "%s:%d: expected ':' after schema <%s>", path, line_no,
                          sname);
@@ -876,6 +890,7 @@ static int merge_module(FgirProgram *out, const FgirProgram *mod, const char *as
                               prim, n_prim);
         }
         b.native_unit_index = mod->blocks[i].native_unit_index;
+        b.jump_block_max_override = mod->blocks[i].jump_block_max_override;
         if (append_block(out, &b, err, err_size) != 0) {
             rc = -1;
             break;
@@ -1106,6 +1121,8 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         free(entry_prog);
         return -1;
     }
+    out->jump_block_max_global = entry_prog->jump_block_max_global;
+    out->jump_block_max_global_set = entry_prog->jump_block_max_global_set;
     free(entry_prog);
 
     if (flat_native_use_build_fnat_union(out) != 0) {

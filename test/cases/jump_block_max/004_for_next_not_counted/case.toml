@@ -1,0 +1,9 @@
+suite = "jump_block_max"
+id = 4
+desc = "for/next body entry does not count as jump:blockMax"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

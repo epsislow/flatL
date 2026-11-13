@@ -1,0 +1,7 @@
+suite = "jump_block_max"
+id = 6
+desc = "negative jump:blockMax rejected at compile"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+stderr_contains = "jump.blockMax.invalid"

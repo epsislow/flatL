@@ -1,0 +1,10 @@
+jump:blockMax 1
+
+#main
+  call #loop
+  call #loop
+  call #loop
+  OK
+
+#loop
+  return

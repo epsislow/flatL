@@ -211,7 +211,7 @@ If no handler exists for that index, control falls through to **`#panic.any`** (
 
 **Panic reason intrinsics** (language builtins, not optional natives):
 
-- **`panicReason() -> name`** — binds the **last infrastructure panic reason** (same string as VM / unhandled stderr: `io.parse`, `for.ntimes_type`, qualified native name, `type.assign.*`, …). Empty string when none was recorded.
+- **`panicReason() -> name`** — binds the **last infrastructure panic reason** (same string as VM / unhandled stderr: `io.parse`, `for.ntimes_type`, `jump.block.reached.max`, qualified native name, `type.assign.*`, …). Empty string when none was recorded.
 - **`panicReset()`** — clears the stored reason; the next **`panicReason()`** returns `""` until another panic is recorded.
 
 The reason is updated on each PANIC routed to a handler (`#panic.*` / `#panic.any`). It is **not** cleared when the handler returns unless the program calls **`panicReset()`**.
@@ -257,6 +257,7 @@ An **empty** `#or` handler block for a guard inside the loop body means **contin
 | After jump | Instructions below `jump` in the same block are **not** executed |
 | vs `call` | Use **`call`** when you need a **`return`** back to the caller; use **`jump`** for shared paths (e.g. `#common`) without a frame |
 | Jump budget | Default **1000** `OP_JUMP` executions per run (`FLAT_VM_DEFAULT_MAX_JUMPS`); exceed → PANIC `vm.jump_limit` (routed like other panics). Override: `flvm --max-jumps N`, or `--no-jump-limit`. **fleditor WASM:** Settings → Terminal, or `flat_wasm_set_run_limits` before run |
+| **`jump:blockMax`** | Optional **per target block** cap on **`jump #block`** entries (source directive). Exceed → PANIC **`jump.block.reached.max`**. Normative detail: [JUMP_BLOCK_MAX.md](./JUMP_BLOCK_MAX.md) |
 
 Work plan: [`.cursor/plans/jump-or-handlers.plan.md`](../.cursor/plans/jump-or-handlers.plan.md).
 

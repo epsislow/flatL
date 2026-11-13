@@ -66,12 +66,12 @@ FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/
                src/common/flat_assign.c src/common/flat_slot_type.c src/common/flat_schema.c \
                src/common/flat_number.c src/common/value_pool.c src/common/value_collection.c \
                src/common/value_live.c \
-               src/common/line_label.c \
+               src/common/line_label.c src/common/flat_jump_block.c \
            src/common/native_use.c \
            $(FLAT_TIME_SRC) \
            $(STR_SRC) $(NATIVE_FLC_SRC)
 FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \
-           src/common/flat_func.c src/common/line_label.c \
+           src/common/flat_func.c src/common/line_label.c src/common/flat_jump_block.c \
             src/common/native_use.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
 
 MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb

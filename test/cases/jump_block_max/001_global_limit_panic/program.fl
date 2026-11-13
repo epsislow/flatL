@@ -1,0 +1,8 @@
+jump:blockMax 3
+
+#main
+  jump #loop
+
+#loop
+  jump #loop
+  OK

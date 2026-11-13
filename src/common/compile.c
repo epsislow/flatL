@@ -851,7 +851,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
 
-    stream_base = FLAT_FB_HEADER_SIZE + (size_t)prog->block_count * 8;
+    stream_base = FLAT_FB_HEADER_SIZE_V11 + (size_t)prog->block_count * 8;
     {
         size_t cursor = stream_base;
         for (i = 0; i < prog->block_count; i++) {
@@ -892,6 +892,8 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         size_t fnun_sz = 0;
         size_t ffun_sz = 0;
         size_t schm_sz = 0;
+        uint32_t jbmx_off = 0;
+        uint32_t *jbmx_limits = NULL;
         int li;
 
         for (li = 0; li < prog->block_count; li++) {
@@ -975,7 +977,8 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         schm_sz = flat_fb_schm_section_size(&schema_catalog);
         schm_off = 0;
         if (prog->optional_native_count > 0) {
-            native_off = (uint32_t)(ffun_off + ffun_sz + schm_sz);
+            native_off = (uint32_t)(ffun_off + ffun_sz + schm_sz +
+                                    flat_fb_jbmx_section_size(count));
         }
         fwrite(magic, 1, 4, f);
         fwrite(&sentinel, 1, 1, f);
@@ -987,6 +990,26 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         fwrite(&fnun_off, 1, 4, f);
         fwrite(&ffun_off, 1, 4, f);
         fwrite(&schm_off, 1, 4, f);
+        {
+            const uint8_t jbmx_zero[4] = { 0, 0, 0, 0 };
+            fwrite(jbmx_zero, 1, 4, f);
+        }
+        jbmx_limits = calloc((size_t)prog->block_count, sizeof(uint32_t));
+        if (!jbmx_limits && prog->block_count > 0) {
+            fclose(f);
+            snprintf(err, err_size, "out of memory");
+            free(offs);
+            free(block_ids);
+            free(code.buf);
+            return -1;
+        }
+        for (i = 0; i < prog->block_count; i++) {
+            if (prog->blocks[i].jump_block_max_override >= 0) {
+                jbmx_limits[i] = (uint32_t)prog->blocks[i].jump_block_max_override;
+            } else {
+                jbmx_limits[i] = prog->jump_block_max_global;
+            }
+        }
         for (i = 0; i < prog->block_count; i++) {
             uint32_t id = block_ids[i];
             uint32_t off = (uint32_t)offs[i].abs_offset;
@@ -1000,6 +1023,7 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
             if (!labels) {
                 fclose(f);
                 snprintf(err, err_size, "out of memory");
+                free(jbmx_limits);
                 free(offs);
                 free(block_ids);
                 free(code.buf);
@@ -1131,10 +1155,38 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
             free(code.buf);
             return -1;
         }
+        jbmx_off = (uint32_t)ftell(f);
+        if (flat_fb_write_jbmx_section(f, count, jbmx_limits) != 0) {
+            fclose(f);
+            snprintf(err, err_size, "failed to write JBMX");
+            free(jbmx_limits);
+            free(offs);
+            free(block_ids);
+            free(code.buf);
+            return -1;
+        }
+        free(jbmx_limits);
+        jbmx_limits = NULL;
         if (fseek(f, 28, SEEK_SET) != 0 ||
             fwrite(&schm_off, 1, 4, f) != 4) {
             fclose(f);
             snprintf(err, err_size, "failed to patch SCHM offset");
+            free(offs);
+            free(block_ids);
+            free(code.buf);
+            return -1;
+        }
+        if (fseek(f, 32, SEEK_SET) != 0 || fwrite(&jbmx_off, 1, 4, f) != 4) {
+            fclose(f);
+            snprintf(err, err_size, "failed to patch JBMX offset");
+            free(offs);
+            free(block_ids);
+            free(code.buf);
+            return -1;
+        }
+        if (fseek(f, 0, SEEK_END) != 0) {
+            fclose(f);
+            snprintf(err, err_size, "failed to seek end after JBMX patch");
             free(offs);
             free(block_ids);
             free(code.buf);

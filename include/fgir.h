@@ -95,6 +95,7 @@ typedef struct {
     FgirInstr instr[FGIR_MAX_INSTR];
     int instr_count;
     int native_unit_index;
+    int32_t jump_block_max_override; /* -1 inherit global; 0+ per-block limit (0 = unlimited) */
 } FgirBlock;
 
 typedef struct {
@@ -136,6 +137,8 @@ typedef struct {
     char exports[FGIR_MAX_FUNCTIONS][FGIR_MAX_FUNC_NAME];
     FgirSchemaDecl schemas[FGIR_SCHEMA_MAX];
     int schema_count;
+    uint32_t jump_block_max_global; /* 0 = unlimited */
+    int jump_block_max_global_set;
 } FgirProgram;
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);

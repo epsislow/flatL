@@ -76,6 +76,7 @@ typedef struct {
     int via_jump;
     uint64_t step_count;
     uint64_t jump_count;
+    uint32_t *jump_block_entry_count;
     const FlatVmOptions *run_opts;
     FlatVcxRuntime *vcx;
 } VmState;
@@ -1250,6 +1251,8 @@ static void vm_teardown(VmState *st, int rc) {
     flat_io_ctx_destroy(st->io_ctx);
     st->io_ctx = NULL;
     flat_file_table_close_all(&st->files);
+    free(st->jump_block_entry_count);
+    st->jump_block_entry_count = NULL;
     flat_coll_destroy(st->coll);
     flat_pool_destroy(st->pool);
 }
@@ -1951,6 +1954,14 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         free(guard_vals);
         return vm_fail_setup(&st, opts);
     }
+    if (bc->block_count > 0) {
+        st.jump_block_entry_count = calloc(bc->block_count, sizeof(uint32_t));
+        if (!st.jump_block_entry_count) {
+            free(guard_names);
+            free(guard_vals);
+            return vm_fail_setup(&st, opts);
+        }
+    }
     if (opts && opts->out_termination) {
         *opts->out_termination = (int)FLAT_TERM_ERROR;
     }
@@ -2244,6 +2255,24 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             if (payload_size < 4) {
                 return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_ERROR, opts);
             }
+            memcpy(&target, payload, 4);
+            if (bc->jump_block_entry_max && st.jump_block_entry_count) {
+                int tbi = vm_block_index(bc, target);
+                if (tbi >= 0 && (size_t)tbi < bc->block_count) {
+                    uint32_t lim = bc->jump_block_entry_max[tbi];
+                    if (lim > 0) {
+                        st.jump_block_entry_count[tbi]++;
+                        if (st.jump_block_entry_count[tbi] > lim) {
+                            if (vm_jump_panic_any(&st, bc, &ip, "jump.block.reached.max",
+                                                  trace) != 0) {
+                                return vm_finish(&st, (char *)guard_names, guard_vals, 1,
+                                                 FLAT_TERM_PANIC, opts);
+                            }
+                            continue;
+                        }
+                    }
+                }
+            }
             st.jump_count++;
             if (st.jump_count > jump_max) {
                 if (vm_jump_panic_any(&st, bc, &ip, "vm.jump_limit", trace) != 0) {
@@ -2252,7 +2281,6 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 }
                 continue;
             }
-            memcpy(&target, payload, 4);
             st.loop_sp = 0;
             st.via_jump = 1;
             ip = target;

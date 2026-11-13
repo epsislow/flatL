@@ -1,0 +1,8 @@
+jump:blockMax 1
+
+#main
+  for(5, i, '#step')
+  OK
+
+#step
+  next

@@ -589,7 +589,12 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         fprintf(stderr, "flvm: truncated .fb header\n");
         return -1;
     }
-    if (out->format_version >= 6 && fsize < FLAT_FB_HEADER_SIZE) {
+    if (out->format_version >= 11 && fsize < FLAT_FB_HEADER_SIZE_V11) {
+        free(buf);
+        fprintf(stderr, "flvm: truncated .fb header\n");
+        return -1;
+    }
+    if (out->format_version >= 6 && out->format_version < 11 && fsize < FLAT_FB_HEADER_SIZE) {
         free(buf);
         fprintf(stderr, "flvm: truncated .fb header\n");
         return -1;
@@ -612,6 +617,7 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         uint32_t fnun_off = 0;
         uint32_t ffun_off = 0;
         uint32_t schm_off = 0;
+        uint32_t jbmx_off = 0;
 
         if (out->format_version >= 4) {
             fnun_off = read_u32_le(buf + 20);
@@ -621,6 +627,9 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         }
         if (out->format_version >= 6) {
             schm_off = read_u32_le(buf + 28);
+        }
+        if (out->format_version >= 11) {
+            jbmx_off = read_u32_le(buf + 32);
         }
 
         if (labels_off != 0 && labels_off <= fsize) {
@@ -701,7 +710,9 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         memset(&out->schemas, 0, sizeof out->schemas);
         if (schm_off != 0 && schm_off < fsize) {
             size_t schm_len;
-            if (native_off != 0 && native_off > schm_off) {
+            if (jbmx_off != 0 && jbmx_off > schm_off) {
+                schm_len = (size_t)(jbmx_off - schm_off);
+            } else if (native_off != 0 && native_off > schm_off) {
                 schm_len = (size_t)(native_off - schm_off);
             } else {
                 schm_len = (size_t)(fsize - schm_off);
@@ -714,6 +725,20 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 return -1;
             }
         }
+        if (jbmx_off != 0 && jbmx_off < fsize) {
+            size_t jbmx_len;
+            if (native_off != 0 && native_off > jbmx_off) {
+                jbmx_len = (size_t)(native_off - jbmx_off);
+            } else {
+                jbmx_len = (size_t)(fsize - jbmx_off);
+            }
+            if (flat_fb_parse_jbmx_section(buf + jbmx_off, jbmx_len, count,
+                                           &out->jump_block_entry_max) != 0) {
+                free(buf);
+                fprintf(stderr, "flvm: invalid JBMX section\n");
+                return -1;
+            }
+        }
     }
     if (out->var_slots > (uint32_t)FLAT_MAX_VARS) {
         free(buf);
@@ -721,7 +746,9 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 (unsigned)out->var_slots, FLAT_MAX_VARS);
         return -1;
     }
-    if (out->format_version >= 6) {
+    if (out->format_version >= 11) {
+        header_size = FLAT_FB_HEADER_SIZE_V11;
+    } else if (out->format_version >= 6) {
         header_size = FLAT_FB_HEADER_SIZE;
     } else if (out->format_version >= 5) {
         header_size = FLAT_FB_HEADER_SIZE_V5;
@@ -855,6 +882,70 @@ int flat_fb_load_file(const char *path, FlatBytecode *out) {
     return 0;
 }
 
+size_t flat_fb_jbmx_section_size(uint16_t block_count) {
+    return 4u + 2u + (size_t)block_count * 4u;
+}
+
+int flat_fb_write_jbmx_section(FILE *f, uint16_t block_count, const uint32_t *limits) {
+    uint32_t magic = FLAT_FB_JBMX_MAGIC;
+    size_t i;
+
+    if (!f || (block_count > 0 && !limits)) {
+        return -1;
+    }
+    if (write_bytes(f, &magic, 4) != 0 || write_bytes(f, &block_count, 2) != 0) {
+        return -1;
+    }
+    for (i = 0; i < (size_t)block_count; i++) {
+        uint32_t lim = limits ? limits[i] : 0u;
+        if (write_bytes(f, &lim, 4) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int flat_fb_parse_jbmx_section(const uint8_t *sec, size_t sec_len, uint16_t block_count,
+                               uint32_t **limits_out) {
+    uint32_t magic;
+    uint16_t n;
+    size_t need;
+    size_t i;
+    uint32_t *lim = NULL;
+
+    if (!limits_out) {
+        return -1;
+    }
+    *limits_out = NULL;
+    if (sec_len < 6) {
+        return -1;
+    }
+    magic = read_u32_le(sec);
+    if (magic != FLAT_FB_JBMX_MAGIC) {
+        return -1;
+    }
+    n = read_u16_le(sec + 4);
+    if (n != block_count) {
+        return -1;
+    }
+    need = 6u + (size_t)n * 4u;
+    if (sec_len < need) {
+        return -1;
+    }
+    if (n == 0) {
+        return 0;
+    }
+    lim = calloc((size_t)n, sizeof(uint32_t));
+    if (!lim) {
+        return -1;
+    }
+    for (i = 0; i < (size_t)n; i++) {
+        lim[i] = read_u32_le(sec + 6 + i * 4);
+    }
+    *limits_out = lim;
+    return 0;
+}
+
 void flat_fb_free(FlatBytecode *bc) {
     if (!bc) {
         return;
@@ -864,6 +955,7 @@ void flat_fb_free(FlatBytecode *bc) {
     free(bc->block_labels);
     free(bc->native_units);
     free(bc->block_native_unit);
+    free(bc->jump_block_entry_max);
     free(bc->functions);
     bc->functions = NULL;
     bc->function_count = 0;
@@ -976,12 +1068,15 @@ int flat_fb_write_min_ok(const char *path) {
     const uint8_t var_slots[4] = { 0, 0, 0, 0 };
     const uint8_t ffun_off_bytes[4] = { 0, 0, 0, 0 };
     const uint8_t schm_off_bytes[4] = { 0, 0, 0, 0 };
-    const uint8_t labels_off_bytes[4] = { 42, 0, 0, 0 }; /* header32 + dir8 + code2 */
-    const uint8_t fnun_off_bytes[4] = { 55, 0, 0, 0 };
+    const uint8_t jbmx_off_bytes[4] = { 59, 0, 0, 0 };
+    const uint8_t labels_off_bytes[4] = { 46, 0, 0, 0 }; /* v11 header + dir + code */
+    const uint8_t fnun_off_bytes[4] = { 69, 0, 0, 0 };
     const uint8_t dir[8] = {
         0, 0, 0, 0, /* block_id main = 0 */
-        40, 0, 0, 0  /* code offset after 32-byte header */
+        44, 0, 0, 0  /* code offset after 36-byte header + dir */
     };
+    const uint32_t jbmx_magic = FLAT_FB_JBMX_MAGIC;
+    const uint32_t jbmx_limit = 0;
     const uint8_t code[2] = { OP_OK, 0 };
     const uint32_t blbl_magic = FLAT_FB_LABEL_MAGIC;
     const uint16_t blbl_count = 1;
@@ -1005,10 +1100,13 @@ int flat_fb_write_min_ok(const char *path) {
             write_bytes(f, native_off, 4) != 0 || write_bytes(f, var_slots, 4) != 0 ||
             write_bytes(f, labels_off_bytes, 4) != 0 || write_bytes(f, fnun_off_bytes, 4) != 0 ||
             write_bytes(f, ffun_off_bytes, 4) != 0 || write_bytes(f, schm_off_bytes, 4) != 0 ||
+            write_bytes(f, jbmx_off_bytes, 4) != 0 ||
             write_bytes(f, dir, 8) != 0 ||
             write_bytes(f, code, 2) != 0 ||
             write_bytes(f, &blbl_magic, 4) != 0 || write_bytes(f, &blbl_count, 2) != 0 ||
             write_bytes(f, &main_len, 2) != 0 || write_bytes(f, main_label, main_len) != 0 ||
+            write_bytes(f, &jbmx_magic, 4) != 0 || write_bytes(f, &blbl_count, 2) != 0 ||
+            write_bytes(f, &jbmx_limit, 4) != 0 ||
             write_bytes(f, &fnun_magic, 4) != 0 || write_bytes(f, &unit_count, 2) != 0 ||
             write_bytes(f, &zero_decl, 1) != 0 || write_bytes(f, &block_count, 2) != 0 ||
             write_bytes(f, &block_unit, 1) != 0) {

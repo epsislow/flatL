@@ -10,8 +10,10 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 10u
-#define FLAT_FB_HEADER_SIZE 32 /* v6: + schm_off at 28; v5 was 28 without schm */
+#define FLAT_FB_FORMAT_VERSION 11u
+#define FLAT_FB_HEADER_SIZE_V11 36 /* v11: jbmx_off at bytes 32–35 */
+#define FLAT_FB_HEADER_SIZE 32     /* v3–v10 header (load) */
+#define FLAT_FB_JBMX_MAGIC 0x584d424au /* 'JBMX' LE */
 #define FLAT_FB_HEADER_SIZE_V5 28
 #define FLAT_FB_HEADER_SIZE_V4 24
 #define FLAT_FB_HEADER_SIZE_V3 20
@@ -64,7 +66,13 @@ typedef struct {
     FlatFbFunctionEntry *functions;
     uint16_t function_count;
     FlatSchemaCatalog schemas;
+    uint32_t *jump_block_entry_max; /* heap, length block_count; 0 = unlimited per target */
 } FlatBytecode;
+
+size_t flat_fb_jbmx_section_size(uint16_t block_count);
+int flat_fb_write_jbmx_section(FILE *f, uint16_t block_count, const uint32_t *limits);
+int flat_fb_parse_jbmx_section(const uint8_t *sec, size_t sec_len, uint16_t block_count,
+                                 uint32_t **limits_out);
 
 size_t flat_fb_native_section_size(int decl_count, const FlatOptionalNativeDecl *decls);
 int flat_fb_write_label_section(FILE *f, uint16_t count, const char labels[][FGIR_MAX_LABEL]);
