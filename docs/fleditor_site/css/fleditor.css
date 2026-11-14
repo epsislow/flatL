@@ -1177,3 +1177,12 @@ body.fleditor-resize-active * {
   .fl-code-map-controls { width: 100%; }
   .fl-code-map-mode { padding: .28rem .42rem; }
 }
+
+/* Code Map v1.4: free 2D graph canvas and orthogonal edge routing. */
+.fl-code-map-viewport { overflow: auto; overscroll-behavior: contain; touch-action: pan-x pan-y; }
+.fl-code-map-svg { background: var(--fl-editor-pane-bg, var(--fl-panel-bg)); }
+.fl-map-grid-dot { fill: var(--fl-text-muted); opacity: .24; }
+.fl-map-edge { stroke-linecap: round; stroke-linejoin: round; }
+.fl-map-node { isolation: isolate; }
+.fl-code-map-controls { flex-wrap: wrap; }
+.fl-code-map-toolbar .fl-code-map-mode[aria-label="Arrange graph"] { width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
