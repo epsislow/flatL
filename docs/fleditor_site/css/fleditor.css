@@ -1195,3 +1195,7 @@ body.fleditor-resize-active * {
 /* Code Map v1.7: correct intrinsic canvas sizing and reliable pointer interaction. */
 .fl-code-map-viewport { overflow: auto !important; min-width: 0; min-height: 280px; touch-action: pan-x pan-y; }
 .fl-code-map-canvas { display: block; max-width: none !important; flex: none; }
+
+/* Code Map v1.9: correctly sized scrollable world canvas. */
+.fl-code-map-viewport { overflow: auto !important; min-width: 0; min-height: 280px; touch-action: none; }
+.fl-code-map-canvas { display: block; flex: none; width: auto; height: auto; max-width: none; max-height: none; }

@@ -118,14 +118,13 @@
   }
   function route(a,b,edge,index){
     const dx=b.x-a.x,dy=b.y-a.y;
-    if(Math.abs(dx)<28&&Math.abs(dy)<28)return [{x:a.x,y:a.y},{x:a.x+30,y:a.y-24-(index%3)*7},{x:b.x-30,y:b.y-24-(index%3)*7},{x:b.x,y:b.y}];
-    const sign=dx>=0?1:-1, sx=a.x+sign*22, ex=b.x-sign*22;
-    if(Math.abs(dx)>=Math.abs(dy)*.65){
-      const mid=(sx+ex)/2;
-      return [{x:a.x+sign*12,y:a.y},{x:sx,y:a.y},{x:mid,y:a.y},{x:mid,y:b.y},{x:ex,y:b.y},{x:b.x-sign*12,y:b.y}];
-    }
-    const sy=a.y+(dy>=0?14:-14),ey=b.y-(dy>=0?14:-14),mid=(sy+ey)/2;
-    return [{x:a.x,y:sy},{x:a.x,y:mid},{x:b.x,y:mid},{x:b.x,y:ey}];
+    const sx=a.x+(dx>=0?10:-10), sy=a.y;
+    const ex=b.x-(dx>=0?10:-10), ey=b.y;
+    const hx=ex-sx,hy=ey-sy,diag=Math.min(Math.abs(hx),Math.abs(hy));
+    if(diag<8)return [{x:sx,y:sy},{x:ex,y:ey}];
+    const mx=sx+Math.sign(hx)*diag,my=sy+Math.sign(hy)*diag;
+    // A 45-degree segment followed by a straight run; deterministic and cheap.
+    return [{x:sx,y:sy},{x:mx,y:my},{x:ex,y:my},{x:ex,y:ey}];
   }
   function drawArrow(ctx, pts, color){
     if(pts.length<2)return;const a=pts[pts.length-2],b=pts[pts.length-1],ang=Math.atan2(b.y-a.y,b.x-a.x);
@@ -139,36 +138,38 @@
     const controls=html('div','fl-code-map-controls');
     [['graph','Graph'],['by-file','By file']].forEach(([v,label])=>{const b=html('button','fl-code-map-mode'+(displayMode===v?' active':''),label);b.type='button';b.setAttribute('aria-pressed',displayMode===v?'true':'false');b.onclick=()=>{displayMode=v;render(host,model,onNodeClick,onEdgeClick);};controls.appendChild(b);});
     const arrange=html('button','fl-code-map-mode','↻');arrange.title='Arrange graph';arrange.setAttribute('aria-label','Arrange graph');arrange.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,true);};controls.appendChild(arrange);
-    [['−',()=>{zoom=Math.max(.4,zoom-.15);resize();}],['+',()=>{zoom=Math.min(2.5,zoom+.15);resize();}],['Fit',()=>{zoom=1;resize();}]].forEach(([label,fn])=>{const b=html('button','fl-code-map-mode',label);b.type='button';b.onclick=fn;controls.appendChild(b);});
+    [['−',()=>{zoomAt(zoom/1.2);}],['+',()=>{zoomAt(zoom*1.2);}],['Fit',()=>{const b=bounds();zoom=Math.max(.25,Math.min(1.5,Math.min((viewW-32)/b.x,(viewH-32)/b.y)));setCanvasSize();draw();viewport.scrollLeft=0;viewport.scrollTop=0;}]].forEach(([label,fn])=>{const b=html('button','fl-code-map-mode',label);b.type='button';b.onclick=fn;controls.appendChild(b);});
     toolbar.appendChild(controls);
     const legend=html('div','fl-code-map-legend');
     Object.keys(COLORS).forEach(type=>{const item=html('span','fl-code-map-legend-item');const sw=html('i','fl-code-map-swatch');sw.style.backgroundColor=COLORS[type];item.append(sw,document.createTextNode(type));legend.appendChild(item);});
     const hint=html('span','fl-code-map-legend-item');hint.append(html('i','fl-code-map-swatch fl-code-map-swatch-hint'),document.createTextNode('@map hint'));legend.appendChild(hint);
     const dyn=html('span','fl-code-map-legend-item');dyn.append(html('i','fl-code-map-swatch fl-code-map-swatch-dynamic'),document.createTextNode('dynamic target'));legend.appendChild(dyn);toolbar.appendChild(legend);host.appendChild(toolbar);
-    const viewport=html('div','fl-code-map-viewport');viewport.style.position='relative';viewport.style.overflow='hidden';viewport.style.touchAction='none';host.appendChild(viewport);
-    const canvas=document.createElement('canvas');canvas.className='fl-code-map-canvas';canvas.style.display='block';canvas.style.width='100%';canvas.style.height='100%';canvas.style.touchAction='none';viewport.appendChild(canvas);
+    const viewport=html('div','fl-code-map-viewport');viewport.style.position='relative';viewport.style.overflow='auto';viewport.style.touchAction='pan-x pan-y';host.appendChild(viewport);
+    const canvas=document.createElement('canvas');canvas.className='fl-code-map-canvas';canvas.style.display='block';canvas.style.touchAction='none';canvas.style.maxWidth='none';viewport.appendChild(canvas);
     const nodes=model.blocks.concat(model.dynamicNodes||[]);if(!nodes.length){viewport.appendChild(html('div','fl-code-map-empty','No FlatL blocks found in this file or its imported files.'));return;}
     const layout=layoutGraph(nodes,model.edges,model,displayMode,!!forceArrange),positions=layout.positions;
     manualPositions.forEach((p,id)=>{if(positions.has(id))Object.assign(positions.get(id),p);});
     let dpr=1,viewW=800,viewH=600,drag=null,pan=null,hover=null;
     const nodeById=new Map(nodes.map(n=>[n.id,n]));
     const edgePaths=model.edges.map((e,i)=>({edge:e,index:i,pts:null}));
-    const bounds=()=>{let x=500,y=400;positions.forEach(p=>{x=Math.max(x,p.x+330);y=Math.max(y,p.y+110);});return {x,y};};
+    const bounds=()=>{let x=500,y=400;positions.forEach(p=>{x=Math.max(x,p.x+Math.max(260,(nodeById.get([...positions.keys()].find(id=>positions.get(id)===p))||{}).name?.length*7||0)+80);y=Math.max(y,p.y+100);});return {x,y};};
+    function setCanvasSize(){
+      const b=bounds(),cssW=Math.max(viewW,b.x*zoom),cssH=Math.max(viewH,b.y*zoom);
+      dpr=Math.max(1,root.devicePixelRatio||1);
+      canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';
+      canvas.width=Math.ceil(cssW*dpr);canvas.height=Math.ceil(cssH*dpr);
+    }
     function resize(){
-      const r=viewport.getBoundingClientRect();viewW=Math.max(320,r.width);viewH=Math.max(280,r.height||600);dpr=root.devicePixelRatio||1;
-      canvas.width=Math.round(viewW*dpr);canvas.height=Math.round(viewH*dpr);
-      const b=bounds();canvas.style.minWidth=Math.max(viewW,b.x*zoom)+'px';canvas.style.minHeight=Math.max(viewH,b.y*zoom)+'px';
-      draw();
+      const r=viewport.getBoundingClientRect();viewW=Math.max(240,r.width);viewH=Math.max(220,r.height);
+      setCanvasSize();draw();
     }
     function transformPoint(clientX,clientY){const r=canvas.getBoundingClientRect();return {x:(clientX-r.left)/zoom,y:(clientY-r.top)/zoom};}
     function draw(){
       const ctx=canvas.getContext('2d');if(!ctx)return;
-      const r=canvas.getBoundingClientRect();ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,canvas.width/dpr,canvas.height/dpr);
-      ctx.save();ctx.scale(zoom,zoom);
-      // Subtle drafting grid.
+      ctx.setTransform(dpr*zoom,0,0,dpr*zoom,0,0);ctx.clearRect(0,0,canvas.width/(dpr*zoom),canvas.height/(dpr*zoom));
+      ctx.save();
       const b=bounds();ctx.fillStyle='rgba(130,145,160,.10)';
       for(let x=20;x<b.x;x+=24)for(let y=20;y<b.y;y+=24){ctx.fillRect(x,y,1,1);}
-      // File boundaries in By file mode.
       if(displayMode==='by-file'){
         layout.files.forEach(file=>{const arr=nodes.filter(n=>n.file===file);if(!arr.length)return;const xs=arr.map(n=>positions.get(n.id).x),ys=arr.map(n=>positions.get(n.id).y);
           const x=Math.min(...xs)-35,y=Math.min(...ys)-38,w=Math.max(...xs)-Math.min(...xs)+300,h=Math.max(...ys)-Math.min(...ys)+78;
@@ -176,7 +177,6 @@
           ctx.fillStyle='#91a3ad';ctx.font='11px sans-serif';ctx.fillText(file,x+10,y+17);
         });
       }
-      // Edges first, nodes last (same layering principle as mapp-canv).
       edgePaths.forEach(({edge,index},i)=>{
         const a=positions.get(edge.from),b=positions.get(edge.to);if(!a||!b)return;
         const pts=route(a,b,edge,index);edgePaths[i].pts=pts;
@@ -191,33 +191,45 @@
         const p=positions.get(n.id);if(!p)return;const dynamic=n.kind==='dynamic',selected=selectedNodeId===n.id,connected=!selectedNodeId||selected||model.edges.some(e=>(e.from===selectedNodeId&&e.to===n.id)||(e.to===selectedNodeId&&e.from===n.id));
         const label=dynamic?'Dynamic target':n.name;ctx.save();ctx.globalAlpha=connected?1:.2;
         ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fillStyle='#202631';ctx.fill();ctx.lineWidth=selected?3:1.8;ctx.strokeStyle=selected?'#facc15':dynamic?'#d97706':'#8b8b9c';ctx.setLineDash(dynamic?[3,2]:[]);ctx.stroke();ctx.setLineDash([]);
-        ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';ctx.fillStyle='#e4e4e7';ctx.textBaseline='middle';ctx.fillText(label,p.x+18,p.y);
+        ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';ctx.fillStyle='#e4e4e7';ctx.textBaseline='middle';ctx.fillText(label,p.x+18,p.y+2);
         ctx.restore();
       });
       ctx.restore();
     }
     function resizeCanvas(){resize();}
-    function findNode(pt){let best=null,dist=Infinity;nodes.forEach(n=>{const p=positions.get(n.id),d=Math.hypot(pt.x-p.x,pt.y-p.y);if(d<16&&d<dist){best=n;dist=d;}});return best;}
+    function findNode(pt){
+      let best=null,dist=Infinity;
+      nodes.forEach(n=>{const p=positions.get(n.id),d=Math.hypot(pt.x-p.x,pt.y-p.y),label=(n.kind==='dynamic'?'Dynamic target':n.name)||'';
+        const inLabel=pt.x>=p.x+12&&pt.x<=p.x+24+label.length*7.5&&Math.abs(pt.y-p.y)<=13;
+        if((d<19||inLabel)&&d<dist){best=n;dist=d;}
+      });return best;
+    }
     function findEdge(pt){let best=null,bestD=9;edgePaths.forEach(({edge,pts})=>{if(!pts)return;for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((pt.x-a.x)*dx+(pt.y-a.y)*dy)/(dx*dx+dy*dy||1))),d=Math.hypot(pt.x-(a.x+t*dx),pt.y-(a.y+t*dy));if(d<bestD){bestD=d;best=edge;}}});return best;}
     canvas.addEventListener('pointerdown',ev=>{
-      if(ev.button!==0)return;const pt=transformPoint(ev.clientX,ev.clientY),node=findNode(pt);
-      if(node){const p=positions.get(node.id);drag={id:node.id,start:pt,origin:{x:p.x,y:p.y},moved:false};canvas.setPointerCapture(ev.pointerId);}
-      else{pan={x:ev.clientX,y:ev.clientY,left:viewport.scrollLeft,top:viewport.scrollTop};canvas.setPointerCapture(ev.pointerId);}
+      if(ev.button!==0&&ev.pointerType!=='touch')return;
+      const pt=transformPoint(ev.clientX,ev.clientY),node=findNode(pt);
+      if(node){const p=positions.get(node.id);drag={id:node.id,start:pt,origin:{x:p.x,y:p.y},moved:false,pointerId:ev.pointerId};canvas.setPointerCapture(ev.pointerId);canvas.style.cursor='grabbing';}
+      else{pan={x:ev.clientX,y:ev.clientY,left:viewport.scrollLeft,top:viewport.scrollTop,pointerId:ev.pointerId};canvas.setPointerCapture(ev.pointerId);}
       ev.preventDefault();
     });
     canvas.addEventListener('pointermove',ev=>{
       const pt=transformPoint(ev.clientX,ev.clientY);
-      if(drag){const p=positions.get(drag.id);p.x=drag.origin.x+(pt.x-drag.start.x);p.y=drag.origin.y+(pt.y-drag.start.y);drag.moved=true;manualPositions.set(drag.id,{x:p.x,y:p.y});draw();}
+      if(drag){const p=positions.get(drag.id),dx=pt.x-drag.start.x,dy=pt.y-drag.start.y;if(Math.abs(dx)+Math.abs(dy)>2)drag.moved=true;p.x=drag.origin.x+dx;p.y=drag.origin.y+dy;manualPositions.set(drag.id,{x:p.x,y:p.y});setCanvasSize();draw();}
       else if(pan){viewport.scrollLeft=pan.left-(ev.clientX-pan.x);viewport.scrollTop=pan.top-(ev.clientY-pan.y);}
       else{hover=findNode(pt);canvas.style.cursor=hover?'grab':'default';}
     });
     function finish(ev){
-      if(drag){if(drag.moved){savePositions(model,positions);draw();}else{const n=nodeById.get(drag.id);selectedNodeId=n.id;draw();if(onNodeClick)onNodeClick(n);}drag=null;}
+      if(drag){const current=drag;if(current.moved){savePositions(model,positions);setCanvasSize();draw();}else{const n=nodeById.get(current.id);selectedNodeId=n.id;draw();if(onNodeClick)onNodeClick(n);}drag=null;canvas.style.cursor='default';}
       else if(!pan){const pt=transformPoint(ev.clientX,ev.clientY),edge=findEdge(pt);if(edge&&onEdgeClick)onEdgeClick(edge);}
       pan=null;
     }
-    canvas.addEventListener('pointerup',finish);canvas.addEventListener('pointercancel',()=>{drag=null;pan=null;});
+    canvas.addEventListener('pointerup',finish);canvas.addEventListener('pointercancel',()=>{drag=null;pan=null;canvas.style.cursor='default';});
     canvas.addEventListener('dblclick',ev=>{const n=findNode(transformPoint(ev.clientX,ev.clientY));if(n&&onNodeClick)onNodeClick(n);});
+    function zoomAt(nextZoom){
+      const old=zoom,cx=viewport.scrollLeft+viewW/2,cy=viewport.scrollTop+viewH/2;
+      zoom=Math.max(.25,Math.min(2.5,nextZoom));setCanvasSize();draw();
+      viewport.scrollLeft=(cx/old)*zoom-viewW/2;viewport.scrollTop=(cy/old)*zoom-viewH/2;
+    }
     activeView={resize:resizeCanvas,draw};resize();
     if(typeof ResizeObserver!=='undefined'){const ro=new ResizeObserver(resize);ro.observe(viewport);}
   }
