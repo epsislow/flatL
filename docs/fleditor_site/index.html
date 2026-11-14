@@ -6,7 +6,7 @@
   <title>flatL fleditor</title>
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=12">
+  <link rel="stylesheet" href="css/fleditor.css?v=13">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -49,6 +49,7 @@
               <button type="button" id="undoBtn" title="Undo">Undo</button>
               <button type="button" id="redoBtn" title="Redo">Redo</button>
               <button type="button" id="saveBtn" title="Save">Save</button>
+              <button type="button" id="codeMapBtn" title="Show block transfer map">Code Map</button>
               <button type="button" id="runBtn" class="btn-run" title="Run">Run</button>
             </div>
           </div>
@@ -94,6 +95,7 @@
             <button type="button" id="binaryHelpDismiss" class="fleditor-binary-help-dismiss"
               title="Dismiss hint" aria-label="Dismiss hint">×</button>
           </div>
+          <div id="codeMapView" class="fl-code-map-view" hidden aria-label="FlatL block transfer map"></div>
         </section>
         <section id="terminalPanel" class="fleditor-terminal-wrap" hidden>
           <div id="terminalPanelResize" class="fleditor-panel-label fleditor-panel-label--resize-ns"
@@ -303,6 +305,8 @@
   <script src="js/fleditor-version.js"></script>
   <script src="js/fleditor-theme.js"></script>
   <script src="js/fleditor-settings.js"></script>
-  <script src="js/fleditor.js?v=49"></script>
+  <script src="js/fleditor-block-analyzer.js?v=2"></script>
+  <script src="js/fleditor-code-map.js?v=2"></script>
+  <script src="js/fleditor.js?v=50"></script>
 </body>
 </html>

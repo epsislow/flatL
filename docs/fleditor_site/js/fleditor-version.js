@@ -3,7 +3,7 @@
   'use strict';
 
   /** Browser UI bundle; align with doc / release notes when bumped. */
-  const FLEDITOR_UI_VERSION = '0.5.0';
+  const FLEDITOR_UI_VERSION = '0.5.1';
 
   global.FleditorVersion = {
     FLEDITOR_UI_VERSION,

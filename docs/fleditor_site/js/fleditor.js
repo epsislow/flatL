@@ -1,4 +1,4 @@
-/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTheme, FleditorSettings */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
 (function () {
   'use strict';
 
@@ -24,6 +24,8 @@
   const statusEl = document.getElementById('status');
   const bannerEl = document.getElementById('wasmBanner');
   const runBtn = document.getElementById('runBtn');
+  const codeMapBtn = document.getElementById('codeMapBtn');
+  const codeMapView = document.getElementById('codeMapView');
   const clearBtn = document.getElementById('clearBtn');
   const saveBtn = document.getElementById('saveBtn');
   const undoBtn = document.getElementById('undoBtn');
@@ -63,6 +65,9 @@
   let running = false;
   let term = null;
   let cm = null;
+  let codeMapVisible = false;
+  let codeMapModel = null;
+  let blockNavigationMark = null;
 
   /** @type {ReturnType<typeof P.loadProject>} */
   let project = null;
@@ -865,6 +870,9 @@
         editorKindLabel.textContent = 'Text editor';
       }
     }
+    if (codeMapBtn) {
+      codeMapBtn.disabled = !hasOpenFile() || editorViewMode !== 'flatl';
+    }
     if (!editorPathLabel) {
       return;
     }
@@ -967,6 +975,7 @@
   }
 
   function enterEmptyEditorState() {
+    if (codeMapVisible) setCodeMapVisible(false);
     leaveBinaryEditor();
     editorViewMode = 'flatl';
     project.openPath = null;
@@ -981,6 +990,7 @@
   }
 
   function loadFileIntoEditor(path) {
+    if (codeMapVisible) setCodeMapVisible(false);
     const norm = P.resolveProjectFilePath(project, path);
     if (project.files[norm] == null) {
       return;
@@ -1873,6 +1883,55 @@
     } else {
       showProgramInputModal(options);
     }
+  }
+
+  function setCodeMapVisible(visible) {
+    if (!cm || !codeMapView || !codeMapBtn) return;
+    codeMapVisible = !!visible;
+    const wrapper = cm.getWrapperElement();
+    wrapper.hidden = codeMapVisible;
+    codeMapView.hidden = !codeMapVisible;
+    codeMapBtn.textContent = codeMapVisible ? 'Editor' : 'Code Map';
+    codeMapBtn.title = codeMapVisible ? 'Return to source editor' : 'Show block transfer map';
+    if (codeMapVisible) {
+      flushEditorToProject();
+      const mapEntry = project.files[P.DEFAULT_MAIN] != null
+        ? P.DEFAULT_MAIN
+        : Object.keys(project.files).find(function (path) { return /\.fl$/i.test(path) && typeof project.files[path] === 'string'; });
+      codeMapModel = FleditorBlockAnalyzer.analyze(project.files, mapEntry || P.DEFAULT_MAIN);
+      FleditorCodeMap.render(codeMapView, codeMapModel, function (block) {
+        navigateToBlock(block, block.startLine);
+      }, function (edge) {
+        const source = codeMapModel.blocks.find(function (block) { return block.id === edge.from; });
+        if (source) navigateToBlock(source, edge.lines.length ? edge.lines[0] : source.startLine);
+      });
+    } else {
+      cm.refresh();
+      cm.focus();
+    }
+  }
+
+  function navigateToBlock(block, lineNumber) {
+    if (!block || !block.file) return;
+    if (codeMapVisible) setCodeMapVisible(false);
+    if (currentOpenPath() !== block.file) openFile(block.file);
+    if (currentOpenPath() !== block.file || editorViewMode !== 'flatl') return;
+    const line = Math.max(0, Math.min(cm.lineCount() - 1, (lineNumber || block.startLine || 1) - 1));
+    if (blockNavigationMark) {
+      cm.removeLineClass(blockNavigationMark.line, 'background', 'cm-fl-block-target');
+      blockNavigationMark = null;
+    }
+    cm.setCursor({ line: line, ch: 0 });
+    cm.scrollIntoView({ line: line, ch: 0 }, 120);
+    cm.addLineClass(line, 'background', 'cm-fl-block-target');
+    blockNavigationMark = { line: line };
+    window.setTimeout(function () {
+      if (blockNavigationMark && blockNavigationMark.line === line) {
+        cm.removeLineClass(line, 'background', 'cm-fl-block-target');
+        blockNavigationMark = null;
+      }
+    }, 1400);
+    cm.focus();
   }
 
   async function initEditor() {
@@ -2771,6 +2830,12 @@
     window.addEventListener('resize', scheduleLayoutRefresh);
     clearBtn.addEventListener('click', () => term.clear());
     runBtn.addEventListener('click', () => onRun());
+    if (codeMapBtn) {
+      codeMapBtn.addEventListener('click', function () {
+        if (editorViewMode !== 'flatl' || !hasOpenFile()) return;
+        setCodeMapVisible(!codeMapVisible);
+      });
+    }
     saveBtn.addEventListener('click', () => saveCurrentFile());
     undoBtn.addEventListener('click', () => {
       cm.undo();

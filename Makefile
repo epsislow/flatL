@@ -82,7 +82,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-all test-bench test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
+.PHONY: all help clean test test-all test-bench test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -122,6 +122,7 @@ help:
 	@echo "  make fleditor-project-smoke        project UI smoke (Node)"
 	@echo "  make fleditor-hex-smoke            hex editor smokes (Node)"
 	@echo "  make fleditor-examples-smoke       examples picker smoke (Node)"
+	@echo "  make fleditor-block-map-smoke      Code Map analyzer smoke (Node)"
 	@echo "  make fleditor-wasm-smoke           WASM smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-multifile-smoke WASM multifile smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-order-flow-smoke   WASM user def (order_flow; needs fleditor-wasm)"
@@ -348,6 +349,9 @@ fleditor-hex-smoke:
 
 fleditor-examples-smoke:
 	$(NODE) test/fleditor/examples_smoke.mjs
+
+fleditor-block-map-smoke:
+	$(NODE) test/fleditor/block_analyzer.mjs
 
 fleditor-wasm-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_smoke.mjs

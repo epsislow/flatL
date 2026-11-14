@@ -102,6 +102,8 @@ Run **`make docs`** before push so `docs/doc_site/` is up to date. **`docs/.noje
 | `css/` | Theme |
 | `js/fleditor.js` | Run/Save, project UI, WASM glue, Xterm I/O |
 | `js/fleditor-project.js` | Virtual project, localStorage, MEMFS sync |
+| `js/fleditor-block-analyzer.js` | Static index of blocks and block-transfer edges for Code Map |
+| `js/fleditor-code-map.js` | SVG Code Map renderer and click navigation callbacks |
 | `ext/` | Vendored CodeMirror 5 + xterm.js (see `ext/VENDOR.md`) |
 
 **FlatL syntax:** line modifiers **`?`** (silent native fail) and **`~`** (route to **`#or`**) at the start of an instruction line are highlighted as **`fl-modifier`**. See [SPECIFICATION.md](./SPECIFICATION.md) §1.2.2.
@@ -110,6 +112,20 @@ Run **`make docs`** before push so `docs/doc_site/` is up to date. **`docs/.noje
 | `examples/` | Curated `.fl` + `manifest.json` |
 
 Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
+
+
+## Code Map
+
+The **Code Map** button on the `.fl` editor action bar switches from source editing to an interactive block-transfer graph.
+
+- Every top-level `#block` declaration in project `.fl` files is shown, including blocks with no incoming or outgoing edges.
+- Nodes are grouped by source file. Transfers between files are drawn across file groups.
+- The first version draws `jump`, `call`, `#or` guard/`~` handler, `for`, `foreach`, explicit `PANIC` indexed/line-labelled handlers, and automatic runtime panic routes to `#panic.any` where statically identifiable. Edge clicks navigate to the source instruction; node clicks open the source file and move the cursor to the block declaration.
+- `next`, `return`, and user-defined function call graphs are intentionally not represented.
+- `for` / `foreach` targets are resolved from literal block labels or a simple string-label assignment earlier in the same block. For dynamic expressions, a preceding special comment can declare possible destinations: `-- @map target=#round,#retry` or a block comment containing `@map target=#round,#retry`. The hint applies to the next instruction. Hint-derived edges use a dashed line.
+- A dynamic `for` / `foreach` target without a hint is shown as a `Dynamic target` node connected to the loop's source block; the expression and source line are retained. This is informational, not a compiler diagnostic.
+
+The analyzer is a browser-side static index, not a compiler diagnostic. Hints are editor-only comments and do not change compiler or VM behavior. An isolated block is not considered an error. Run `make fleditor-block-map-smoke` for the analyzer smoke test.
 
 ## I/O model
 

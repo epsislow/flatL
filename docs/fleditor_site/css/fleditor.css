@@ -1103,3 +1103,50 @@ body.fleditor-resize-active * {
     flex: 0 0 32%;
   }
 }
+
+/* FlatL Code Map */
+.fl-code-map-view {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--fl-editor-pane-bg, var(--fl-panel-bg));
+}
+.fl-code-map-view[hidden] { display: none !important; }
+.fl-code-map-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem 1rem;
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid var(--fl-border);
+  color: var(--fl-text-muted);
+  font-size: 0.75rem;
+}
+.fl-code-map-summary { white-space: nowrap; }
+.fl-code-map-legend { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; }
+.fl-code-map-legend-item { display: inline-flex; align-items: center; gap: 0.28rem; }
+.fl-code-map-swatch { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.fl-code-map-swatch-hint { width: 16px; height: 0; border-top: 2px dashed var(--fl-text-muted); border-radius: 0; }
+.fl-code-map-swatch-dynamic { background: transparent; border: 1px dashed #d97706; border-radius: 2px; }
+.fl-code-map-viewport { flex: 1 1 0; min-height: 0; overflow: auto; padding: 0.5rem; }
+.fl-code-map-svg { display: block; max-width: none; }
+.fl-map-file-bg { fill: rgba(120, 120, 140, 0.055); stroke: var(--fl-border); stroke-width: 1; }
+.fl-map-file-title { fill: var(--fl-text); font-size: 12px; font-weight: 650; }
+.fl-map-file-meta { fill: var(--fl-text-muted); font-size: 10px; }
+.fl-map-edge { fill: none; stroke-width: 2; opacity: 0.82; pointer-events: none; }
+.fl-map-edge-hint { stroke-dasharray: 7 4; }
+.fl-map-edge-dynamic { stroke-dasharray: 2 5; opacity: 0.95; }
+.fl-map-edge-hit { fill: none; stroke: transparent; stroke-width: 12; cursor: pointer; pointer-events: stroke; }
+.fl-map-node { cursor: pointer; outline: none; }
+.fl-map-node-bg { fill: var(--fl-surface); stroke: #666477; stroke-width: 1.2; }
+.fl-map-node-dynamic .fl-map-node-bg { stroke: #d97706; stroke-dasharray: 5 3; }
+.fl-map-node:hover .fl-map-node-bg,
+.fl-map-node:focus .fl-map-node-bg { stroke: #e6dcc8; stroke-width: 2; }
+.fl-map-node-name { fill: var(--fl-text); font-size: 12px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+.fl-map-node-line { fill: var(--fl-text-muted); font-size: 10px; }
+.fl-code-map-empty { padding: 2rem; color: var(--fl-text-muted); text-align: center; }
+.cm-fl-block-target { background: rgba(250, 204, 21, 0.20) !important; }
