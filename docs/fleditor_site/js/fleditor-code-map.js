@@ -112,19 +112,84 @@
     }
     // Place any nodes added after a saved layout without moving existing nodes.
     nodes.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+(i%5)*colGap,y:margin+Math.floor(i/5)*rowGap});});
+    if(mode!=='by-file' && force) optimizeLayout(nodes,edges,pos);
     const widths=new Map();nodes.forEach(n=>widths.set(n.id,Math.max(30,Math.min(220,n.name.length*7.2))));
     const maxX=Math.max(500,...Array.from(pos.values(),p=>p.x+300)),maxY=Math.max(400,...Array.from(pos.values(),p=>p.y+100));
     return {positions:pos,widths,width:maxX,height:maxY,files:Array.from(new Set(nodes.map(n=>n.file)))};
   }
-  function route(a,b,edge,index){
-    const dx=b.x-a.x,dy=b.y-a.y;
-    const sx=a.x+(dx>=0?10:-10), sy=a.y;
-    const ex=b.x-(dx>=0?10:-10), ey=b.y;
-    const hx=ex-sx,hy=ey-sy,diag=Math.min(Math.abs(hx),Math.abs(hy));
-    if(diag<8)return [{x:sx,y:sy},{x:ex,y:ey}];
-    const mx=sx+Math.sign(hx)*diag,my=sy+Math.sign(hy)*diag;
-    // A 45-degree segment followed by a straight run; deterministic and cheap.
-    return [{x:sx,y:sy},{x:mx,y:my},{x:ex,y:my},{x:ex,y:ey}];
+
+  const PORT_ANGLES=[-90,-60,-30,0,30,60,90,120,150,180,210,240];
+  function choosePorts(a,b,edge,index,edges,positions){
+    const angle=Math.atan2(b.y-a.y,b.x-a.x);
+    const sourceOrder=PORT_ANGLES.map((deg,i)=>({i,delta:Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-angle),Math.cos(deg*Math.PI/180-angle)))})).sort((x,y)=>x.delta-y.delta);
+    const reverse=angle+Math.PI;
+    const targetOrder=PORT_ANGLES.map((deg,i)=>({i,delta:Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-reverse),Math.cos(deg*Math.PI/180-reverse)))})).sort((x,y)=>x.delta-y.delta);
+    const usedOut=new Map(),usedIn=new Map();
+    edges.forEach((e,j)=>{if(j>=index)return;if(e.from===edge.from)usedOut.set(e._portOut,(usedOut.get(e._portOut)||0)+1);if(e.to===edge.to)usedIn.set(e._portIn,(usedIn.get(e._portIn)||0)+1);});
+    const out=sourceOrder.find(x=>!usedOut.has(x.i))||sourceOrder[0],inn=targetOrder.find(x=>!usedIn.has(x.i))||targetOrder[0];
+    edge._portOut=out.i;edge._portIn=inn.i;
+    const point=(p,i)=>{const r=11,rad=PORT_ANGLES[i]*Math.PI/180;return {x:p.x+Math.cos(rad)*r,y:p.y+Math.sin(rad)*r};};
+    return [point(a,out.i),point(b,inn.i)];
+  }
+  function route(a,b,edge,index,edges){
+    const [s,e]=choosePorts(a,b,edge,index,edges);
+    const dx=e.x-s.x,dy=e.y-s.y;
+    if(Math.hypot(dx,dy)<22)return [s,e];
+    // Prefer a compact 45-degree dogleg; use a short lead from each port.
+    const sx=s.x+Math.sign(dx||1)*5,sy=s.y+Math.sign(dy||1)*5;
+    const ex=e.x-Math.sign(dx||1)*5,ey=e.y-Math.sign(dy||1)*5;
+    const adx=ex-sx,ady=ey-sy,diag=Math.min(Math.abs(adx),Math.abs(ady));
+    if(diag<10)return [s,{x:sx,y:sy},{x:ex,y:ey},e];
+    const signX=Math.sign(adx),signY=Math.sign(ady);
+    const bend1={x:sx+signX*diag,y:sy+signY*diag};
+    const bend2={x:ex-signX*diag,y:ey-signY*diag};
+    const pts=[s,{x:sx,y:sy},bend1];
+    if(Math.hypot(bend2.x-bend1.x,bend2.y-bend1.y)>8)pts.push(bend2);
+    pts.push({x:ex,y:ey},e);
+    return pts;
+  }
+  function segmentCross(a,b,c,d){
+    const cross=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
+    const x1=cross(a,b,c),x2=cross(a,b,d),x3=cross(c,d,a),x4=cross(c,d,b);
+    return x1*x2<-.01&&x3*x4<-.01;
+  }
+  function layoutCost(nodes,edges,pos){
+    let cost=0;
+    const ids=new Map(nodes.map(n=>[n.id,n]));
+    const paths=edges.map(e=>{const a=pos.get(e.from),b=pos.get(e.to);return a&&b?route(a,b,{...e},0,[]):null;});
+    paths.forEach((p,i)=>{if(!p)return;for(let j=1;j<p.length;j++)cost+=Math.hypot(p[j].x-p[j-1].x,p[j].y-p[j-1].y)*.012;});
+    for(let i=0;i<paths.length;i++)if(paths[i])for(let j=i+1;j<paths.length;j++)if(paths[j]){
+      const a=paths[i],b=paths[j];let crossings=0;
+      for(let x=1;x<a.length;x++)for(let y=1;y<b.length;y++)if(segmentCross(a[x-1],a[x],b[y-1],b[y]))crossings++;
+      cost+=crossings*95;
+    }
+    for(let i=0;i<nodes.length;i++)for(let j=i+1;j<nodes.length;j++){
+      const a=pos.get(nodes[i].id),b=pos.get(nodes[j].id);if(!a||!b)continue;
+      const dx=Math.abs(a.x-b.x),dy=Math.abs(a.y-b.y);
+      const minX=Math.max(44,Math.min(190,(nodes[i].name||'').length*3.8))+Math.max(44,Math.min(190,(nodes[j].name||'').length*3.8));
+      if(dx<minX&&dy<30)cost+=(minX-dx)*2+(30-dy)*3;
+    }
+    return cost;
+  }
+  function optimizeLayout(nodes,edges,positions){
+    const movable=nodes.filter(n=>positions.has(n.id));
+    if(movable.length<3)return;
+    // Coordinate descent on a coarse grid: cheap for editor-sized graphs and deterministic.
+    let best=layoutCost(nodes,edges,positions),step=36;
+    for(let pass=0;pass<5;pass++){
+      let changed=false;
+      for(const n of movable){
+        const p=positions.get(n.id),origin={x:p.x,y:p.y},candidates=[
+          [0,0],[-step,0],[step,0],[0,-step],[0,step],[-step,-step],[step,-step],[-step,step],[step,step],
+          [-step*2,0],[step*2,0],[0,-step*2],[0,step*2]
+        ];
+        let local=best,choice=origin;
+        candidates.forEach(([dx,dy])=>{p.x=origin.x+dx;p.y=origin.y+dy;const score=layoutCost(nodes,edges,positions);if(score<local-.01){local=score;choice={x:p.x,y:p.y};}});
+        p.x=choice.x;p.y=choice.y;if(local<best-.01){best=local;changed=true;}
+      }
+      step=Math.max(8,step*.62);
+      if(!changed&&pass>1)break;
+    }
   }
   function drawArrow(ctx, pts, color){
     if(pts.length<2)return;const a=pts[pts.length-2],b=pts[pts.length-1],ang=Math.atan2(b.y-a.y,b.x-a.x);
@@ -179,7 +244,7 @@
       }
       edgePaths.forEach(({edge,index},i)=>{
         const a=positions.get(edge.from),b=positions.get(edge.to);if(!a||!b)return;
-        const pts=route(a,b,edge,index);edgePaths[i].pts=pts;
+        const pts=route(a,b,edge,index,model.edges);edgePaths[i].pts=pts;
         const active=selectedNodeId===edge.from||selectedNodeId===edge.to;
         ctx.save();ctx.strokeStyle=COLORS[edge.type]||'#a1a1aa';ctx.lineWidth=selectedNodeId&&!active?1.2:1.8;ctx.globalAlpha=selectedNodeId&&!active?.18:.82;
         if(edge.resolution==='hint')ctx.setLineDash([6,4]);else if(edge.resolution==='dynamic')ctx.setLineDash([2,4]);
