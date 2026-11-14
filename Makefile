@@ -285,7 +285,7 @@ test-flatl: all
 # Fleditor needs a Linux Node (not a WSL shim to Windows node.exe — breaks on UNC paths).
 # Override: make fleditor-serve NODE=/path/to/linux/node
 _FLEDITOR_LINUX_NODE := $(shell sh scripts/fleditor_linux_node.sh 2>/dev/null || true)
-ifeq ($(origin NODE),command)
+ifeq ($(origin NODE),command line)
 # keep NODE from: make NODE=/usr/bin/node fleditor-serve
 else
 override NODE := $(_FLEDITOR_LINUX_NODE)

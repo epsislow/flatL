@@ -1127,6 +1127,11 @@ body.fleditor-resize-active * {
   font-size: 0.75rem;
 }
 .fl-code-map-summary { white-space: nowrap; }
+.fl-code-map-controls { display: inline-flex; align-items: center; gap: 0.25rem; }
+.fl-code-map-mode-label { margin-right: 0.2rem; }
+.fl-code-map-mode { border: 1px solid var(--fl-border); border-radius: 5px; padding: 0.22rem 0.48rem; color: var(--fl-text-muted); background: transparent; font: inherit; cursor: pointer; }
+.fl-code-map-mode:hover { color: var(--fl-text); border-color: var(--fl-text-muted); }
+.fl-code-map-mode.active { color: var(--fl-text); background: var(--fl-surface); border-color: var(--fl-accent, #60a5fa); }
 .fl-code-map-legend { display: flex; flex-wrap: wrap; gap: 0.45rem 0.8rem; }
 .fl-code-map-legend-item { display: inline-flex; align-items: center; gap: 0.28rem; }
 .fl-code-map-swatch { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }

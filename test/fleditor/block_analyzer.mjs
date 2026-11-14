@@ -67,10 +67,13 @@ const files = {
     '  return'
   ].join('\n'),
   'lib/caller.fl': [
+    'use "nested/extra.fl" as #extra_',
     '#invoke',
-    '  call #math_add',
+    '  call #extra_target',
     '  return'
-  ].join('\n')
+  ].join('\n'),
+  'lib/nested/extra.fl': '#target\n  return',
+  'unrelated/unused.fl': '#not_imported\n  OK'
 };
 
 const model = analyze(files, 'main.fl');
@@ -81,6 +84,7 @@ const main = block('main.fl', '#main');
 const start = block('main.fl', '#start');
 const add = block('lib/math.fl', '#add');
 const invoke = block('lib/caller.fl', '#invoke');
+const nestedTarget = block('lib/nested/extra.fl', '#target');
 const loop = block('main.fl', '#loop');
 const orphan = block('main.fl', '#orphan');
 const orReady = block('main.fl', '#or.#main.ready');
@@ -89,13 +93,17 @@ const panicManual = block('main.fl', '#panic.#main.manual');
 const panicAny = block('main.fl', '#panic.any');
 const round = block('main.fl', '#round');
 const retry = block('main.fl', '#retry');
+if (block('unrelated/unused.fl', '#not_imported')) throw new Error('unimported project file leaked into the entry map');
+if (model.files.some((file) => file.path === 'unrelated/unused.fl')) throw new Error('unimported file was included in the map file list');
+if (model.entryPath !== 'main.fl') throw new Error('entry path was not retained in the model');
 
-if (!main || !start || !add || !invoke || !loop || !orphan || !orReady || !panic || !panicManual || !panicAny || !round || !retry) {
+if (!main || !start || !add || !invoke || !nestedTarget || !loop || !orphan || !orReady || !panic || !panicManual || !panicAny || !round || !retry) {
   throw new Error('block declarations were not indexed');
 }
 if (add.qualifiedName !== '#math_add') throw new Error('module prefix was not applied: ' + add.qualifiedName);
 if (invoke.qualifiedName !== '#caller_invoke') throw new Error('second module prefix was not applied: ' + invoke.qualifiedName);
-if (!edge(invoke, add, 'call')) throw new Error('already-prefixed cross-module call was not resolved');
+if (nestedTarget.qualifiedName !== '#caller_extra_target') throw new Error('nested module prefix was not applied: ' + nestedTarget.qualifiedName);
+if (!edge(invoke, nestedTarget, 'call')) throw new Error('nested imported cross-module call was not resolved');
 if (!edge(main, start, 'jump')) throw new Error('jump edge missing');
 if (!edge(main, add, 'call')) throw new Error('module call edge missing');
 if (!edge(main, loop, 'for') || !edge(main, loop, 'foreach')) throw new Error('loop body edge missing');

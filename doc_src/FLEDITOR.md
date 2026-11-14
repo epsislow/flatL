@@ -116,11 +116,15 @@ Refresh vendored UI: `./scripts/vendor-fleditor-ext.sh`
 
 ## Code Map
 
-The **Code Map** button on the `.fl` editor action bar switches from source editing to an interactive block-transfer graph.
+The **Code Map** button on the `.fl` editor action bar switches from source editing to an interactive block-transfer graph. The graph starts from the currently open `.fl` file and includes only that file plus its transitive `use` dependencies. Unrelated project files are excluded; every reachable file is included once, and isolated blocks inside those files remain visible.
 
-- Every top-level `#block` declaration in project `.fl` files is shown, including blocks with no incoming or outgoing edges.
-- Nodes are grouped by source file. Transfers between files are drawn across file groups.
-- The first version draws `jump`, `call`, `#or` guard/`~` handler, `for`, `foreach`, explicit `PANIC` indexed/line-labelled handlers, and automatic runtime panic routes to `#panic.any` where statically identifiable. Edge clicks navigate to the source instruction; node clicks open the source file and move the cursor to the block declaration.
+The graph has two layout modes, selectable from its toolbar:
+
+- **Connected** (default): blocks are arranged by transfer distance from blocks in the entry file. Nodes from different files can be interleaved; each node shows its source file and line. Disconnected blocks remain visible after the connected portion.
+- **By file**: the same nodes and edges are grouped into columns by source file. Cross-file transfers remain visible.
+
+Both modes use the same graph and transfer model. The analyzer draws `jump`, `call`, `#or` guard/`~` handler, `for`, `foreach`, explicit `PANIC` indexed/line-labelled handlers, and automatic runtime panic routes to `#panic.any` where statically identifiable. Edge clicks navigate to the source instruction; node clicks open the source file and move the cursor to the block declaration.
+
 - `next`, `return`, and user-defined function call graphs are intentionally not represented.
 - `for` / `foreach` targets are resolved from literal block labels or a simple string-label assignment earlier in the same block. For dynamic expressions, a preceding special comment can declare possible destinations: `-- @map target=#round,#retry` or a block comment containing `@map target=#round,#retry`. The hint applies to the next instruction. Hint-derived edges use a dashed line.
 - A dynamic `for` / `foreach` target without a hint is shown as a `Dynamic target` node connected to the loop's source block; the expression and source line are retained. This is informational, not a compiler diagnostic.

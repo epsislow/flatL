@@ -1895,9 +1895,12 @@
     codeMapBtn.title = codeMapVisible ? 'Return to source editor' : 'Show block transfer map';
     if (codeMapVisible) {
       flushEditorToProject();
-      const mapEntry = project.files[P.DEFAULT_MAIN] != null
-        ? P.DEFAULT_MAIN
-        : Object.keys(project.files).find(function (path) { return /\.fl$/i.test(path) && typeof project.files[path] === 'string'; });
+      const openPath = currentOpenPath();
+      const mapEntry = openPath && /\.fl$/i.test(openPath)
+        ? openPath
+        : (project.files[P.DEFAULT_MAIN] != null
+          ? P.DEFAULT_MAIN
+          : Object.keys(project.files).find(function (path) { return /\.fl$/i.test(path) && typeof project.files[path] === 'string'; }));
       codeMapModel = FleditorBlockAnalyzer.analyze(project.files, mapEntry || P.DEFAULT_MAIN);
       FleditorCodeMap.render(codeMapView, codeMapModel, function (block) {
         navigateToBlock(block, block.startLine);

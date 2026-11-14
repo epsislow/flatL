@@ -242,7 +242,8 @@
 
     const rootPath = normalizePath(entryPath || 'main.fl');
     const queue = [{ path: rootPath, prefix: '' }];
-    const visited = {};
+    const visited = Object.create(null);
+    const reachablePaths = [];
     while (queue.length) {
       const item = queue.shift();
       const record = fileRecords[item.path];
@@ -250,20 +251,18 @@
       const visitKey = item.path + '\u0000' + item.prefix;
       if (visited[visitKey]) continue;
       visited[visitKey] = true;
+      if (reachablePaths.indexOf(item.path) === -1) reachablePaths.push(item.path);
       if (!record.prefix) record.prefix = item.prefix;
       record.imports.forEach(function (imp) {
         queue.push({ path: imp.path, prefix: item.prefix + imp.prefix });
       });
     }
 
-    // Files not reachable from the entry still appear as independent project groups.
-    paths.forEach(function (path) {
-      if (!fileRecords[path].prefix && path !== rootPath) fileRecords[path].prefix = '';
-    });
-
+    // The map is scoped to the entry file and its transitive `use` dependencies.
+    const pathsInContext = reachablePaths;
     const blocks = [];
     const blockIndex = {};
-    paths.forEach(function (path) {
+    pathsInContext.forEach(function (path) {
       const record = fileRecords[path];
       record.blocks.forEach(function (block) {
         block.qualifiedName = qualifyBlock(block.name, record.prefix, true);
@@ -415,7 +414,8 @@
       blocks: blocks,
       dynamicNodes: dynamicNodes,
       edges: edges,
-      files: paths.map(function (path) {
+      entryPath: rootPath,
+      files: pathsInContext.map(function (path) {
         return { path: path, prefix: fileRecords[path].prefix, blockCount: fileRecords[path].blocks.length };
       }),
       unresolved: []
