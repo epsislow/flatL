@@ -259,3 +259,8 @@ make fleditor-wasm
 Smoke after rebuild: `make fleditor-wasm-order-flow-smoke`.
 
 Output: **`docs/fleditor_site/wasm/`**. See `Makefile.wasm` (`-DFLAT_WASM_BUILD`, `-s ASYNCIFY=1`).
+
+
+### Code Map layouts (v1.3)
+
+The Code Map provides three interchangeable layouts: **Vertical** (execution layers from top to bottom), **Horizontal** (execution layers from left to right), and **By file** (blocks grouped by source file). All layouts use the same analyzed nodes and transfers; layout changes never filter transfer edges. Edge colors continue to identify transfer types. Selecting a block highlights its incoming and outgoing transfers, and nodes can be repositioned by dragging. Zoom controls are available in the map toolbar.

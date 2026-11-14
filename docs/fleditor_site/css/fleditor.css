@@ -1155,3 +1155,25 @@ body.fleditor-resize-active * {
 .fl-map-node-line { fill: var(--fl-text-muted); font-size: 10px; }
 .fl-code-map-empty { padding: 2rem; color: var(--fl-text-muted); text-align: center; }
 .cm-fl-block-target { background: rgba(250, 204, 21, 0.20) !important; }
+
+/* Code Map v1.3: three layouts, edge focus and draggable nodes. */
+.fl-code-map-toolbar { gap: 0.45rem; }
+.fl-code-map-controls { flex-wrap: wrap; }
+.fl-code-map-mode { touch-action: manipulation; }
+.fl-code-map-viewport { position: relative; }
+.fl-code-map-svg { max-width: none; touch-action: pan-x pan-y; }
+.fl-map-edge { opacity: .72; stroke-width: 2; transition: opacity .12s, stroke-width .12s; pointer-events: stroke; }
+.fl-map-edge-hit { pointer-events: stroke; }
+.fl-map-edge.highlighted { opacity: 1; stroke-width: 3.5; }
+.fl-map-edge.dimmed { opacity: .10; }
+.fl-map-node { cursor: grab; touch-action: none; }
+.fl-map-node:active { cursor: grabbing; }
+.fl-map-node.selected .fl-map-node-bg { stroke: var(--fl-accent, #60a5fa); stroke-width: 2.8; }
+.fl-map-node.dimmed { opacity: .28; }
+.fl-map-node.selected { opacity: 1; }
+@media (max-width: 640px) {
+  .fl-code-map-toolbar { align-items: flex-start; }
+  .fl-code-map-summary { white-space: normal; }
+  .fl-code-map-controls { width: 100%; }
+  .fl-code-map-mode { padding: .28rem .42rem; }
+}
