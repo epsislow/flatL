@@ -7,7 +7,7 @@
   let activeView=null;
 
   function html(name, cls, text) { const e=document.createElement(name); if(cls)e.className=cls; if(text!=null)e.textContent=text; return e; }
-  function key(model){return 'fleditor-code-map:v2:'+ (model.entryPath||'project');}
+  function key(model){return 'fleditor-code-map:v3:'+ (model.entryPath||'project');}
   function loadPositions(model){try{return JSON.parse(root.localStorage.getItem(key(model))||'null');}catch(_){return null;}}
   function savePositions(model, positions){try{const o={};positions.forEach((p,id)=>o[id]={x:p.x,y:p.y});root.localStorage.setItem(key(model),JSON.stringify(o));}catch(_){}}
   function compare(a,b){return a.file.localeCompare(b.file)||a.startLine-b.startLine||a.name.localeCompare(b.name);}
@@ -16,6 +16,28 @@
     ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';
     return Math.max(34,Math.ceil(ctx.measureText(node.kind==='dynamic'?'Dynamic target':node.name).width+4));
   }
+  // Find the longest forward execution path from the entry block.
+  // This becomes the visual spine; other nodes are placed as branches around it.
+  function findMainPath(nodes, forward, roots) {
+    const ids=new Set(nodes.map(n=>n.id)), outgoing=new Map(nodes.map(n=>[n.id,[]]));
+    forward.forEach(e=>{if(ids.has(e.from)&&ids.has(e.to))outgoing.get(e.from).push(e.to);});
+    const memo=new Map(), visiting=new Set();
+    function best(id){
+      if(memo.has(id))return memo.get(id);
+      if(visiting.has(id))return {score:0,path:[id]};
+      visiting.add(id);
+      let choice={score:0,path:[id]};
+      (outgoing.get(id)||[]).forEach(to=>{
+        const next=best(to),candidate={score:1+next.score,path:[id,...next.path]};
+        if(candidate.score>choice.score)choice=candidate;
+      });
+      visiting.delete(id);memo.set(id,choice);return choice;
+    }
+    let result={score:-1,path:[]};
+    roots.forEach(n=>{const candidate=best(n.id);if(candidate.score>result.score)result=candidate;});
+    if(!result.path.length&&nodes.length)result=best(nodes[0].id);
+    return result.path;
+  }
   function layoutGraph(nodes, edges, model, mode, force) {
     const pos=new Map(), rank=new Map(), outgoing=new Map(nodes.map(n=>[n.id,[]])), incoming=new Map(nodes.map(n=>[n.id,[]]));
     const saved=!force?loadPositions(model):null;
@@ -23,8 +45,11 @@
     const entry=model.entryPath||(model.files[0]&&model.files[0].path);
     nodes.forEach(n=>rank.set(n.id,Infinity));
     const queue=[];
-    nodes.filter(n=>n.file===entry&&n.kind!=='dynamic').sort(compare).forEach(n=>{rank.set(n.id,0);queue.push(n.id);});
     edges.forEach(e=>{if(outgoing.has(e.from)&&incoming.has(e.to)){outgoing.get(e.from).push(e.to);incoming.get(e.to).push(e.from);}});
+    const entryNodes=nodes.filter(n=>n.file===entry&&n.kind!=='dynamic');
+    const mainNodes=entryNodes.filter(n=>String(n.name).replace(/^#/,'').toLowerCase()==='main');
+    const roots=mainNodes.length?mainNodes:entryNodes.filter(n=>(incoming.get(n.id)||[]).length===0);
+    (roots.length?roots:entryNodes.slice(0,1)).sort(compare).forEach(n=>{rank.set(n.id,0);queue.push(n.id);});
     for(let i=0;i<queue.length;i++){const id=queue[i];(outgoing.get(id)||[]).forEach(to=>{if(rank.get(to)===Infinity){rank.set(to,rank.get(id)+1);queue.push(to);}});}
     let max=0;rank.forEach(v=>{if(Number.isFinite(v))max=Math.max(max,v);});
     nodes.forEach(n=>{if(!Number.isFinite(rank.get(n.id)))rank.set(n.id,max+1);});
@@ -50,7 +75,40 @@
         arr.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+col*520+(i%columns)*220,y:margin+Math.floor(i/columns)*rowGap});});
       });
     } else {
-      ordered.forEach((arr,col)=>arr.forEach((n,row)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+col*colGap,y:margin+row*rowGap});}));
+      const spine=findMainPath(nodes,forward,roots.length?roots:entryNodes.slice(0,1));
+      const spineIndex=new Map(spine.map((id,i)=>[id,i]));
+      const parentMap=new Map(nodes.map(n=>[n.id,[]]));
+      forward.forEach(e=>{if(parentMap.has(e.to))parentMap.get(e.to).push(e.from);});
+      function spineAnchor(id){
+        const seen=new Set(),q=[id];
+        while(q.length){const current=q.shift();if(spineIndex.has(current))return spineIndex.get(current);if(seen.has(current))continue;seen.add(current);(parentMap.get(current)||[]).forEach(v=>q.push(v));}
+        return -1;
+      }
+      const branchGroups=new Map();
+      nodes.forEach(n=>{if(spineIndex.has(n.id))return;const anchor=spineAnchor(n.id);if(!branchGroups.has(anchor))branchGroups.set(anchor,[]);branchGroups.get(anchor).push(n);});
+      // Keep the main path on one readable horizontal spine.
+      const spineY=margin+Math.max(0,...Array.from(branchGroups.values(),a=>a.length))*rowGap*.35+rowGap;
+      spine.forEach((id,i)=>{if(!pos.has(id))pos.set(id,{x:margin+i*colGap,y:spineY});});
+      // Branches are clustered near the spine node they originate from.
+      const branchByRank=new Map();
+      branchGroups.forEach((arr,anchor)=>{
+        arr.sort((a,b)=>rank.get(a.id)-rank.get(b.id)||compare(a,b));
+        arr.forEach(n=>{
+          const r=rank.get(n.id),anchorX=anchor>=0?anchor:0;
+          if(!branchByRank.has(r))branchByRank.set(r,[]);
+          branchByRank.get(r).push({node:n,anchor:anchorX});
+        });
+      });
+      branchByRank.forEach((arr,r)=>{
+        arr.sort((a,b)=>a.anchor-b.anchor||compare(a.node,b.node));
+        arr.forEach((item,i)=>{
+          if(pos.has(item.node.id))return;
+          const side=(i%2===0?1:-1),slot=Math.floor(i/2)+1;
+          pos.set(item.node.id,{x:margin+r*colGap,y:spineY+side*slot*rowGap});
+        });
+      });
+      // Disconnected/import-only blocks remain in a compact side area.
+      nodes.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+(i%4)*colGap,y:spineY+((i%2)?-1:1)*(Math.floor(i/4)+2)*rowGap});});
     }
     // Place any nodes added after a saved layout without moving existing nodes.
     nodes.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+(i%5)*colGap,y:margin+Math.floor(i/5)*rowGap});});
