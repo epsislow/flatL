@@ -75,57 +75,84 @@
     } catch (_) {}
   }
   function computePositions(nodes, edges, model, mode, forceArrange) {
-    const positions = new Map();
-    const nodeW=252,nodeH=58,gapX=100,gapY=76,margin=64,grid=24;
-    if (mode === 'by-file') {
-      const groups=new Map((model.files||[]).map(f=>[f.path,[]]));
-      nodes.forEach(n=>{if(!groups.has(n.file))groups.set(n.file,[]);groups.get(n.file).push(n);});
-      const entries=Array.from(groups.entries());
-      entries.forEach(([file,arr],col)=>arr.sort(nodeCompare).forEach((n,row)=>positions.set(n.id,{x:margin+col*(nodeW+gapX),y:margin+row*(nodeH+gapY),file})));
-      return {positions,nodeW,nodeH,groups:entries,width:margin*2+entries.length*(nodeW+gapX),height:Math.max(420,...entries.map(x=>margin+x[1].length*(nodeH+gapY)))};
-    }
+    const positions = new Map(), nodeW=180, nodeH=28, margin=72, grid=20, gapX=260, gapY=100;
     const saved=!forceArrange?loadSavedPositions(model):null;
     if(saved) nodes.forEach(n=>{const p=saved[n.id];if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))positions.set(n.id,{x:p.x,y:p.y});});
-    if(positions.size===nodes.length) return boundsFor(positions,nodeW,nodeH);
-    // Layered 2D grid: BFS depth gives a readable execution direction; each
-    // layer is spread over a compact grid and adjacent layers are staggered.
-    const graph=getLayers(nodes,edges,model.entryPath||(model.files[0]&&model.files[0].path));
-    const layers=orderLayers(graph.layers,edges,graph.depth);
-    const maxRows=Math.max(2,Math.ceil(Math.sqrt(Math.max(1,nodes.length))));
-    layers.forEach((arr,layer)=>{
-      arr.forEach((n,index)=>{
-        if(positions.has(n.id))return;
-        const band=Math.floor(index/maxRows),slot=index%maxRows;
-        const direction=band%2===0?1:-1;
-        const x=margin+layer*(nodeW+gapX)+band*(nodeW+36);
-        const y=margin+slot*(nodeH+gapY)+(layer%2)*28;
-        positions.set(n.id,{x:Math.round(x/grid)*grid,y:Math.round(y/grid)*grid,layer,slot});
-      });
-    });
-    return boundsFor(positions,nodeW,nodeH);
-  }
-  function boundsFor(positions,nodeW,nodeH) {
-    let maxX=0,maxY=0;
-    positions.forEach(p=>{maxX=Math.max(maxX,p.x+nodeW);maxY=Math.max(maxY,p.y+nodeH);});
-    return {positions,nodeW,nodeH,width:maxX+100,height:maxY+100};
-  }
-
-  // Orthogonal routing uses short ports and a dedicated offset lane per edge.
-  // The path is kept outside node rectangles; parallel transfers get separate lanes.
-  function routeEdge(from,to,edge,index,mode,nodeW,nodeH) {
-    const dx=(to.x+nodeW/2)-(from.x+nodeW/2),dy=(to.y+nodeH/2)-(from.y+nodeH/2);
-    const offset=((index%9)-4)*7;
-    const horizontal=Math.abs(dx)>=Math.abs(dy);
-    if(horizontal) {
-      const forward=dx>=0,x1=forward?from.x+nodeW:from.x,x2=forward?to.x:to.x+nodeW;
-      const y1=from.y+nodeH/2,y2=to.y+nodeH/2;
-      const laneX=(x1+x2)/2+offset;
-      return `M ${x1} ${y1} L ${laneX} ${y1} L ${laneX} ${y2} L ${x2} ${y2}`;
+    if(positions.size!==nodes.length) {
+      const graph=getLayers(nodes,edges,model.entryPath||(model.files[0]&&model.files[0].path));
+      const layers=orderLayers(graph.layers,edges,graph.depth);
+      if(mode==='by-file') {
+        const files=Array.from(new Set(nodes.map(n=>n.file))).sort();
+        files.forEach((file,col)=>{
+          const arr=nodes.filter(n=>n.file===file).sort(nodeCompare);
+          const cols=Math.max(1,Math.ceil(Math.sqrt(arr.length)));
+          arr.forEach((n,i)=>{if(!positions.has(n.id))positions.set(n.id,{x:margin+col*gapX+(i%cols)*120,y:margin+Math.floor(i/cols)*gapY});});
+        });
+      } else {
+        layers.forEach((arr,layer)=>arr.forEach((n,i)=>{
+          if(!positions.has(n.id)) positions.set(n.id,{x:margin+layer*gapX,y:margin+i*gapY});
+        }));
+      }
     }
-    const down=dy>=0,y1=down?from.y+nodeH:from.y,y2=down?to.y:to.y+nodeH;
-    const x1=from.x+nodeW/2,x2=to.x+nodeW/2;
-    const laneY=(y1+y2)/2+offset;
-    return `M ${x1} ${y1} L ${x1} ${laneY} L ${x2} ${laneY} L ${x2} ${y2}`;
+    // Keep manually saved positions, but snap automatically-created positions to the routing grid.
+    positions.forEach((p,id)=>{p.x=Math.round(p.x/grid)*grid;p.y=Math.round(p.y/grid)*grid;});
+    const maxX=Math.max(500,...Array.from(positions.values(),p=>p.x+nodeW+150));
+    const maxY=Math.max(420,...Array.from(positions.values(),p=>p.y+nodeH+100));
+    return {positions,nodeW,nodeH,width:maxX,height:maxY,groups:Array.from(new Set(nodes.map(n=>n.file))).map(f=>[f,nodes.filter(n=>n.file===f)])};
+  }
+  function routeAll(nodes, edges, positions, nodeW, nodeH) {
+    const step=20, radius=12, occupied=new Set(), usedSegments=new Set(), routes=[];
+    const byId=new Map(nodes.map(n=>[n.id,n]));
+    const center=id=>{const p=positions.get(id);return p?{x:p.x+radius,y:p.y+radius}:null;};
+    const key=(x,y)=>x+','+y;
+    const segKey=(a,b)=>[key(a.x,a.y),key(b.x,b.y)].sort().join('|');
+    const nodeCells=new Set();
+    nodes.forEach(n=>{const c=center(n.id);if(!c)return;for(let x=-2;x<=2;x++)for(let y=-2;y<=2;y++)if(x*x+y*y<=5)nodeCells.add(key(Math.round(c.x/step)+x,Math.round(c.y/step)+y));});
+    const ordered=edges.map((e,i)=>({e,i})).sort((a,b)=>{
+      const ca=center(a.e.from),cb=center(a.e.to),da=center(a.e.from),db=center(a.e.to);
+      return (Math.hypot(db.x-da.x,db.y-da.y)-Math.hypot(cb.x-ca.x,cb.y-ca.y));
+    });
+    function port(from,to,edge,source) {
+      const a=center(from),b=center(to);if(!a||!b)return null;
+      const angle=Math.atan2(b.y-a.y,b.x-a.x);
+      const c={x:a.x+Math.cos(angle)*(radius+step),y:a.y+Math.sin(angle)*(radius+step)};
+      return {x:Math.round(c.x/step),y:Math.round(c.y/step)};
+    }
+    function astar(start,goal) {
+      const open=[{x:start.x,y:start.y,g:0,f:Math.hypot(goal.x-start.x,goal.y-start.y)}], came=new Map(), costs=new Map([[key(start.x,start.y),0]]), closed=new Set();
+      let found=null, iterations=0;
+      while(open.length&&iterations++<30000){
+        open.sort((a,b)=>a.f-b.f);const cur=open.shift(),ck=key(cur.x,cur.y);if(closed.has(ck))continue;closed.add(ck);
+        if(cur.x===goal.x&&cur.y===goal.y){found=cur;break;}
+        for(let dx=-1;dx<=1;dx++)for(let dy=-1;dy<=1;dy++){
+          if(!dx&&!dy)continue;const nx=cur.x+dx,ny=cur.y+dy,nk=key(nx,ny);
+          if(nodeCells.has(nk)&&!(nx===goal.x&&ny===goal.y))continue;
+          if(occupied.has(nk)&&!(nx===goal.x&&ny===goal.y))continue;
+          const sk=segKey(cur,{x:nx,y:ny});if(usedSegments.has(sk))continue;
+          if(dx&&dy&&usedSegments.has(segKey({x:cur.x+dx,y:cur.y},{x:cur.x,y:cur.y+dy})))continue;
+          // Prevent diagonal corner-cutting through occupied cells.
+          if(dx&&dy&&(occupied.has(key(cur.x+dx,cur.y))||occupied.has(key(cur.x,cur.y+dy))))continue;
+          const ng=cur.g+(dx&&dy?Math.SQRT2:1)+(dx&&dy?0.15:0);
+          if(ng>=(costs.get(nk)??Infinity))continue;
+          costs.set(nk,ng);came.set(nk,ck);open.push({x:nx,y:ny,g:ng,f:ng+Math.hypot(goal.x-nx,goal.y-ny)});
+        }
+      }
+      if(!found)return null;const path=[];let k=key(found.x,found.y);
+      while(k){const [x,y]=k.split(',').map(Number);path.push({x,y});k=came.get(k);}
+      return path.reverse();
+    }
+    ordered.forEach(({e,i})=>{
+      const a=port(e.from,e.to,e,true),b=port(e.to,e.from,e,false);if(!a||!b)return;
+      // Ports are outside node keep-out zones; retry with expanding routing space.
+      let path=astar(a,b);
+      if(!path){const pad=8+i%5;const s={x:a.x+(a.x<b.x?-pad:pad),y:a.y+(a.y<b.y?-pad:pad)},t={x:b.x+(b.x<a.x?-pad:pad),y:b.y+(b.y<a.y?-pad:pad)};path=astar(s,t);if(path)path=[a,...path,b];}
+      if(!path){routes[i]=null;return;}
+      path.forEach((pt,j)=>{occupied.add(key(pt.x,pt.y));if(j)usedSegments.add(segKey(path[j-1],pt));});
+      // Simplify collinear grid points while preserving 45-degree bends.
+      const simple=path.filter((pt,j)=>j===0||j===path.length-1||((pt.x-path[j-1].x)*(path[j+1].y-pt.y)!==(pt.y-path[j-1].y)*(path[j+1].x-pt.x)));
+      routes[i]='M '+simple.map(pt=>(pt.x*step)+' '+(pt.y*step)).join(' L ');
+    });
+    return routes;
   }
 
   function render(host, model, onNodeClick, onEdgeClick, forceArrange) {
@@ -157,31 +184,32 @@
     const positions=layout.positions;
     manualPositions.forEach((p,id)=>{if(positions.has(id))Object.assign(positions.get(id),p);});
     const width=layout.width,height=layout.height;
+    const routedPaths=routeAll(nodes,model.edges,positions,layout.nodeW,layout.nodeH);
     const svg=svgElement('svg',{class:'fl-code-map-svg',width:Math.ceil(width*zoom),height:Math.ceil(height*zoom),viewBox:`0 0 ${width} ${height}`,role:'img','aria-label':'FlatL block transfer map'});
     const defs=svgElement('defs');Object.keys(COLORS).forEach(type=>{const marker=svgElement('marker',{id:'fl-map-arrow-'+type,markerWidth:8,markerHeight:8,refX:6,refY:3,orient:'auto',markerUnits:'strokeWidth'});marker.appendChild(svgElement('path',{d:'M0,0 L0,6 L6,3 z',fill:COLORS[type]}));defs.appendChild(marker);});svg.appendChild(defs);
     if(displayMode==='by-file'){
-      layout.groups.forEach(([file,arr],col)=>{if(!arr.length)return;const x=Math.min(...arr.map(n=>positions.get(n.id).x))-14;const y=26;const bottom=Math.max(...arr.map(n=>positions.get(n.id).y+layout.nodeH))+16;
-        svg.appendChild(svgElement('rect',{x,y,width:layout.nodeW+28,height:bottom-y,rx:10,class:'fl-map-file-bg'}));svg.appendChild(svgElement('text',{x:x+14,y:y+22,class:'fl-map-file-title'},file));});
+      layout.groups.forEach(([file,arr])=>{if(!arr.length)return;const x=Math.min(...arr.map(n=>positions.get(n.id).x))-24;const y=Math.min(...arr.map(n=>positions.get(n.id).y))-38;const right=Math.max(...arr.map(n=>positions.get(n.id).x))+220;const bottom=Math.max(...arr.map(n=>positions.get(n.id).y))+48;
+        svg.appendChild(svgElement('rect',{x,y,width:right-x,height:bottom-y,rx:10,class:'fl-map-file-bg'}));svg.appendChild(svgElement('text',{x:x+12,y:y+20,class:'fl-map-file-title'},file));});
     }
     // Draw every model edge exactly once; none are filtered by layout or direction.
     model.edges.forEach((edge,index)=>{
       const from=positions.get(edge.from),to=positions.get(edge.to);if(!from||!to)return;
-      const d=routeEdge(from,to,edge,index,displayMode,layout.nodeW,layout.nodeH);const color=COLORS[edge.type]||'#a1a1aa';
+      const d=routedPaths[index];if(!d)return;const color=COLORS[edge.type]||'#a1a1aa';
       const path=svgElement('path',{d,class:'fl-map-edge'+(edge.resolution==='hint'?' fl-map-edge-hint':edge.resolution==='dynamic'?' fl-map-edge-dynamic':''),stroke:color,'marker-end':'url(#fl-map-arrow-'+(COLORS[edge.type]?edge.type:'jump')+')','data-from':edge.from,'data-to':edge.to});
       path.appendChild(svgElement('title',{},edge.type+' · line '+edge.lines.join(', ')+(edge.resolution==='hint'?' · @map hint':edge.resolution==='dynamic'?' · dynamic target':'')));
       const hit=svgElement('path',{d,class:'fl-map-edge-hit'});hit.addEventListener('click',ev=>{ev.stopPropagation();if(onEdgeClick)onEdgeClick(edge);});
       path.addEventListener('click',ev=>{ev.stopPropagation();if(onEdgeClick)onEdgeClick(edge);});svg.appendChild(path);svg.appendChild(hit);
     });
     nodes.forEach(block=>{
-      const p=positions.get(block.id);if(!p)return;const dynamic=block.kind==='dynamic';const g=svgElement('g',{class:'fl-map-node'+(dynamic?' fl-map-node-dynamic':'')+(selectedNodeId===block.id?' selected':''),tabindex:0,role:'button','data-node-id':block.id});
-      g.appendChild(svgElement('rect',{x:p.x,y:p.y,width:layout.nodeW,height:layout.nodeH,rx:7,class:'fl-map-node-bg'}));
-      g.appendChild(svgElement('text',{x:p.x+12,y:p.y+22,class:'fl-map-node-name'},dynamic?'Dynamic target':block.name));
-      g.appendChild(svgElement('text',{x:p.x+12,y:p.y+41,class:'fl-map-node-line'},dynamic?String(block.expression||'runtime value'):block.file+' · line '+block.startLine));
+      const p=positions.get(block.id);if(!p)return;const dynamic=block.kind==='dynamic';
+      const g=svgElement('g',{class:'fl-map-node'+(dynamic?' fl-map-node-dynamic':'')+(selectedNodeId===block.id?' selected':''),tabindex:0,role:'button','data-node-id':block.id});
+      g.appendChild(svgElement('circle',{cx:p.x+12,cy:p.y+12,r:10,class:'fl-map-node-bg'}));
+      g.appendChild(svgElement('text',{x:p.x+30,y:p.y+16,class:'fl-map-node-name'},dynamic?'Dynamic target':block.name));
+      g.appendChild(svgElement('title',{},block.file+' · line '+block.startLine));
       function activate(ev){if(ev.type==='keydown'&&ev.key!=='Enter'&&ev.key!==' ')return;if(ev.type==='keydown')ev.preventDefault();selectedNodeId=block.id;highlight();if(onNodeClick)onNodeClick(block);}
       g.addEventListener('click',activate);g.addEventListener('keydown',activate);
-      // Pointer drag: manual positions are retained when switching back to this layout.
       g.addEventListener('pointerdown',ev=>{if(ev.button!==0)return;const startX=ev.clientX,startY=ev.clientY,orig={x:p.x,y:p.y};g.setPointerCapture(ev.pointerId);
-        function move(e){const scale=zoom;const next={x:orig.x+(e.clientX-startX)/scale,y:orig.y+(e.clientY-startY)/scale};p.x=next.x;p.y=next.y;manualPositions.set(block.id,next);savePositions(model,positions);g.querySelector('rect').setAttribute('x',p.x);g.querySelectorAll('text').forEach((t,i)=>t.setAttribute('x',p.x+12));g.querySelectorAll('text').forEach((t,i)=>t.setAttribute('y',p.y+(i===0?22:41)));redrawEdges();}
+        function move(e){const next={x:orig.x+(e.clientX-startX)/zoom,y:orig.y+(e.clientY-startY)/zoom};p.x=next.x;p.y=next.y;manualPositions.set(block.id,next);savePositions(model,positions);g.querySelector('circle').setAttribute('cx',p.x+12);g.querySelector('circle').setAttribute('cy',p.y+12);g.querySelector('text').setAttribute('x',p.x+30);g.querySelector('text').setAttribute('y',p.y+16);redrawEdges();}
         function up(){g.removeEventListener('pointermove',move);g.removeEventListener('pointerup',up);}g.addEventListener('pointermove',move);g.addEventListener('pointerup',up,{once:true});});
       svg.appendChild(g);
     });
@@ -190,7 +218,7 @@
       svg.querySelectorAll('.fl-map-node').forEach(n=>{const id=n.getAttribute('data-node-id');n.classList.toggle('selected',id===selectedNodeId);n.classList.toggle('dimmed',selectedNodeId!==null&&!connected.has(id));});
       svg.querySelectorAll('.fl-map-edge').forEach(e=>{const active=e.getAttribute('data-from')===selectedNodeId||e.getAttribute('data-to')===selectedNodeId;e.classList.toggle('highlighted',active);e.classList.toggle('dimmed',selectedNodeId!==null&&!active);});
     }
-    function redrawEdges(){const paths=svg.querySelectorAll('.fl-map-edge, .fl-map-edge-hit');let i=0;model.edges.forEach((edge,index)=>{const a=positions.get(edge.from),b=positions.get(edge.to);if(!a||!b)return;const d=routeEdge(a,b,edge,index,displayMode,layout.nodeW,layout.nodeH);paths[i++].setAttribute('d',d);paths[i++].setAttribute('d',d);});}
+    function redrawEdges(){const next=routeAll(nodes,model.edges,positions,layout.nodeW,layout.nodeH);const paths=svg.querySelectorAll('.fl-map-edge, .fl-map-edge-hit');let i=0;model.edges.forEach((edge,index)=>{const d=next[index];if(!d)return;paths[i++].setAttribute('d',d);paths[i++].setAttribute('d',d);});}
     svg.addEventListener('click',ev=>{if(ev.target===svg){selectedNodeId=null;highlight();}});
     highlight();viewport.appendChild(svg);
   }
