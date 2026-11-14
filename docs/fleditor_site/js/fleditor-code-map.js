@@ -121,32 +121,31 @@
   const PORT_ANGLES=[-90,-60,-30,0,30,60,90,120,150,180,210,240];
   function choosePorts(a,b,edge,index,edges,positions){
     const angle=Math.atan2(b.y-a.y,b.x-a.x);
-    const sourceOrder=PORT_ANGLES.map((deg,i)=>({i,delta:Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-angle),Math.cos(deg*Math.PI/180-angle)))})).sort((x,y)=>x.delta-y.delta);
-    const reverse=angle+Math.PI;
-    const targetOrder=PORT_ANGLES.map((deg,i)=>({i,delta:Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-reverse),Math.cos(deg*Math.PI/180-reverse)))})).sort((x,y)=>x.delta-y.delta);
+    const nearest=target=>PORT_ANGLES.map((deg,i)=>({i,delta:Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-target),Math.cos(deg*Math.PI/180-target)))})).sort((x,y)=>x.delta-y.delta);
     const usedOut=new Map(),usedIn=new Map();
-    edges.forEach((e,j)=>{if(j>=index)return;if(e.from===edge.from)usedOut.set(e._portOut,(usedOut.get(e._portOut)||0)+1);if(e.to===edge.to)usedIn.set(e._portIn,(usedIn.get(e._portIn)||0)+1);});
-    const out=sourceOrder.find(x=>!usedOut.has(x.i))||sourceOrder[0],inn=targetOrder.find(x=>!usedIn.has(x.i))||targetOrder[0];
-    edge._portOut=out.i;edge._portIn=inn.i;
+    edges.forEach((e,j)=>{if(j>=index)return;if(e.from===edge.from&&Number.isInteger(e._portOut))usedOut.set(e._portOut,true);if(e.to===edge.to&&Number.isInteger(e._portIn))usedIn.set(e._portIn,true);});
+    // Assign ports once per edge. Keeping them fixed prevents the connection
+    // from jumping around the node while the user drags either endpoint.
+    if(!Number.isInteger(edge._portOut))edge._portOut=(nearest(angle).find(x=>!usedOut.has(x.i))||nearest(angle)[0]).i;
+    if(!Number.isInteger(edge._portIn)){const order=nearest(angle+Math.PI);edge._portIn=(order.find(x=>!usedIn.has(x.i))||order[0]).i;}
     const point=(p,i)=>{const r=11,rad=PORT_ANGLES[i]*Math.PI/180;return {x:p.x+Math.cos(rad)*r,y:p.y+Math.sin(rad)*r};};
-    return [point(a,out.i),point(b,inn.i)];
+    return [point(a,edge._portOut),point(b,edge._portIn)];
   }
   function route(a,b,edge,index,edges){
     const [s,e]=choosePorts(a,b,edge,index,edges);
     const dx=e.x-s.x,dy=e.y-s.y;
+    if(edge.from===edge.to){
+      const side=edge._portOut%2===0?1:-1,reach=34;
+      return [s,{x:s.x+side*reach,y:s.y-reach},{x:e.x-side*reach,y:e.y-reach},e];
+    }
     if(Math.hypot(dx,dy)<22)return [s,e];
-    // Prefer a compact 45-degree dogleg; use a short lead from each port.
-    const sx=s.x+Math.sign(dx||1)*5,sy=s.y+Math.sign(dy||1)*5;
-    const ex=e.x-Math.sign(dx||1)*5,ey=e.y-Math.sign(dy||1)*5;
-    const adx=ex-sx,ady=ey-sy,diag=Math.min(Math.abs(adx),Math.abs(ady));
-    if(diag<10)return [s,{x:sx,y:sy},{x:ex,y:ey},e];
-    const signX=Math.sign(adx),signY=Math.sign(ady);
-    const bend1={x:sx+signX*diag,y:sy+signY*diag};
-    const bend2={x:ex-signX*diag,y:ey-signY*diag};
-    const pts=[s,{x:sx,y:sy},bend1];
-    if(Math.hypot(bend2.x-bend1.x,bend2.y-bend1.y)>8)pts.push(bend2);
-    pts.push({x:ex,y:ey},e);
-    return pts;
+    // At most one 45-degree segment followed by one straight segment.
+    // This removes the multi-bend Z routes produced by the previous router.
+    const diagonal=Math.min(Math.abs(dx),Math.abs(dy));
+    if(diagonal<8)return [s,e];
+    const bend={x:s.x+Math.sign(dx)*diagonal,y:s.y+Math.sign(dy)*diagonal};
+    if(Math.hypot(e.x-bend.x,e.y-bend.y)<3)return [s,e];
+    return [s,bend,e];
   }
   function segmentCross(a,b,c,d){
     const cross=(p,q,r)=>(q.x-p.x)*(r.y-p.y)-(q.y-p.y)*(r.x-p.x);
