@@ -1919,7 +1919,7 @@
         const source = codeMapModel.blocks.find(function (block) { return block.id === edge.from; });
         if (source) navigateToBlock(source, edge.lines.length ? edge.lines[0] : source.startLine);
       });
-      FleditorCodeMap.setSelectedNode(getCodeMapSelection());
+      FleditorCodeMap.setSelectedNode(getCodeMapSelection(), true);
     } else {
       cm.refresh();
       cm.focus();
