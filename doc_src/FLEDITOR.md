@@ -125,6 +125,8 @@ The graph has two layout modes, selectable from its toolbar:
 
 Both modes use the same graph and transfer model. The analyzer draws `jump`, `call`, `#or` guard/`~` handler, `for`, `foreach`, explicit `PANIC` indexed/line-labelled handlers, and automatic runtime panic routes to `#panic.any` where statically identifiable. Edge clicks navigate to the source instruction; node clicks open the source file and move the cursor to the block declaration.
 
+- The selected node follows the cursor in the source editor: a cursor inside a block selects that block; a cursor outside all blocks clears the selection. Moving focus away from the editor preserves the last cursor position and therefore the last selection.
+- The selected block and its direct neighbours/transfers are highlighted, while the rest of the graph stays visible at reduced emphasis. Every node remains draggable regardless of selection.
 - `next`, `return`, and user-defined function call graphs are intentionally not represented.
 - `for` / `foreach` targets are resolved from literal block labels or a simple string-label assignment earlier in the same block. For dynamic expressions, a preceding special comment can declare possible destinations: `-- @map target=#round,#retry` or a block comment containing `@map target=#round,#retry`. The hint applies to the next instruction. Hint-derived edges use a dashed line.
 - A dynamic `for` / `foreach` target without a hint is shown as a `Dynamic target` node connected to the loop's source block; the expression and source line are retained. This is informational, not a compiler diagnostic.

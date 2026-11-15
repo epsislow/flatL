@@ -1885,6 +1885,17 @@
     }
   }
 
+  function getCodeMapSelection() {
+    if (!cm || !codeMapModel || !currentOpenPath()) return null;
+    const cursor = cm.getCursor();
+    const line = cursor.line + 1;
+    const path = currentOpenPath();
+    const block = codeMapModel.blocks.find(function (item) {
+      return item.file === path && line >= item.startLine && line <= item.endLine;
+    });
+    return block ? block.id : null;
+  }
+
   function setCodeMapVisible(visible) {
     if (!cm || !codeMapView || !codeMapBtn) return;
     codeMapVisible = !!visible;
@@ -1908,6 +1919,7 @@
         const source = codeMapModel.blocks.find(function (block) { return block.id === edge.from; });
         if (source) navigateToBlock(source, edge.lines.length ? edge.lines[0] : source.startLine);
       });
+      FleditorCodeMap.setSelectedNode(getCodeMapSelection());
     } else {
       cm.refresh();
       cm.focus();

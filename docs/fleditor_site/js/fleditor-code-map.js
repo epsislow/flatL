@@ -6,6 +6,11 @@
   let displayMode='graph', zoom=1, selectedNodeId=null, manualPositions=new Map();
   let activeView=null;
 
+  function setSelectedNode(id){
+    selectedNodeId=id||null;
+    if(activeView&&typeof activeView.draw==='function')activeView.draw();
+  }
+
   function html(name, cls, text) { const e=document.createElement(name); if(cls)e.className=cls; if(text!=null)e.textContent=text; return e; }
   function key(model){return 'fleditor-code-map:v3:'+ (model.entryPath||'project');}
   function loadPositions(model){try{return JSON.parse(root.localStorage.getItem(key(model))||'null');}catch(_){return null;}}
@@ -245,7 +250,7 @@
         const a=positions.get(edge.from),b=positions.get(edge.to);if(!a||!b)return;
         const pts=route(a,b,edge,index,model.edges);edgePaths[i].pts=pts;
         const active=selectedNodeId===edge.from||selectedNodeId===edge.to;
-        ctx.save();ctx.strokeStyle=COLORS[edge.type]||'#a1a1aa';ctx.lineWidth=selectedNodeId&&!active?1.2:1.8;ctx.globalAlpha=selectedNodeId&&!active?.18:.82;
+        ctx.save();ctx.strokeStyle=COLORS[edge.type]||'#a1a1aa';ctx.lineWidth=selectedNodeId&&!active?1.2:1.8;ctx.globalAlpha=selectedNodeId&&!active?.42:.82;
         if(edge.resolution==='hint')ctx.setLineDash([6,4]);else if(edge.resolution==='dynamic')ctx.setLineDash([2,4]);
         ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let j=1;j<pts.length;j++)ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();ctx.setLineDash([]);
         if(active){ctx.lineWidth=4;ctx.globalAlpha=.22;ctx.stroke();}
@@ -253,7 +258,7 @@
       });
       nodes.forEach(n=>{
         const p=positions.get(n.id);if(!p)return;const dynamic=n.kind==='dynamic',selected=selectedNodeId===n.id,connected=!selectedNodeId||selected||model.edges.some(e=>(e.from===selectedNodeId&&e.to===n.id)||(e.to===selectedNodeId&&e.from===n.id));
-        const label=dynamic?'Dynamic target':n.name;ctx.save();ctx.globalAlpha=connected?1:.2;
+        const label=dynamic?'Dynamic target':n.name;ctx.save();ctx.globalAlpha=connected?1:.62;
         ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fillStyle='#202631';ctx.fill();ctx.lineWidth=selected?3:1.8;ctx.strokeStyle=selected?'#facc15':dynamic?'#d97706':'#8b8b9c';ctx.setLineDash(dynamic?[3,2]:[]);ctx.stroke();ctx.setLineDash([]);
         ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';ctx.fillStyle='#e4e4e7';ctx.textBaseline='middle';ctx.fillText(label,p.x+18,p.y+2);
         ctx.restore();
@@ -297,5 +302,5 @@
     activeView={resize:resizeCanvas,draw};resize();
     if(typeof ResizeObserver!=='undefined'){const ro=new ResizeObserver(resize);ro.observe(viewport);}
   }
-  root.FleditorCodeMap={render:render};
+  root.FleditorCodeMap={render:render,setSelectedNode:setSelectedNode};
 }(typeof window!=='undefined'?window:this));
