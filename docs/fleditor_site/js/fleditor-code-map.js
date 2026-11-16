@@ -112,7 +112,7 @@
       });layer.forEach((n,i)=>order.set(n.id,i));});
       sweep(ordered.slice(1),pred);sweep(ordered.slice(0,-1).reverse(),succ);
     }
-    const colGap=250,rowGap=76,margin=70;
+    const colGap=250,rowGap=76,margin=70,hubChildren=new Map();
     if(mode==='by-file'){
       const files=Array.from(new Set(nodes.map(n=>n.file))).sort();
       files.forEach((file,col)=>{const arr=nodes.filter(n=>n.file===file).sort(compare);const columns=Math.max(1,Math.ceil(Math.sqrt(arr.length/3)));
@@ -139,6 +139,7 @@
         const unique=Array.from(new Set(elist.map(e=>e.to).filter(t=>t!==parentId&&byId.has(t))));
         if(unique.length<HUB_OUT_MIN)return;
         const parent=pos.get(parentId);if(!parent)return;
+        hubChildren.set(parentId,unique);
         placeHubThreeBands(parent,unique.map(id=>byId.get(id)).sort(compare),pos,hubPlaced,colGap,rowGap);
       });
       // Branches are clustered near the spine node they originate from.
@@ -164,7 +165,7 @@
     }
     // Place any nodes added after a saved layout without moving existing nodes.
     nodes.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+(i%5)*colGap,y:margin+Math.floor(i/5)*rowGap});});
-    if(mode!=='by-file' && force) optimizeLayout(nodes,edges,pos);
+    if(mode!=='by-file' && force){optimizeLayout(nodes,edges,pos,hubChildren,rowGap);relaxHubSiblings(pos,hubChildren,rowGap);}
     // Branches and the auto-arrange pass can place nodes above or left of the
     // origin. The canvas cannot scroll below zero, so pull the whole graph in.
     containPositions(pos,function(_id,p){return {left:p.x-NODE_R,top:p.y-NODE_R};});
@@ -324,9 +325,58 @@
     const x1=cross(a,b,c),x2=cross(a,b,d),x3=cross(c,d,a),x4=cross(c,d,b);
     return x1*x2<-.01&&x3*x4<-.01;
   }
-  function layoutCost(nodes,edges,pos){
+  function angleDelta(a,b){let d=a-b;while(d>Math.PI)d-=Math.PI*2;while(d<-Math.PI)d+=Math.PI*2;d=Math.abs(d);if(d>Math.PI)d=Math.PI*2-d;return d;}
+  function orderedHubChildren(parent,childIds,pos){
+    return childIds.map(id=>({id,p:pos.get(id)})).filter(x=>x.p).sort((a,b)=>{
+      const aa=Math.atan2(a.p.y-parent.y,a.p.x-parent.x),ab=Math.atan2(b.p.y-parent.y,b.p.x-parent.x);
+      return aa-ab;
+    });
+  }
+  function hubSiblingCost(pos,hubs,rowGap){
+    let cost=0;const minAng=Math.PI/16,minD=rowGap*.85;
+    hubs.forEach((childIds,parentId)=>{
+      const parent=pos.get(parentId);if(!parent)return;
+      const ord=orderedHubChildren(parent,childIds,pos);
+      for(let i=0;i<ord.length-1;i++){
+        const a=ord[i].p,b=ord[i+1].p,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);
+        if(d<minD)cost+=(minD-d)*70;
+        const ai=Math.atan2(a.y-parent.y,a.x-parent.x),aj=Math.atan2(b.y-parent.y,b.x-parent.x);
+        const da=angleDelta(ai,aj);
+        if(da<minAng)cost+=(minAng-da)*2400;
+      }
+    });
+    return cost;
+  }
+  function relaxHubSiblings(pos,hubs,rowGap){
+    const minDist=rowGap*.92,minAng=Math.PI/16;
+    hubs.forEach((childIds,parentId)=>{
+      const parent=pos.get(parentId);if(!parent)return;
+      const ord=orderedHubChildren(parent,childIds,pos);
+      for(let iter=0;iter<48;iter++){
+        let moved=false;
+        for(let i=0;i<ord.length;i++){
+          for(let j=i+1;j<Math.min(i+3,ord.length);j++){
+            const a=ord[i].p,b=ord[j].p,dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+            if(d<minDist){const push=(minDist-d)*.7;a.x-=push*dx/d;a.y-=push*dy/d;b.x+=push*dx/d;b.y+=push*dy/d;moved=true;}
+          }
+          if(i+1<ord.length){
+            const a=ord[i].p,b=ord[i+1].p;
+            const ai=Math.atan2(a.y-parent.y,a.x-parent.x),aj=Math.atan2(b.y-parent.y,b.x-parent.x);
+            const da=angleDelta(ai,aj);
+            if(da<minAng){
+              const rb=Math.hypot(b.x-parent.x,b.y-parent.y)||minDist;
+              const ng=aj+(minAng-da)*.6;
+              b.x=parent.x+Math.cos(ng)*rb;b.y=parent.y+Math.sin(ng)*rb;
+              moved=true;
+            }
+          }
+        }
+        if(!moved)break;
+      }
+    });
+  }
+  function layoutCost(nodes,edges,pos,hubs,rowGap){
     let cost=0;
-    const ids=new Map(nodes.map(n=>[n.id,n]));
     const paths=edges.map(e=>{const a=pos.get(e.from),b=pos.get(e.to);return a&&b?route(a,b,Object.assign({},e,{_portOut:undefined,_portIn:undefined})):null;});
     paths.forEach((p,i)=>{if(!p)return;for(let j=1;j<p.length;j++)cost+=Math.hypot(p[j].x-p[j-1].x,p[j].y-p[j-1].y)*.012;});
     for(let i=0;i<paths.length;i++)if(paths[i])for(let j=i+1;j<paths.length;j++)if(paths[j]){
@@ -340,13 +390,13 @@
       const minX=Math.max(44,Math.min(190,(nodes[i].name||'').length*3.8))+Math.max(44,Math.min(190,(nodes[j].name||'').length*3.8));
       if(dx<minX&&dy<30)cost+=(minX-dx)*2+(30-dy)*3;
     }
+    if(hubs&&hubs.size)cost+=hubSiblingCost(pos,hubs,rowGap||76);
     return cost;
   }
-  function optimizeLayout(nodes,edges,positions){
+  function optimizeLayout(nodes,edges,positions,hubs,rowGap){
     const movable=nodes.filter(n=>positions.has(n.id));
     if(movable.length<3)return;
-    // Coordinate descent on a coarse grid: cheap for editor-sized graphs and deterministic.
-    let best=layoutCost(nodes,edges,positions),step=36;
+    let best=layoutCost(nodes,edges,positions,hubs,rowGap),step=36;
     for(let pass=0;pass<5;pass++){
       let changed=false;
       for(const n of movable){
@@ -355,12 +405,14 @@
           [-step*2,0],[step*2,0],[0,-step*2],[0,step*2]
         ];
         let local=best,choice=origin;
-        candidates.forEach(([dx,dy])=>{p.x=origin.x+dx;p.y=origin.y+dy;const score=layoutCost(nodes,edges,positions);if(score<local-.01){local=score;choice={x:p.x,y:p.y};}});
+        candidates.forEach(([dx,dy])=>{p.x=origin.x+dx;p.y=origin.y+dy;const score=layoutCost(nodes,edges,positions,hubs,rowGap);if(score<local-.01){local=score;choice={x:p.x,y:p.y};}});
         p.x=choice.x;p.y=choice.y;if(local<best-.01){best=local;changed=true;}
       }
+      if(hubs&&hubs.size)relaxHubSiblings(positions,hubs,rowGap);
       step=Math.max(8,step*.62);
       if(!changed&&pass>1)break;
     }
+    if(hubs&&hubs.size)relaxHubSiblings(positions,hubs,rowGap);
   }
   function drawArrow(ctx, pts, color){
     if(pts.length<2)return;const a=pts[pts.length-2],b=pts[pts.length-1],ang=Math.atan2(b.y-a.y,b.x-a.x);
