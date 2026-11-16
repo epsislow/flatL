@@ -67,4 +67,7 @@ assert(leDec.ok && leDec.encoding === 'utf-16le' && leDec.text === 'AB', 'utf-16
 const singleQuote = C.parseFile("'a,b',c", { delimiter: ',', autoDetect: false, quoteChar: "'" });
 assert(singleQuote.rows[0][0] === 'a,b' && singleQuote.rows[0][1] === 'c', 'single-quote field');
 
+const clip = C.parseClipboardGrid('a\tb\nc\td', {});
+assert(clip.length === 2 && clip[0][1] === 'b' && clip[1][0] === 'c', 'clipboard TSV');
+
 console.log('OK: csv_parse');

@@ -51,6 +51,7 @@
               <button type="button" id="saveBtn" title="Save">Save</button>
               <button type="button" id="codeMapBtn" title="Show block transfer map">Code Map</button>
               <button type="button" id="csvViewToggleBtn" class="fleditor-csv-view-toggle" hidden title="Open table editor" aria-label="Open table editor">▦</button>
+              <button type="button" id="textFormatBtn" hidden title="Line endings and encoding">Format…</button>
               <button type="button" id="runBtn" class="btn-run" title="Run">Run</button>
             </div>
           </div>
@@ -59,7 +60,7 @@
               <span id="csvTableSizeLabel" class="fleditor-csv-meta"></span>
               <button type="button" id="csvHeaderRowBtn" class="fleditor-csv-header-btn" title="Highlight row 1 (display only)" aria-pressed="false">Header</button>
               <button type="button" id="csvTableSizeBtn" title="Set row and column count">Size…</button>
-              <button type="button" id="csvFormatBtn" title="Separator, quote, and encoding">Format…</button>
+              <button type="button" id="csvFormatBtn" title="Separator, quote, line endings, encoding">Format…</button>
             </div>
             <div class="fleditor-csv-row">
               <label class="fleditor-csv-field">Pos
@@ -227,6 +228,7 @@
             <option value="tab">tab</option>
           </select>
         </label>
+        <button type="button" id="csvFormatAutoDelimiterBtn" class="fleditor-csv-header-btn" title="Auto-detect separator from file content" aria-pressed="true">Auto</button>
         <label class="fleditor-csv-field">Quote
           <select id="csvFormatQuoteSelect" class="fleditor-csv-format-select" aria-label="Quote character">
             <option value="&quot;">&quot;</option>
@@ -234,6 +236,13 @@
           </select>
         </label>
       </div>
+      <label class="fleditor-csv-field fleditor-csv-format-encoding">Line endings
+        <select id="csvFormatLineEndingSelect" class="fleditor-csv-format-select" aria-label="Line endings">
+          <option value="lf">Unix LF</option>
+          <option value="crlf">Windows CRLF</option>
+          <option value="cr">Mac CR</option>
+        </select>
+      </label>
       <label class="fleditor-csv-field fleditor-csv-format-encoding">Encoding
         <select id="csvFormatEncodingSelect" class="fleditor-csv-format-select" aria-label="Encoding">
           <option value="utf-8">UTF-8</option>
@@ -245,6 +254,31 @@
       <div class="fleditor-io-actions">
         <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
         <button type="button" id="csvFormatModalCancel" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="textFormatModal" class="fleditor-io-modal" aria-labelledby="textFormatModalTitle">
+    <form id="textFormatModalForm" class="fleditor-io-form">
+      <h2 id="textFormatModalTitle" class="fleditor-io-title">File format</h2>
+      <p class="fleditor-io-hint">Line endings and encoding for save (project / MEMFS).</p>
+      <label class="fleditor-csv-field fleditor-csv-format-encoding">Line endings
+        <select id="textFormatLineEndingSelect" class="fleditor-csv-format-select" aria-label="Line endings">
+          <option value="lf">Unix LF</option>
+          <option value="crlf">Windows CRLF</option>
+          <option value="cr">Mac CR</option>
+        </select>
+      </label>
+      <label class="fleditor-csv-field fleditor-csv-format-encoding">Encoding
+        <select id="textFormatEncodingSelect" class="fleditor-csv-format-select" aria-label="Encoding">
+          <option value="utf-8">UTF-8</option>
+          <option value="utf-8-bom">UTF-8 with BOM</option>
+          <option value="utf-16le">UTF-16 LE</option>
+          <option value="utf-16be">UTF-16 BE</option>
+        </select>
+      </label>
+      <div class="fleditor-io-actions">
+        <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
+        <button type="button" id="textFormatModalCancel" class="fleditor-io-btn">Cancel</button>
       </div>
     </form>
   </dialog>
@@ -378,15 +412,16 @@
   <script src="js/mode-flatl.js"></script>
   <script src="js/fleditor-hex.js"></script>
   <script src="js/fleditor-hex-grid.js?v=6"></script>
-  <script src="js/fleditor-csv-parse.js?v=2"></script>
-  <script src="js/fleditor-csv-grid.js?v=4"></script>
-  <script src="js/fleditor-project.js?v=5"></script>
+  <script src="js/fleditor-text-format.js?v=1"></script>
+  <script src="js/fleditor-csv-parse.js?v=4"></script>
+  <script src="js/fleditor-csv-grid.js?v=5"></script>
+  <script src="js/fleditor-project.js?v=7"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
   <script src="js/fleditor-theme.js"></script>
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=58"></script>
+  <script src="js/fleditor.js?v=61"></script>
 </body>
 </html>

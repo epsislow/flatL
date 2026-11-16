@@ -153,9 +153,11 @@ The analyzer is a browser-side static index, not a compiler diagnostic. Hints ar
 
 UTF-8 project files such as **`data.txt`**, **`config.json`**, or **`notes.md`** open in **Text editor** (plain CodeMirror, no FlatL highlighting). Click the file row in the Project tree to open it; switching files **auto-saves** the previous file into the project (no discard dialog). **Save** writes `localStorage`. After **Run**, the open file reloads if MEMFS changed it.
 
+**Format…** (editor toolbar, not on `.fl` or CSV) — **line endings** (Unix LF, Windows CRLF, Mac CR) and **encoding** (UTF-8, UTF-8 with BOM, UTF-16 LE/BE). The editor shows normalized LF internally; save writes the chosen line ending. Non–UTF-8 text uses the same project wrapper pattern as CSV (`FLEDITOR::TEXT::<encoding>::\n` + body).
+
 ## CSV / TSV table editor (`.csv`, `.tsv`)
 
-Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor** when the table is at most **2000 rows** and **100 columns**. Larger files open in the **text editor** with a banner: **`Too large (X rows, Y columns). Open as text.`** Use **Open as table** on the banner (or **▦** in the editor toolbar) to force the grid anyway.
+Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor (grid)** when the table is at most **2000 rows** and **100 columns** (always grid on reopen, not text). Larger files open in the **text editor** with a banner: **`Too large (X rows, Y columns). Open as text.`** Use **Open as table** on the banner (or **▦** in the editor toolbar) to force the grid anyway.
 
 ### View layout
 
@@ -171,7 +173,7 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor** when t
 - **Line endings** detected on load (`\n` or `\r\n`) and preserved on **Save**.
 - **Empty file** (0 bytes): grid starts **1×1**; saving an unchanged empty grid writes **0 bytes**.
 - **MEMFS / Run:** bytes imported from the filesystem are decoded as **UTF-8**, **UTF-8 with BOM**, or **UTF-16 LE/BE** (BOM required). On **Save** to the project, **UTF-8** is stored as a plain string; other encodings use a project prefix `FLEDITOR::CSV::<encoding>::\n` before the logical table text. MEMFS sync writes the matching bytes (including BOM where applicable).
-- **Format…** — **separator** (`,`, `;`, tab), **quote** (`"` or `'`), and **encoding** from a fixed list (**UTF-8**, **UTF-8 with BOM**, **UTF-16 LE**, **UTF-16 BE**).
+- **Format…** — **separator** (`,`, `;`, tab) with **Auto** toggle (detect from content, same style as **Header**), **quote** (`"` or `'`), **line endings** (Unix LF, Windows CRLF, Mac CR), and **encoding** from a fixed list (**UTF-8**, **UTF-8 with BOM**, **UTF-16 LE**, **UTF-16 BE**).
 - All UI strings are **English**.
 
 ### Editing
@@ -179,6 +181,7 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor** when t
 - **Pos** + **Go** — jump to cell **`row,column`** (1-based, e.g. `2,3`). **Search** — literal text in cells; **Prev** / **Next** with **`n / total`** counter (like the hex editor).
 - **Arrow keys**, **Tab** / **Shift+Tab**, **Enter** (cell below; adds a row at the bottom edge).
 - **Delete** clears the cell; **Backspace** on an empty cell moves left.
+- **Selection** — click a cell, then **Shift+click** another cell or **Shift+arrow** to select a rectangle (green tint). **Ctrl/Cmd+C** copies the block as **TSV** (tabs between columns) for Excel/Sheets. **Ctrl/Cmd+V** pastes a TSV/CSV block from the clipboard starting at the active cell (grows the grid if needed).
 - Modified cells are **highlighted** until **Save**; **Undo / Redo** are disabled in table mode (same as hex).
 
 ### Unsaved changes

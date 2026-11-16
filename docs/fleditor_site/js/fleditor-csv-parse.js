@@ -15,6 +15,8 @@
   }
 
   function detectLineEnding(text) {
+    const T = typeof globalThis !== 'undefined' && globalThis.FleditorTextFormat;
+    if (T && T.detectLineEnding) return T.detectLineEnding(text);
     return text.indexOf('\r\n') >= 0 ? '\r\n' : '\n';
   }
 
@@ -332,6 +334,29 @@
     return ',';
   }
 
+  /** Clipboard / paste: tab if present, else session delimiter or detect */
+  function parseClipboardGrid(text, options) {
+    const opts = options || {};
+    const raw = String(text || '').replace(/^\uFEFF/, '');
+    if (!raw.replace(/[\s\uFEFF]/g, '').length) return [];
+    const lines = splitPhysicalLines(raw);
+    const first = lines[0] || '';
+    const hasTab = first.indexOf('\t') >= 0;
+    const preferTab = !!opts.preferTab || hasTab;
+    let delimiter = opts.delimiter;
+    if (delimiter == null) {
+      delimiter = hasTab ? '\t' : detectDelimiter(raw, preferTab, opts.quoteChar || '"');
+    }
+    const quote = opts.quoteChar || '"';
+    const out = [];
+    lines.forEach((ln) => {
+      const chunk = parseCsvText(ln, delimiter, quote);
+      out.push(chunk.length ? chunk[0] : ['']);
+    });
+    while (out.length > 1 && out[out.length - 1].every((c) => c === '')) out.pop();
+    return out;
+  }
+
   function encodingFromProjectContent(content) {
     const un = unwrapProjectCsv(content);
     if (un && un.wrapped) return un.encoding;
@@ -366,6 +391,7 @@
     resizeGrid,
     ensureMinGrid,
     delimiterLabel,
+    parseClipboardGrid,
     decodeTabularBytes,
     encodeTabularBytes,
     isCsvStoredValue,

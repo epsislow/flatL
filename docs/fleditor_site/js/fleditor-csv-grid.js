@@ -9,6 +9,53 @@
     return 'fleditor-csv-grid-cell' + (dirty ? ' fleditor-csv-grid-cell--dirty' : '');
   }
 
+  function normalizeSelection(anchor, focus) {
+    if (!anchor || !focus) return null;
+    return {
+      r0: Math.min(anchor.r, focus.r),
+      r1: Math.max(anchor.r, focus.r),
+      c0: Math.min(anchor.c, focus.c),
+      c1: Math.max(anchor.c, focus.c),
+    };
+  }
+
+  function isMultiCellSelection(anchor, focus) {
+    const b = normalizeSelection(anchor, focus);
+    if (!b) return false;
+    return b.r0 !== b.r1 || b.c0 !== b.c1;
+  }
+
+  function copySelectionToTsv(rows, anchor, focus) {
+    const b = normalizeSelection(anchor, focus);
+    if (!b || !rows.length) return '';
+    const lines = [];
+    for (let r = b.r0; r <= b.r1; r++) {
+      const line = rows[r] || [];
+      const fields = [];
+      for (let c = b.c0; c <= b.c1; c++) {
+        fields.push(line[c] != null ? String(line[c]) : '');
+      }
+      lines.push(fields.join('\t'));
+    }
+    return lines.join('\n');
+  }
+
+  function applySelectionHighlights(container, anchor, focus) {
+    container.querySelectorAll('input.fleditor-csv-grid-cell').forEach((inp) => {
+      inp.classList.remove('fleditor-csv-grid-cell--selected');
+    });
+    const b = normalizeSelection(anchor, focus);
+    if (!b) return;
+    for (let r = b.r0; r <= b.r1; r++) {
+      for (let c = b.c0; c <= b.c1; c++) {
+        const inp = container.querySelector(
+          'input.fleditor-csv-grid-cell[data-row="' + r + '"][data-col="' + c + '"]'
+        );
+        if (inp) inp.classList.add('fleditor-csv-grid-cell--selected');
+      }
+    }
+  }
+
   function focusCell(container, r, c, kind) {
     const sel = kind === 'append-col'
       ? 'input.fleditor-csv-grid-cell--append-col[data-row="' + r + '"]'
@@ -29,6 +76,13 @@
     inp.spellcheck = false;
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Cell row ' + (r + 1) + ' column ' + (c + 1));
+    inp.addEventListener('mousedown', function (e) {
+      if (e.shiftKey && opts.onCellExtendSelect) {
+        opts.onCellExtendSelect(r, c);
+      } else if (opts.onCellSelect) {
+        opts.onCellSelect(r, c);
+      }
+    });
     inp.addEventListener('focus', function () {
       if (opts.onCellFocus) opts.onCellFocus(r, c);
     });
@@ -75,6 +129,29 @@
         inp.value = '';
         if (opts.onCellChange) opts.onCellChange(r, c, '');
         inp.className = cellInputClass(true);
+      } else if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        let nr = r;
+        let nc = c;
+        if (e.key === 'ArrowRight' && c + 1 < cols) nc = c + 1;
+        else if (e.key === 'ArrowLeft' && c > 0) nc = c - 1;
+        else if (e.key === 'ArrowDown' && r + 1 < rows) nr = r + 1;
+        else if (e.key === 'ArrowUp' && r > 0) nr = r - 1;
+        if (nr !== r || nc !== c) {
+          e.preventDefault();
+          if (opts.onCellExtendSelect) opts.onCellExtendSelect(nr, nc);
+          focusCell(opts.container, nr, nc);
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'c' && opts.onCopy) {
+        const multi = opts.isMultiCellSelection && opts.isMultiCellSelection();
+        const allSelected =
+          inp.selectionStart === 0 && inp.selectionEnd === inp.value.length;
+        if (multi || allSelected) {
+          e.preventDefault();
+          opts.onCopy();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key === 'v' && opts.onPaste) {
+        e.preventDefault();
+        opts.onPaste(r, c);
       }
     });
     td.appendChild(inp);
@@ -187,6 +264,10 @@
     tbody.appendChild(trPlus);
     table.appendChild(tbody);
     container.appendChild(table);
+    if (options.getSelection) {
+      const sel = options.getSelection();
+      applySelectionHighlights(container, sel && sel.anchor, sel && sel.focus);
+    }
   }
 
   function cellLinearIndex(r, c, colCount) {
@@ -248,6 +329,10 @@
     APPEND_LABEL: APPEND,
     renderGrid,
     focusCell,
+    normalizeSelection,
+    isMultiCellSelection,
+    copySelectionToTsv,
+    applySelectionHighlights,
     cellLinearIndex,
     findCellMatches,
     parseCellPos,

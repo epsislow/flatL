@@ -240,10 +240,20 @@
   function bytesToProjectValue(u8, relPath) {
     const rel = relPath || '';
     const C = typeof globalThis !== 'undefined' && globalThis.FleditorCsvParse;
+    const F = typeof globalThis !== 'undefined' && globalThis.FleditorTextFormat;
     if (C && /\.(csv|tsv)$/i.test(rel)) {
       const dec = C.decodeTabularBytes(u8);
       if (dec.ok) {
         return C.wrapProjectCsv(dec.text, dec.encoding);
+      }
+    }
+    if (F) {
+      const dec = F.decodeTextBytes(u8);
+      if (dec.ok) {
+        if (dec.encoding === 'utf-8') {
+          return dec.text;
+        }
+        return F.wrapProjectText(dec.text, dec.encoding);
       }
     }
     try {
@@ -271,10 +281,17 @@
       return u8;
     }
     const C = typeof globalThis !== 'undefined' && globalThis.FleditorCsvParse;
+    const F = typeof globalThis !== 'undefined' && globalThis.FleditorTextFormat;
     if (C && typeof content === 'string') {
       const un = C.unwrapProjectCsv(content);
       if (un && un.wrapped) {
         return C.encodeTabularBytes(un.text, un.encoding);
+      }
+    }
+    if (F && typeof content === 'string') {
+      const un = F.unwrapProjectText(content);
+      if (un && un.wrapped) {
+        return F.encodeTextBytes(un.text, un.encoding);
       }
     }
     return content;
@@ -579,6 +596,7 @@
     binaryProjectValueToHexView,
     binaryProjectValueToBytes: binaryProjectValueToBytesExport,
     bytesToProjectValue,
+    projectValueToMemfsPayload,
     bytesToProjectValueBinary,
     isBinaryProjectFile,
     isFlatlProjectFile,
