@@ -1185,7 +1185,8 @@ body.fleditor-resize-active * {
 .fl-map-edge { stroke-linecap: round; stroke-linejoin: round; }
 .fl-map-node { isolation: isolate; }
 .fl-code-map-controls { flex-wrap: wrap; }
-.fl-code-map-toolbar .fl-code-map-mode[aria-label="Arrange graph"] { width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.fl-code-map-toolbar .fl-code-map-mode[aria-label="Arrange graph"],
+.fl-code-map-toolbar .fl-code-map-mode[aria-label="Clear saved positions"] { width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 14px; line-height: 1; }
 
 /* Code Map v1.6: Canvas renderer, local node dragging and lightweight edge redraw. */
 .fl-code-map-viewport { flex: 1 1 0; min-height: 280px; min-width: 0; overflow: auto; padding: 0; overscroll-behavior: contain; }

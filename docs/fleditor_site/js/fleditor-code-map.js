@@ -294,7 +294,22 @@
     if(pts.length<2)return;const a=pts[pts.length-2],b=pts[pts.length-1],ang=Math.atan2(b.y-a.y,b.x-a.x);
     ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-9*Math.cos(ang-.48),b.y-9*Math.sin(ang-.48));ctx.lineTo(b.x-9*Math.cos(ang+.48),b.y-9*Math.sin(ang+.48));ctx.closePath();ctx.fill();
   }
-  function render(host, model, onNodeClick, onEdgeClick, forceArrange){
+  function defaultFocusId(nodes, model){
+    const entry=model.entryPath||(model.files[0]&&model.files[0].path);
+    const entryBlocks=nodes.filter(n=>n.file===entry&&n.kind!=='dynamic');
+    const main=entryBlocks.find(n=>String(n.name).replace(/^#/,'').toLowerCase()==='main');
+    if(main)return main.id;
+    const incoming=new Map(nodes.map(n=>[n.id,0]));
+    (model.edges||[]).forEach(e=>{if(incoming.has(e.to))incoming.set(e.to,incoming.get(e.to)+1);});
+    const roots=entryBlocks.filter(n=>!incoming.get(n.id)).sort(compare);
+    if(roots.length)return roots[0].id;
+    if(entryBlocks.length)return entryBlocks.sort(compare)[0].id;
+    const any=nodes.filter(n=>n.kind!=='dynamic').sort(compare);
+    return any.length?any[0].id:(nodes[0]&&nodes[0].id)||null;
+  }
+  function render(host, model, onNodeClick, onEdgeClick, forceArrange,centerView){
+    const hadSavedLayout=!forceArrange&&!!loadPositions(model);
+    const shouldCenter=!!centerView||!hadSavedLayout;
     host.innerHTML='';
     const toolbar=html('div','fl-code-map-toolbar');
     const summary=html('span','fl-code-map-summary',model.blocks.length+' blocks'+((model.dynamicNodes||[]).length?' · '+model.dynamicNodes.length+' dynamic targets':'')+' · '+model.edges.length+' transfers · '+model.files.length+' files');
@@ -303,6 +318,7 @@
     activeOrientation=loadOrientation(model);
     [['graph','Graph'],['by-file','By file']].forEach(([v,label])=>{const b=html('button','fl-code-map-mode'+(displayMode===v?' active':''),label);b.type='button';b.title=label;b.setAttribute('aria-label',label);b.setAttribute('aria-pressed',displayMode===v?'true':'false');b.onclick=()=>{displayMode=v;render(host,model,onNodeClick,onEdgeClick);};controls.appendChild(b);});
     const arrange=html('button','fl-code-map-mode','↻');arrange.type='button';arrange.title='Arrange graph';arrange.setAttribute('aria-label','Arrange graph');arrange.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,true);};controls.appendChild(arrange);
+    const clearPos=html('button','fl-code-map-mode','🗑');clearPos.type='button';clearPos.title='Clear saved positions (first layout)';clearPos.setAttribute('aria-label','Clear saved positions');clearPos.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,false,true);};controls.appendChild(clearPos);
     const rotate=html('button','fl-code-map-mode','⤾');rotate.type='button';rotate.title='Rotate graph 90°';rotate.setAttribute('aria-label','Rotate graph 90 degrees');rotate.setAttribute('aria-pressed',activeOrientation==='vertical'?'true':'false');rotate.onclick=()=>{activeOrientation=activeOrientation==='horizontal'?'vertical':'horizontal';try{root.localStorage.setItem(orientationKey(model),activeOrientation);}catch(_){}render(host,model,onNodeClick,onEdgeClick);if(selectedNodeId&&activeView)activeView.focus(selectedNodeId);};controls.appendChild(rotate);
     const focus=html('button','fl-code-map-mode','⌖');focus.type='button';focus.title='Focus selected block';focus.setAttribute('aria-label','Focus selected block');focus.onclick=()=>{if(activeView&&selectedNodeId)activeView.focus(selectedNodeId);};controls.appendChild(focus);
     [['−',()=>{zoomAt(zoom/1.2);}],['+',()=>{zoomAt(zoom*1.2);}],['Fit',()=>{const b=bounds();const w=activeOrientation==='vertical'?b.y:b.x,h=activeOrientation==='vertical'?b.x:b.y;zoom=Math.max(.25,Math.min(1.5,Math.min((viewW-32)/w,(viewH-32)/h)));setCanvasSize();draw();viewport.scrollLeft=0;viewport.scrollTop=0;}]].forEach(([label,fn])=>{const b=html('button','fl-code-map-mode',label);b.type='button';b.title=label==='Fit'?'Fit graph':'Zoom '+(label==='+'?'in':'out');b.setAttribute('aria-label',b.title);b.onclick=fn;controls.appendChild(b);});
@@ -346,10 +362,13 @@
     function resize(){
       const r=viewport.getBoundingClientRect();viewW=Math.max(240,r.width);viewH=Math.max(220,r.height);
       setCanvasSize();draw();
+      if(pendingCenter&&viewW>80&&viewH>80){pendingCenter=false;centerOnDefault();}
     }
     function transformPoint(clientX,clientY){const r=canvas.getBoundingClientRect(),x=(clientX-r.left)/zoom,y=(clientY-r.top)/zoom;if(activeOrientation==='vertical'){const b=bounds();return {x:b.x-y,y:x};}return {x,y};}
     function displayPoint(p){if(activeOrientation==='vertical'){const b=bounds();return {x:p.y,y:b.x-p.x};}return {x:p.x,y:p.y};}
-    function focusNode(id){const p=positions.get(id);if(!p)return;const q=displayPoint(p);viewport.scrollLeft=q.x*zoom-viewW/2;viewport.scrollTop=q.y*zoom-viewH/2;}
+    function focusNode(id){const p=positions.get(id);if(!p)return;const q=displayPoint(p),left=q.x*zoom-viewW/2,top=q.y*zoom-viewH/2,maxL=Math.max(0,canvas.clientWidth-viewW),maxT=Math.max(0,canvas.clientHeight-viewH);viewport.scrollLeft=Math.min(maxL,Math.max(0,left));viewport.scrollTop=Math.min(maxT,Math.max(0,top));}
+    function centerOnDefault(){const id=defaultFocusId(nodes,model);if(!id)return;focusNode(id);}
+    let pendingCenter=shouldCenter;
     function draw(){
       const ctx=canvas.getContext('2d');if(!ctx)return;
       ctx.setTransform(dpr*zoom,0,0,dpr*zoom,0,0);ctx.clearRect(0,0,canvas.width/(dpr*zoom),canvas.height/(dpr*zoom));
