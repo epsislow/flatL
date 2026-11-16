@@ -224,8 +224,18 @@
     const cols = rows[0] ? rows[0].length : 1;
     for (let c = 0; c < cols; c++) {
       const th = document.createElement('th');
-      th.className = 'fleditor-csv-grid-col-h';
+      th.className = 'fleditor-csv-grid-col-h fleditor-csv-grid-axis';
       th.textContent = String(c + 1);
+      th.setAttribute('role', 'button');
+      th.setAttribute('tabindex', '0');
+      th.title = 'Select column';
+      th.setAttribute('aria-label', 'Select column ' + (c + 1));
+      th.setAttribute('data-csv-col', String(c));
+      const colIdx = c;
+      th.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        if (options.onColHeaderSelect) options.onColHeaderSelect(colIdx, e.shiftKey);
+      });
       hr.appendChild(th);
     }
     const thPlus = document.createElement('th');
@@ -254,8 +264,18 @@
       const tr = document.createElement('tr');
       if (headerStyle && r === 0) tr.className = 'fleditor-csv-grid-row--header';
       const rowLabel = document.createElement('th');
-      rowLabel.className = 'fleditor-csv-grid-row-h';
+      rowLabel.className = 'fleditor-csv-grid-row-h fleditor-csv-grid-axis';
       rowLabel.textContent = String(r + 1);
+      rowLabel.setAttribute('role', 'button');
+      rowLabel.setAttribute('tabindex', '0');
+      rowLabel.title = 'Select row';
+      rowLabel.setAttribute('aria-label', 'Select row ' + (r + 1));
+      rowLabel.setAttribute('data-csv-row', String(r));
+      const rowIdx = r;
+      rowLabel.addEventListener('mousedown', function (e) {
+        e.preventDefault();
+        if (options.onRowHeaderSelect) options.onRowHeaderSelect(rowIdx, e.shiftKey);
+      });
       tr.appendChild(rowLabel);
       const line = rows[r];
       for (let c = 0; c < cols; c++) {

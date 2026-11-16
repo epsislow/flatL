@@ -181,7 +181,7 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor (grid)**
 - **Pos** + **Go** — jump to cell **`row,column`** (1-based, e.g. `2,3`). **Search** — literal text in cells; **Prev** / **Next** with **`n / total`** counter (like the hex editor).
 - **Arrow keys**, **Tab** / **Shift+Tab**, **Enter** (cell below; adds a row at the bottom edge).
 - **Delete** clears the cell; **Backspace** on an empty cell moves left.
-- **Selection** — click a cell, then **Shift+click** another cell or **Shift+arrow** to select a rectangle (green tint). **Ctrl/Cmd+C** copies the block using the file **separator**, **line endings**, and **quote** rules (same as save). **Ctrl/Cmd+V** pastes clipboard data (tab from Excel, or the file separator) starting at the active cell (grows the grid if needed).
+- **Selection** — click a cell, then **Shift+click** another cell or **Shift+arrow** to select a rectangle (green tint). Click a **row number** or **column number** to select that entire row or column; **Shift+click** another header to extend the range (headers highlight when the selection spans the full width or height). **Ctrl/Cmd+C** copies the block using the file **separator**, **line endings**, and **quote** rules (same as save). **Ctrl/Cmd+V** pastes clipboard data (tab from Excel, or the file separator) starting at the active cell (grows the grid if needed).
 - Modified cells are **highlighted** until **Save**; **Undo / Redo** are disabled in table mode (same as hex).
 
 ### Unsaved changes
@@ -198,7 +198,7 @@ After **Run**, the runtime **`chdir`s to `/fleditor`**, so paths like `file.read
 | **Writing** | `file.write` should emit the **same bytes** the editor would: same **separator**, **line endings**, and **encoding** (use **Format…** in the editor as the reference). |
 | **Encoding** | UTF-8 plain in project → UTF-8 bytes on MEMFS. UTF-8 BOM / UTF-16 → editor stores a wrapper; sync writes BOM bytes. |
 | **Round-trip** | Edit in grid → **Save** → **Run** → program reads `/fleditor/your.csv`. If the program writes a new file, sync pulls it back with `bytesToProjectValue` (opens in CSV grid when decodable). |
-| **Excel samples** | `docs/fleditor_site/examples/test1_csv_*.csv` — same 8×2 table: **LF**, **CRLF (MS-DOS)**, **CR (Mac)**, **UTF-8 BOM + LF**. Used in `make fleditor-csv-smoke`. **`.gitattributes`** marks them `-text` so Git keeps bytes. |
+| **Excel samples** | `docs/fleditor_site/examples/test1_csv_*.csv` — same 8×2 table: **LF**, **CRLF (MS-DOS)**, **CR (Mac)**, **UTF-8 BOM + LF**, **UTF-16 LE/BE**. Listed in `examples/manifest.json`; used in `make fleditor-csv-smoke`. **`.gitattributes`** marks them `-text` so Git keeps bytes. |
 
 The editor does not run FlatL **`file.*`** for you; it keeps project/MEMFS bytes aligned so programs and Excel see a consistent file.
 

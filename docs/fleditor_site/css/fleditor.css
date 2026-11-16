@@ -630,6 +630,16 @@ body.fleditor-resize-active * {
   padding: 0.1rem 0.2rem;
   vertical-align: middle;
 }
+.fleditor-csv-grid-axis {
+  cursor: pointer;
+  user-select: none;
+}
+.fleditor-csv-grid-axis:hover {
+  background: rgba(90, 122, 74, 0.18);
+}
+.fleditor-csv-grid-axis--active {
+  background: rgba(90, 122, 74, 0.32);
+}
 .fleditor-csv-grid-corner,
 .fleditor-csv-grid-row-h,
 .fleditor-csv-grid-col-h {

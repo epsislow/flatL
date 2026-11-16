@@ -545,7 +545,12 @@
       if (!fileRes.ok) {
         continue;
       }
-      out[projectPath] = await fileRes.text();
+      if (/\.(csv|tsv)$/i.test(entry)) {
+        const buf = await fileRes.arrayBuffer();
+        out[projectPath] = bytesToProjectValue(new Uint8Array(buf), projectPath);
+      } else {
+        out[projectPath] = await fileRes.text();
+      }
     }
     return out;
   }

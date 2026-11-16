@@ -1149,6 +1149,67 @@
   function applyCsvSelectionVisuals() {
     if (!csvGridHost || !csvSession) return;
     CsvG.applySelectionHighlights(csvGridHost, csvSession.selAnchor, csvSession.selFocus);
+    applyCsvAxisHighlights();
+  }
+
+  function csvSetSelectionRect(r0, c0, r1, c1) {
+    if (!csvSession) return;
+    csvSession.selAnchor = { r: r0, c: c0 };
+    csvSession.selFocus = { r: r1, c: c1 };
+    applyCsvSelectionVisuals();
+  }
+
+  function csvSelectRow(r, shift) {
+    if (!csvSession) return;
+    const lastCol = Math.max(0, csvColCount() - 1);
+    if (shift && csvSession.selAnchor && csvSession.selFocus) {
+      const b = CsvG.normalizeSelection(csvSession.selAnchor, csvSession.selFocus);
+      const r0 = Math.min(b.r0, b.r1, r);
+      const r1 = Math.max(b.r0, b.r1, r);
+      csvSetSelectionRect(r0, 0, r1, lastCol);
+    } else {
+      csvSetSelectionRect(r, 0, r, lastCol);
+    }
+    csvGoToCell(r, 0);
+  }
+
+  function csvSelectCol(c, shift) {
+    if (!csvSession) return;
+    const lastRow = Math.max(0, csvSession.rows.length - 1);
+    if (shift && csvSession.selAnchor && csvSession.selFocus) {
+      const b = CsvG.normalizeSelection(csvSession.selAnchor, csvSession.selFocus);
+      const c0 = Math.min(b.c0, b.c1, c);
+      const c1 = Math.max(b.c0, b.c1, c);
+      csvSetSelectionRect(0, c0, lastRow, c1);
+    } else {
+      csvSetSelectionRect(0, c, lastRow, c);
+    }
+    csvGoToCell(0, c);
+  }
+
+  function applyCsvAxisHighlights() {
+    if (!csvGridHost || !csvSession) return;
+    csvGridHost.querySelectorAll('.fleditor-csv-grid-axis').forEach(function (el) {
+      el.classList.remove('fleditor-csv-grid-axis--active');
+    });
+    const b = CsvG.normalizeSelection(csvSession.selAnchor, csvSession.selFocus);
+    if (!b) return;
+    const cols = csvColCount();
+    const rows = csvSession.rows.length;
+    const fullRowSel = b.c0 === 0 && b.c1 >= cols - 1;
+    const fullColSel = b.r0 === 0 && b.r1 >= rows - 1;
+    if (fullRowSel) {
+      for (let ri = b.r0; ri <= b.r1; ri++) {
+        const el = csvGridHost.querySelector('[data-csv-row="' + ri + '"]');
+        if (el) el.classList.add('fleditor-csv-grid-axis--active');
+      }
+    }
+    if (fullColSel) {
+      for (let ci = b.c0; ci <= b.c1; ci++) {
+        const el = csvGridHost.querySelector('[data-csv-col="' + ci + '"]');
+        if (el) el.classList.add('fleditor-csv-grid-axis--active');
+      }
+    }
   }
 
   function csvCopySelection() {
@@ -1253,6 +1314,12 @@
       },
       onPaste: function (r, c) {
         void csvPasteAt(r, c);
+      },
+      onRowHeaderSelect: function (r, shift) {
+        csvSelectRow(r, shift);
+      },
+      onColHeaderSelect: function (c, shift) {
+        csvSelectCol(c, shift);
       },
       onCellChange: function (r, c, val) {
         if (!sess.rows[r]) sess.rows[r] = [];

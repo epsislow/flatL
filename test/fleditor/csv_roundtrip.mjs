@@ -55,6 +55,8 @@ const excelExports = [
   'test1_csv_mac.csv',
   'test1_csv_msdos.csv',
   'test1_csv_utf8_commadel.csv',
+  'test1_csv_utf16le.csv',
+  'test1_csv_utf16be.csv',
 ];
 excelExports.forEach((name) => {
   const filePath = path.join(examplesDir, name);
