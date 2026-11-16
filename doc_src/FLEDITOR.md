@@ -153,6 +153,43 @@ The analyzer is a browser-side static index, not a compiler diagnostic. Hints ar
 
 UTF-8 project files such as **`data.txt`**, **`config.json`**, or **`notes.md`** open in **Text editor** (plain CodeMirror, no FlatL highlighting). Click the file row in the Project tree to open it; switching files **auto-saves** the previous file into the project (no discard dialog). **Save** writes `localStorage`. After **Run**, the open file reloads if MEMFS changed it.
 
+## CSV / TSV table editor (`.csv`, `.tsv`)
+
+Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor** when the table is at most **2000 rows** and **100 columns**. Larger files open in the **text editor** with a banner: **`Too large (X rows, Y columns). Open as text.`** Use **Open as table** on the banner (or **▦** in the editor toolbar) to force the grid anyway.
+
+### View layout
+
+- Scrollable **table grid** with one input per cell (CodeMirror hidden in table mode).
+- Row/column labels; **`+`** cells on the right and bottom append a column or row (same idea as hex **append**).
+- Toolbar row: **dimensions** (`R × C`), **separator** (`,`, `;`, tab), **Header** toggle (yellowish highlight on row 1, display only), **Size…** (set row/column counts; shrink asks for `yes` if data would be removed).
+- **Text** / **▦** in the editor action bar toggles **table ↔ text** for the same file.
+
+### Parsing and saving
+
+- **Auto-detect** `,`, `;`, or tab on the first lines; **`.tsv`** prefers tab.
+- **RFC-style** quoted fields (`"a,b"`, `""` escape).
+- **Line endings** detected on load (`\n` or `\r\n`) and preserved on **Save**.
+- **Empty file** (0 bytes): grid starts **1×1**; saving an unchanged empty grid writes **0 bytes**.
+- All UI strings are **English**.
+
+### Editing
+
+- **Arrow keys**, **Tab** / **Shift+Tab**, **Enter** (cell below; adds a row at the bottom edge).
+- **Delete** clears the cell; **Backspace** on an empty cell moves left.
+- Modified cells are **highlighted** until **Save**; **Undo / Redo** are disabled in table mode (same as hex).
+
+### Unsaved changes
+
+- Switching **table ↔ text** or another project file uses the same **Unsaved changes** dialog as **`.fl`** files (Continue / Cancel). On Continue, the active view is synced into the other representation; nothing is written to disk until **Save**.
+
+### Tests (Node)
+
+```bash
+make fleditor-csv-smoke
+```
+
+Runs `test/fleditor/csv_parse.mjs` (parse, detect, serialize, size limits).
+
 ## Hex editor (binary files)
 
 When a binary file is open, the panel title shows **Hex editor** and the path. **`.fl`** sources use **Fl editor**.

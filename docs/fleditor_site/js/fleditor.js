@@ -1,4 +1,4 @@
-/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorCsvParse, FleditorCsvGrid, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
 (function () {
   'use strict';
 
@@ -6,6 +6,8 @@
   const L = FleditorLayout;
   const H = FleditorHex;
   const G = FleditorHexGrid;
+  const CsvP = FleditorCsvParse;
+  const CsvG = FleditorCsvGrid;
 
   const IO_OK = 0;
   const IO_PANIC_EOF = 2;
@@ -25,6 +27,16 @@
   const bannerEl = document.getElementById('wasmBanner');
   const runBtn = document.getElementById('runBtn');
   const codeMapBtn = document.getElementById('codeMapBtn');
+  const csvViewToggleBtn = document.getElementById('csvViewToggleBtn');
+  const csvTableBar = document.getElementById('csvTableBar');
+  const csvGridHost = document.getElementById('csvGridHost');
+  const csvTableSizeLabel = document.getElementById('csvTableSizeLabel');
+  const csvDelimiterSelect = document.getElementById('csvDelimiterSelect');
+  const csvHeaderRowBtn = document.getElementById('csvHeaderRowBtn');
+  const csvTableSizeBtn = document.getElementById('csvTableSizeBtn');
+  const csvHelpBanner = document.getElementById('csvHelpBanner');
+  const csvHelpLabel = document.getElementById('csvHelpLabel');
+  const csvTooLargeOpenTable = document.getElementById('csvTooLargeOpenTable');
   const codeMapView = document.getElementById('codeMapView');
   const clearBtn = document.getElementById('clearBtn');
   const saveBtn = document.getElementById('saveBtn');
@@ -88,8 +100,10 @@
   let ioCharMode = false;
   let ioLineBuffer = '';
 
-  /** 'flatl' | 'plaintext' | 'binary' */
+  /** 'flatl' | 'plaintext' | 'binary' | 'csv' */
   let editorViewMode = 'flatl';
+  /** @type {null | { path: string, rows: string[][], savedRows: string[][], delimiter: string, lineEnding: string, preferTab: boolean, savedSerialized: string, headerRow: boolean, gridForced: boolean }} */
+  let csvSession = null;
   /** @type {Uint8Array | null} */
   let binaryBuffer = null;
   /** @type {Uint8Array | null} */
@@ -478,11 +492,14 @@
     if (cm) {
       const wrap = cm.getWrapperElement();
       if (wrap) {
-        wrap.style.display = mode === 'binary' ? 'none' : '';
+        wrap.style.display = mode === 'binary' || mode === 'csv' ? 'none' : '';
       }
     }
     if (grid) {
       grid.hidden = mode !== 'binary';
+    }
+    if (csvGridHost) {
+      csvGridHost.hidden = mode !== 'csv';
     }
     syncEditorWrapKind();
   }
@@ -495,12 +512,15 @@
       'fleditor-editor-wrap--flatl',
       'fleditor-editor-wrap--text',
       'fleditor-editor-wrap--binary',
+      'fleditor-editor-wrap--csv',
       'fleditor-editor-wrap--idle'
     );
     if (!hasOpenFile()) {
       editorWrap.classList.add('fleditor-editor-wrap--idle');
     } else if (editorViewMode === 'binary') {
       editorWrap.classList.add('fleditor-editor-wrap--binary');
+    } else if (editorViewMode === 'csv') {
+      editorWrap.classList.add('fleditor-editor-wrap--csv');
     } else if (editorViewMode === 'flatl') {
       editorWrap.classList.add('fleditor-editor-wrap--flatl');
     } else {
@@ -783,6 +803,7 @@
   }
 
   function enterBinaryEditorFromBytes(bytes) {
+    leaveCsvEditor();
     binaryBuffer = H.copyBytes(bytes);
     binarySavedSnapshot = H.copyBytes(bytes);
     binaryPage = 0;
@@ -819,6 +840,274 @@
       banner.hidden = true;
     }
     updateUndoRedoButtons();
+  }
+
+  function isCsvPath(path) {
+    const low = String(path || '').toLowerCase();
+    return low.endsWith('.csv') || low.endsWith('.tsv');
+  }
+
+  function isCsvSessionActive() {
+    return csvSession != null && isCsvPath(csvSession.path);
+  }
+
+  function leaveCsvEditor() {
+    csvSession = null;
+    if (csvTableBar) csvTableBar.hidden = true;
+    if (csvGridHost) {
+      csvGridHost.innerHTML = '';
+      csvGridHost.hidden = true;
+    }
+    if (csvHelpBanner) csvHelpBanner.hidden = true;
+    if (csvViewToggleBtn) csvViewToggleBtn.hidden = true;
+    syncEditorWrapKind();
+  }
+
+  function csvSerializedNow() {
+    if (!csvSession) return '';
+    return CsvP.serializeCsv(csvSession.rows, csvSession.delimiter, csvSession.lineEnding);
+  }
+
+  function recomputeCsvDirty() {
+    if (!csvSession) return;
+    if (editorViewMode === 'csv') {
+      setDirty(csvSerializedNow() !== csvSession.savedSerialized);
+      return;
+    }
+    if (editorViewMode === 'plaintext' && cm) {
+      setDirty(cm.getValue() !== csvSession.savedSerialized);
+    }
+  }
+
+  function snapshotCsvSavedRows() {
+    if (!csvSession) return;
+    csvSession.savedRows = JSON.parse(JSON.stringify(csvSession.rows));
+  }
+
+  function updateCsvBarMeta() {
+    if (!csvSession || !csvTableSizeLabel) return;
+    const t = CsvP.tableSize(csvSession.rows);
+    csvTableSizeLabel.textContent = t.rows + ' \u00d7 ' + t.cols;
+    if (csvDelimiterSelect) {
+      const d = csvSession.delimiter;
+      csvDelimiterSelect.value = d === '\t' ? 'tab' : d;
+    }
+    if (csvHeaderRowBtn) {
+      csvHeaderRowBtn.setAttribute('aria-pressed', csvSession.headerRow ? 'true' : 'false');
+      csvHeaderRowBtn.classList.toggle('fleditor-csv-header-btn--active', !!csvSession.headerRow);
+    }
+  }
+
+  function updateCsvToggleButton() {
+    if (!csvViewToggleBtn) return;
+    if (!isCsvSessionActive()) {
+      csvViewToggleBtn.hidden = true;
+      return;
+    }
+    csvViewToggleBtn.hidden = false;
+    if (editorViewMode === 'csv') {
+      csvViewToggleBtn.textContent = 'Text';
+      csvViewToggleBtn.title = 'Open text editor';
+      csvViewToggleBtn.setAttribute('aria-label', 'Open text editor');
+      csvViewToggleBtn.setAttribute('aria-pressed', 'true');
+    } else {
+      csvViewToggleBtn.textContent = '\u25a6';
+      csvViewToggleBtn.title = 'Open table editor';
+      csvViewToggleBtn.setAttribute('aria-label', 'Open table editor');
+      csvViewToggleBtn.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  function showCsvHelpBanner(kind, rows) {
+    if (!csvHelpBanner || !csvHelpLabel) return;
+    if (kind === 'too-large' && rows) {
+      csvHelpLabel.textContent = CsvP.tooLargeMessage(rows);
+      if (csvTooLargeOpenTable) csvTooLargeOpenTable.hidden = false;
+      csvHelpBanner.hidden = false;
+      return;
+    }
+    if (kind === 'empty') {
+      csvHelpLabel.textContent =
+        'File is empty. Type in a cell or use + to grow the table, or Size\u2026.';
+      if (csvTooLargeOpenTable) csvTooLargeOpenTable.hidden = true;
+      csvHelpBanner.hidden = false;
+      return;
+    }
+    csvHelpBanner.hidden = true;
+  }
+
+  function renderCsvGrid() {
+    if (!csvSession || !csvGridHost) return;
+    const sess = csvSession;
+    CsvG.renderGrid(csvGridHost, sess.rows, sess.savedRows, {
+      headerRow: sess.headerRow,
+      onCellChange: function (r, c, val) {
+        if (!sess.rows[r]) sess.rows[r] = [];
+        sess.rows[r][c] = val;
+        recomputeCsvDirty();
+      },
+      onGrowRow: function () {
+        const cols = sess.rows[0] ? sess.rows[0].length : 1;
+        const line = [];
+        for (let i = 0; i < cols; i++) line.push('');
+        sess.rows.push(line);
+        if (CsvP.isTooLarge(sess.rows)) {
+          showAlert(CsvP.tooLargeMessage(sess.rows), 'CSV editor');
+          sess.rows.pop();
+          return;
+        }
+        renderCsvGrid();
+        updateCsvBarMeta();
+        recomputeCsvDirty();
+      },
+      onGrowCol: function () {
+        sess.rows.forEach(function (row) {
+          row.push('');
+        });
+        if (CsvP.isTooLarge(sess.rows)) {
+          showAlert(CsvP.tooLargeMessage(sess.rows), 'CSV editor');
+          sess.rows.forEach(function (row) {
+            row.pop();
+          });
+          return;
+        }
+        renderCsvGrid();
+        updateCsvBarMeta();
+        recomputeCsvDirty();
+      },
+    });
+    updateCsvBarMeta();
+  }
+
+  function enterCsvTableMode() {
+    if (!csvSession) return;
+    editorViewMode = 'csv';
+    if (csvTableBar) csvTableBar.hidden = false;
+    setEditorSurfaceMode('csv');
+    renderCsvGrid();
+    if (CsvP.isGridEmpty(csvSession.rows)) {
+      showCsvHelpBanner('empty');
+    } else {
+      showCsvHelpBanner('none');
+    }
+    updateCsvToggleButton();
+    updateEditorHeader();
+    updateEditorEmptyState();
+    updateUndoRedoButtons();
+  }
+
+  function enterCsvFromProject(path, content) {
+    leaveCsvEditor();
+    const preferTab = path.toLowerCase().endsWith('.tsv');
+    const text = typeof content === 'string' ? content : '';
+    const parsed = CsvP.parseFile(text, { preferTab: preferTab });
+    csvSession = {
+      path: path,
+      rows: parsed.rows,
+      savedRows: JSON.parse(JSON.stringify(parsed.rows)),
+      delimiter: parsed.delimiter,
+      lineEnding: parsed.lineEnding,
+      preferTab: preferTab,
+      savedSerialized: text,
+      headerRow: false,
+      gridForced: false,
+    };
+    const tooLarge = CsvP.isTooLarge(parsed.rows);
+    updateCsvToggleButton();
+    if (tooLarge) {
+      suppressChange = true;
+      loadTextEditorForPath(path, text);
+      suppressChange = false;
+      showCsvHelpBanner('too-large', parsed.rows);
+      updateEditorHeader();
+      updateEditorEmptyState();
+      updateUndoRedoButtons();
+      return;
+    }
+    enterCsvTableMode();
+    if (parsed.empty) showCsvHelpBanner('empty');
+  }
+
+  function saveCsvEditorToProject() {
+    if (!csvSession || !hasOpenFile()) return;
+    const path = currentOpenPath();
+    let text = '';
+    if (editorViewMode === 'csv') {
+      text = csvSerializedNow();
+    } else if (cm) {
+      text = cm.getValue();
+    }
+    project.files[path] = text;
+    csvSession.savedSerialized = text;
+    if (editorViewMode === 'csv') {
+      const reparsed = CsvP.parseFile(text, {
+        preferTab: csvSession.preferTab,
+        delimiter: csvSession.delimiter,
+      });
+      csvSession.rows = reparsed.rows;
+      snapshotCsvSavedRows();
+    }
+  }
+
+  function applyCsvDelimiterFromUi(val) {
+    if (!csvSession) return;
+    const d = val === 'tab' ? '\t' : val;
+    csvSession.delimiter = d;
+    if (editorViewMode === 'csv') {
+      recomputeCsvDirty();
+    }
+  }
+
+  function doToggleCsvView() {
+    if (!csvSession) return;
+    if (editorViewMode === 'csv') {
+      const text = csvSerializedNow();
+      suppressChange = true;
+      loadTextEditorForPath(csvSession.path, text);
+      suppressChange = false;
+      if (csvTableBar) csvTableBar.hidden = true;
+      showCsvHelpBanner('none');
+      recomputeCsvDirty();
+    } else {
+      const raw = cm ? cm.getValue() : '';
+      const parsed = CsvP.parseFile(raw, {
+        preferTab: csvSession.preferTab,
+        delimiter: csvSession.delimiter,
+      });
+      if (CsvP.isTooLarge(parsed.rows) && !csvSession.gridForced) {
+        showAlert(CsvP.tooLargeMessage(parsed.rows), 'CSV editor');
+        return;
+      }
+      csvSession.rows = CsvP.ensureMinGrid(parsed.rows);
+      csvSession.delimiter = parsed.delimiter;
+      csvSession.lineEnding = parsed.lineEnding;
+      enterCsvTableMode();
+      recomputeCsvDirty();
+    }
+    updateCsvToggleButton();
+    updateEditorHeader();
+  }
+
+  function toggleCsvView() {
+    if (!csvSession) return;
+    confirmDiscardIfDirty(doToggleCsvView);
+  }
+
+  function openCsvTableDespiteSize() {
+    if (!csvSession) return;
+    confirmDiscardIfDirty(function () {
+      if (editorViewMode === 'plaintext' && cm) {
+        const parsed = CsvP.parseFile(cm.getValue(), {
+          preferTab: csvSession.preferTab,
+          delimiter: csvSession.delimiter,
+        });
+        csvSession.rows = CsvP.ensureMinGrid(parsed.rows);
+      }
+      csvSession.gridForced = true;
+      enterCsvTableMode();
+      recomputeCsvDirty();
+      updateCsvToggleButton();
+    });
   }
 
   function saveBinaryEditorToProject() {
@@ -864,14 +1153,20 @@
         editorKindLabel.textContent = 'Editor';
       } else if (editorViewMode === 'binary') {
         editorKindLabel.textContent = 'Hex editor';
+      } else if (editorViewMode === 'csv') {
+        editorKindLabel.textContent = 'CSV editor';
       } else if (editorViewMode === 'flatl') {
         editorKindLabel.textContent = 'Fl editor';
+      } else if (isCsvSessionActive()) {
+        editorKindLabel.textContent = 'CSV editor (text)';
       } else {
         editorKindLabel.textContent = 'Text editor';
       }
     }
     if (codeMapBtn) {
-      codeMapBtn.disabled = !hasOpenFile() || editorViewMode !== 'flatl';
+      const showCodeMap = hasOpenFile() && editorViewMode === 'flatl';
+      codeMapBtn.hidden = !showCodeMap;
+      codeMapBtn.disabled = !showCodeMap;
     }
     if (!editorPathLabel) {
       return;
@@ -903,6 +1198,10 @@
     if (grid && editorViewMode === 'binary') {
       grid.hidden = noFiles || !hasOpenFile();
     }
+    if (csvGridHost && editorViewMode === 'csv') {
+      csvGridHost.hidden = noFiles || !hasOpenFile();
+    }
+    updateCsvToggleButton();
     updateRunSaveButtons();
   }
 
@@ -931,6 +1230,8 @@
     const path = currentOpenPath();
     if (editorViewMode === 'binary') {
       saveBinaryEditorToProject();
+    } else if (isCsvSessionActive()) {
+      saveCsvEditorToProject();
     } else {
       project.files[path] = cm.getValue();
     }
@@ -947,6 +1248,8 @@
     }
     if (editorViewMode === 'binary') {
       saveBinaryEditorToProject();
+    } else if (isCsvSessionActive()) {
+      saveCsvEditorToProject();
     } else {
       flushEditorToProject();
     }
@@ -955,6 +1258,9 @@
     if (editorViewMode === 'binary') {
       renderBinaryGrid();
       updateBinaryBarMeta();
+    } else if (editorViewMode === 'csv' && csvSession) {
+      snapshotCsvSavedRows();
+      renderCsvGrid();
     }
     setStatus('saved');
     window.setTimeout(function () {
@@ -967,6 +1273,8 @@
   function implicitSaveForRun() {
     if (editorViewMode === 'binary') {
       saveBinaryEditorToProject();
+    } else if (isCsvSessionActive()) {
+      saveCsvEditorToProject();
     } else {
       flushEditorToProject();
     }
@@ -977,6 +1285,7 @@
   function enterEmptyEditorState() {
     if (codeMapVisible) setCodeMapVisible(false);
     leaveBinaryEditor();
+    leaveCsvEditor();
     editorViewMode = 'flatl';
     project.openPath = null;
     suppressChange = true;
@@ -996,11 +1305,15 @@
       return;
     }
     leaveBinaryEditor();
+    leaveCsvEditor();
     suppressChange = true;
     if (P.isBinaryProjectFile(norm, project.files[norm])) {
       const bytes = P.binaryProjectValueToBytes(project.files[norm]);
       suppressChange = false;
       enterBinaryEditorFromBytes(bytes);
+    } else if (isCsvPath(norm)) {
+      suppressChange = false;
+      enterCsvFromProject(norm, project.files[norm]);
     } else {
       loadTextEditorForPath(norm, project.files[norm]);
       suppressChange = false;
@@ -1584,7 +1897,7 @@
     if (!cm || !undoBtn || !redoBtn) {
       return;
     }
-    if (editorViewMode === 'binary') {
+    if (editorViewMode === 'binary' || editorViewMode === 'csv') {
       undoBtn.disabled = true;
       redoBtn.disabled = true;
       return;
@@ -1976,6 +2289,11 @@
         return;
       }
       if (editorViewMode === 'binary') {
+        return;
+      }
+      if (isCsvSessionActive()) {
+        recomputeCsvDirty();
+        updateUndoRedoButtons();
         return;
       }
       setDirty(true);
@@ -2566,6 +2884,87 @@
     updateBinarySearchCountLabel();
   }
 
+  function initCsvBar() {
+    if (csvViewToggleBtn) {
+      csvViewToggleBtn.addEventListener('click', function () {
+        toggleCsvView();
+      });
+    }
+    if (csvDelimiterSelect) {
+      csvDelimiterSelect.addEventListener('change', function () {
+        applyCsvDelimiterFromUi(csvDelimiterSelect.value);
+      });
+    }
+    if (csvHeaderRowBtn) {
+      csvHeaderRowBtn.addEventListener('click', function () {
+        if (!csvSession) return;
+        csvSession.headerRow = !csvSession.headerRow;
+        if (editorViewMode === 'csv') renderCsvGrid();
+        updateCsvBarMeta();
+      });
+    }
+    const helpDismiss = document.getElementById('csvHelpDismiss');
+    if (helpDismiss) {
+      helpDismiss.addEventListener('click', function () {
+        if (csvHelpBanner) csvHelpBanner.hidden = true;
+      });
+    }
+    if (csvTooLargeOpenTable) {
+      csvTooLargeOpenTable.addEventListener('click', function () {
+        openCsvTableDespiteSize();
+      });
+    }
+    if (csvTableSizeBtn) {
+      csvTableSizeBtn.addEventListener('click', async function () {
+        if (!csvSession || editorViewMode !== 'csv') return;
+        const t = CsvP.tableSize(csvSession.rows);
+        const rStr = await showPrompt({
+          title: 'Table size',
+          message: 'Row count (min 1):',
+          defaultValue: String(t.rows),
+        });
+        if (rStr == null) return;
+        const cStr = await showPrompt({
+          title: 'Table size',
+          message: 'Column count (min 1):',
+          defaultValue: String(t.cols),
+        });
+        if (cStr == null) return;
+        const r = Math.max(1, parseInt(rStr, 10) || 1);
+        const c = Math.max(1, parseInt(cStr, 10) || 1);
+        if (r > CsvP.MAX_ROWS || c > CsvP.MAX_COLS) {
+          showAlert('Too large (' + r + ' rows, ' + c + ' columns). Open as text.', 'CSV editor');
+          return;
+        }
+        const shrunk = r < t.rows || c < t.cols;
+        let hasData = false;
+        if (shrunk) {
+          for (let y = r; y < csvSession.rows.length && !hasData; y++) {
+            for (let x = 0; x < (csvSession.rows[y] || []).length; x++) {
+              if (csvSession.rows[y][x]) hasData = true;
+            }
+          }
+          for (let y = 0; y < Math.min(r, csvSession.rows.length) && !hasData; y++) {
+            for (let x = c; x < (csvSession.rows[y] || []).length; x++) {
+              if (csvSession.rows[y][x]) hasData = true;
+            }
+          }
+        }
+        if (hasData) {
+          const ok = await showPrompt({
+            title: 'Shrink table',
+            message: 'Shrink will delete cells. Type yes to continue:',
+            defaultValue: '',
+          });
+          if (ok !== 'yes') return;
+        }
+        csvSession.rows = CsvP.resizeGrid(csvSession.rows, r, c);
+        renderCsvGrid();
+        recomputeCsvDirty();
+      });
+    }
+  }
+
   function initBinaryBar() {
     const helpDismiss = document.getElementById('binaryHelpDismiss');
     if (helpDismiss) {
@@ -2824,6 +3223,7 @@
     initAlertModal();
     initNewFileModal();
     initBinaryBar();
+    initCsvBar();
     FleditorSettings.init({
       appEl: document.querySelector('.fleditor-app'),
       getCm: function () {
