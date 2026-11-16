@@ -123,14 +123,25 @@
     // Place any nodes added after a saved layout without moving existing nodes.
     nodes.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+(i%5)*colGap,y:margin+Math.floor(i/5)*rowGap});});
     if(mode!=='by-file' && force) optimizeLayout(nodes,edges,pos);
+    // Branches and the auto-arrange pass can place nodes above or left of the
+    // origin. The canvas cannot scroll below zero, so pull the whole graph in.
+    containPositions(pos,function(_id,p){return {left:p.x-NODE_R,top:p.y-NODE_R};});
     const widths=new Map();nodes.forEach(n=>widths.set(n.id,Math.max(30,Math.min(220,n.name.length*7.2))));
     const maxX=Math.max(500,...Array.from(pos.values(),p=>p.x+300)),maxY=Math.max(400,...Array.from(pos.values(),p=>p.y+100));
     return {positions:pos,widths,width:maxX,height:maxY,files:Array.from(new Set(nodes.map(n=>n.file)))};
   }
 
   const PORT_ANGLES=[-90,-60,-30,0,30,60,90,120,150,180,210,240];
-  const PORT_GAP=20,NODE_R=10,PORT_R=11;
+  const PORT_GAP=20,NODE_R=10,PORT_R=11,CANVAS_PAD=48;
   let nodeRadius=new Map();
+  function containPositions(pos,edgeOf){
+    let minL=Infinity,minT=Infinity;
+    pos.forEach((p,id)=>{const e=edgeOf(id,p);minL=Math.min(minL,e.left);minT=Math.min(minT,e.top);});
+    const dx=Number.isFinite(minL)&&minL<CANVAS_PAD?CANVAS_PAD-minL:0;
+    const dy=Number.isFinite(minT)&&minT<CANVAS_PAD?CANVAS_PAD-minT:0;
+    if(dx||dy)pos.forEach(p=>{p.x+=dx;p.y+=dy;});
+    return {dx:dx,dy:dy};
+  }
   function portDelta(deg,target){return Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-target),Math.cos(deg*Math.PI/180-target)));}
   function ringFor(count){
     if(count<=PORT_ANGLES.length)return {node:NODE_R,port:PORT_R};
@@ -308,9 +319,25 @@
     let dpr=1,viewW=800,viewH=600,drag=null,pan=null,hover=null;
     const nodeById=new Map(nodes.map(n=>[n.id,n]));
     const edgePaths=model.edges.map((e,i)=>({edge:e,index:i,pts:null}));
-    const bounds=()=>{let x=500,y=400;positions.forEach((p,id)=>{const pad=(nodeRadius.get(id)||{node:0}).node;x=Math.max(x,p.x+Math.max(260,(nodeById.get(id)||{}).name?.length*7||0)+80+pad);y=Math.max(y,p.y+100+pad);});return {x,y};};
-    function setCanvasSize(){
+    function nodeBox(id,p){
+      const ring=(nodeRadius.get(id)||{node:NODE_R}).node,node=nodeById.get(id);
+      const label=!node?'':(node.kind==='dynamic'?'Dynamic target':(node.name||''));
+      const text=Math.max(28,label.length*7.4),labelAt=ring+8;
+      if(activeOrientation==='vertical')return {left:p.x-ring,right:p.x+ring,top:p.y-ring,bottom:p.y+text};
+      return {left:p.x-ring,right:p.x+labelAt+text,top:p.y-ring,bottom:p.y+ring};
+    }
+    const bounds=()=>{let x=500,y=400;positions.forEach((p,id)=>{const box=nodeBox(id,p);x=Math.max(x,box.right+CANVAS_PAD);y=Math.max(y,box.bottom+CANVAS_PAD);});return {x,y};};
+    function containLive(){
       assignPorts(model.edges,positions);
+      const shift=containPositions(positions,nodeBox);
+      if(!shift.dx&&!shift.dy)return;
+      manualPositions.forEach((mp,id)=>{if(positions.has(id)){mp.x+=shift.dx;mp.y+=shift.dy;}});
+      // While dragging, scroll by the same shift so the node stays under the cursor
+      // and the canvas grows instead of letting the node leave the scrollable area.
+      if(drag){viewport.scrollLeft+=shift.dx*zoom;viewport.scrollTop+=shift.dy*zoom;}
+    }
+    function setCanvasSize(){
+      containLive();
       const b=bounds(),worldW=activeOrientation==='vertical'?b.y:b.x,worldH=activeOrientation==='vertical'?b.x:b.y,cssW=Math.max(viewW,worldW*zoom),cssH=Math.max(viewH,worldH*zoom);
       dpr=Math.max(1,root.devicePixelRatio||1);
       canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';
