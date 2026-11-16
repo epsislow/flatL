@@ -129,15 +129,24 @@
   }
 
   const PORT_ANGLES=[-90,-60,-30,0,30,60,90,120,150,180,210,240];
-  const PORT_GAP=20;
+  const PORT_GAP=20,NODE_R=10,PORT_R=11;
+  let nodeRadius=new Map();
   function portDelta(deg,target){return Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-target),Math.cos(deg*Math.PI/180-target)));}
-  function portPoint(p,deg){const rad=deg*Math.PI/180;return {x:p.x+Math.cos(rad)*11,y:p.y+Math.sin(rad)*11};}
+  function ringFor(count){
+    if(count<=PORT_ANGLES.length)return {node:NODE_R,port:PORT_R};
+    // Match the chord of the 12-point ring (30° on the standard radius), not the
+    // tighter 20° pack. The circle grows as soon as a 13th end is added.
+    const gap=Math.min(PORT_GAP*Math.PI/180,2*Math.PI/count);
+    const scale=Math.sin(Math.PI/12)/Math.sin(gap/2);
+    return {node:NODE_R*scale,port:PORT_R*scale};
+  }
+  function portPoint(p,deg,radius){const r=radius||PORT_R,rad=deg*Math.PI/180;return {x:p.x+Math.cos(rad)*r,y:p.y+Math.sin(rad)*r};}
   function nearestPort(target){let best=0,delta=Infinity;PORT_ANGLES.forEach((deg,i)=>{const d=portDelta(deg,target);if(d<delta){delta=d;best=i;}});return best;}
   function normRad(a){const t=Math.PI*2;a%=t;return a<0?a+t:a;}
   function toDeg(rad){let deg=normRad(rad)*180/Math.PI;if(deg>180)deg-=360;return deg;}
   // One shared ring per node, for both incoming and outgoing ends.
-  // Up to 12 ends use the fixed 30° points. Past that, ends stay at least
-  // PORT_GAP apart; when the circle cannot hold that gap, spacing becomes 360/n.
+  // Up to 12 ends use the fixed 30° points on the standard circle. Past that,
+  // the circle grows so neighboring lines stay as far apart as on that 12-point ring.
   function assignGrid(stubs){
     const used=new Set(),pending=stubs.map((stub,i)=>({stub,i})),degs=new Array(stubs.length);
     while(pending.length){
@@ -184,8 +193,8 @@
     return degs;
   }
   function assignPorts(edges,positions){
-    edges.forEach(e=>{delete e._portOut;delete e._portIn;});
-    const groups=new Map();
+    edges.forEach(e=>{delete e._portOut;delete e._portIn;delete e._rOut;delete e._rIn;});
+    const groups=new Map(),radii=new Map();
     function add(id,edge,side,angle,index){if(!groups.has(id))groups.set(id,[]);groups.get(id).push({edge,side,angle,index});}
     edges.forEach((edge,index)=>{
       const from=positions.get(edge.from),to=positions.get(edge.to);if(!from||!to)return;
@@ -195,22 +204,27 @@
       add(edge.from,edge,'out',outAngle,index);
       add(edge.to,edge,'in',inAngle,index);
     });
-    groups.forEach(stubs=>{
-      const degs=stubs.length<=PORT_ANGLES.length?assignGrid(stubs):assignDense(stubs);
-      stubs.forEach((stub,i)=>{if(stub.side==='out')stub.edge._portOut=degs[i];else stub.edge._portIn=degs[i];});
+    groups.forEach((stubs,id)=>{
+      const ring=ringFor(stubs.length),degs=stubs.length<=PORT_ANGLES.length?assignGrid(stubs):assignDense(stubs);
+      radii.set(id,ring);
+      stubs.forEach((stub,i)=>{
+        if(stub.side==='out'){stub.edge._portOut=degs[i];stub.edge._rOut=ring.port;}
+        else{stub.edge._portIn=degs[i];stub.edge._rIn=ring.port;}
+      });
     });
+    nodeRadius=radii;
   }
   function choosePorts(a,b,edge){
     const angle=Math.atan2(b.y-a.y,b.x-a.x);
     if(typeof edge._portOut!=='number')edge._portOut=PORT_ANGLES[nearestPort(angle)];
     if(typeof edge._portIn!=='number')edge._portIn=PORT_ANGLES[nearestPort(angle+Math.PI)];
-    return [portPoint(a,edge._portOut),portPoint(b,edge._portIn)];
+    return [portPoint(a,edge._portOut,edge._rOut),portPoint(b,edge._portIn,edge._rIn)];
   }
   function route(a,b,edge){
     const [s,e]=choosePorts(a,b,edge);
     const dx=e.x-s.x,dy=e.y-s.y;
     if(edge.from===edge.to){
-      const side=Math.cos(edge._portOut*Math.PI/180)>=0?1:-1,reach=34;
+      const side=Math.cos(edge._portOut*Math.PI/180)>=0?1:-1,reach=Math.max(34,(edge._rOut||PORT_R)+24);
       return [s,{x:s.x+side*reach,y:s.y-reach},{x:e.x-side*reach,y:e.y-reach},e];
     }
     if(Math.hypot(dx,dy)<22)return [s,e];
@@ -294,8 +308,9 @@
     let dpr=1,viewW=800,viewH=600,drag=null,pan=null,hover=null;
     const nodeById=new Map(nodes.map(n=>[n.id,n]));
     const edgePaths=model.edges.map((e,i)=>({edge:e,index:i,pts:null}));
-    const bounds=()=>{let x=500,y=400;positions.forEach(p=>{x=Math.max(x,p.x+Math.max(260,(nodeById.get([...positions.keys()].find(id=>positions.get(id)===p))||{}).name?.length*7||0)+80);y=Math.max(y,p.y+100);});return {x,y};};
+    const bounds=()=>{let x=500,y=400;positions.forEach((p,id)=>{const pad=(nodeRadius.get(id)||{node:0}).node;x=Math.max(x,p.x+Math.max(260,(nodeById.get(id)||{}).name?.length*7||0)+80+pad);y=Math.max(y,p.y+100+pad);});return {x,y};};
     function setCanvasSize(){
+      assignPorts(model.edges,positions);
       const b=bounds(),worldW=activeOrientation==='vertical'?b.y:b.x,worldH=activeOrientation==='vertical'?b.x:b.y,cssW=Math.max(viewW,worldW*zoom),cssH=Math.max(viewH,worldH*zoom);
       dpr=Math.max(1,root.devicePixelRatio||1);
       canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';
@@ -335,9 +350,9 @@
       });
       nodes.forEach(n=>{
         const p=positions.get(n.id);if(!p)return;const dynamic=n.kind==='dynamic',selected=selectedNodeId===n.id,connected=!selectedNodeId||selected||model.edges.some(e=>(e.from===selectedNodeId&&e.to===n.id)||(e.to===selectedNodeId&&e.from===n.id));
-        const label=dynamic?'Dynamic target':n.name;ctx.save();ctx.globalAlpha=connected?1:.62;
-        ctx.beginPath();ctx.arc(p.x,p.y,10,0,Math.PI*2);ctx.fillStyle='#202631';ctx.fill();ctx.lineWidth=selected?3:1.8;ctx.strokeStyle=selected?'#facc15':dynamic?'#d97706':'#8b8b9c';ctx.setLineDash(dynamic?[3,2]:[]);ctx.stroke();ctx.setLineDash([]);
-        ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';ctx.fillStyle='#e4e4e7';ctx.textBaseline='middle';if(activeOrientation==='vertical'){ctx.save();ctx.translate(p.x+18,p.y+2);ctx.rotate(Math.PI/2);ctx.fillText(label,0,0);ctx.restore();}else ctx.fillText(label,p.x+18,p.y+2);
+        const label=dynamic?'Dynamic target':n.name,ring=nodeRadius.get(n.id)||{node:NODE_R},labelAt=ring.node+8;ctx.save();ctx.globalAlpha=connected?1:.62;
+        ctx.beginPath();ctx.arc(p.x,p.y,ring.node,0,Math.PI*2);ctx.fillStyle='#202631';ctx.fill();ctx.lineWidth=selected?3:1.8;ctx.strokeStyle=selected?'#facc15':dynamic?'#d97706':'#8b8b9c';ctx.setLineDash(dynamic?[3,2]:[]);ctx.stroke();ctx.setLineDash([]);
+        ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';ctx.fillStyle='#e4e4e7';ctx.textBaseline='middle';if(activeOrientation==='vertical'){ctx.save();ctx.translate(p.x+labelAt,p.y+2);ctx.rotate(Math.PI/2);ctx.fillText(label,0,0);ctx.restore();}else ctx.fillText(label,p.x+labelAt,p.y+2);
         ctx.restore();
       });
       ctx.restore();
@@ -345,9 +360,9 @@
     function resizeCanvas(){resize();}
     function findNode(pt){
       let best=null,dist=Infinity;
-      nodes.forEach(n=>{const p=positions.get(n.id),d=Math.hypot(pt.x-p.x,pt.y-p.y),label=(n.kind==='dynamic'?'Dynamic target':n.name)||'';
-        const inLabel=activeOrientation==='vertical'?(Math.abs(pt.x-(p.x+18))<=13&&pt.y>=p.y-8&&pt.y<=p.y+8+label.length*7.5):(pt.x>=p.x+12&&pt.x<=p.x+24+label.length*7.5&&Math.abs(pt.y-p.y)<=13);
-        if((d<19||inLabel)&&d<dist){best=n;dist=d;}
+      nodes.forEach(n=>{const p=positions.get(n.id),d=Math.hypot(pt.x-p.x,pt.y-p.y),label=(n.kind==='dynamic'?'Dynamic target':n.name)||'',ring=nodeRadius.get(n.id)||{node:NODE_R},labelAt=ring.node+8;
+        const inLabel=activeOrientation==='vertical'?(Math.abs(pt.x-(p.x+labelAt))<=13&&pt.y>=p.y-8&&pt.y<=p.y+8+label.length*7.5):(pt.x>=p.x+ring.node+2&&pt.x<=p.x+labelAt+6+label.length*7.5&&Math.abs(pt.y-p.y)<=13);
+        if((d<ring.node+9||inLabel)&&d<dist){best=n;dist=d;}
       });return best;
     }
     function findEdge(pt){let best=null,bestD=9;edgePaths.forEach(({edge,pts})=>{if(!pts)return;for(let i=1;i<pts.length;i++){const a=pts[i-1],b=pts[i],dx=b.x-a.x,dy=b.y-a.y,t=Math.max(0,Math.min(1,((pt.x-a.x)*dx+(pt.y-a.y)*dy)/(dx*dx+dy*dy||1))),d=Math.hypot(pt.x-(a.x+t*dx),pt.y-(a.y+t*dy));if(d<bestD){bestD=d;best=edge;}}});return best;}
