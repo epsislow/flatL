@@ -48,6 +48,21 @@
     if(!result.path.length&&nodes.length)result=best(nodes[0].id);
     return result.path;
   }
+  const HUB_OUT_MIN=6;
+  function jitterSeed(id){let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))|0;return h;}
+  function placeHubThreeBands(parent,kids,pos,hubPlaced,colGap,rowGap){
+    const rMin=colGap*.85,rMax=colGap*1.35,jx=colGap*.25,jy=rowGap*.35,bandBase=[-Math.PI/4,0,Math.PI/4];
+    kids.forEach((node,i)=>{
+      if(pos.has(node.id))return;
+      const band=i%3,slot=Math.floor(i/3),spread=(slot%5)-2;
+      const angle=bandBase[band]+spread*(Math.PI/36);
+      const r=rMin+(slot%3)*((rMax-rMin)/2);
+      const h=jitterSeed(node.id);
+      const dx=((h&255)/255-.5)*2*jx,dy=(((h>>8)&255)/255-.5)*2*jy;
+      pos.set(node.id,{x:parent.x+Math.cos(angle)*r+dx,y:parent.y+Math.sin(angle)*r+dy});
+      hubPlaced.add(node.id);
+    });
+  }
   function layoutGraph(nodes, edges, model, mode, force) {
     const pos=new Map(), rank=new Map(), outgoing=new Map(nodes.map(n=>[n.id,[]])), incoming=new Map(nodes.map(n=>[n.id,[]]));
     const saved=!force?loadPositions(model):null;
@@ -99,6 +114,14 @@
       // Keep the main path on one readable horizontal spine.
       const spineY=margin+Math.max(0,...Array.from(branchGroups.values(),a=>a.length))*rowGap*.35+rowGap;
       spine.forEach((id,i)=>{if(!pos.has(id))pos.set(id,{x:margin+i*colGap,y:spineY});});
+      const hubPlaced=new Set(),byId=new Map(nodes.map(n=>[n.id,n])),outByFrom=new Map();
+      edges.forEach(e=>{if(!outByFrom.has(e.from))outByFrom.set(e.from,[]);outByFrom.get(e.from).push(e);});
+      outByFrom.forEach((elist,parentId)=>{
+        const unique=Array.from(new Set(elist.map(e=>e.to).filter(t=>t!==parentId&&byId.has(t))));
+        if(unique.length<HUB_OUT_MIN)return;
+        const parent=pos.get(parentId);if(!parent)return;
+        placeHubThreeBands(parent,unique.map(id=>byId.get(id)).sort(compare),pos,hubPlaced,colGap,rowGap);
+      });
       // Branches are clustered near the spine node they originate from.
       const branchByRank=new Map();
       branchGroups.forEach((arr,anchor)=>{
@@ -112,7 +135,7 @@
       branchByRank.forEach((arr,r)=>{
         arr.sort((a,b)=>a.anchor-b.anchor||compare(a.node,b.node));
         arr.forEach((item,i)=>{
-          if(pos.has(item.node.id))return;
+          if(pos.has(item.node.id)||hubPlaced.has(item.node.id))return;
           const side=(i%2===0?1:-1),slot=Math.floor(i/2)+1;
           pos.set(item.node.id,{x:margin+r*colGap,y:spineY+side*slot*rowGap});
         });
@@ -174,6 +197,27 @@
     }
     return degs;
   }
+  function isWestDeg(deg){return Math.cos(deg*Math.PI/180)<=1e-6;}
+  function assignGroupedOut(outs,ring){
+    const buckets=new Map();
+    outs.forEach(stub=>{const b=nearestPort(stub.angle);if(!buckets.has(b))buckets.set(b,[]);buckets.get(b).push(stub);});
+    buckets.forEach((items,b)=>{const deg=PORT_ANGLES[b];items.forEach(stub=>{stub.edge._portOut=deg;stub.edge._rOut=ring.port;});});
+    return new Set(Array.from(buckets.keys(),b=>PORT_ANGLES[b]));
+  }
+  function assignInWest(ins,ring,blockOutDeg){
+    const west=PORT_ANGLES.map((deg,i)=>({deg,i})).filter(o=>isWestDeg(o.deg));
+    ins.forEach(stub=>{
+      let choice=null;
+      west.forEach(o=>{
+        if(blockOutDeg.has(o.deg))return;
+        const delta=portDelta(o.deg,stub.angle);
+        if(!choice||delta<choice.delta-1e-9||(Math.abs(delta-choice.delta)<=1e-9&&o.i<choice.i))choice={...o,delta};
+      });
+      if(!choice)west.forEach(o=>{if(blockOutDeg.has(o.deg))return;const delta=portDelta(o.deg,stub.angle);if(!choice||delta<choice.delta-1e-9)choice={...o,delta};});
+      const port=choice||west[0];
+      stub.edge._portIn=port.deg;stub.edge._rIn=ring.port;
+    });
+  }
   function assignDense(stubs){
     const n=stubs.length,full=Math.PI*2,minGap=Math.min(PORT_GAP*Math.PI/180,full/n);
     const order=stubs.map((stub,i)=>({i,a:normRad(stub.angle)})).sort((p,q)=>p.a-q.a||p.i-q.i);
@@ -216,12 +260,21 @@
       add(edge.to,edge,'in',inAngle,index);
     });
     groups.forEach((stubs,id)=>{
-      const ring=ringFor(stubs.length),degs=stubs.length<=PORT_ANGLES.length?assignGrid(stubs):assignDense(stubs);
+      const outs=stubs.filter(s=>s.side==='out'),ins=stubs.filter(s=>s.side==='in');
+      const hub=outs.length>=HUB_OUT_MIN;
+      const portSlots=hub?new Set(outs.map(s=>nearestPort(s.angle))).size+ins.length:stubs.length;
+      const ring=ringFor(portSlots);
       radii.set(id,ring);
-      stubs.forEach((stub,i)=>{
-        if(stub.side==='out'){stub.edge._portOut=degs[i];stub.edge._rOut=ring.port;}
-        else{stub.edge._portIn=degs[i];stub.edge._rIn=ring.port;}
-      });
+      if(hub){
+        const blockOut=assignGroupedOut(outs,ring);
+        if(ins.length)assignInWest(ins,ring,blockOut);
+      }else{
+        const degs=portSlots<=PORT_ANGLES.length?assignGrid(stubs):assignDense(stubs);
+        stubs.forEach((stub,i)=>{
+          if(stub.side==='out'){stub.edge._portOut=degs[i];stub.edge._rOut=ring.port;}
+          else{stub.edge._portIn=degs[i];stub.edge._rIn=ring.port;}
+        });
+      }
     });
     nodeRadius=radii;
   }
