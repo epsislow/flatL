@@ -51,17 +51,36 @@
   const HUB_OUT_MIN=6;
   function jitterSeed(id){let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))|0;return h;}
   function placeHubThreeBands(parent,kids,pos,hubPlaced,colGap,rowGap){
-    const rMin=colGap*.85,rMax=colGap*1.35,jx=colGap*.25,jy=rowGap*.35,bandBase=[-Math.PI/4,0,Math.PI/4];
-    kids.forEach((node,i)=>{
-      if(pos.has(node.id))return;
-      const band=i%3,slot=Math.floor(i/3),spread=(slot%5)-2;
-      const angle=bandBase[band]+spread*(Math.PI/36);
-      const r=rMin+(slot%3)*((rMax-rMin)/2);
-      const h=jitterSeed(node.id);
-      const dx=((h&255)/255-.5)*2*jx,dy=(((h>>8)&255)/255-.5)*2*jy;
-      pos.set(node.id,{x:parent.x+Math.cos(angle)*r+dx,y:parent.y+Math.sin(angle)*r+dy});
-      hubPlaced.add(node.id);
+    const step=rowGap,minDist=step*.98,rMin=colGap*.88,rMax=colGap*1.38,jx=colGap*.1,jy=rowGap*.12;
+    const bandCenter=[-Math.PI/3.5,0,Math.PI/3.5];
+    const bands=[[],[],[]];
+    kids.forEach((node,i)=>{bands[i%3].push(node);});
+    const placed=[];
+    bands.forEach((arr,band)=>{
+      const n=arr.length;if(!n)return;
+      const midR=(rMin+rMax)/2;
+      const stepAng=n>1?Math.min(Math.PI/8,Math.max(minDist/midR*1.08,Math.PI/(n+5))):0;
+      const spread=Math.min(Math.PI/2.8,Math.max(stepAng*Math.max(0,n-1),Math.PI/9));
+      const start=bandCenter[band]-spread/2;
+      const aStep=n>1?spread/(n-1):0;
+      arr.forEach((node,si)=>{
+        const angle=start+si*aStep;
+        const t=n>1?si/(n-1):0.5;
+        const r=rMin+(rMax-rMin)*(0.15+0.7*t);
+        const h=jitterSeed(node.id);
+        const dx=((h&255)/255-.5)*2*jx,dy=(((h>>8)&255)/255-.5)*2*jy;
+        const p={x:parent.x+Math.cos(angle)*r+dx,y:parent.y+Math.sin(angle)*r+dy};
+        pos.set(node.id,p);hubPlaced.add(node.id);placed.push(p);
+      });
     });
+    for(let iter=0;iter<48;iter++){
+      let moved=false;
+      for(let i=0;i<placed.length;i++)for(let j=i+1;j<placed.length;j++){
+        const a=placed[i],b=placed[j],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||1;
+        if(d<minDist){const push=(minDist-d)*.72;a.x-=push*dx/d;a.y-=push*dy/d;b.x+=push*dx/d;b.y+=push*dy/d;moved=true;}
+      }
+      if(!moved)break;
+    }
   }
   function layoutGraph(nodes, edges, model, mode, force) {
     const pos=new Map(), rank=new Map(), outgoing=new Map(nodes.map(n=>[n.id,[]])), incoming=new Map(nodes.map(n=>[n.id,[]]));
