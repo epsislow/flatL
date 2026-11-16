@@ -1128,6 +1128,21 @@ body.fleditor-resize-active * {
 }
 .fl-code-map-summary { white-space: nowrap; }
 .fl-code-map-controls { display: inline-flex; align-items: center; gap: 0.25rem; }
+.fl-code-map-controls .fl-code-map-mode {
+  box-sizing: border-box;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 0.48rem;
+}
+.fl-code-map-controls .fl-code-map-mode-icon {
+  width: 30px;
+  min-width: 30px;
+  padding: 0;
+  font-size: 14px;
+}
 .fl-code-map-mode-label { margin-right: 0.2rem; }
 .fl-code-map-mode { border: 1px solid var(--fl-border); border-radius: 5px; padding: 0.22rem 0.48rem; color: var(--fl-text-muted); background: transparent; font: inherit; cursor: pointer; }
 .fl-code-map-mode:hover { color: var(--fl-text); border-color: var(--fl-text-muted); }
@@ -1185,9 +1200,6 @@ body.fleditor-resize-active * {
 .fl-map-edge { stroke-linecap: round; stroke-linejoin: round; }
 .fl-map-node { isolation: isolate; }
 .fl-code-map-controls { flex-wrap: wrap; }
-.fl-code-map-toolbar .fl-code-map-mode[aria-label="Arrange graph"],
-.fl-code-map-toolbar .fl-code-map-mode[aria-label="Clear saved positions"] { width: 30px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0; font-size: 14px; line-height: 1; }
-
 /* Code Map v1.6: Canvas renderer, local node dragging and lightweight edge redraw. */
 .fl-code-map-viewport { flex: 1 1 0; min-height: 280px; min-width: 0; overflow: auto; padding: 0; overscroll-behavior: contain; }
 .fl-code-map-canvas { display: block; background: var(--fl-editor-pane-bg, var(--fl-panel-bg)); cursor: default; }
@@ -1201,12 +1213,6 @@ body.fleditor-resize-active * {
 .fl-code-map-viewport { overflow: auto !important; min-width: 0; min-height: 280px; touch-action: none; }
 .fl-code-map-canvas { display: block; flex: none; width: auto; height: auto; max-width: none; max-height: none; }
 
-/* Code Map v1.13: compact icon actions for focus and orientation. */
-.fl-code-map-controls .fl-code-map-mode[aria-label="Rotate graph 90 degrees"],
-.fl-code-map-controls .fl-code-map-mode[aria-label="Focus selected block"] {
-  width: 32px; height: 30px; display: inline-flex; align-items: center; justify-content: center;
-  padding: 0; font-size: 1.05rem; line-height: 1;
-}
 .fl-code-map-controls .fl-code-map-mode[aria-pressed="true"] {
   border-color: var(--fl-accent, #60a5fa); color: var(--fl-text);
 }

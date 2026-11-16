@@ -414,9 +414,9 @@
     }
     if(hubs&&hubs.size)relaxHubSiblings(positions,hubs,rowGap);
   }
-  function drawArrow(ctx, pts, color){
+  function drawArrow(ctx, pts, color, alpha){
     if(pts.length<2)return;const a=pts[pts.length-2],b=pts[pts.length-1],ang=Math.atan2(b.y-a.y,b.x-a.x);
-    ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-9*Math.cos(ang-.48),b.y-9*Math.sin(ang-.48));ctx.lineTo(b.x-9*Math.cos(ang+.48),b.y-9*Math.sin(ang+.48));ctx.closePath();ctx.fill();
+    ctx.save();ctx.globalAlpha=alpha==null?.82:alpha;ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-9*Math.cos(ang-.48),b.y-9*Math.sin(ang-.48));ctx.lineTo(b.x-9*Math.cos(ang+.48),b.y-9*Math.sin(ang+.48));ctx.closePath();ctx.fill();ctx.restore();
   }
   function defaultFocusId(nodes, model){
     const entry=model.entryPath||(model.files[0]&&model.files[0].path);
@@ -441,11 +441,11 @@
     const controls=html('div','fl-code-map-controls');
     activeOrientation=loadOrientation(model);
     [['graph','Graph'],['by-file','By file']].forEach(([v,label])=>{const b=html('button','fl-code-map-mode'+(displayMode===v?' active':''),label);b.type='button';b.title=label;b.setAttribute('aria-label',label);b.setAttribute('aria-pressed',displayMode===v?'true':'false');b.onclick=()=>{displayMode=v;render(host,model,onNodeClick,onEdgeClick);};controls.appendChild(b);});
-    const arrange=html('button','fl-code-map-mode','↻');arrange.type='button';arrange.title='Arrange graph';arrange.setAttribute('aria-label','Arrange graph');arrange.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,true);};controls.appendChild(arrange);
-    const clearPos=html('button','fl-code-map-mode','🗑');clearPos.type='button';clearPos.title='Clear saved positions (first layout)';clearPos.setAttribute('aria-label','Clear saved positions');clearPos.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,false,true);};controls.appendChild(clearPos);
-    const rotate=html('button','fl-code-map-mode','⤾');rotate.type='button';rotate.title='Rotate graph 90°';rotate.setAttribute('aria-label','Rotate graph 90 degrees');rotate.setAttribute('aria-pressed',activeOrientation==='vertical'?'true':'false');rotate.onclick=()=>{activeOrientation=activeOrientation==='horizontal'?'vertical':'horizontal';try{root.localStorage.setItem(orientationKey(model),activeOrientation);}catch(_){}render(host,model,onNodeClick,onEdgeClick);if(selectedNodeId&&activeView)activeView.focus(selectedNodeId);};controls.appendChild(rotate);
-    const focus=html('button','fl-code-map-mode','⌖');focus.type='button';focus.title='Focus selected block';focus.setAttribute('aria-label','Focus selected block');focus.onclick=()=>{if(activeView&&selectedNodeId)activeView.focus(selectedNodeId);};controls.appendChild(focus);
-    [['−',()=>{zoomAt(zoom/1.2);}],['+',()=>{zoomAt(zoom*1.2);}],['Fit',()=>{const b=bounds();const w=activeOrientation==='vertical'?b.y:b.x,h=activeOrientation==='vertical'?b.x:b.y;zoom=Math.max(.25,Math.min(1.5,Math.min((viewW-32)/w,(viewH-32)/h)));setCanvasSize();draw();viewport.scrollLeft=0;viewport.scrollTop=0;}]].forEach(([label,fn])=>{const b=html('button','fl-code-map-mode',label);b.type='button';b.title=label==='Fit'?'Fit graph':'Zoom '+(label==='+'?'in':'out');b.setAttribute('aria-label',b.title);b.onclick=fn;controls.appendChild(b);});
+    const arrange=html('button','fl-code-map-mode fl-code-map-mode-icon','↻');arrange.type='button';arrange.title='Arrange graph';arrange.setAttribute('aria-label','Arrange graph');arrange.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,true);};controls.appendChild(arrange);
+    const clearPos=html('button','fl-code-map-mode fl-code-map-mode-icon','🗑');clearPos.type='button';clearPos.title='Clear saved positions (first layout)';clearPos.setAttribute('aria-label','Clear saved positions');clearPos.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,false,true);};controls.appendChild(clearPos);
+    const rotate=html('button','fl-code-map-mode fl-code-map-mode-icon','⤾');rotate.type='button';rotate.title='Rotate graph 90°';rotate.setAttribute('aria-label','Rotate graph 90 degrees');rotate.setAttribute('aria-pressed',activeOrientation==='vertical'?'true':'false');rotate.onclick=()=>{activeOrientation=activeOrientation==='horizontal'?'vertical':'horizontal';try{root.localStorage.setItem(orientationKey(model),activeOrientation);}catch(_){}render(host,model,onNodeClick,onEdgeClick);if(selectedNodeId&&activeView)activeView.focus(selectedNodeId);};controls.appendChild(rotate);
+    const focus=html('button','fl-code-map-mode fl-code-map-mode-icon','⌖');focus.type='button';focus.title='Focus selected block';focus.setAttribute('aria-label','Focus selected block');focus.onclick=()=>{if(activeView&&selectedNodeId)activeView.focus(selectedNodeId);};controls.appendChild(focus);
+    [['−',()=>{zoomAt(zoom/1.2);}],['+',()=>{zoomAt(zoom*1.2);}],['Fit',()=>{const b=bounds();const w=activeOrientation==='vertical'?b.y:b.x,h=activeOrientation==='vertical'?b.x:b.y;zoom=Math.max(.25,Math.min(1.5,Math.min((viewW-32)/w,(viewH-32)/h)));setCanvasSize();draw();viewport.scrollLeft=0;viewport.scrollTop=0;}]].forEach(([label,fn])=>{const b=html('button','fl-code-map-mode'+(label==='Fit'?'':' fl-code-map-mode-icon'),label);b.type='button';b.title=label==='Fit'?'Fit graph':'Zoom '+(label==='+'?'in':'out');b.setAttribute('aria-label',b.title);b.onclick=fn;controls.appendChild(b);});
     toolbar.appendChild(controls);
     const legend=html('div','fl-code-map-legend');
     Object.keys(COLORS).forEach(type=>{const item=html('span','fl-code-map-legend-item');const sw=html('i','fl-code-map-swatch');sw.style.backgroundColor=COLORS[type];item.append(sw,document.createTextNode(type));legend.appendChild(item);});
@@ -515,8 +515,8 @@
         ctx.save();ctx.strokeStyle=COLORS[edge.type]||'#a1a1aa';ctx.lineWidth=selectedNodeId&&!active?1.2:1.8;ctx.globalAlpha=selectedNodeId&&!active?.42:.82;
         if(edge.resolution==='hint')ctx.setLineDash([6,4]);else if(edge.resolution==='dynamic')ctx.setLineDash([2,4]);
         ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let j=1;j<pts.length;j++)ctx.lineTo(pts[j].x,pts[j].y);ctx.stroke();ctx.setLineDash([]);
-        if(active){ctx.lineWidth=4;ctx.globalAlpha=.22;ctx.stroke();}
-        drawArrow(ctx,pts,COLORS[edge.type]||'#a1a1aa');ctx.restore();
+        if(active){ctx.save();ctx.lineWidth=4;ctx.globalAlpha=.22;ctx.stroke();ctx.restore();}
+        drawArrow(ctx,pts,COLORS[edge.type]||'#a1a1aa',selectedNodeId&&!active?.42:.82);ctx.restore();
       });
       nodes.forEach(n=>{
         const p=positions.get(n.id);if(!p)return;const dynamic=n.kind==='dynamic',selected=selectedNodeId===n.id,connected=!selectedNodeId||selected||model.edges.some(e=>(e.from===selectedNodeId&&e.to===n.id)||(e.to===selectedNodeId&&e.from===n.id));
