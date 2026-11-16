@@ -129,23 +129,88 @@
   }
 
   const PORT_ANGLES=[-90,-60,-30,0,30,60,90,120,150,180,210,240];
-  function choosePorts(a,b,edge,index,edges,positions){
-    const angle=Math.atan2(b.y-a.y,b.x-a.x);
-    const nearest=target=>PORT_ANGLES.map((deg,i)=>({i,delta:Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-target),Math.cos(deg*Math.PI/180-target)))})).sort((x,y)=>x.delta-y.delta);
-    const usedOut=new Map(),usedIn=new Map();
-    edges.forEach((e,j)=>{if(j>=index)return;if(e.from===edge.from&&Number.isInteger(e._portOut))usedOut.set(e._portOut,true);if(e.to===edge.to&&Number.isInteger(e._portIn))usedIn.set(e._portIn,true);});
-    // Assign ports once per edge. Keeping them fixed prevents the connection
-    // from jumping around the node while the user drags either endpoint.
-    if(!Number.isInteger(edge._portOut))edge._portOut=(nearest(angle).find(x=>!usedOut.has(x.i))||nearest(angle)[0]).i;
-    if(!Number.isInteger(edge._portIn)){const order=nearest(angle+Math.PI);edge._portIn=(order.find(x=>!usedIn.has(x.i))||order[0]).i;}
-    const point=(p,i)=>{const r=11,rad=PORT_ANGLES[i]*Math.PI/180;return {x:p.x+Math.cos(rad)*r,y:p.y+Math.sin(rad)*r};};
-    return [point(a,edge._portOut),point(b,edge._portIn)];
+  const PORT_GAP=20;
+  function portDelta(deg,target){return Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-target),Math.cos(deg*Math.PI/180-target)));}
+  function portPoint(p,deg){const rad=deg*Math.PI/180;return {x:p.x+Math.cos(rad)*11,y:p.y+Math.sin(rad)*11};}
+  function nearestPort(target){let best=0,delta=Infinity;PORT_ANGLES.forEach((deg,i)=>{const d=portDelta(deg,target);if(d<delta){delta=d;best=i;}});return best;}
+  function normRad(a){const t=Math.PI*2;a%=t;return a<0?a+t:a;}
+  function toDeg(rad){let deg=normRad(rad)*180/Math.PI;if(deg>180)deg-=360;return deg;}
+  // One shared ring per node, for both incoming and outgoing ends.
+  // Up to 12 ends use the fixed 30° points. Past that, ends stay at least
+  // PORT_GAP apart; when the circle cannot hold that gap, spacing becomes 360/n.
+  function assignGrid(stubs){
+    const used=new Set(),pending=stubs.map((stub,i)=>({stub,i})),degs=new Array(stubs.length);
+    while(pending.length){
+      let best=null;
+      pending.forEach((item,pi)=>{
+        PORT_ANGLES.forEach((deg,p)=>{
+          if(used.has(p))return;
+          const delta=portDelta(deg,item.stub.angle);
+          const closer=!best||delta<best.delta-1e-9||(Math.abs(delta-best.delta)<=1e-9&&(item.stub.index<best.item.stub.index||(item.stub.index===best.item.stub.index&&item.stub.side<best.item.stub.side)||(item.stub.index===best.item.stub.index&&item.stub.side===best.item.stub.side&&p<best.p)));
+          if(closer)best={delta,item,pi,p};
+        });
+      });
+      used.add(best.p);degs[best.item.i]=PORT_ANGLES[best.p];pending.splice(best.pi,1);
+    }
+    return degs;
   }
-  function route(a,b,edge,index,edges){
-    const [s,e]=choosePorts(a,b,edge,index,edges);
+  function assignDense(stubs){
+    const n=stubs.length,full=Math.PI*2,minGap=Math.min(PORT_GAP*Math.PI/180,full/n);
+    const order=stubs.map((stub,i)=>({i,a:normRad(stub.angle)})).sort((p,q)=>p.a-q.a||p.i-q.i);
+    const want=order.map(o=>o.a);
+    let x=want.slice();
+    for(let iter=0;iter<80;iter++){
+      let changed=false;
+      for(let i=0;i<n;i++){
+        const j=(i+1)%n,gap=(j===0?x[0]+full:x[j])-x[i];
+        if(gap<minGap-1e-8){const push=(minGap-gap)/2;x[i]-=push;x[j]+=push;changed=true;}
+      }
+      let shift=0;
+      for(let i=0;i<n;i++){let d=x[i]-want[i];while(d>Math.PI)d-=full;while(d<-Math.PI)d+=full;shift+=d;}
+      shift/=n;
+      if(Math.abs(shift)>1e-8){for(let i=0;i<n;i++)x[i]-=shift;changed=true;}
+      if(!changed)break;
+    }
+    let u=x.map(normRad);
+    for(let i=1;i<n;i++)if(u[i]<u[i-1]-1e-6)u[i]+=full;
+    for(let i=1;i<n;i++)u[i]=Math.max(u[i],u[i-1]+minGap);
+    if(u[n-1]>u[0]+full-minGap+1e-5){
+      const gap=full/n;let sx=0,sy=0;order.forEach(o=>{sx+=Math.cos(o.a);sy+=Math.sin(o.a);});
+      const start=Math.atan2(sy,sx)-(n-1)*gap/2;
+      for(let i=0;i<n;i++)u[i]=start+i*gap;
+    }
+    const degs=new Array(n);
+    order.forEach((o,k)=>{degs[o.i]=toDeg(u[k]);});
+    return degs;
+  }
+  function assignPorts(edges,positions){
+    edges.forEach(e=>{delete e._portOut;delete e._portIn;});
+    const groups=new Map();
+    function add(id,edge,side,angle,index){if(!groups.has(id))groups.set(id,[]);groups.get(id).push({edge,side,angle,index});}
+    edges.forEach((edge,index)=>{
+      const from=positions.get(edge.from),to=positions.get(edge.to);if(!from||!to)return;
+      const outAngle=Math.atan2(to.y-from.y,to.x-from.x);
+      let inAngle=Math.atan2(from.y-to.y,from.x-to.x);
+      if(edge.from===edge.to)inAngle+=Math.PI;
+      add(edge.from,edge,'out',outAngle,index);
+      add(edge.to,edge,'in',inAngle,index);
+    });
+    groups.forEach(stubs=>{
+      const degs=stubs.length<=PORT_ANGLES.length?assignGrid(stubs):assignDense(stubs);
+      stubs.forEach((stub,i)=>{if(stub.side==='out')stub.edge._portOut=degs[i];else stub.edge._portIn=degs[i];});
+    });
+  }
+  function choosePorts(a,b,edge){
+    const angle=Math.atan2(b.y-a.y,b.x-a.x);
+    if(typeof edge._portOut!=='number')edge._portOut=PORT_ANGLES[nearestPort(angle)];
+    if(typeof edge._portIn!=='number')edge._portIn=PORT_ANGLES[nearestPort(angle+Math.PI)];
+    return [portPoint(a,edge._portOut),portPoint(b,edge._portIn)];
+  }
+  function route(a,b,edge){
+    const [s,e]=choosePorts(a,b,edge);
     const dx=e.x-s.x,dy=e.y-s.y;
     if(edge.from===edge.to){
-      const side=edge._portOut%2===0?1:-1,reach=34;
+      const side=Math.cos(edge._portOut*Math.PI/180)>=0?1:-1,reach=34;
       return [s,{x:s.x+side*reach,y:s.y-reach},{x:e.x-side*reach,y:e.y-reach},e];
     }
     if(Math.hypot(dx,dy)<22)return [s,e];
@@ -165,7 +230,7 @@
   function layoutCost(nodes,edges,pos){
     let cost=0;
     const ids=new Map(nodes.map(n=>[n.id,n]));
-    const paths=edges.map(e=>{const a=pos.get(e.from),b=pos.get(e.to);return a&&b?route(a,b,{...e},0,[]):null;});
+    const paths=edges.map(e=>{const a=pos.get(e.from),b=pos.get(e.to);return a&&b?route(a,b,Object.assign({},e,{_portOut:undefined,_portIn:undefined})):null;});
     paths.forEach((p,i)=>{if(!p)return;for(let j=1;j<p.length;j++)cost+=Math.hypot(p[j].x-p[j-1].x,p[j].y-p[j-1].y)*.012;});
     for(let i=0;i<paths.length;i++)if(paths[i])for(let j=i+1;j<paths.length;j++)if(paths[j]){
       const a=paths[i],b=paths[j];let crossings=0;
@@ -257,9 +322,10 @@
           ctx.fillStyle='#91a3ad';ctx.font='11px sans-serif';ctx.fillText(file,x+10,y+17);
         });
       }
-      edgePaths.forEach(({edge,index},i)=>{
+      assignPorts(model.edges,positions);
+      edgePaths.forEach(({edge},i)=>{
         const a=positions.get(edge.from),b=positions.get(edge.to);if(!a||!b)return;
-        const pts=route(a,b,edge,index,model.edges);edgePaths[i].pts=pts;
+        const pts=route(a,b,edge);edgePaths[i].pts=pts;
         const active=selectedNodeId===edge.from||selectedNodeId===edge.to;
         ctx.save();ctx.strokeStyle=COLORS[edge.type]||'#a1a1aa';ctx.lineWidth=selectedNodeId&&!active?1.2:1.8;ctx.globalAlpha=selectedNodeId&&!active?.42:.82;
         if(edge.resolution==='hint')ctx.setLineDash([6,4]);else if(edge.resolution==='dynamic')ctx.setLineDash([2,4]);
