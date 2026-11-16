@@ -70,4 +70,7 @@ assert(singleQuote.rows[0][0] === 'a,b' && singleQuote.rows[0][1] === 'c', 'sing
 const clip = C.parseClipboardGrid('a\tb\nc\td', {});
 assert(clip.length === 2 && clip[0][1] === 'b' && clip[1][0] === 'c', 'clipboard TSV');
 
+const allQ = C.serializeCsv([['a', 'b']], ';', '\n', '"', true);
+assert(allQ === '"a";"b"', 'quote all fields');
+
 console.log('OK: csv_parse');

@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>flatL fleditor</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
   <link rel="stylesheet" href="css/fleditor.css?v=14">
@@ -235,6 +236,7 @@
             <option value="'">'</option>
           </select>
         </label>
+        <button type="button" id="csvFormatQuoteAllBtn" class="fleditor-csv-header-btn" title="Quote every field on save" aria-pressed="false">Always</button>
       </div>
       <label class="fleditor-csv-field fleditor-csv-format-encoding">Line endings
         <select id="csvFormatLineEndingSelect" class="fleditor-csv-format-select" aria-label="Line endings">
@@ -413,8 +415,8 @@
   <script src="js/fleditor-hex.js"></script>
   <script src="js/fleditor-hex-grid.js?v=6"></script>
   <script src="js/fleditor-text-format.js?v=1"></script>
-  <script src="js/fleditor-csv-parse.js?v=4"></script>
-  <script src="js/fleditor-csv-grid.js?v=5"></script>
+  <script src="js/fleditor-csv-parse.js?v=5"></script>
+  <script src="js/fleditor-csv-grid.js?v=6"></script>
   <script src="js/fleditor-project.js?v=7"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
@@ -422,6 +424,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=61"></script>
+  <script src="js/fleditor.js?v=63"></script>
 </body>
 </html>

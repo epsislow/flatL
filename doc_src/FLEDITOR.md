@@ -173,7 +173,7 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor (grid)**
 - **Line endings** detected on load (`\n` or `\r\n`) and preserved on **Save**.
 - **Empty file** (0 bytes): grid starts **1×1**; saving an unchanged empty grid writes **0 bytes**.
 - **MEMFS / Run:** bytes imported from the filesystem are decoded as **UTF-8**, **UTF-8 with BOM**, or **UTF-16 LE/BE** (BOM required). On **Save** to the project, **UTF-8** is stored as a plain string; other encodings use a project prefix `FLEDITOR::CSV::<encoding>::\n` before the logical table text. MEMFS sync writes the matching bytes (including BOM where applicable).
-- **Format…** — **separator** (`,`, `;`, tab) with **Auto** toggle (detect from content, same style as **Header**), **quote** (`"` or `'`), **line endings** (Unix LF, Windows CRLF, Mac CR), and **encoding** from a fixed list (**UTF-8**, **UTF-8 with BOM**, **UTF-16 LE**, **UTF-16 BE**).
+- **Format…** — **separator** (`,`, `;`, tab) with **Auto** toggle (detect from content, same style as **Header**), **quote** (`"` or `'`) with **Always** (quote every field on save), **line endings** (Unix LF, Windows CRLF, Mac CR), and **encoding** from a fixed list (**UTF-8**, **UTF-8 with BOM**, **UTF-16 LE**, **UTF-16 BE**).
 - All UI strings are **English**.
 
 ### Editing

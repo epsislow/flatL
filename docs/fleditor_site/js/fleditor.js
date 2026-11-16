@@ -39,6 +39,7 @@
   const csvFormatEncodingSelect = document.getElementById('csvFormatEncodingSelect');
   const csvFormatLineEndingSelect = document.getElementById('csvFormatLineEndingSelect');
   const csvFormatAutoDelimiterBtn = document.getElementById('csvFormatAutoDelimiterBtn');
+  const csvFormatQuoteAllBtn = document.getElementById('csvFormatQuoteAllBtn');
   const textFormatBtn = document.getElementById('textFormatBtn');
   const textFormatModal = document.getElementById('textFormatModal');
   const textFormatModalForm = document.getElementById('textFormatModalForm');
@@ -972,7 +973,8 @@
       csvSession.rows,
       csvSession.delimiter,
       csvSession.lineEnding,
-      csvSession.quoteChar
+      csvSession.quoteChar,
+      !!csvSession.quoteAllFields
     );
   }
 
@@ -1330,6 +1332,7 @@
       delimiter: parsed.delimiter,
       lineEnding: parsed.lineEnding,
       quoteChar: parsed.quoteChar || '"',
+      quoteAllFields: false,
       autoDetectDelimiter: true,
       encoding: encoding,
       preferTab: preferTab,
@@ -1425,6 +1428,11 @@
     if (csvFormatDelimiterSelect) {
       csvFormatDelimiterSelect.disabled = !!csvSession.autoDetectDelimiter;
     }
+    if (csvFormatQuoteAllBtn) {
+      const on = !!csvSession.quoteAllFields;
+      csvFormatQuoteAllBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      csvFormatQuoteAllBtn.classList.toggle('fleditor-csv-header-btn--active', on);
+    }
   }
 
   function applyCsvLineEndingFromUi(key) {
@@ -1454,6 +1462,10 @@
     }
     if (csvFormatEncodingSelect) {
       applyCsvEncoding(csvFormatEncodingSelect.value);
+    }
+    if (csvFormatQuoteAllBtn) {
+      csvSession.quoteAllFields =
+        csvFormatQuoteAllBtn.getAttribute('aria-pressed') === 'true';
     }
     recomputeCsvDirty();
   }
@@ -3394,6 +3406,13 @@
         toggleCsvView();
       });
     }
+    if (csvFormatQuoteAllBtn) {
+      csvFormatQuoteAllBtn.addEventListener('click', function () {
+        const on = csvFormatQuoteAllBtn.getAttribute('aria-pressed') !== 'true';
+        csvFormatQuoteAllBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        csvFormatQuoteAllBtn.classList.toggle('fleditor-csv-header-btn--active', on);
+      });
+    }
     if (csvFormatAutoDelimiterBtn) {
       csvFormatAutoDelimiterBtn.addEventListener('click', function () {
         const on = csvFormatAutoDelimiterBtn.getAttribute('aria-pressed') !== 'true';
@@ -3834,7 +3853,7 @@
       wasmModule = m;
       if (m) {
         showBanner('');
-        if (global.FleditorSettings && FleditorSettings.refreshAboutPanel) {
+        if (typeof FleditorSettings !== 'undefined' && FleditorSettings.refreshAboutPanel) {
           FleditorSettings.refreshAboutPanel();
         }
       }

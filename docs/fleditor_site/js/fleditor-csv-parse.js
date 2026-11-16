@@ -169,19 +169,21 @@
     return String(field).split(Q).join(Q + Q);
   }
 
-  function serializeField(field, delimiter, quoteChar) {
+  function serializeField(field, delimiter, quoteChar, quoteAll) {
     const Q = quoteChar || '"';
     const s = String(field);
+    if (quoteAll) return Q + escapeField(s, Q) + Q;
     if (!needsQuote(s, delimiter, Q)) return s;
     return Q + escapeField(s, Q) + Q;
   }
 
-  function serializeCsv(rows, delimiter, lineEnding, quoteChar) {
+  function serializeCsv(rows, delimiter, lineEnding, quoteChar, quoteAll) {
     const norm = normalizeRowWidths(rows);
     if (isGridEmpty(norm)) return '';
     const le = lineEnding || '\n';
     const Q = quoteChar || '"';
-    return norm.map((r) => r.map((c) => serializeField(c, delimiter, Q)).join(delimiter)).join(le);
+    const all = !!quoteAll;
+    return norm.map((r) => r.map((c) => serializeField(c, delimiter, Q, all)).join(delimiter)).join(le);
   }
 
   const ENCODINGS = ['utf-8', 'utf-8-bom', 'utf-16le', 'utf-16be'];

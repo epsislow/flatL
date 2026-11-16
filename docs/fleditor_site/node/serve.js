@@ -45,6 +45,12 @@ function safePathInRoot(root, relPath) {
 
 function resolveFilePath(urlPath) {
   const decoded = decodeURIComponent(urlPath.split('?')[0]);
+  if (decoded === '/favicon.ico') {
+    const svg = path.join(fleditorRoot, 'favicon.svg');
+    if (fs.existsSync(svg)) {
+      return svg;
+    }
+  }
   if (decoded === '/' || decoded === '') {
     return safePathInRoot(pagesRoot, 'index.html');
   }
@@ -76,7 +82,10 @@ const server = http.createServer((req, res) => {
       res.end('Not found');
       return;
     }
-    const ext = path.extname(filePath).toLowerCase();
+    let ext = path.extname(filePath).toLowerCase();
+    if ((req.url || '').split('?')[0] === '/favicon.ico') {
+      ext = '.svg';
+    }
     const headers = { 'Content-Type': MIME[ext] || 'application/octet-stream' };
     if (ext === '.js' || ext === '.html' || ext === '.wasm') {
       headers['Cache-Control'] = 'no-cache';

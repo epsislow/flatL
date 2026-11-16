@@ -77,13 +77,16 @@
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Cell row ' + (r + 1) + ' column ' + (c + 1));
     inp.addEventListener('mousedown', function (e) {
-      if (e.shiftKey && opts.onCellExtendSelect) {
-        opts.onCellExtendSelect(r, c);
-      } else if (opts.onCellSelect) {
-        opts.onCellSelect(r, c);
-      }
+      opts.pendingSelect = e.shiftKey ? 'extend' : 'replace';
     });
     inp.addEventListener('focus', function () {
+      const mode = opts.pendingSelect;
+      opts.pendingSelect = null;
+      if (mode === 'extend') {
+        if (opts.onCellExtendSelect) opts.onCellExtendSelect(r, c);
+      } else if (mode === 'replace' || mode === 'navigate') {
+        if (opts.onCellSelect) opts.onCellSelect(r, c);
+      }
       if (opts.onCellFocus) opts.onCellFocus(r, c);
     });
     inp.addEventListener('input', function () {
@@ -93,20 +96,44 @@
     inp.addEventListener('keydown', function (e) {
       const cols = opts.colCount();
       const rows = opts.rowCount();
+      if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+        let nr = r;
+        let nc = c;
+        if (e.key === 'ArrowRight' && c + 1 < cols) nc = c + 1;
+        else if (e.key === 'ArrowLeft' && c > 0) nc = c - 1;
+        else if (e.key === 'ArrowDown' && r + 1 < rows) nr = r + 1;
+        else if (e.key === 'ArrowUp' && r > 0) nr = r - 1;
+        if (nr !== r || nc !== c) {
+          e.preventDefault();
+          opts.pendingSelect = 'extend';
+          focusCell(opts.container, nr, nc);
+        }
+        return;
+      }
       if (e.key === 'ArrowRight') {
         e.preventDefault();
-        if (c + 1 < cols) focusCell(opts.container, r, c + 1);
-        else if (c + 1 === cols) focusCell(opts.container, r, 0, 'append-col');
+        if (c + 1 < cols) {
+          opts.pendingSelect = 'navigate';
+          focusCell(opts.container, r, c + 1);
+        } else if (c + 1 === cols) focusCell(opts.container, r, 0, 'append-col');
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (c > 0) focusCell(opts.container, r, c - 1);
+        if (c > 0) {
+          opts.pendingSelect = 'navigate';
+          focusCell(opts.container, r, c - 1);
+        }
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        if (r + 1 < rows) focusCell(opts.container, r + 1, c);
-        else focusCell(opts.container, 0, c, 'append-row');
+        if (r + 1 < rows) {
+          opts.pendingSelect = 'navigate';
+          focusCell(opts.container, r + 1, c);
+        } else focusCell(opts.container, 0, c, 'append-row');
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        if (r > 0) focusCell(opts.container, r - 1, c);
+        if (r > 0) {
+          opts.pendingSelect = 'navigate';
+          focusCell(opts.container, r - 1, c);
+        }
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (r + 1 < rows) focusCell(opts.container, r + 1, c);
@@ -129,18 +156,6 @@
         inp.value = '';
         if (opts.onCellChange) opts.onCellChange(r, c, '');
         inp.className = cellInputClass(true);
-      } else if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
-        let nr = r;
-        let nc = c;
-        if (e.key === 'ArrowRight' && c + 1 < cols) nc = c + 1;
-        else if (e.key === 'ArrowLeft' && c > 0) nc = c - 1;
-        else if (e.key === 'ArrowDown' && r + 1 < rows) nr = r + 1;
-        else if (e.key === 'ArrowUp' && r > 0) nr = r - 1;
-        if (nr !== r || nc !== c) {
-          e.preventDefault();
-          if (opts.onCellExtendSelect) opts.onCellExtendSelect(nr, nc);
-          focusCell(opts.container, nr, nc);
-        }
       } else if ((e.ctrlKey || e.metaKey) && e.key === 'c' && opts.onCopy) {
         const multi = opts.isMultiCellSelection && opts.isMultiCellSelection();
         const allSelected =
@@ -221,11 +236,18 @@
     const tbody = document.createElement('tbody');
     const gridOpts = {
       container,
+      pendingSelect: null,
       colCount: function () { return rows[0] ? rows[0].length : 1; },
       rowCount: function () { return rows.length; },
       onCellChange: options.onCellChange,
       onGrowRow: options.onGrowRow,
       onGrowCol: options.onGrowCol,
+      onCellSelect: options.onCellSelect,
+      onCellExtendSelect: options.onCellExtendSelect,
+      onCellFocus: options.onCellFocus,
+      onCopy: options.onCopy,
+      onPaste: options.onPaste,
+      isMultiCellSelection: options.isMultiCellSelection,
     };
     for (let r = 0; r < rows.length; r++) {
       const tr = document.createElement('tr');
