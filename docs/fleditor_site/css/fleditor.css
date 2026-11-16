@@ -562,6 +562,21 @@ body.fleditor-resize-active * {
   align-items: center;
   gap: 0.3rem;
 }
+.fleditor-csv-field input {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.82rem;
+  padding: 0.12rem 0.35rem;
+  background: var(--fl-bg);
+  border: 1px solid var(--fl-border);
+  color: var(--fl-text);
+  border-radius: 3px;
+}
+.fleditor-csv-search-count {
+  min-width: 2.5rem;
+  text-align: center;
+  color: var(--fl-text-muted);
+  font-variant-numeric: tabular-nums;
+}
 .fleditor-csv-field select {
   font-size: 0.82rem;
   padding: 0.12rem 0.35rem;
@@ -647,6 +662,12 @@ body.fleditor-resize-active * {
 }
 .fleditor-csv-grid-cell--dirty {
   background: rgba(250, 204, 21, 0.12);
+}
+.fleditor-csv-grid-cell--search {
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.65);
+}
+.fleditor-csv-grid-cell--search-current {
+  box-shadow: inset 0 0 0 2px var(--fl-accent, #60a5fa);
 }
 .fleditor-csv-grid-cell--append-col,
 .fleditor-csv-grid-cell--append-row {

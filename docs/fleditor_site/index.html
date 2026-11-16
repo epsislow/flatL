@@ -67,6 +67,18 @@
               <button type="button" id="csvHeaderRowBtn" class="fleditor-csv-header-btn" title="Highlight row 1 (display only)" aria-pressed="false">Header</button>
               <button type="button" id="csvTableSizeBtn" title="Set table size">Size…</button>
             </div>
+            <div class="fleditor-csv-row">
+              <label class="fleditor-csv-field">Pos
+                <input type="text" id="csvGoCell" size="8" spellcheck="false" autocomplete="off" aria-label="Cell position row,column" />
+              </label>
+              <button type="button" id="csvGoBtn" title="Go to cell">Go</button>
+              <label class="fleditor-csv-field">Search
+                <input type="text" id="csvSearchInput" size="14" spellcheck="false" autocomplete="off" aria-label="Search cell text" />
+              </label>
+              <button type="button" id="csvSearchPrev" title="Previous match">Prev</button>
+              <span id="csvSearchCount" class="fleditor-csv-search-count" aria-live="polite">0</span>
+              <button type="button" id="csvSearchNext" title="Next match">Next</button>
+            </div>
           </div>
           <div id="binaryHexBar" class="fleditor-binary-bar" hidden>
             <div class="fleditor-binary-row">
@@ -322,7 +334,7 @@
   <script src="js/fleditor-hex.js"></script>
   <script src="js/fleditor-hex-grid.js?v=6"></script>
   <script src="js/fleditor-csv-parse.js?v=1"></script>
-  <script src="js/fleditor-csv-grid.js?v=3"></script>
+  <script src="js/fleditor-csv-grid.js?v=4"></script>
   <script src="js/fleditor-project.js?v=4"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
@@ -330,6 +342,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=53"></script>
+  <script src="js/fleditor.js?v=54"></script>
 </body>
 </html>

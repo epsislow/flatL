@@ -34,6 +34,12 @@
   const csvDelimiterSelect = document.getElementById('csvDelimiterSelect');
   const csvHeaderRowBtn = document.getElementById('csvHeaderRowBtn');
   const csvTableSizeBtn = document.getElementById('csvTableSizeBtn');
+  const csvGoCell = document.getElementById('csvGoCell');
+  const csvGoBtn = document.getElementById('csvGoBtn');
+  const csvSearchInput = document.getElementById('csvSearchInput');
+  const csvSearchCount = document.getElementById('csvSearchCount');
+  const csvSearchPrev = document.getElementById('csvSearchPrev');
+  const csvSearchNext = document.getElementById('csvSearchNext');
   const csvHelpBanner = document.getElementById('csvHelpBanner');
   const csvHelpLabel = document.getElementById('csvHelpLabel');
   const csvTooLargeOpenTable = document.getElementById('csvTooLargeOpenTable');
@@ -104,6 +110,11 @@
   let editorViewMode = 'flatl';
   /** @type {null | { path: string, rows: string[][], savedRows: string[][], delimiter: string, lineEnding: string, preferTab: boolean, savedSerialized: string, headerRow: boolean, gridForced: boolean }} */
   let csvSession = null;
+  /** @type {{r:number,c:number}[]} */
+  let csvSearchMatches = [];
+  let csvSearchMatchIndex = -1;
+  /** @type {{r:number,c:number}} */
+  let csvSearchAnchor = { r: 0, c: 0 };
   /** @type {Uint8Array | null} */
   let binaryBuffer = null;
   /** @type {Uint8Array | null} */
@@ -853,6 +864,12 @@
 
   function leaveCsvEditor() {
     csvSession = null;
+    csvSearchMatches = [];
+    csvSearchMatchIndex = -1;
+    csvSearchAnchor = { r: 0, c: 0 };
+    if (csvSearchInput) csvSearchInput.value = '';
+    if (csvSearchCount) csvSearchCount.textContent = '0';
+    if (csvGoCell) csvGoCell.value = '';
     if (csvTableBar) csvTableBar.hidden = true;
     if (csvGridHost) {
       csvGridHost.innerHTML = '';
@@ -882,6 +899,115 @@
   function snapshotCsvSavedRows() {
     if (!csvSession) return;
     csvSession.savedRows = JSON.parse(JSON.stringify(csvSession.rows));
+  }
+
+  function csvColCount() {
+    if (!csvSession || !csvSession.rows.length) return 1;
+    return csvSession.rows[0].length;
+  }
+
+  function setCsvPosFieldFromCell(r, c) {
+    if (!csvGoCell) return;
+    csvGoCell.value = r + 1 + ',' + (c + 1);
+  }
+
+  function updateCsvSearchCountLabel() {
+    if (!csvSearchCount) return;
+    const n = csvSearchMatches.length;
+    if (!n) {
+      csvSearchCount.textContent = '0';
+      return;
+    }
+    const pos = csvSearchMatchIndex >= 0 ? csvSearchMatchIndex + 1 : '\u2014';
+    csvSearchCount.textContent = pos + ' / ' + n;
+  }
+
+  function recomputeCsvSearchMatches() {
+    if (!csvSession || !csvSearchInput) {
+      csvSearchMatches = [];
+      csvSearchMatchIndex = -1;
+      updateCsvSearchCountLabel();
+      return;
+    }
+    const q = csvSearchInput.value.trim();
+    if (!q) {
+      csvSearchMatches = [];
+      csvSearchMatchIndex = -1;
+      updateCsvSearchCountLabel();
+      applyCsvSearchVisuals();
+      return;
+    }
+    csvSearchMatches = CsvG.findCellMatches(csvSession.rows, q);
+    csvSearchMatchIndex = CsvG.matchIndexForAnchor(
+      csvSearchMatches,
+      csvSearchAnchor.r,
+      csvSearchAnchor.c,
+      csvColCount()
+    );
+    updateCsvSearchCountLabel();
+    applyCsvSearchVisuals();
+  }
+
+  function applyCsvSearchVisuals() {
+    if (!csvGridHost || editorViewMode !== 'csv') return;
+    CsvG.applySearchHighlights(csvGridHost, csvSearchMatches, csvSearchMatchIndex);
+  }
+
+  function csvGoToCell(r, c) {
+    if (!csvSession || !csvGridHost) return;
+    const cols = csvColCount();
+    if (r < 0 || c < 0 || r >= csvSession.rows.length || c >= cols) return;
+    csvSearchAnchor = { r: r, c: c };
+    csvSearchMatchIndex = CsvG.matchIndexForAnchor(csvSearchMatches, r, c, cols);
+    setCsvPosFieldFromCell(r, c);
+    updateCsvSearchCountLabel();
+    applyCsvSearchVisuals();
+    CsvG.focusCell(csvGridHost, r, c);
+    const inp = csvGridHost.querySelector(
+      'input.fleditor-csv-grid-cell[data-row="' + r + '"][data-col="' + c + '"]'
+    );
+    if (inp && inp.scrollIntoView) inp.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }
+
+  function csvSearchStep(direction) {
+    if (!csvSession || !csvSearchInput) return;
+    const q = csvSearchInput.value.trim();
+    if (!q) {
+      showAlert('Enter a search pattern', 'CSV editor');
+      return;
+    }
+    csvSearchMatches = CsvG.findCellMatches(csvSession.rows, q);
+    const list = csvSearchMatches;
+    if (!list.length) {
+      csvSearchMatchIndex = -1;
+      updateCsvSearchCountLabel();
+      applyCsvSearchVisuals();
+      return;
+    }
+    const cols = csvColCount();
+    const anchorIdx = CsvG.cellLinearIndex(csvSearchAnchor.r, csvSearchAnchor.c, cols);
+    let idx = -1;
+    if (direction === 'next') {
+      for (let i = 0; i < list.length; i++) {
+        const li = CsvG.cellLinearIndex(list[i].r, list[i].c, cols);
+        if (li > anchorIdx) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0) idx = 0;
+    } else {
+      for (let i = list.length - 1; i >= 0; i--) {
+        const li = CsvG.cellLinearIndex(list[i].r, list[i].c, cols);
+        if (li < anchorIdx) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0) idx = list.length - 1;
+    }
+    csvSearchMatchIndex = idx;
+    csvGoToCell(list[idx].r, list[idx].c);
   }
 
   function updateCsvBarMeta() {
@@ -945,6 +1071,7 @@
         if (!sess.rows[r]) sess.rows[r] = [];
         sess.rows[r][c] = val;
         recomputeCsvDirty();
+        if (csvSearchInput && csvSearchInput.value.trim()) recomputeCsvSearchMatches();
       },
       onGrowRow: function () {
         const cols = sess.rows[0] ? sess.rows[0].length : 1;
@@ -959,6 +1086,15 @@
         renderCsvGrid();
         updateCsvBarMeta();
         recomputeCsvDirty();
+      },
+      onCellFocus: function (r, c) {
+        csvSearchAnchor = { r: r, c: c };
+        setCsvPosFieldFromCell(r, c);
+        if (csvSearchInput && csvSearchInput.value.trim()) {
+          csvSearchMatchIndex = CsvG.matchIndexForAnchor(csvSearchMatches, r, c, csvColCount());
+          updateCsvSearchCountLabel();
+          applyCsvSearchVisuals();
+        }
       },
       onGrowCol: function () {
         sess.rows.forEach(function (row) {
@@ -977,6 +1113,8 @@
       },
     });
     updateCsvBarMeta();
+    recomputeCsvSearchMatches();
+    if (csvSession.rows.length) setCsvPosFieldFromCell(0, 0);
   }
 
   function enterCsvTableMode() {
@@ -2912,6 +3050,32 @@
     if (csvTooLargeOpenTable) {
       csvTooLargeOpenTable.addEventListener('click', function () {
         openCsvTableDespiteSize();
+      });
+    }
+    if (csvGoBtn && csvGoCell) {
+      csvGoBtn.addEventListener('click', function () {
+        if (!csvSession || editorViewMode !== 'csv') return;
+        const p = CsvG.parseCellPos(csvGoCell.value, csvSession.rows);
+        if (!p.ok) {
+          showAlert(p.error || 'Invalid position', 'CSV editor');
+          return;
+        }
+        csvGoToCell(p.r, p.c);
+      });
+    }
+    if (csvSearchInput) {
+      csvSearchInput.addEventListener('input', function () {
+        recomputeCsvSearchMatches();
+      });
+    }
+    if (csvSearchPrev) {
+      csvSearchPrev.addEventListener('click', function () {
+        csvSearchStep('prev');
+      });
+    }
+    if (csvSearchNext) {
+      csvSearchNext.addEventListener('click', function () {
+        csvSearchStep('next');
       });
     }
     if (csvTableSizeBtn) {

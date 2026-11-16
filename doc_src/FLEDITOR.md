@@ -174,6 +174,7 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor** when t
 
 ### Editing
 
+- **Pos** + **Go** — jump to cell **`row,column`** (1-based, e.g. `2,3`). **Search** — literal text in cells; **Prev** / **Next** with **`n / total`** counter (like the hex editor).
 - **Arrow keys**, **Tab** / **Shift+Tab**, **Enter** (cell below; adds a row at the bottom edge).
 - **Delete** clears the cell; **Backspace** on an empty cell moves left.
 - Modified cells are **highlighted** until **Save**; **Undo / Redo** are disabled in table mode (same as hex).

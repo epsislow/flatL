@@ -29,6 +29,9 @@
     inp.spellcheck = false;
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Cell row ' + (r + 1) + ' column ' + (c + 1));
+    inp.addEventListener('focus', function () {
+      if (opts.onCellFocus) opts.onCellFocus(r, c);
+    });
     inp.addEventListener('input', function () {
       if (opts.onCellChange) opts.onCellChange(r, c, inp.value);
       inp.className = cellInputClass(inp.value !== savedValue);
@@ -186,10 +189,70 @@
     container.appendChild(table);
   }
 
+  function cellLinearIndex(r, c, colCount) {
+    return r * colCount + c;
+  }
+
+  function findCellMatches(rows, query) {
+    const q = String(query || '').trim();
+    if (!q) return [];
+    const low = q.toLowerCase();
+    const out = [];
+    for (let r = 0; r < rows.length; r++) {
+      const line = rows[r] || [];
+      for (let c = 0; c < line.length; c++) {
+        if (String(line[c]).toLowerCase().indexOf(low) >= 0) out.push({ r: r, c: c });
+      }
+    }
+    return out;
+  }
+
+  function parseCellPos(text, rows) {
+    const s = String(text || '').trim();
+    const m = s.match(/^(\d+)\s*[,:\s]\s*(\d+)$/);
+    if (!m) return { ok: false, error: 'Use row,column (1-based), e.g. 2,3' };
+    const r = parseInt(m[1], 10) - 1;
+    const c = parseInt(m[2], 10) - 1;
+    if (!rows.length) return { ok: false, error: 'Empty table' };
+    const cols = rows[0] ? rows[0].length : 0;
+    if (r < 0 || c < 0 || r >= rows.length || c >= cols) {
+      return { ok: false, error: 'Cell out of range' };
+    }
+    return { ok: true, r: r, c: c };
+  }
+
+  function matchIndexForAnchor(matches, anchorR, anchorC, colCount) {
+    const a = cellLinearIndex(anchorR, anchorC, colCount);
+    for (let i = 0; i < matches.length; i++) {
+      const m = matches[i];
+      if (cellLinearIndex(m.r, m.c, colCount) === a) return i;
+    }
+    return -1;
+  }
+
+  function applySearchHighlights(container, matches, currentIndex) {
+    container.querySelectorAll('input.fleditor-csv-grid-cell').forEach((inp) => {
+      inp.classList.remove('fleditor-csv-grid-cell--search', 'fleditor-csv-grid-cell--search-current');
+    });
+    matches.forEach((m, i) => {
+      const inp = container.querySelector(
+        'input.fleditor-csv-grid-cell[data-row="' + m.r + '"][data-col="' + m.c + '"]'
+      );
+      if (!inp) return;
+      inp.classList.add('fleditor-csv-grid-cell--search');
+      if (i === currentIndex) inp.classList.add('fleditor-csv-grid-cell--search-current');
+    });
+  }
+
   root.FleditorCsvGrid = {
     APPEND_LABEL: APPEND,
     renderGrid,
     focusCell,
+    cellLinearIndex,
+    findCellMatches,
+    parseCellPos,
+    matchIndexForAnchor,
+    applySearchHighlights,
     isCellDirty(val, saved) {
       return String(val) !== String(saved);
     },
