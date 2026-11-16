@@ -25,19 +25,20 @@
     return b.r0 !== b.r1 || b.c0 !== b.c1;
   }
 
-  function copySelectionToTsv(rows, anchor, focus) {
+  function copySelectionForClipboard(rows, anchor, focus, delimiter, lineEnding, quoteChar, quoteAll) {
     const b = normalizeSelection(anchor, focus);
-    if (!b || !rows.length) return '';
-    const lines = [];
+    if (!b || !rows.length || !P) return '';
+    const slice = [];
     for (let r = b.r0; r <= b.r1; r++) {
-      const line = rows[r] || [];
-      const fields = [];
+      const line = [];
+      const src = rows[r] || [];
       for (let c = b.c0; c <= b.c1; c++) {
-        fields.push(line[c] != null ? String(line[c]) : '');
+        line.push(src[c] != null ? String(src[c]) : '');
       }
-      lines.push(fields.join('\t'));
+      slice.push(line);
     }
-    return lines.join('\n');
+    const le = lineEnding || '\n';
+    return P.serializeCsv(slice, delimiter || ',', le, quoteChar || '"', !!quoteAll);
   }
 
   function applySelectionHighlights(container, anchor, focus) {
@@ -353,7 +354,7 @@
     focusCell,
     normalizeSelection,
     isMultiCellSelection,
-    copySelectionToTsv,
+    copySelectionForClipboard,
     applySelectionHighlights,
     cellLinearIndex,
     findCellMatches,

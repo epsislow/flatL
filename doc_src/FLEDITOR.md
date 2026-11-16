@@ -181,20 +181,35 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor (grid)**
 - **Pos** + **Go** — jump to cell **`row,column`** (1-based, e.g. `2,3`). **Search** — literal text in cells; **Prev** / **Next** with **`n / total`** counter (like the hex editor).
 - **Arrow keys**, **Tab** / **Shift+Tab**, **Enter** (cell below; adds a row at the bottom edge).
 - **Delete** clears the cell; **Backspace** on an empty cell moves left.
-- **Selection** — click a cell, then **Shift+click** another cell or **Shift+arrow** to select a rectangle (green tint). **Ctrl/Cmd+C** copies the block as **TSV** (tabs between columns) for Excel/Sheets. **Ctrl/Cmd+V** pastes a TSV/CSV block from the clipboard starting at the active cell (grows the grid if needed).
+- **Selection** — click a cell, then **Shift+click** another cell or **Shift+arrow** to select a rectangle (green tint). **Ctrl/Cmd+C** copies the block using the file **separator**, **line endings**, and **quote** rules (same as save). **Ctrl/Cmd+V** pastes clipboard data (tab from Excel, or the file separator) starting at the active cell (grows the grid if needed).
 - Modified cells are **highlighted** until **Save**; **Undo / Redo** are disabled in table mode (same as hex).
 
 ### Unsaved changes
 
 - Switching **table ↔ text** or another project file uses the same **Unsaved changes** dialog as **`.fl`** files (Continue / Cancel). On Continue, the active view is synced into the other representation; nothing is written to disk until **Save**.
 
+### FlatL programs and CSV on MEMFS
+
+After **Run**, the runtime **`chdir`s to `/fleditor`**, so paths like `file.readCtx('stock.csv')` match project file **`stock.csv`** at the tree root (not under `examples/` unless you put the file there).
+
+| Topic | Guidance |
+|-------|----------|
+| **Reading** | `file.read` returns the file body as a FlatL string (UTF-8 bytes in MEMFS). For CSV you parse in FlatL or treat as text. |
+| **Writing** | `file.write` should emit the **same bytes** the editor would: same **separator**, **line endings**, and **encoding** (use **Format…** in the editor as the reference). |
+| **Encoding** | UTF-8 plain in project → UTF-8 bytes on MEMFS. UTF-8 BOM / UTF-16 → editor stores a wrapper; sync writes BOM bytes. |
+| **Round-trip** | Edit in grid → **Save** → **Run** → program reads `/fleditor/your.csv`. If the program writes a new file, sync pulls it back with `bytesToProjectValue` (opens in CSV grid when decodable). |
+| **Excel samples** | `docs/fleditor_site/examples/test1_csv_*.csv` — same 8×2 table: **LF**, **CRLF (MS-DOS)**, **CR (Mac)**, **UTF-8 BOM + LF**. Used in `make fleditor-csv-smoke`. **`.gitattributes`** marks them `-text` so Git keeps bytes. |
+
+The editor does not run FlatL **`file.*`** for you; it keeps project/MEMFS bytes aligned so programs and Excel see a consistent file.
+
 ### Tests (Node)
 
 ```bash
 make fleditor-csv-smoke
+make fleditor-wasm-csv-smoke   # needs make fleditor-wasm
 ```
 
-Runs `test/fleditor/csv_parse.mjs` (parse, detect, serialize, size limits).
+`fleditor-csv-smoke` runs parse, text format, and round-trip (including Excel exports under `examples/`). `fleditor-wasm-csv-smoke` reads a CSV from MEMFS via WASM `file.read`.
 
 ## Hex editor (binary files)
 

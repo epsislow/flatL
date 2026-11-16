@@ -21,18 +21,32 @@
   }
 
   function splitPhysicalLines(text) {
+    const T = typeof globalThis !== 'undefined' && globalThis.FleditorTextFormat;
+    if (T && T.splitTextLines) {
+      const lines = T.splitTextLines(String(text));
+      const s = String(text);
+      if (s.endsWith('\n') || s.endsWith('\r\n') || s.endsWith('\r')) {
+        if (!lines.length || lines[lines.length - 1] !== '') lines.push('');
+      }
+      return lines;
+    }
     const lines = [];
+    const s = String(text);
     let start = 0;
-    for (let i = 0; i < text.length; i++) {
-      if (text[i] === '\n') {
-        let end = i;
-        if (end > start && text[end - 1] === '\r') end--;
-        lines.push(text.slice(start, end));
+    for (let i = 0; i < s.length; i++) {
+      if (s[i] === '\r' && s[i + 1] === '\n') {
+        lines.push(s.slice(start, i));
+        start = i + 2;
+        i++;
+        continue;
+      }
+      if (s[i] === '\n' || s[i] === '\r') {
+        lines.push(s.slice(start, i));
         start = i + 1;
       }
     }
-    if (start < text.length) lines.push(text.slice(start));
-    else if (text.endsWith('\n') || text.endsWith('\r\n')) lines.push('');
+    if (start < s.length) lines.push(s.slice(start));
+    else if (s.endsWith('\n') || s.endsWith('\r\n') || s.endsWith('\r')) lines.push('');
     return lines;
   }
 
@@ -67,12 +81,20 @@
 
   function detectDelimiter(text, preferTab, quoteChar) {
     const lines = splitPhysicalLines(text).filter((ln) => ln.trim() !== '').slice(0, 20);
-    const candidates = preferTab ? ['\t', ';', ','] : [';', ',', '\t'];
+    const candidates = preferTab ? ['\t', ',', ';'] : [',', ';', '\t'];
     let best = ',';
     let bestScore = -1;
+    let bestCols = 0;
     candidates.forEach((d) => {
       const s = scoreDelimiter(lines, d, quoteChar);
-      if (s.score > bestScore) { bestScore = s.score; best = d; }
+      if (
+        s.score > bestScore ||
+        (s.score === bestScore && s.cols > bestCols)
+      ) {
+        bestScore = s.score;
+        bestCols = s.cols;
+        best = d;
+      }
     });
     return best;
   }

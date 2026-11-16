@@ -1,0 +1,3 @@
+# Keep Excel CSV fixture bytes stable (especially Mac CR and UTF-8 BOM).
+docs/fleditor_site/examples/test1_csv_*.csv -text
+test/fleditor/csv/fixtures/** -text

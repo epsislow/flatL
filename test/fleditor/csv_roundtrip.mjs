@@ -6,6 +6,7 @@ import path from 'path';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const fixturesDir = path.join(repo, 'test/fleditor/csv/fixtures');
+const examplesDir = path.join(repo, 'docs/fleditor_site/examples');
 const require = createRequire(import.meta.url);
 require(path.join(repo, 'docs/fleditor_site/js/fleditor-text-format.js'));
 require(path.join(repo, 'docs/fleditor_site/js/fleditor-csv-parse.js'));
@@ -48,6 +49,40 @@ roundTripFixture('excel_semicolon_crlf.csv', 'excel_semicolon_crlf.csv');
 roundTripFixture('quoted_semicolon.csv', 'quoted_semicolon.csv');
 roundTripFixture('utf8_bom.csv', 'utf8_bom.csv');
 roundTripFixture('utf16le_semicolon.csv', 'utf16le_semicolon.csv');
+
+const excelExports = [
+  'test1_csv_commadel.csv',
+  'test1_csv_mac.csv',
+  'test1_csv_msdos.csv',
+  'test1_csv_utf8_commadel.csv',
+];
+excelExports.forEach((name) => {
+  const filePath = path.join(examplesDir, name);
+  if (!fs.existsSync(filePath)) {
+    console.error('csv_roundtrip: missing', name);
+    process.exit(1);
+  }
+  const u8 = new Uint8Array(fs.readFileSync(filePath));
+  const stored = P.bytesToProjectValue(u8, name);
+  const back = payloadToU8(P.projectValueToMemfsPayload(stored));
+  assert(bytesEqual(u8, back), 'excel export round-trip ' + name);
+});
+
+const macBody = C.projectTextFromContent(
+  P.bytesToProjectValue(new Uint8Array(fs.readFileSync(path.join(examplesDir, 'test1_csv_mac.csv'))), 'mac.csv')
+);
+assert(globalThis.FleditorTextFormat.detectLineEnding(macBody) === '\r', 'excel mac CR line endings');
+const macParsed = C.parseFile(macBody, { autoDetect: true, quoteChar: '"' });
+assert(macParsed.delimiter === ',' && macParsed.rows[0][0] === 'Product', 'excel mac parse');
+assert(macParsed.rows.length === 8, 'excel mac row count');
+
+const msdosPath = path.join(examplesDir, 'test1_csv_msdos.csv');
+const msdosBody = C.projectTextFromContent(
+  P.bytesToProjectValue(new Uint8Array(fs.readFileSync(msdosPath)), 'msdos.csv')
+);
+assert(globalThis.FleditorTextFormat.detectLineEnding(msdosBody) === '\r\n', 'excel msdos CRLF');
+const msdosParsed = C.parseFile(msdosBody, { autoDetect: true, quoteChar: '"' });
+assert(msdosParsed.rows.length === 8 && msdosParsed.delimiter === ',', 'excel msdos parse');
 
 const raw = new Uint8Array(fs.readFileSync(path.join(fixturesDir, 'excel_semicolon_crlf.csv')));
 const stored = P.bytesToProjectValue(raw, 'data.csv');

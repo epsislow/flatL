@@ -1153,10 +1153,14 @@
 
   function csvCopySelection() {
     if (!csvSession) return;
-    const text = CsvG.copySelectionToTsv(
+    const text = CsvG.copySelectionForClipboard(
       csvSession.rows,
       csvSession.selAnchor,
-      csvSession.selFocus
+      csvSession.selFocus,
+      csvSession.delimiter,
+      csvSession.lineEnding,
+      csvSession.quoteChar,
+      csvSession.quoteAllFields
     );
     if (navigator.clipboard && navigator.clipboard.writeText) {
       void navigator.clipboard.writeText(text);
