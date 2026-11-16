@@ -82,7 +82,7 @@
       if(!moved)break;
     }
   }
-  function layoutGraph(nodes, edges, model, mode, force) {
+  function layoutGraph(nodes, edges, model, force, spreadFiles) {
     const pos=new Map(), rank=new Map(), outgoing=new Map(nodes.map(n=>[n.id,[]])), incoming=new Map(nodes.map(n=>[n.id,[]]));
     const saved=!force?loadPositions(model):null;
     if(saved) nodes.forEach(n=>{const p=saved[n.id];if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))pos.set(n.id,{x:p.x,y:p.y});});
@@ -113,12 +113,8 @@
       sweep(ordered.slice(1),pred);sweep(ordered.slice(0,-1).reverse(),succ);
     }
     const colGap=250,rowGap=76,margin=70,hubChildren=new Map();
-    if(mode==='by-file'){
-      const files=Array.from(new Set(nodes.map(n=>n.file))).sort();
-      files.forEach((file,col)=>{const arr=nodes.filter(n=>n.file===file).sort(compare);const columns=Math.max(1,Math.ceil(Math.sqrt(arr.length/3)));
-        arr.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+col*520+(i%columns)*220,y:margin+Math.floor(i/columns)*rowGap});});
-      });
-    } else {
+    // Same spine/hub layout for graph and by-file; by-file only adds file region overlays in draw().
+    {
       const spine=findMainPath(nodes,forward,roots.length?roots:entryNodes.slice(0,1));
       const spineIndex=new Map(spine.map((id,i)=>[id,i]));
       const parentMap=new Map(nodes.map(n=>[n.id,[]]));
@@ -165,7 +161,8 @@
     }
     // Place any nodes added after a saved layout without moving existing nodes.
     nodes.forEach((n,i)=>{if(!pos.has(n.id))pos.set(n.id,{x:margin+(i%5)*colGap,y:margin+Math.floor(i/5)*rowGap});});
-    if(mode!=='by-file' && force){optimizeLayout(nodes,edges,pos,hubChildren,rowGap);relaxHubSiblings(pos,hubChildren,rowGap);}
+    if(force){optimizeLayout(nodes,edges,pos,hubChildren,rowGap);relaxHubSiblings(pos,hubChildren,rowGap);}
+    if(spreadFiles){spreadFileGroups(nodes,pos,entry);if(force)relaxHubSiblings(pos,hubChildren,rowGap);}
     // Branches and the auto-arrange pass can place nodes above or left of the
     // origin. The canvas cannot scroll below zero, so pull the whole graph in.
     containPositions(pos,function(_id,p){return {left:p.x-NODE_R,top:p.y-NODE_R};});
@@ -184,6 +181,41 @@
     const dy=Number.isFinite(minT)&&minT<CANVAS_PAD?CANVAS_PAD-minT:0;
     if(dx||dy)pos.forEach(p=>{p.x+=dx;p.y+=dy;});
     return {dx:dx,dy:dy};
+  }
+  const FILE_REGION={padL:35,padT:38,padR:265,padB:40,gap:56};
+  function fileRegionForNodes(arr,pos){
+    const xs=[],ys=[];
+    arr.forEach(n=>{const p=pos.get(n.id);if(p){xs.push(p.x);ys.push(p.y);}});
+    if(!xs.length)return null;
+    const left=Math.min(...xs)-FILE_REGION.padL,top=Math.min(...ys)-FILE_REGION.padT;
+    const right=Math.max(...xs)+FILE_REGION.padR,bottom=Math.max(...ys)+FILE_REGION.padB;
+    return {left,top,right,bottom,width:right-left,height:bottom-top};
+  }
+  function fileRegionsOverlap(nodes,pos){
+    const byFile=new Map();
+    nodes.forEach(n=>{if(!byFile.has(n.file))byFile.set(n.file,[]);byFile.get(n.file).push(n);});
+    const rects=[];
+    byFile.forEach(arr=>{const r=fileRegionForNodes(arr,pos);if(r)rects.push(r);});
+    for(let i=0;i<rects.length;i++)for(let j=i+1;j<rects.length;j++){
+      const a=rects[i],b=rects[j],g=12;
+      if(a.left<b.right+g&&b.left<a.right+g&&a.top<b.bottom+g&&b.top<a.bottom+g)return true;
+    }
+    return false;
+  }
+  function spreadFileGroups(nodes,pos,entry){
+    const byFile=new Map();
+    nodes.forEach(n=>{if(!byFile.has(n.file))byFile.set(n.file,[]);byFile.get(n.file).push(n);});
+    if(byFile.size<2)return;
+    const files=Array.from(byFile.keys()).sort((a,b)=>{if(a===entry)return -1;if(b===entry)return 1;return a.localeCompare(b);});
+    let cursor=-Infinity;
+    files.forEach(file=>{
+      const arr=byFile.get(file),region=fileRegionForNodes(arr,pos);
+      if(!region)return;
+      const dx=cursor===-Infinity?0:Math.max(0,cursor+FILE_REGION.gap-region.left);
+      if(dx>0)arr.forEach(n=>{const p=pos.get(n.id);if(p)p.x+=dx;});
+      const after=fileRegionForNodes(arr,pos);
+      if(after)cursor=after.right;
+    });
   }
   function portDelta(deg,target){return Math.abs(Math.atan2(Math.sin(deg*Math.PI/180-target),Math.cos(deg*Math.PI/180-target)));}
   function ringFor(count){
@@ -431,16 +463,17 @@
     const any=nodes.filter(n=>n.kind!=='dynamic').sort(compare);
     return any.length?any[0].id:(nodes[0]&&nodes[0].id)||null;
   }
-  function render(host, model, onNodeClick, onEdgeClick, forceArrange,centerView){
+  function render(host, model, onNodeClick, onEdgeClick, forceArrange,centerView,spreadByFileSwitch){
     const hadSavedLayout=!forceArrange&&!!loadPositions(model);
     const shouldCenter=!!centerView||!hadSavedLayout;
+    const entryForFiles=model.entryPath||(model.files[0]&&model.files[0].path);
     host.innerHTML='';
     const toolbar=html('div','fl-code-map-toolbar');
     const summary=html('span','fl-code-map-summary',model.blocks.length+' blocks'+((model.dynamicNodes||[]).length?' · '+model.dynamicNodes.length+' dynamic targets':'')+' · '+model.edges.length+' transfers · '+model.files.length+' files');
     toolbar.appendChild(summary);
     const controls=html('div','fl-code-map-controls');
     activeOrientation=loadOrientation(model);
-    [['graph','Graph'],['by-file','By file']].forEach(([v,label])=>{const b=html('button','fl-code-map-mode'+(displayMode===v?' active':''),label);b.type='button';b.title=label;b.setAttribute('aria-label',label);b.setAttribute('aria-pressed',displayMode===v?'true':'false');b.onclick=()=>{displayMode=v;render(host,model,onNodeClick,onEdgeClick);};controls.appendChild(b);});
+    [['graph','Graph'],['by-file','By file']].forEach(([v,label])=>{const b=html('button','fl-code-map-mode'+(displayMode===v?' active':''),label);b.type='button';b.title=label;b.setAttribute('aria-label',label);b.setAttribute('aria-pressed',displayMode===v?'true':'false');b.onclick=()=>{displayMode=v;render(host,model,onNodeClick,onEdgeClick,false,false,v==='by-file');};controls.appendChild(b);});
     const arrange=html('button','fl-code-map-mode fl-code-map-mode-icon','↻');arrange.type='button';arrange.title='Arrange graph';arrange.setAttribute('aria-label','Arrange graph');arrange.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,true);};controls.appendChild(arrange);
     const clearPos=html('button','fl-code-map-mode fl-code-map-mode-icon','🗑');clearPos.type='button';clearPos.title='Clear saved positions (first layout)';clearPos.setAttribute('aria-label','Clear saved positions');clearPos.onclick=()=>{manualPositions.clear();try{root.localStorage.removeItem(key(model));}catch(_){}render(host,model,onNodeClick,onEdgeClick,false,true);};controls.appendChild(clearPos);
     const rotate=html('button','fl-code-map-mode fl-code-map-mode-icon','⤾');rotate.type='button';rotate.title='Rotate graph 90°';rotate.setAttribute('aria-label','Rotate graph 90 degrees');rotate.setAttribute('aria-pressed',activeOrientation==='vertical'?'true':'false');rotate.onclick=()=>{activeOrientation=activeOrientation==='horizontal'?'vertical':'horizontal';try{root.localStorage.setItem(orientationKey(model),activeOrientation);}catch(_){}render(host,model,onNodeClick,onEdgeClick);if(selectedNodeId&&activeView)activeView.focus(selectedNodeId);};controls.appendChild(rotate);
@@ -454,8 +487,10 @@
     const viewport=html('div','fl-code-map-viewport');viewport.style.position='relative';viewport.style.overflow='auto';viewport.style.touchAction='pan-x pan-y';host.appendChild(viewport);
     const canvas=document.createElement('canvas');canvas.className='fl-code-map-canvas';canvas.style.display='block';canvas.style.touchAction='none';canvas.style.maxWidth='none';viewport.appendChild(canvas);
     const nodes=model.blocks.concat(model.dynamicNodes||[]);if(!nodes.length){viewport.appendChild(html('div','fl-code-map-empty','No FlatL blocks found in this file or its imported files.'));return;}
-    const layout=layoutGraph(nodes,model.edges,model,displayMode,!!forceArrange),positions=layout.positions;
+    const spreadFiles=displayMode==='by-file'&&(!!forceArrange||!hadSavedLayout||!!spreadByFileSwitch);
+    const layout=layoutGraph(nodes,model.edges,model,!!forceArrange,spreadFiles),positions=layout.positions;
     manualPositions.forEach((p,id)=>{if(positions.has(id))Object.assign(positions.get(id),p);});
+    if(displayMode==='by-file'&&fileRegionsOverlap(nodes,positions)){spreadFileGroups(nodes,positions,entryForFiles);containPositions(positions,function(_id,p){return {left:p.x-NODE_R,top:p.y-NODE_R};});}
     let dpr=1,viewW=800,viewH=600,drag=null,pan=null,hover=null;
     const nodeById=new Map(nodes.map(n=>[n.id,n]));
     const edgePaths=model.edges.map((e,i)=>({edge:e,index:i,pts:null}));
@@ -501,10 +536,9 @@
       const b=bounds();ctx.fillStyle='rgba(130,145,160,.10)';
       for(let x=20;x<b.x;x+=24)for(let y=20;y<b.y;y+=24){ctx.fillRect(x,y,1,1);}
       if(displayMode==='by-file'){
-        layout.files.forEach(file=>{const arr=nodes.filter(n=>n.file===file);if(!arr.length)return;const xs=arr.map(n=>positions.get(n.id).x),ys=arr.map(n=>positions.get(n.id).y);
-          const x=Math.min(...xs)-35,y=Math.min(...ys)-38,w=Math.max(...xs)-Math.min(...xs)+300,h=Math.max(...ys)-Math.min(...ys)+78;
-          ctx.fillStyle='rgba(120,140,160,.045)';ctx.strokeStyle='rgba(130,145,160,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect?ctx.roundRect(x,y,w,h,9):ctx.rect(x,y,w,h);ctx.fill();ctx.stroke();
-          ctx.fillStyle='#91a3ad';ctx.font='11px sans-serif';ctx.fillText(file,x+10,y+17);
+        layout.files.forEach(file=>{const arr=nodes.filter(n=>n.file===file);if(!arr.length)return;const region=fileRegionForNodes(arr,positions);if(!region)return;
+          ctx.fillStyle='rgba(120,140,160,.045)';ctx.strokeStyle='rgba(130,145,160,.25)';ctx.lineWidth=1;ctx.beginPath();ctx.roundRect?ctx.roundRect(region.left,region.top,region.width,region.height,9):ctx.rect(region.left,region.top,region.width,region.height);ctx.fill();ctx.stroke();
+          ctx.fillStyle='#91a3ad';ctx.font='11px sans-serif';ctx.fillText(file,region.left+10,region.top+17);
         });
       }
       assignPorts(model.edges,positions);
