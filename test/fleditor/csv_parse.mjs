@@ -50,4 +50,21 @@ assert(hits.length === 2, 'find cells with a');
 const pos = G.parseCellPos('2,1', [['x', 'y'], ['p', 'q']]);
 assert(pos.ok && pos.r === 1 && pos.c === 0, 'parse cell pos');
 
+assert(C.wrapProjectCsv('a,b', 'utf-8') === 'a,b', 'utf-8 plain wrap');
+const w16 = C.wrapProjectCsv('x\ty', 'utf-16le');
+assert(w16.startsWith('FLEDITOR::CSV::utf-16le::\n'), 'utf-16 wrapper');
+assert(C.projectTextFromContent(w16) === 'x\ty', 'unwrap project text');
+
+const bomBytes = C.encodeTabularBytes('hi', 'utf-8-bom');
+assert(bomBytes[0] === 0xef && bomBytes[1] === 0xbb && bomBytes[2] === 0xbf, 'utf-8-bom bytes');
+const bomDec = C.decodeTabularBytes(bomBytes);
+assert(bomDec.ok && bomDec.encoding === 'utf-8-bom' && bomDec.text === 'hi', 'utf-8-bom decode');
+
+const leBytes = C.encodeTabularBytes('AB', 'utf-16le');
+const leDec = C.decodeTabularBytes(leBytes);
+assert(leDec.ok && leDec.encoding === 'utf-16le' && leDec.text === 'AB', 'utf-16le round-trip');
+
+const singleQuote = C.parseFile("'a,b',c", { delimiter: ',', autoDetect: false, quoteChar: "'" });
+assert(singleQuote.rows[0][0] === 'a,b' && singleQuote.rows[0][1] === 'c', 'single-quote field');
+
 console.log('OK: csv_parse');

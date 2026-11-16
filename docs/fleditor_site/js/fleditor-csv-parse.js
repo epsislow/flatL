@@ -4,7 +4,7 @@
 
   const MAX_ROWS = 2000;
   const MAX_COLS = 100;
-  const QUOTE = '"';
+  const CSV_STORE_PREFIX = 'FLEDITOR::CSV::';
 
   function stripBom(text) {
     return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
@@ -34,27 +34,28 @@
     return lines;
   }
 
-  function countUnquoted(line, ch) {
+  function countUnquoted(line, delim, quoteChar) {
+    const Q = quoteChar || '"';
     let n = 0;
     let q = false;
     for (let i = 0; i < line.length; i++) {
       const c = line[i];
       if (q) {
-        if (c === QUOTE) {
-          if (line[i + 1] === QUOTE) { i++; continue; }
+        if (c === Q) {
+          if (line[i + 1] === Q) { i++; continue; }
           q = false;
         }
         continue;
       }
-      if (c === QUOTE) { q = true; continue; }
-      if (c === ch) n++;
+      if (c === Q) { q = true; continue; }
+      if (c === delim) n++;
     }
     return n;
   }
 
-  function scoreDelimiter(sampleLines, delim) {
+  function scoreDelimiter(sampleLines, delim, quoteChar) {
     if (!sampleLines.length) return { score: -1, cols: 0 };
-    const counts = sampleLines.map((ln) => countUnquoted(ln, delim) + 1);
+    const counts = sampleLines.map((ln) => countUnquoted(ln, delim, quoteChar) + 1);
     const mode = counts.reduce((a, b) => a + b, 0) / counts.length;
     let variance = 0;
     counts.forEach((c) => { variance += Math.abs(c - mode); });
@@ -62,19 +63,29 @@
     return { score: consistent ? counts.length * 10 - variance : -1, cols: counts[0] || 0 };
   }
 
-  function detectDelimiter(text, preferTab) {
+  function detectDelimiter(text, preferTab, quoteChar) {
     const lines = splitPhysicalLines(text).filter((ln) => ln.trim() !== '').slice(0, 20);
     const candidates = preferTab ? ['\t', ';', ','] : [';', ',', '\t'];
     let best = ',';
     let bestScore = -1;
     candidates.forEach((d) => {
-      const s = scoreDelimiter(lines, d);
+      const s = scoreDelimiter(lines, d, quoteChar);
       if (s.score > bestScore) { bestScore = s.score; best = d; }
     });
     return best;
   }
 
-  function parseCsvText(text, delimiter) {
+  function parseDelimiterInput(str) {
+    const s = String(str || '').trim().toLowerCase();
+    if (s === 'tab' || s === '\\t') return '\t';
+    if (s === 'comma' || s === ',') return ',';
+    if (s === 'semicolon' || s === ';') return ';';
+    if (s.length === 1) return s;
+    return null;
+  }
+
+  function parseCsvText(text, delimiter, quoteChar) {
+    const Q = quoteChar || '"';
     const rows = [];
     let row = [];
     let field = '';
@@ -84,8 +95,8 @@
     while (i < s.length) {
       const c = s[i];
       if (inQuotes) {
-        if (c === QUOTE) {
-          if (s[i + 1] === QUOTE) { field += QUOTE; i += 2; continue; }
+        if (c === Q) {
+          if (s[i + 1] === Q) { field += Q; i += 2; continue; }
           inQuotes = false;
           i++;
           continue;
@@ -94,7 +105,7 @@
         i++;
         continue;
       }
-      if (c === QUOTE) { inQuotes = true; i++; continue; }
+      if (c === Q) { inQuotes = true; i++; continue; }
       if (c === delimiter) { row.push(field); field = ''; i++; continue; }
       if (c === '\r') {
         i++;
@@ -143,48 +154,146 @@
     return rows[0][0] === '';
   }
 
-  function needsQuote(field, delimiter) {
-    if (field.indexOf(QUOTE) >= 0) return true;
+  function needsQuote(field, delimiter, quoteChar) {
+    const Q = quoteChar || '"';
+    if (field.indexOf(Q) >= 0) return true;
     if (field.indexOf('\n') >= 0 || field.indexOf('\r') >= 0) return true;
     if (field.indexOf(delimiter) >= 0) return true;
     return false;
   }
 
-  function escapeField(field) {
-    return String(field).replace(/"/g, '""');
+  function escapeField(field, quoteChar) {
+    const Q = quoteChar || '"';
+    return String(field).split(Q).join(Q + Q);
   }
 
-  function serializeField(field, delimiter) {
+  function serializeField(field, delimiter, quoteChar) {
+    const Q = quoteChar || '"';
     const s = String(field);
-    if (!needsQuote(s, delimiter)) return s;
-    return QUOTE + escapeField(s) + QUOTE;
+    if (!needsQuote(s, delimiter, Q)) return s;
+    return Q + escapeField(s, Q) + Q;
   }
 
-  function serializeCsv(rows, delimiter, lineEnding) {
+  function serializeCsv(rows, delimiter, lineEnding, quoteChar) {
     const norm = normalizeRowWidths(rows);
     if (isGridEmpty(norm)) return '';
     const le = lineEnding || '\n';
-    return norm.map((r) => r.map((c) => serializeField(c, delimiter)).join(delimiter)).join(le);
+    const Q = quoteChar || '"';
+    return norm.map((r) => r.map((c) => serializeField(c, delimiter, Q)).join(delimiter)).join(le);
+  }
+
+  const ENCODINGS = ['utf-8', 'utf-8-bom', 'utf-16le', 'utf-16be'];
+
+  function normalizeEncoding(enc) {
+    const e = String(enc || 'utf-8').toLowerCase();
+    return ENCODINGS.indexOf(e) >= 0 ? e : 'utf-8';
+  }
+
+  function detectEncodingFromBytes(u8) {
+    if (u8.length >= 2 && u8[0] === 0xff && u8[1] === 0xfe) return 'utf-16le';
+    if (u8.length >= 2 && u8[0] === 0xfe && u8[1] === 0xff) return 'utf-16be';
+    if (u8.length >= 3 && u8[0] === 0xef && u8[1] === 0xbb && u8[2] === 0xbf) return 'utf-8-bom';
+    return 'utf-8';
+  }
+
+  function decodeTabularBytes(u8) {
+    if (!u8 || !u8.length) {
+      return { ok: true, text: '', encoding: 'utf-8' };
+    }
+    const encoding = detectEncodingFromBytes(u8);
+    try {
+      let text = '';
+      if (encoding === 'utf-16le' || encoding === 'utf-16be') {
+        text = new TextDecoder(encoding).decode(u8.subarray(2));
+      } else if (encoding === 'utf-8-bom') {
+        text = new TextDecoder('utf-8').decode(u8.subarray(3));
+      } else {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(u8);
+      }
+      if (text.indexOf('\0') >= 0) return { ok: false };
+      return { ok: true, text: text, encoding: encoding };
+    } catch (_e) {
+      return { ok: false };
+    }
+  }
+
+  function encodeTabularBytes(text, encoding) {
+    const enc = normalizeEncoding(encoding);
+    const body = String(text);
+    if (enc === 'utf-16le' || enc === 'utf-16be') {
+      return encodeTabularBytesUtf16(body, enc);
+    }
+    const utf8 = new TextEncoder().encode(body);
+    if (enc === 'utf-8-bom') {
+      const out = new Uint8Array(3 + utf8.length);
+      out[0] = 0xef; out[1] = 0xbb; out[2] = 0xbf;
+      out.set(utf8, 3);
+      return out;
+    }
+    return utf8;
+  }
+
+  function encodeTabularBytesUtf16(body, enc) {
+    const le = enc === 'utf-16le';
+    const bom = le ? [0xff, 0xfe] : [0xfe, 0xff];
+    const u8 = new Uint8Array(2 + body.length * 2);
+    u8[0] = bom[0]; u8[1] = bom[1];
+    const view = new DataView(u8.buffer);
+    for (let i = 0; i < body.length; i++) {
+      view.setUint16(2 + i * 2, body.charCodeAt(i), le);
+    }
+    return u8;
+  }
+
+  function isCsvStoredValue(content) {
+    return typeof content === 'string' && content.startsWith(CSV_STORE_PREFIX);
+  }
+
+  function unwrapProjectCsv(content) {
+    if (typeof content !== 'string') return null;
+    if (!content.startsWith(CSV_STORE_PREFIX)) {
+      return { text: content, encoding: 'utf-8', wrapped: false };
+    }
+    const rest = content.slice(CSV_STORE_PREFIX.length);
+    const nl = rest.indexOf('\n');
+    if (nl < 0) return null;
+    const tag = rest.slice(0, nl);
+    const enc = tag.endsWith('::') ? tag.slice(0, -2) : tag;
+    if (ENCODINGS.indexOf(enc) < 0 || enc === 'utf-8') return null;
+    return { text: rest.slice(nl + 1), encoding: enc, wrapped: true };
+  }
+
+  function wrapProjectCsv(text, encoding) {
+    const enc = normalizeEncoding(encoding);
+    if (enc === 'utf-8') return String(text);
+    return CSV_STORE_PREFIX + enc + '::\n' + String(text);
   }
 
   function parseFile(text, options) {
     const opts = options || {};
+    const quoteChar = opts.quoteChar != null && String(opts.quoteChar).length ? String(opts.quoteChar)[0] : '"';
+    const preferTab = !!opts.preferTab;
+    const autoDetect = opts.autoDetect !== false;
     if (isWhitespaceOnly(text)) {
       return {
         rows: emptyGrid(),
-        delimiter: opts.preferTab ? '\t' : ',',
+        delimiter: opts.delimiter != null ? opts.delimiter : (preferTab ? '\t' : ','),
         lineEnding: '\n',
+        quoteChar: quoteChar,
         empty: true,
       };
     }
     const raw = stripBom(String(text));
     const lineEnding = detectLineEnding(raw);
-    const delimiter = opts.delimiter || detectDelimiter(raw, !!opts.preferTab);
-    let rows = parseCsvText(raw, delimiter);
+    let delimiter = opts.delimiter;
+    if (delimiter == null) {
+      delimiter = detectDelimiter(raw, preferTab, quoteChar);
+    }
+    let rows = parseCsvText(raw, delimiter, quoteChar);
     while (rows.length > 1 && rows[rows.length - 1].every((c) => c === '')) rows.pop();
     rows = normalizeRowWidths(rows);
     if (!rows.length) rows = emptyGrid();
-    return { rows, delimiter, lineEnding, empty: false };
+    return { rows, delimiter, lineEnding, quoteChar, empty: false };
   }
 
   function tableSize(rows) {
@@ -223,13 +332,29 @@
     return ',';
   }
 
+  function encodingFromProjectContent(content) {
+    const un = unwrapProjectCsv(content);
+    if (un && un.wrapped) return un.encoding;
+    if (typeof content === 'string' && content.charCodeAt(0) === 0xfeff) return 'utf-8-bom';
+    return 'utf-8';
+  }
+
+  function projectTextFromContent(content) {
+    const un = unwrapProjectCsv(content);
+    if (un) return stripBom(un.text);
+    return stripBom(String(content || ''));
+  }
+
   root.FleditorCsvParse = {
     MAX_ROWS,
     MAX_COLS,
+    ENCODINGS,
+    CSV_STORE_PREFIX,
     stripBom,
     isWhitespaceOnly,
     detectLineEnding,
     detectDelimiter,
+    parseDelimiterInput,
     parseCsvText,
     parseFile,
     serializeCsv,
@@ -241,6 +366,14 @@
     resizeGrid,
     ensureMinGrid,
     delimiterLabel,
+    decodeTabularBytes,
+    encodeTabularBytes,
+    isCsvStoredValue,
+    unwrapProjectCsv,
+    wrapProjectCsv,
+    encodingFromProjectContent,
+    projectTextFromContent,
+    normalizeEncoding,
     tooLargeMessage(rows) {
       const t = tableSize(rows);
       return 'Too large (' + t.rows + ' rows, ' + t.cols + ' columns). Open as text.';

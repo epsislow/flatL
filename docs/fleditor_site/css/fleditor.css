@@ -1201,6 +1201,55 @@ body.fleditor-resize-active * {
   outline-offset: 1px;
 }
 
+.fleditor-io-input--compact {
+  width: 5.25rem;
+  max-width: 100%;
+  padding: 0.28rem 0.4rem;
+  font-size: 0.88rem;
+}
+
+#csvTableSizeModal {
+  max-width: min(300px, calc(100vw - 2rem));
+}
+
+.fleditor-csv-size-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1.35rem;
+}
+
+#csvFormatModal {
+  max-width: min(320px, calc(100vw - 2rem));
+}
+
+.fleditor-csv-format-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1.35rem;
+}
+
+.fleditor-csv-format-select {
+  font-size: 0.88rem;
+  padding: 0.28rem 0.4rem;
+  background: var(--fl-bg);
+  border: 1px solid var(--fl-border);
+  color: var(--fl-text);
+  border-radius: 4px;
+  min-width: 4.5rem;
+}
+
+.fleditor-csv-format-encoding {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.fleditor-csv-format-encoding .fleditor-csv-format-select {
+  min-width: 11rem;
+}
+
 .fleditor-io-actions {
   display: flex;
   justify-content: flex-end;

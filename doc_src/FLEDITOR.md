@@ -161,7 +161,7 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor** when t
 
 - Scrollable **table grid** with one input per cell (CodeMirror hidden in table mode).
 - Row/column labels; **`+`** cells on the right and bottom append a column or row (same idea as hex **append**).
-- Toolbar row: **dimensions** (`R × C`), **separator** (`,`, `;`, tab), **Header** toggle (yellowish highlight on row 1, display only), **Size…** (set row/column counts; shrink asks for `yes` if data would be removed).
+- Toolbar row: **dimensions** (`R × C`), **Header** toggle (yellowish highlight on row 1, display only), **Size…** (modal with **Rows** and **Cols**; shrink asks for `yes` if data would be removed), **Format…** (separator, quote, encoding).
 - **Text** / **▦** in the editor action bar toggles **table ↔ text** for the same file.
 
 ### Parsing and saving
@@ -170,6 +170,8 @@ Project files named **`*.csv`** or **`*.tsv`** open in the **CSV editor** when t
 - **RFC-style** quoted fields (`"a,b"`, `""` escape).
 - **Line endings** detected on load (`\n` or `\r\n`) and preserved on **Save**.
 - **Empty file** (0 bytes): grid starts **1×1**; saving an unchanged empty grid writes **0 bytes**.
+- **MEMFS / Run:** bytes imported from the filesystem are decoded as **UTF-8**, **UTF-8 with BOM**, or **UTF-16 LE/BE** (BOM required). On **Save** to the project, **UTF-8** is stored as a plain string; other encodings use a project prefix `FLEDITOR::CSV::<encoding>::\n` before the logical table text. MEMFS sync writes the matching bytes (including BOM where applicable).
+- **Format…** — **separator** (`,`, `;`, tab), **quote** (`"` or `'`), and **encoding** from a fixed list (**UTF-8**, **UTF-8 with BOM**, **UTF-16 LE**, **UTF-16 BE**).
 - All UI strings are **English**.
 
 ### Editing

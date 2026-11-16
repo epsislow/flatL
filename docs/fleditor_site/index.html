@@ -57,15 +57,9 @@
           <div id="csvTableBar" class="fleditor-csv-bar" hidden>
             <div class="fleditor-csv-row">
               <span id="csvTableSizeLabel" class="fleditor-csv-meta"></span>
-              <label class="fleditor-csv-field">Separator
-                <select id="csvDelimiterSelect" aria-label="Column separator">
-                  <option value=",">,</option>
-                  <option value=";">;</option>
-                  <option value="tab">tab</option>
-                </select>
-              </label>
               <button type="button" id="csvHeaderRowBtn" class="fleditor-csv-header-btn" title="Highlight row 1 (display only)" aria-pressed="false">Header</button>
-              <button type="button" id="csvTableSizeBtn" title="Set table size">Size…</button>
+              <button type="button" id="csvTableSizeBtn" title="Set row and column count">Size…</button>
+              <button type="button" id="csvFormatBtn" title="Separator, quote, and encoding">Format…</button>
             </div>
             <div class="fleditor-csv-row">
               <label class="fleditor-csv-field">Pos
@@ -203,6 +197,57 @@
       </div>
     </form>
   </dialog>
+  <dialog id="csvTableSizeModal" class="fleditor-io-modal" aria-labelledby="csvTableSizeModalTitle">
+    <form id="csvTableSizeModalForm" class="fleditor-io-form">
+      <h2 id="csvTableSizeModalTitle" class="fleditor-io-title">Table size</h2>
+      <p class="fleditor-io-hint">Row and column counts (min 1 each; max 2000 rows, 100 columns).</p>
+      <div class="fleditor-csv-size-fields">
+        <label class="fleditor-csv-field">Rows
+          <input type="number" id="csvTableSizeRowsInput" class="fleditor-io-input fleditor-io-input--compact" min="1" max="2000" step="1" autocomplete="off" aria-label="Row count" />
+        </label>
+        <label class="fleditor-csv-field">Cols
+          <input type="number" id="csvTableSizeColsInput" class="fleditor-io-input fleditor-io-input--compact" min="1" max="100" step="1" autocomplete="off" aria-label="Column count" />
+        </label>
+      </div>
+      <div class="fleditor-io-actions">
+        <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
+        <button type="button" id="csvTableSizeModalCancel" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="csvFormatModal" class="fleditor-io-modal" aria-labelledby="csvFormatModalTitle">
+    <form id="csvFormatModalForm" class="fleditor-io-form">
+      <h2 id="csvFormatModalTitle" class="fleditor-io-title">File format</h2>
+      <p class="fleditor-io-hint">Separator, quote, and encoding for parse and save (project / MEMFS).</p>
+      <div class="fleditor-csv-format-fields">
+        <label class="fleditor-csv-field">Separator
+          <select id="csvFormatDelimiterSelect" class="fleditor-csv-format-select" aria-label="Column separator">
+            <option value=",">,</option>
+            <option value=";">;</option>
+            <option value="tab">tab</option>
+          </select>
+        </label>
+        <label class="fleditor-csv-field">Quote
+          <select id="csvFormatQuoteSelect" class="fleditor-csv-format-select" aria-label="Quote character">
+            <option value="&quot;">&quot;</option>
+            <option value="'">'</option>
+          </select>
+        </label>
+      </div>
+      <label class="fleditor-csv-field fleditor-csv-format-encoding">Encoding
+        <select id="csvFormatEncodingSelect" class="fleditor-csv-format-select" aria-label="Encoding">
+          <option value="utf-8">UTF-8</option>
+          <option value="utf-8-bom">UTF-8 with BOM</option>
+          <option value="utf-16le">UTF-16 LE</option>
+          <option value="utf-16be">UTF-16 BE</option>
+        </select>
+      </label>
+      <div class="fleditor-io-actions">
+        <button type="submit" class="fleditor-io-btn fleditor-io-btn--primary">OK</button>
+        <button type="button" id="csvFormatModalCancel" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </form>
+  </dialog>
   <dialog id="promptModal" class="fleditor-io-modal" aria-labelledby="promptModalTitle">
     <form id="promptModalForm" class="fleditor-io-form">
       <h2 id="promptModalTitle" class="fleditor-io-title">Input</h2>
@@ -333,15 +378,15 @@
   <script src="js/mode-flatl.js"></script>
   <script src="js/fleditor-hex.js"></script>
   <script src="js/fleditor-hex-grid.js?v=6"></script>
-  <script src="js/fleditor-csv-parse.js?v=1"></script>
+  <script src="js/fleditor-csv-parse.js?v=2"></script>
   <script src="js/fleditor-csv-grid.js?v=4"></script>
-  <script src="js/fleditor-project.js?v=4"></script>
+  <script src="js/fleditor-project.js?v=5"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
   <script src="js/fleditor-theme.js"></script>
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=54"></script>
+  <script src="js/fleditor.js?v=58"></script>
 </body>
 </html>

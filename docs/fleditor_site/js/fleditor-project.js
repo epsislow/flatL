@@ -237,7 +237,15 @@
     return norm;
   }
 
-  function bytesToProjectValue(u8) {
+  function bytesToProjectValue(u8, relPath) {
+    const rel = relPath || '';
+    const C = typeof globalThis !== 'undefined' && globalThis.FleditorCsvParse;
+    if (C && /\.(csv|tsv)$/i.test(rel)) {
+      const dec = C.decodeTabularBytes(u8);
+      if (dec.ok) {
+        return C.wrapProjectCsv(dec.text, dec.encoding);
+      }
+    }
     try {
       const text = new TextDecoder('utf-8', { fatal: true }).decode(u8);
       if (text.indexOf('\0') >= 0) {
@@ -261,6 +269,13 @@
         u8[i] = raw.charCodeAt(i);
       }
       return u8;
+    }
+    const C = typeof globalThis !== 'undefined' && globalThis.FleditorCsvParse;
+    if (C && typeof content === 'string') {
+      const un = C.unwrapProjectCsv(content);
+      if (un && un.wrapped) {
+        return C.encodeTabularBytes(un.text, un.encoding);
+      }
     }
     return content;
   }
@@ -287,7 +302,7 @@
       if (before && bytesEqual(before, after)) {
         continue;
       }
-      project.files[rel] = bytesToProjectValue(after);
+      project.files[rel] = bytesToProjectValue(after, rel);
       ensureParentDirs(project, rel);
       report.push({ path: rel, kind: before ? 'updated' : 'new' });
     }

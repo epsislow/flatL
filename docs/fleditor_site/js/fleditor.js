@@ -31,9 +31,18 @@
   const csvTableBar = document.getElementById('csvTableBar');
   const csvGridHost = document.getElementById('csvGridHost');
   const csvTableSizeLabel = document.getElementById('csvTableSizeLabel');
-  const csvDelimiterSelect = document.getElementById('csvDelimiterSelect');
+  const csvFormatDelimiterSelect = document.getElementById('csvFormatDelimiterSelect');
+  const csvFormatQuoteSelect = document.getElementById('csvFormatQuoteSelect');
+  const csvFormatModal = document.getElementById('csvFormatModal');
+  const csvFormatModalForm = document.getElementById('csvFormatModalForm');
+  const csvFormatEncodingSelect = document.getElementById('csvFormatEncodingSelect');
+  const csvTableSizeModal = document.getElementById('csvTableSizeModal');
+  const csvTableSizeModalForm = document.getElementById('csvTableSizeModalForm');
+  const csvTableSizeRowsInput = document.getElementById('csvTableSizeRowsInput');
+  const csvTableSizeColsInput = document.getElementById('csvTableSizeColsInput');
   const csvHeaderRowBtn = document.getElementById('csvHeaderRowBtn');
   const csvTableSizeBtn = document.getElementById('csvTableSizeBtn');
+  const csvFormatBtn = document.getElementById('csvFormatBtn');
   const csvGoCell = document.getElementById('csvGoCell');
   const csvGoBtn = document.getElementById('csvGoBtn');
   const csvSearchInput = document.getElementById('csvSearchInput');
@@ -880,20 +889,41 @@
     syncEditorWrapKind();
   }
 
+  function csvParseOptsFromSession() {
+    if (!csvSession) return {};
+    return {
+      preferTab: csvSession.preferTab,
+      delimiter: csvSession.autoDetectDelimiter ? undefined : csvSession.delimiter,
+      autoDetect: !!csvSession.autoDetectDelimiter,
+      quoteChar: csvSession.quoteChar,
+    };
+  }
+
+  function csvLogicalTextNow() {
+    if (!csvSession) return '';
+    if (editorViewMode === 'csv') return csvSerializedNow();
+    return cm ? cm.getValue() : '';
+  }
+
+  function csvStoredProjectValue(logicalText) {
+    if (!csvSession) return '';
+    return CsvP.wrapProjectCsv(logicalText, csvSession.encoding);
+  }
+
   function csvSerializedNow() {
     if (!csvSession) return '';
-    return CsvP.serializeCsv(csvSession.rows, csvSession.delimiter, csvSession.lineEnding);
+    return CsvP.serializeCsv(
+      csvSession.rows,
+      csvSession.delimiter,
+      csvSession.lineEnding,
+      csvSession.quoteChar
+    );
   }
 
   function recomputeCsvDirty() {
     if (!csvSession) return;
-    if (editorViewMode === 'csv') {
-      setDirty(csvSerializedNow() !== csvSession.savedSerialized);
-      return;
-    }
-    if (editorViewMode === 'plaintext' && cm) {
-      setDirty(cm.getValue() !== csvSession.savedSerialized);
-    }
+    const logical = csvLogicalTextNow();
+    setDirty(csvStoredProjectValue(logical) !== csvSession.savedProjectValue);
   }
 
   function snapshotCsvSavedRows() {
@@ -1014,10 +1044,6 @@
     if (!csvSession || !csvTableSizeLabel) return;
     const t = CsvP.tableSize(csvSession.rows);
     csvTableSizeLabel.textContent = t.rows + ' \u00d7 ' + t.cols;
-    if (csvDelimiterSelect) {
-      const d = csvSession.delimiter;
-      csvDelimiterSelect.value = d === '\t' ? 'tab' : d;
-    }
     if (csvHeaderRowBtn) {
       csvHeaderRowBtn.setAttribute('aria-pressed', csvSession.headerRow ? 'true' : 'false');
       csvHeaderRowBtn.classList.toggle('fleditor-csv-header-btn--active', !!csvSession.headerRow);
@@ -1137,16 +1163,23 @@
   function enterCsvFromProject(path, content) {
     leaveCsvEditor();
     const preferTab = path.toLowerCase().endsWith('.tsv');
-    const text = typeof content === 'string' ? content : '';
-    const parsed = CsvP.parseFile(text, { preferTab: preferTab });
+    const raw = typeof content === 'string' ? content : '';
+    const savedProjectValue = raw;
+    const encoding = CsvP.encodingFromProjectContent(raw);
+    const text = CsvP.projectTextFromContent(raw);
+    const parsed = CsvP.parseFile(text, { preferTab: preferTab, autoDetect: true, quoteChar: '"' });
     csvSession = {
       path: path,
       rows: parsed.rows,
       savedRows: JSON.parse(JSON.stringify(parsed.rows)),
       delimiter: parsed.delimiter,
       lineEnding: parsed.lineEnding,
+      quoteChar: parsed.quoteChar || '"',
+      autoDetectDelimiter: true,
+      encoding: encoding,
       preferTab: preferTab,
       savedSerialized: text,
+      savedProjectValue: savedProjectValue,
       headerRow: false,
       gridForced: false,
     };
@@ -1175,14 +1208,14 @@
     } else if (cm) {
       text = cm.getValue();
     }
-    project.files[path] = text;
+    const stored = csvStoredProjectValue(text);
+    project.files[path] = stored;
     csvSession.savedSerialized = text;
+    csvSession.savedProjectValue = stored;
     if (editorViewMode === 'csv') {
-      const reparsed = CsvP.parseFile(text, {
-        preferTab: csvSession.preferTab,
-        delimiter: csvSession.delimiter,
-      });
+      const reparsed = CsvP.parseFile(text, csvParseOptsFromSession());
       csvSession.rows = reparsed.rows;
+      csvSession.quoteChar = reparsed.quoteChar || csvSession.quoteChar;
       snapshotCsvSavedRows();
     }
   }
@@ -1190,10 +1223,107 @@
   function applyCsvDelimiterFromUi(val) {
     if (!csvSession) return;
     const d = val === 'tab' ? '\t' : val;
+    csvSession.autoDetectDelimiter = false;
     csvSession.delimiter = d;
-    if (editorViewMode === 'csv') {
-      recomputeCsvDirty();
+    recomputeCsvDirty();
+  }
+
+  function applyCsvQuoteFromUi(val) {
+    if (!csvSession) return;
+    csvSession.quoteChar = val === "'" ? "'" : '"';
+    recomputeCsvDirty();
+  }
+
+  function applyCsvEncoding(enc) {
+    if (!csvSession) return;
+    csvSession.encoding = CsvP.normalizeEncoding(enc);
+    recomputeCsvDirty();
+  }
+
+  function syncCsvFormatModalFromSession() {
+    if (!csvSession) return;
+    if (csvFormatDelimiterSelect) {
+      const d = csvSession.delimiter;
+      csvFormatDelimiterSelect.value = d === '\t' ? 'tab' : d;
     }
+    if (csvFormatQuoteSelect) {
+      const q = csvSession.quoteChar || '"';
+      csvFormatQuoteSelect.value = q === "'" ? "'" : '"';
+    }
+    if (csvFormatEncodingSelect) {
+      const enc = CsvP.normalizeEncoding(csvSession.encoding);
+      csvFormatEncodingSelect.value =
+        CsvP.ENCODINGS.indexOf(enc) >= 0 ? enc : 'utf-8';
+    }
+  }
+
+  function applyCsvFormatFromModal() {
+    if (!csvSession) return;
+    if (csvFormatDelimiterSelect) {
+      applyCsvDelimiterFromUi(csvFormatDelimiterSelect.value);
+    }
+    if (csvFormatQuoteSelect) {
+      applyCsvQuoteFromUi(csvFormatQuoteSelect.value);
+    }
+    if (csvFormatEncodingSelect) {
+      applyCsvEncoding(csvFormatEncodingSelect.value);
+    }
+  }
+
+  function openCsvFormatDialog() {
+    if (!csvSession || !csvFormatModal) return;
+    syncCsvFormatModalFromSession();
+    csvFormatModal.showModal();
+    if (csvFormatDelimiterSelect) {
+      csvFormatDelimiterSelect.focus();
+    }
+  }
+
+  function openCsvTableSizeDialog() {
+    if (!csvSession || !csvTableSizeModal || !csvTableSizeRowsInput || !csvTableSizeColsInput) return;
+    const t = CsvP.tableSize(csvSession.rows);
+    csvTableSizeRowsInput.value = String(t.rows);
+    csvTableSizeColsInput.value = String(t.cols);
+    csvTableSizeModal.showModal();
+    csvTableSizeRowsInput.focus();
+    csvTableSizeRowsInput.select();
+  }
+
+  async function applyCsvTableSizeFromInputs() {
+    if (!csvSession || editorViewMode !== 'csv') return false;
+    const t = CsvP.tableSize(csvSession.rows);
+    const r = Math.max(1, parseInt(csvTableSizeRowsInput.value, 10) || 1);
+    const c = Math.max(1, parseInt(csvTableSizeColsInput.value, 10) || 1);
+    if (r > CsvP.MAX_ROWS || c > CsvP.MAX_COLS) {
+      await showAlert('Too large (' + r + ' rows, ' + c + ' columns). Open as text.', 'CSV editor');
+      return false;
+    }
+    const shrunk = r < t.rows || c < t.cols;
+    let hasData = false;
+    if (shrunk) {
+      for (let y = r; y < csvSession.rows.length && !hasData; y++) {
+        for (let x = 0; x < (csvSession.rows[y] || []).length; x++) {
+          if (csvSession.rows[y][x]) hasData = true;
+        }
+      }
+      for (let y = 0; y < Math.min(r, csvSession.rows.length) && !hasData; y++) {
+        for (let x = c; x < (csvSession.rows[y] || []).length; x++) {
+          if (csvSession.rows[y][x]) hasData = true;
+        }
+      }
+    }
+    if (hasData) {
+      const ok = await showPrompt({
+        title: 'Shrink table',
+        message: 'Shrink will delete cells. Type yes to continue:',
+        defaultValue: '',
+      });
+      if (ok !== 'yes') return false;
+    }
+    csvSession.rows = CsvP.resizeGrid(csvSession.rows, r, c);
+    renderCsvGrid();
+    recomputeCsvDirty();
+    return true;
   }
 
   function doToggleCsvView() {
@@ -1208,10 +1338,7 @@
       recomputeCsvDirty();
     } else {
       const raw = cm ? cm.getValue() : '';
-      const parsed = CsvP.parseFile(raw, {
-        preferTab: csvSession.preferTab,
-        delimiter: csvSession.delimiter,
-      });
+      const parsed = CsvP.parseFile(raw, csvParseOptsFromSession());
       if (CsvP.isTooLarge(parsed.rows) && !csvSession.gridForced) {
         showAlert(CsvP.tooLargeMessage(parsed.rows), 'CSV editor');
         return;
@@ -1235,10 +1362,7 @@
     if (!csvSession) return;
     confirmDiscardIfDirty(function () {
       if (editorViewMode === 'plaintext' && cm) {
-        const parsed = CsvP.parseFile(cm.getValue(), {
-          preferTab: csvSession.preferTab,
-          delimiter: csvSession.delimiter,
-        });
+        const parsed = CsvP.parseFile(cm.getValue(), csvParseOptsFromSession());
         csvSession.rows = CsvP.ensureMinGrid(parsed.rows);
       }
       csvSession.gridForced = true;
@@ -3028,10 +3152,22 @@
         toggleCsvView();
       });
     }
-    if (csvDelimiterSelect) {
-      csvDelimiterSelect.addEventListener('change', function () {
-        applyCsvDelimiterFromUi(csvDelimiterSelect.value);
+    if (csvFormatModalForm && csvFormatModal) {
+      csvFormatModalForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        applyCsvFormatFromModal();
+        csvFormatModal.close();
       });
+      csvFormatModal.addEventListener('cancel', function (e) {
+        e.preventDefault();
+        csvFormatModal.close();
+      });
+      const csvFormatCancel = document.getElementById('csvFormatModalCancel');
+      if (csvFormatCancel) {
+        csvFormatCancel.addEventListener('click', function () {
+          csvFormatModal.close();
+        });
+      }
     }
     if (csvHeaderRowBtn) {
       csvHeaderRowBtn.addEventListener('click', function () {
@@ -3078,54 +3214,35 @@
         csvSearchStep('next');
       });
     }
-    if (csvTableSizeBtn) {
-      csvTableSizeBtn.addEventListener('click', async function () {
-        if (!csvSession || editorViewMode !== 'csv') return;
-        const t = CsvP.tableSize(csvSession.rows);
-        const rStr = await showPrompt({
-          title: 'Table size',
-          message: 'Row count (min 1):',
-          defaultValue: String(t.rows),
-        });
-        if (rStr == null) return;
-        const cStr = await showPrompt({
-          title: 'Table size',
-          message: 'Column count (min 1):',
-          defaultValue: String(t.cols),
-        });
-        if (cStr == null) return;
-        const r = Math.max(1, parseInt(rStr, 10) || 1);
-        const c = Math.max(1, parseInt(cStr, 10) || 1);
-        if (r > CsvP.MAX_ROWS || c > CsvP.MAX_COLS) {
-          showAlert('Too large (' + r + ' rows, ' + c + ' columns). Open as text.', 'CSV editor');
-          return;
-        }
-        const shrunk = r < t.rows || c < t.cols;
-        let hasData = false;
-        if (shrunk) {
-          for (let y = r; y < csvSession.rows.length && !hasData; y++) {
-            for (let x = 0; x < (csvSession.rows[y] || []).length; x++) {
-              if (csvSession.rows[y][x]) hasData = true;
-            }
-          }
-          for (let y = 0; y < Math.min(r, csvSession.rows.length) && !hasData; y++) {
-            for (let x = c; x < (csvSession.rows[y] || []).length; x++) {
-              if (csvSession.rows[y][x]) hasData = true;
-            }
-          }
-        }
-        if (hasData) {
-          const ok = await showPrompt({
-            title: 'Shrink table',
-            message: 'Shrink will delete cells. Type yes to continue:',
-            defaultValue: '',
-          });
-          if (ok !== 'yes') return;
-        }
-        csvSession.rows = CsvP.resizeGrid(csvSession.rows, r, c);
-        renderCsvGrid();
-        recomputeCsvDirty();
+    if (csvFormatBtn) {
+      csvFormatBtn.addEventListener('click', function () {
+        openCsvFormatDialog();
       });
+    }
+    if (csvTableSizeBtn) {
+      csvTableSizeBtn.addEventListener('click', function () {
+        if (!csvSession || editorViewMode !== 'csv') return;
+        openCsvTableSizeDialog();
+      });
+    }
+    if (csvTableSizeModalForm && csvTableSizeModal) {
+      csvTableSizeModalForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+        void (async function () {
+          const ok = await applyCsvTableSizeFromInputs();
+          if (ok) csvTableSizeModal.close();
+        })();
+      });
+      csvTableSizeModal.addEventListener('cancel', function (e) {
+        e.preventDefault();
+        csvTableSizeModal.close();
+      });
+      const csvTableSizeCancel = document.getElementById('csvTableSizeModalCancel');
+      if (csvTableSizeCancel) {
+        csvTableSizeCancel.addEventListener('click', function () {
+          csvTableSizeModal.close();
+        });
+      }
     }
   }
 
