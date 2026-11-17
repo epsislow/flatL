@@ -1,6 +1,6 @@
 # Liste tipizate și literali (AM-LIST-LIT)
 
-**Status:** **L-core complet** (rank 1–4, `f64`/`tN`/`b`/numeric, literali, rect); apoi L.1a/b, L-ext, L.2.  
+**Status:** **L-core** + **L-ext** (`l`/`o`/`[][]`, rank 1–4, §2.2.4–2.2.5); **L.1a/b** MVP; **L.2** parțial.  
 **Legături:** [TYPED_BIND.md](./TYPED_BIND.md), [STRICT_TYPES.md](./STRICT_TYPES.md), plan `vect-matrix-rect-roadmap`.
 
 ## Sintaxă axe (LHS și sufix literal)
@@ -54,6 +54,8 @@ buf = [[1, 2], [3, 4]]:f64[][]       # fără LHS — doar parse + assert sufix
 | `l[][]` … | 2–4 | da, celule orice |
 | `o[]`, `o[][]` | 1 / 2–4 | `o` OBJECT la frunză |
 | `[][]` | 2–4 | da, frunză mixtă (≠ `l[]`) |
+
+**Anti-confuzie jagged:** `loose:l[] = [[1], [2, 3]]:l[]` — OK (subliste de lungimi diferite). `zone:[][] = [[1], [2, 3]]:[][]` — `type.assign.list.jagged` (rank 2 impune rect). Literal fără LHS (`[[1], [2, 3]]:[][]` singur) → eroare compile.
 
 ## Liste `<schema>` 1D (L.1a)
 
