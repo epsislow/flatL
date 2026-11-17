@@ -1,0 +1,4 @@
+#main
+  mem.infoResId(1) -> k
+  io.outln(k)
+  OK

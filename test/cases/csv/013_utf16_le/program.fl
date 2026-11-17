@@ -1,0 +1,15 @@
+use native csv
+use native list
+
+#main
+  fp = file.readCtx('data.csv')
+  rid = csv.reader(fp)
+  head = csv.next(rid)
+  list.get(head, 0) -> a
+  a == 'Product'
+  list.get(head, 1) -> b
+  b == 'Quantity'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('utf16-ok')
+  OK

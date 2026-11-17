@@ -534,6 +534,13 @@ void flat_vcx_runtime_destroy(FlatVcxRuntime *rt, FlatCollectionPool *coll, Flat
     free(rt);
 }
 
+int flat_vcx_context_live(const FlatVcxRuntime *rt, uint32_t ctx_id) {
+    if (!rt) {
+        return 0;
+    }
+    return ctx_index_by_id(rt, ctx_id) >= 0;
+}
+
 uint32_t flat_vcx_current_id(const FlatVcxRuntime *rt) {
     if (!rt || rt->context_count <= 0) {
         return 0;

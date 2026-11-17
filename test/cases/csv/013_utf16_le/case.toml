@@ -1,0 +1,9 @@
+suite = "csv"
+id = 13
+desc = "UTF-16 LE reader"
+kind = "pipeline"
+source = "program.fl"
+compile = "cp {root}/docs/fleditor_site/examples/test1_csv_utf16le.csv {tmp}/data.csv && {root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "utf16-ok"

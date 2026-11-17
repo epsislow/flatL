@@ -10,6 +10,8 @@ use native obj
 
 Writer **`writeCols`** needs **`obj`**. Format is auto-detected on first read; override with **`setSeparator`**, **`setLineEndings`**, **`setEncoding`**, **`setQuote`**. Pass **`""`** to any setter to re-enable auto for that field.
 
+**Encoding (read):** UTF-8, UTF-8-BOM, **UTF-16 LE/BE** (BOM optional on read). **Writer** output remains UTF-8 only in v1.
+
 ## Reader
 
 | Call | Returns | Panic |
@@ -24,6 +26,9 @@ Writer **`writeCols`** needs **`obj`**. Format is auto-detected on first read; o
 | `setRow(rid, row)` | — | `csv.setRow` |
 | `next(rid)` | LIST STRING | `csv.next` (>1024 fields) |
 | `nextCells(rid, len)` | LIST STRING | `csv.nextCells` |
+| `getCells(rid, x0, y0, xLen, yLen, mode?)` | LIST (rows) or OBJECT | `csv.getCells`, `bounds` (region / field range); product **`xLen*yLen > 1024`** |
+
+**`getCells`** — rectangle from top-left **`(x0, y0)`** with size **`xLen × yLen`**. Default **`mode`** **`"list"`** → LIST of LIST (row-major). **`"obj"`** → OBJECT with keys **`"0"`…`"xLen-1"`** and LIST values (column-major); requires **`use native obj`** at compile time. Numeric object keys: **`obj.get(grid, '"0"')`** (path DSL, see **`obj.get`**).
 
 ## Writer
 
@@ -47,7 +52,7 @@ Format setters work on **`rid`** or **`wid`**.
 ## FLEditor / tests
 
 - Example: `docs/fleditor_site/examples/csv_reader/` (MEMFS **`stock.csv`**, **`use native csv`**).
-- Parity: `test/fleditor/csv_vm_parity.mjs` compares **`csv.next`** output to **FleditorCsvParse** on `test1_csv_*` (UTF-8 exports only; UTF-16 deferred).
+- Parity: `test/fleditor/csv_vm_parity.mjs` compares **`csv.next`** output to **FleditorCsvParse** on `test1_csv_*` (including UTF-16 LE/BE).
 
 ## Example
 

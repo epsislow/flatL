@@ -43,6 +43,62 @@ Returns the **logical** type (not VM storage detail). Inline STRING and STRING R
 
 Open file ids from **`file.readCtx`** and related calls are **`number`** values (`mem.type_of` reports **`number`**).
 
+### Resource id kind (`infoResId`)
+
+| Call | Args | Returns |
+|------|------|---------|
+| `infoResId(id, kind)` | NUMBER id, STRING kind | STRING |
+
+**`kind`** selects which **resource namespace** to query (`"csv"`, `"file"`, or `"vcx"`). File, CSV session, and VCX context ids are independent counters; the hint is required so the same numeric id is not ambiguous.
+
+| `kind` | Live id → result |
+|--------|------------------|
+| `"csv"` | `csv.reader` / `csv.writer`, else `unknown` |
+| `"file"` | `file` (slot **0 … max−1**), else `unknown` |
+| `"vcx"` | `vcx`, else `unknown` |
+
+#### What `unknown` means
+
+`unknown` is a **normal return** (no panic): you passed a valid **`kind`** and a numeric **`id`** in range for that family, but the runtime has **no live resource** there **right now**. It does **not** mean “this number is ambiguous across modules”; you already fixed the family with **`kind`**.
+
+Typical cases:
+
+| Situation | Example | Result |
+|-----------|---------|--------|
+| Id never allocated in that family | `mem.infoResId(99999, 'vcx')` | `unknown` |
+| Handle / session already closed | after `file.close(fp)`, `mem.infoResId(fp, 'file')` | `unknown` |
+| Number from another API | `mem.infoResId(fp, 'csv')` when `fp` is a **file** slot, not a CSV session id | `unknown` (no CSV session with that session id) |
+
+The **same integer** can be live in one family and `unknown` in another (e.g. file slot `2` vs VCX context `2`). That is why **`kind`** is required.
+
+#### Panic vs `unknown`
+
+| Call problem | Outcome |
+|--------------|---------|
+| One argument only, e.g. `mem.infoResId(1)` | **PANIC** `mem.infoResId.kind` |
+| Invalid **`kind`** (not `csv` / `file` / `vcx`) | **PANIC** `mem.infoResId.kind` |
+| **`id`** not a whole number, or out of range for **`kind`** | **PANIC** `mem.infoResId.id` |
+| Valid **`kind`** + **`id`**, but nothing live in that table | STRING **`unknown`** |
+
+#### Examples
+
+```text
+mem.infoResId(fp, 'file') -> kind
+kind == 'file'
+```
+
+```text
+use native vcx
+#main
+  mem.infoResId(1, 'vcx') -> g
+  g == 'vcx'
+  fp = file.createCtx('x.dat')
+  mem.infoResId(1, 'file') -> f
+  ; 'file' only if slot 1 is an open handle; else 'unknown'
+  file.close(fp)
+  OK
+```
+
 ```text
 #main
   xs = [1, 2]

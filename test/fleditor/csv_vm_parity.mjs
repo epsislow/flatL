@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * CSV5: flatL csv.reader row/delimiter semantics vs FleditorCsvParse on test1_csv_* (UTF-8 only).
+ * CSV5/7: flatL csv.reader vs FleditorCsvParse on test1_csv_* (UTF-8 and UTF-16).
  */
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
@@ -23,12 +23,14 @@ require(path.join(repo, 'docs/fleditor_site/js/fleditor-project.js'));
 const P = globalThis.FleditorProject;
 const C = globalThis.FleditorCsvParse;
 
-/* test1_csv_* share one 8×2 table; UTF-16 fixtures omitted (VM reader v1). */
-const UTF8_FIXTURES = [
+/* test1_csv_* share one 8×2 table. */
+const PARITY_FIXTURES = [
   'test1_csv_commadel.csv',
   'test1_csv_msdos.csv',
   'test1_csv_mac.csv',
   'test1_csv_utf8_commadel.csv',
+  'test1_csv_utf16le.csv',
+  'test1_csv_utf16be.csv',
 ];
 
 function assert(cond, msg) {
@@ -70,7 +72,7 @@ if (!fs.existsSync(flc) || !fs.existsSync(flvm)) {
   process.exit(1);
 }
 
-for (const name of UTF8_FIXTURES) {
+for (const name of PARITY_FIXTURES) {
   const js = jsExpectedRows(name);
   assert(js.delimiter === ',', name + ': JS delimiter ' + js.delimiter);
   const vm = vmDumpRows(name);
@@ -83,4 +85,4 @@ for (const name of UTF8_FIXTURES) {
   }
 }
 
-console.log('OK: csv_vm_parity (' + UTF8_FIXTURES.length + ' fixtures)');
+console.log('OK: csv_vm_parity (' + PARITY_FIXTURES.length + ' fixtures)');

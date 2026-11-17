@@ -210,9 +210,11 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("csv", "writeRows", "csv.writeRows(wid, rowsList)"),
     META_SIG("csv", "writeCols", "csv.writeCols(wid, colsObj)"),
     META_SIG("csv", "flush", "csv.flush(wid)"),
+    META_SIG("csv", "getCells", "csv.getCells(rid, x0, y0, xLen, yLen, mode?)"),
     META_SIG("mem", "slot_type", "mem.slot_type(expr)"),
     META_SIG("mem", "slot_frozen", "mem.slot_frozen(expr)"),
     META_SIG("mem", "slot_const", "mem.slot_const(expr)"),
+    META_SIG("mem", "infoResId", "mem.infoResId(id, kind)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

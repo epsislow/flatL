@@ -13,7 +13,9 @@ typedef enum {
 
 typedef enum {
     FLAT_CSV_ENC_UTF8 = 0,
-    FLAT_CSV_ENC_UTF8_BOM
+    FLAT_CSV_ENC_UTF8_BOM,
+    FLAT_CSV_ENC_UTF16_LE,
+    FLAT_CSV_ENC_UTF16_BE
 } FlatCsvEncoding;
 
 typedef struct {
@@ -71,5 +73,9 @@ int flat_csv_serialize_row(const char **fields, const size_t *lens, int count, c
                            size_t *out_len);
 
 size_t flat_csv_strip_utf8_bom(const unsigned char *data, size_t len);
+
+/* Decodes UTF-16 (per enc, BOM optional). Allocates *out_utf8; caller frees. */
+int flat_csv_utf16_to_utf8(const unsigned char *data, size_t data_len, FlatCsvEncoding enc,
+                           char **out_utf8, size_t *out_len);
 
 #endif

@@ -48,6 +48,8 @@ FlatVcxRuntime *flat_vcx_runtime_active(void);
 
 uint32_t flat_vcx_current_id(const FlatVcxRuntime *rt);
 
+int flat_vcx_context_live(const FlatVcxRuntime *rt, uint32_t ctx_id);
+
 int flat_vcx_is_active(const FlatVcxRuntime *rt, uint32_t ctx_id, int *out_active,
                        char *panic_detail, size_t panic_sz);
 

@@ -1,11 +1,17 @@
+#include "flat_csv_runtime.h"
+#include "flat_file.h"
+#include "flat_number.h"
 #include "flat_memstream.h"
 #include "flat_native_mod.h"
 #include "flat_mem_stats.h"
 #include "flat_native.h"
+#include "flat_native_util.h"
 #include "flat_obj_path.h"
 #include "flat_slot_type.h"
 #include "flat_value.h"
+#include "flat_vcx.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -265,6 +271,180 @@ int flat_native_mem_slot_const(FlatNativeCtx *ctx) {
     }
     *ctx->io_status = FLAT_IO_OK;
     return flat_value_set_bool(ctx->out, is_const);
+}
+
+static int info_split_two_args(char *inner, char **left, char **right) {
+    int depth = 0;
+    char quote = 0;
+    char *p;
+
+    if (!inner || !left || !right) {
+        return -1;
+    }
+    for (p = inner; *p; p++) {
+        if (!quote && (*p == '\'' || *p == '"')) {
+            quote = *p;
+        } else if (quote && *p == quote) {
+            quote = 0;
+        } else if (!quote && (*p == '[' || *p == '(')) {
+            depth++;
+        } else if (!quote && (*p == ']' || *p == ')')) {
+            if (depth > 0) {
+                depth--;
+            }
+        } else if (!quote && depth == 0 && *p == ',') {
+            *p = '\0';
+            *left = flat_native_trim(inner);
+            *right = flat_native_trim(p + 1);
+            return (*left[0] != '\0' && *right[0] != '\0') ? 0 : -1;
+        }
+    }
+    return -1;
+}
+
+static int info_parse_rhs(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
+    char buf[512];
+
+    if (!ctx || !expr || !out) {
+        return -1;
+    }
+    snprintf(buf, sizeof buf, "%s", expr);
+    flat_native_trim(buf);
+    if (flat_native_eval_call(ctx, buf, out) == 0) {
+        return 0;
+    }
+    return flat_value_parse_assign_rhs(buf, out, ctx->pool, ctx->coll, ctx->vars, ctx->var_count,
+                                       ctx->var_names);
+}
+
+static int info_parse_hint(FlatNativeCtx *ctx, const char *expr, char *hint, size_t hint_sz) {
+    FlatValue v;
+
+    if (info_parse_rhs(ctx, expr, &v) != 0) {
+        return -1;
+    }
+    if (v.tag == VAL_STR_INLINE) {
+        snprintf(hint, hint_sz, "%s", v.u.ins.bytes);
+        return 0;
+    }
+    if (v.tag == VAL_STR_REF && ctx->pool) {
+        return flat_value_get_cstr(&v, ctx->pool, hint, hint_sz);
+    }
+    return -1;
+}
+
+enum {
+    INFO_HINT_CSV = 1,
+    INFO_HINT_FILE,
+    INFO_HINT_VCX
+};
+
+static int info_parse_hint_kind(const char *hint) {
+    if (!hint || hint[0] == '\0') {
+        return 0;
+    }
+    if (strcmp(hint, "csv") == 0) {
+        return INFO_HINT_CSV;
+    }
+    if (strcmp(hint, "file") == 0) {
+        return INFO_HINT_FILE;
+    }
+    if (strcmp(hint, "vcx") == 0) {
+        return INFO_HINT_VCX;
+    }
+    return 0;
+}
+
+static int info_res_kind(FlatNativeCtx *ctx, int hint_kind, uint32_t id, const char **out_kind) {
+    int csv_kind;
+
+    if (!out_kind) {
+        return -1;
+    }
+    *out_kind = "unknown";
+    if (hint_kind == INFO_HINT_CSV) {
+        if (id >= 1u && ctx->csv && flat_csv_session_live(ctx->csv, id, &csv_kind)) {
+            *out_kind =
+                (csv_kind == (int)FLAT_CSV_SESS_WRITER) ? "csv.writer" : "csv.reader";
+        }
+        return 0;
+    }
+    if (hint_kind == INFO_HINT_FILE) {
+        if (ctx->file_tbl && id < FLAT_FILE_MAX_HANDLES &&
+            flat_file_is_live(ctx->file_tbl, id)) {
+            *out_kind = "file";
+        }
+        return 0;
+    }
+    if (hint_kind == INFO_HINT_VCX) {
+        if (id >= 1u && ctx->vcx && flat_vcx_context_live(ctx->vcx, id)) {
+            *out_kind = "vcx";
+        }
+        return 0;
+    }
+    return 0;
+}
+
+static int info_parse_id_for_hint(int hint_kind, const FlatValue *v, uint32_t *out_id) {
+    double d;
+
+    if (!v || !out_id || v->tag != VAL_NUMBER) {
+        return -1;
+    }
+    d = flat_number_as_f64(v);
+    if (d != d || floor(d) != d) {
+        return -1;
+    }
+    if (hint_kind == INFO_HINT_FILE) {
+        if (d < 0.0 || d >= (double)FLAT_FILE_MAX_HANDLES) {
+            return -1;
+        }
+        *out_id = (uint32_t)d;
+        return 0;
+    }
+    if (d < 1.0) {
+        return -1;
+    }
+    *out_id = (uint32_t)d;
+    return 0;
+}
+
+static int mem_info_res_fail(FlatNativeCtx *ctx, const char *code) {
+    return mem_slot_arg_err(ctx, code);
+}
+
+int flat_native_mem_info_res_id(FlatNativeCtx *ctx) {
+    FlatValue v;
+    char inner_buf[512];
+    char hint_buf[32];
+    char *left = NULL;
+    char *right = NULL;
+    uint32_t id;
+    int hint_kind;
+    const char *kind = "unknown";
+
+    if (!ctx || !ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    if (!ctx->inner || ctx->inner[0] == '\0') {
+        return mem_info_res_fail(ctx, "mem.infoResId.kind");
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (info_split_two_args(inner_buf, &left, &right) != 0) {
+        return mem_info_res_fail(ctx, "mem.infoResId.kind");
+    }
+    if (info_parse_hint(ctx, right, hint_buf, sizeof hint_buf) != 0 ||
+        (hint_kind = info_parse_hint_kind(hint_buf)) == 0) {
+        return mem_info_res_fail(ctx, "mem.infoResId.kind");
+    }
+    if (info_parse_rhs(ctx, left, &v) != 0 ||
+        info_parse_id_for_hint(hint_kind, &v, &id) != 0) {
+        return mem_info_res_fail(ctx, "mem.infoResId.id");
+    }
+    info_res_kind(ctx, hint_kind, id, &kind);
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_str_inline(ctx->out, kind, strlen(kind));
 }
 
 int flat_native_mem_ref_empty(FlatNativeCtx *ctx) {

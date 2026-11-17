@@ -21,6 +21,7 @@ void flat_csv_runtime_destroy(FlatCsvRuntime *rt);
 
 int flat_csv_fp_busy(const FlatCsvRuntime *rt, uint32_t fp_id);
 int flat_csv_fp_session_kind(const FlatCsvRuntime *rt, uint32_t fp_id);
+int flat_csv_session_live(const FlatCsvRuntime *rt, uint32_t id, int *out_kind);
 
 uint32_t flat_csv_reader_open(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t fp_id,
                               char *panic, size_t panic_sz);
@@ -43,6 +44,11 @@ int flat_csv_reader_next(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid,
 int flat_csv_reader_next_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int len,
                                FlatCollectionPool *coll, FlatStringPool *pool, uint32_t *out_list_id,
                                char *panic, size_t panic_sz);
+int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int x0,
+                                int y0, int xLen, int yLen, int as_object,
+                                FlatCollectionPool *coll, FlatStringPool *pool,
+                                uint32_t *out_coll_id, int *out_is_object, char *panic,
+                                size_t panic_sz);
 
 int flat_csv_format_set_separator(FlatCsvRuntime *rt, uint32_t sess_id, const char *val,
                                   char *panic, size_t panic_sz);

@@ -34,6 +34,9 @@ typedef struct {
     char *write_buf;
     size_t write_len;
     size_t write_cap;
+    char *text_buf;
+    size_t text_len;
+    int text_mode;
 } FlatCsvSession;
 
 struct FlatCsvRuntime {
@@ -69,6 +72,7 @@ static void sess_clear(FlatCsvSession *s) {
     }
     free(s->line_offsets);
     free(s->write_buf);
+    free(s->text_buf);
     memset(s, 0, sizeof *s);
 }
 
@@ -98,6 +102,20 @@ int flat_csv_fp_busy(const FlatCsvRuntime *rt, uint32_t fp_id) {
     }
     for (i = 0; i < FLAT_CSV_MAX_SESSIONS; i++) {
         if (rt->sessions[i].in_use && rt->sessions[i].fp_id == fp_id) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int flat_csv_session_live(const FlatCsvRuntime *rt, uint32_t id, int *out_kind) {
+    int i;
+    if (!rt || !out_kind) {
+        return 0;
+    }
+    for (i = 0; i < FLAT_CSV_MAX_SESSIONS; i++) {
+        if (rt->sessions[i].in_use && rt->sessions[i].id == id) {
+            *out_kind = (int)rt->sessions[i].kind;
             return 1;
         }
     }
@@ -161,10 +179,29 @@ static void apply_detect(FlatCsvFormat *fmt, const char *sample, size_t sample_l
     FlatCsvEncoding enc;
     FlatCsvLineEnding le;
     char delim;
-    size_t bom = flat_csv_strip_utf8_bom((const unsigned char *)sample, sample_len);
+    const char *body;
+    size_t body_len;
+    char *decoded = NULL;
+
     flat_csv_detect_encoding((const unsigned char *)sample, sample_len, &enc);
-    flat_csv_detect_line_ending(sample + bom, sample_len - bom, &le);
-    flat_csv_detect_delimiter(sample + bom, sample_len - bom, fmt->quote, &delim);
+    if (enc == FLAT_CSV_ENC_UTF16_LE || enc == FLAT_CSV_ENC_UTF16_BE) {
+        if (flat_csv_utf16_to_utf8((const unsigned char *)sample, sample_len, enc, &decoded,
+                                   &body_len) != 0) {
+            decoded = NULL;
+            body_len = 0;
+        }
+        body = decoded ? decoded : sample;
+        if (!decoded) {
+            body_len = sample_len;
+        }
+    } else {
+        size_t bom = flat_csv_strip_utf8_bom((const unsigned char *)sample, sample_len);
+        body = sample + bom;
+        body_len = sample_len - bom;
+    }
+    flat_csv_detect_line_ending(body, body_len, &le);
+    flat_csv_detect_delimiter(body, body_len, fmt->quote, &delim);
+    free(decoded);
     if (fmt->separator_auto) {
         fmt->separator = delim;
     }
@@ -174,6 +211,89 @@ static void apply_detect(FlatCsvFormat *fmt, const char *sample, size_t sample_l
     if (fmt->encoding_auto) {
         fmt->encoding = enc;
     }
+}
+
+static int sess_load_utf8_text(FlatCsvSession *s, FILE *fp, char *panic, size_t panic_sz) {
+    unsigned char *raw = NULL;
+    long sz;
+    size_t n;
+
+    if (!s || !fp) {
+        return panic_msg(panic, panic_sz, "csv.reader");
+    }
+    if (fseek(fp, 0, SEEK_END) != 0) {
+        return panic_msg(panic, panic_sz, "csv.reader");
+    }
+    sz = ftell(fp);
+    if (sz < 0) {
+        return panic_msg(panic, panic_sz, "csv.reader");
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) {
+        return panic_msg(panic, panic_sz, "csv.reader");
+    }
+    if (sz > 0) {
+        raw = malloc((size_t)sz);
+        if (!raw) {
+            return panic_msg(panic, panic_sz, "csv.reader");
+        }
+        n = fread(raw, 1, (size_t)sz, fp);
+        if ((long)n != sz) {
+            free(raw);
+            return panic_msg(panic, panic_sz, "csv.reader");
+        }
+    }
+    if (flat_csv_utf16_to_utf8(raw, (size_t)sz, s->fmt.encoding, &s->text_buf, &s->text_len) !=
+        0) {
+        free(raw);
+        return panic_msg(panic, panic_sz, "csv.reader");
+    }
+    free(raw);
+    s->text_mode = 1;
+    s->row_count_cached = 0;
+    free(s->line_offsets);
+    s->line_offsets = NULL;
+    return 0;
+}
+
+static int sess_getc(FlatCsvSession *s, FILE *fp) {
+    if (s->text_mode) {
+        if ((size_t)s->pos >= s->text_len) {
+            return EOF;
+        }
+        return (unsigned char)s->text_buf[(size_t)s->pos++];
+    }
+    return fgetc(fp);
+}
+
+static void sess_ungetc(FlatCsvSession *s, FILE *fp, int c) {
+    if (c == EOF) {
+        return;
+    }
+    if (s->text_mode) {
+        if ((size_t)s->pos > 0) {
+            s->pos--;
+        }
+        return;
+    }
+    ungetc(c, fp);
+}
+
+static long sess_tell(FlatCsvSession *s, FILE *fp) {
+    if (s->text_mode) {
+        return s->pos;
+    }
+    return ftell(fp);
+}
+
+static int sess_seek_set(FlatCsvSession *s, FILE *fp, long pos) {
+    if (s->text_mode) {
+        if (pos < 0 || (size_t)pos > s->text_len) {
+            return -1;
+        }
+        s->pos = pos;
+        return 0;
+    }
+    return fseek(fp, pos, SEEK_SET);
 }
 
 static int sess_ensure_detect(FlatCsvSession *s, FILE *fp) {
@@ -240,7 +360,15 @@ uint32_t flat_csv_reader_open(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
         panic_msg(panic, panic_sz, "csv.reader");
         return 0;
     }
-    s->pos = file_data_start(&s->fmt, fp);
+    if (s->fmt.encoding == FLAT_CSV_ENC_UTF16_LE || s->fmt.encoding == FLAT_CSV_ENC_UTF16_BE) {
+        if (sess_load_utf8_text(s, fp, panic, panic_sz) != 0) {
+            sess_clear(s);
+            return 0;
+        }
+        s->pos = 0;
+    } else {
+        s->pos = file_data_start(&s->fmt, fp);
+    }
     s->cursor_row = 0;
     s->cursor_col = 0;
     flat_file_retain(files, fp_id);
@@ -337,9 +465,9 @@ static int ensure_line_index(FlatCsvSession *s, FILE *fp) {
     if (s->row_count_cached && s->line_offsets) {
         return 0;
     }
-    start = file_data_start(&s->fmt, fp);
-    mark = ftell(fp);
-    if (fseek(fp, start, SEEK_SET) != 0) {
+    start = s->text_mode ? 0 : file_data_start(&s->fmt, fp);
+    mark = sess_tell(s, fp);
+    if (sess_seek_set(s, fp, start) != 0) {
         return -1;
     }
     cap = 32;
@@ -351,18 +479,18 @@ static int ensure_line_index(FlatCsvSession *s, FILE *fp) {
     s->line_offset_cap = cap;
     s->line_offsets[s->line_offset_count++] = start;
     for (;;) {
-        int c = fgetc(fp);
+        int c = sess_getc(s, fp);
         if (c == EOF) {
             break;
         }
         if (in_quotes) {
             if (c == (unsigned char)s->fmt.quote) {
-                int n = fgetc(fp);
+                int n = sess_getc(s, fp);
                 if (n == (unsigned char)s->fmt.quote) {
                     continue;
                 }
                 if (n != EOF) {
-                    ungetc(n, fp);
+                    sess_ungetc(s, fp, n);
                 }
                 in_quotes = 0;
             }
@@ -374,9 +502,9 @@ static int ensure_line_index(FlatCsvSession *s, FILE *fp) {
         }
         if (c == '\r' || c == '\n') {
             if (c == '\r') {
-                int n = fgetc(fp);
+                int n = sess_getc(s, fp);
                 if (n != '\n' && n != EOF) {
-                    ungetc(n, fp);
+                    sess_ungetc(s, fp, n);
                 }
             }
             if (s->line_offset_count >= s->line_offset_cap) {
@@ -387,20 +515,22 @@ static int ensure_line_index(FlatCsvSession *s, FILE *fp) {
                     return -1;
                 }
             }
-            s->line_offsets[s->line_offset_count++] = ftell(fp);
+            s->line_offsets[s->line_offset_count++] = sess_tell(s, fp);
             continue;
         }
     }
     {
         int physical = 0;
         s->row_count = s->line_offset_count > 0 ? s->line_offset_count : 1;
-        if (flat_csv_count_physical_lines_file(fp, mark, s->fmt.line_ending, s->fmt.quote,
-                                               &physical) == 0 && physical > s->row_count) {
+        if (!s->text_mode &&
+            flat_csv_count_physical_lines_file(fp, mark, s->fmt.line_ending, s->fmt.quote,
+                                               &physical) == 0 &&
+            physical > s->row_count) {
             s->row_count = physical;
         }
     }
     s->row_count_cached = 1;
-    fseek(fp, mark, SEEK_SET);
+    sess_seek_set(s, fp, mark);
     return 0;
 }
 
@@ -418,7 +548,15 @@ int flat_csv_reader_reset(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid
     s->cursor_col = 0;
     s->eof = 0;
     s->cols_cached_row = -1;
-    s->pos = file_data_start(&s->fmt, fp);
+    s->row_count_cached = 0;
+    free(s->line_offsets);
+    s->line_offsets = NULL;
+    s->line_offset_count = 0;
+    if (s->text_mode) {
+        s->pos = 0;
+    } else {
+        s->pos = file_data_start(&s->fmt, fp);
+    }
     return 0;
 }
 
@@ -502,18 +640,18 @@ static int read_record_into_buf(FILE *fp, FlatCsvSession *s, char *buf, size_t b
                                 size_t *out_len, int *at_eof) {
     size_t o = 0;
     int in_quotes = 0;
-    if (fseek(fp, s->pos, SEEK_SET) != 0) {
+    if (sess_seek_set(s, fp, s->pos) != 0) {
         return -1;
     }
     for (;;) {
-        int c = fgetc(fp);
+        int c = sess_getc(s, fp);
         if (c == EOF) {
             *at_eof = 1;
             break;
         }
         if (in_quotes) {
             if (c == (unsigned char)s->fmt.quote) {
-                int n = fgetc(fp);
+                int n = sess_getc(s, fp);
                 if (n == (unsigned char)s->fmt.quote) {
                     if (o + 1 >= buf_sz) {
                         return -1;
@@ -522,7 +660,7 @@ static int read_record_into_buf(FILE *fp, FlatCsvSession *s, char *buf, size_t b
                     continue;
                 }
                 if (n != EOF) {
-                    ungetc(n, fp);
+                    sess_ungetc(s, fp, n);
                 }
                 in_quotes = 0;
                 continue;
@@ -539,12 +677,12 @@ static int read_record_into_buf(FILE *fp, FlatCsvSession *s, char *buf, size_t b
         }
         if (c == '\r' || c == '\n') {
             if (c == '\r') {
-                int n = fgetc(fp);
+                int n = sess_getc(s, fp);
                 if (n != '\n' && n != EOF) {
-                    ungetc(n, fp);
+                    sess_ungetc(s, fp, n);
                 }
             }
-            s->pos = ftell(fp);
+            s->pos = sess_tell(s, fp);
             break;
         }
         if (o + 1 >= buf_sz) {
@@ -727,6 +865,193 @@ int flat_csv_reader_next_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_
     }
     s->cursor_col += len;
     return 0;
+}
+
+static int parse_row_at(FlatCsvSession *s, FILE *fp, int row, FlatCsvArena *arena, char **fields,
+                        size_t *lens, int max_fields, int *out_count) {
+    char rec[FLAT_CSV_RECORD_SZ];
+    size_t rlen = 0;
+    int at_eof = 0;
+    long save_pos;
+    int save_row;
+    int save_col;
+    int save_eof;
+    int save_cols_row;
+    int save_cols_count;
+    size_t pos = 0;
+
+    if (!s->line_offsets || row < 0 || row >= s->line_offset_count || !arena) {
+        return -1;
+    }
+    arena->used = 0;
+    save_pos = s->pos;
+    save_row = s->cursor_row;
+    save_col = s->cursor_col;
+    save_eof = s->eof;
+    save_cols_row = s->cols_cached_row;
+    save_cols_count = s->cols_count;
+    s->cursor_row = row;
+    s->cursor_col = 0;
+    s->eof = 0;
+    s->cols_cached_row = -1;
+    s->pos = s->line_offsets[row];
+    if (read_record_into_buf(fp, s, rec, sizeof rec, &rlen, &at_eof) != 0) {
+        s->pos = save_pos;
+        s->cursor_row = save_row;
+        s->cursor_col = save_col;
+        s->eof = save_eof;
+        s->cols_cached_row = save_cols_row;
+        s->cols_count = save_cols_count;
+        return -1;
+    }
+    if (flat_csv_parse_record(rec, rlen, &pos, s->fmt.quote, s->fmt.separator, arena, fields, lens,
+                              max_fields, out_count) != 0) {
+        s->pos = save_pos;
+        s->cursor_row = save_row;
+        s->cursor_col = save_col;
+        s->eof = save_eof;
+        s->cols_cached_row = save_cols_row;
+        s->cols_count = save_cols_count;
+        return -1;
+    }
+    if (*out_count == 0 && rlen == 0) {
+        *out_count = 1;
+        fields[0] = arena->base;
+        lens[0] = 0;
+        arena->base[0] = '\0';
+        arena->used = 1;
+    }
+    s->pos = save_pos;
+    s->cursor_row = save_row;
+    s->cursor_col = save_col;
+    s->eof = save_eof;
+    s->cols_cached_row = save_cols_row;
+    s->cols_count = save_cols_count;
+    return 0;
+}
+
+int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int x0,
+                               int y0, int xLen, int yLen, int as_object,
+                               FlatCollectionPool *coll, FlatStringPool *pool, uint32_t *out_coll_id,
+                               int *out_is_object, char *panic, size_t panic_sz) {
+    FlatCsvSession *s = sess_by_id(rt, rid);
+    FILE *fp;
+    int r;
+    int y;
+
+    if (!s || s->kind != FLAT_CSV_SESS_READER || !coll || !pool || !out_coll_id || !out_is_object) {
+        return panic_msg(panic, panic_sz, "csv.getCells");
+    }
+    if (xLen < 1 || yLen < 1) {
+        return panic_msg(panic, panic_sz, "bounds");
+    }
+    if (xLen > FLAT_LIST_MAX_ELEMS || yLen > FLAT_LIST_MAX_ELEMS ||
+        xLen > FLAT_LIST_MAX_ELEMS / yLen) {
+        return panic_msg(panic, panic_sz, "csv.getCells");
+    }
+    fp = sess_fp(s, files);
+    if (!fp || sess_with_detect_and_lines(s, files) != 0) {
+        return panic_msg(panic, panic_sz, "csv.getCells");
+    }
+    if (y0 < 0 || x0 < 0 || yLen > s->line_offset_count || y0 > s->line_offset_count - yLen) {
+        return panic_msg(panic, panic_sz, "bounds");
+    }
+
+    if (!as_object) {
+        FlatValue row_vals[64];
+        uint32_t row_ids[64];
+        if (yLen > 64) {
+            return panic_msg(panic, panic_sz, "csv.getCells");
+        }
+        {
+            char arena_buf[FLAT_CSV_RECORD_SZ];
+            FlatCsvArena arena = {arena_buf, sizeof arena_buf, 0};
+            for (y = 0; y < yLen; y++) {
+            char *fields[FLAT_CSV_MAX_FIELDS];
+            size_t lens[FLAT_CSV_MAX_FIELDS];
+            int nfields = 0;
+            if (parse_row_at(s, fp, y0 + y, &arena, fields, lens, FLAT_CSV_MAX_FIELDS,
+                             &nfields) != 0) {
+                return panic_msg(panic, panic_sz, "csv.getCells");
+            }
+            if (x0 + xLen > nfields) {
+                return panic_msg(panic, panic_sz, "bounds");
+            }
+            if (list_from_fields(coll, pool, fields, lens, x0, xLen, &row_ids[y]) != 0) {
+                return panic_msg(panic, panic_sz, "csv.getCells");
+            }
+            if (flat_value_set_list(&row_vals[y], row_ids[y]) != 0) {
+                return panic_msg(panic, panic_sz, "csv.getCells");
+            }
+            flat_value_retain(coll, pool, &row_vals[y]);
+            }
+        }
+        if (yLen == 1) {
+            *out_coll_id = row_ids[0];
+        } else if (flat_list_build(coll, pool, row_vals, yLen, out_coll_id) != 0) {
+            return panic_msg(panic, panic_sz, "csv.getCells");
+        }
+        for (y = 0; y < yLen; y++) {
+            flat_value_release(coll, pool, &row_vals[y]);
+        }
+        *out_is_object = 0;
+        return 0;
+    }
+
+    {
+        FlatValue cols[FLAT_CSV_MAX_FIELDS];
+        char key_bufs[FLAT_CSV_MAX_FIELDS][FLAT_OBJ_KEY_MAX + 1];
+        if (xLen > FLAT_CSV_MAX_FIELDS) {
+            return panic_msg(panic, panic_sz, "csv.getCells");
+        }
+        char arena_buf[FLAT_CSV_RECORD_SZ];
+        FlatCsvArena arena = {arena_buf, sizeof arena_buf, 0};
+        for (r = 0; r < xLen; r++) {
+            FlatValue cells[64];
+            uint32_t col_id;
+            if (yLen > 64) {
+                return panic_msg(panic, panic_sz, "csv.getCells");
+            }
+            snprintf(key_bufs[r], sizeof key_bufs[r], "%d", r);
+            for (y = 0; y < yLen; y++) {
+                char *fields[FLAT_CSV_MAX_FIELDS];
+                size_t lens[FLAT_CSV_MAX_FIELDS];
+                int nfields = 0;
+                uint32_t ref;
+                if (parse_row_at(s, fp, y0 + y, &arena, fields, lens, FLAT_CSV_MAX_FIELDS,
+                                 &nfields) != 0) {
+                    return panic_msg(panic, panic_sz, "csv.getCells");
+                }
+                if (x0 + xLen > nfields) {
+                    return panic_msg(panic, panic_sz, "bounds");
+                }
+                if (flat_pool_alloc_copy(pool, fields[x0 + r], lens[x0 + r], &ref) != 0) {
+                    return panic_msg(panic, panic_sz, "csv.getCells");
+                }
+                if (flat_value_set_str_ref(&cells[y], ref) != 0) {
+                    return panic_msg(panic, panic_sz, "csv.getCells");
+                }
+            }
+            if (flat_list_build(coll, pool, cells, yLen, &col_id) != 0) {
+                return panic_msg(panic, panic_sz, "csv.getCells");
+            }
+            if (flat_value_set_list(&cols[r], col_id) != 0) {
+                return panic_msg(panic, panic_sz, "csv.getCells");
+            }
+            flat_value_retain(coll, pool, &cols[r]);
+        }
+        if (flat_obj_build(coll, pool, key_bufs, cols, xLen, out_coll_id) != 0) {
+            for (r = 0; r < xLen; r++) {
+                flat_value_release(coll, pool, &cols[r]);
+            }
+            return panic_msg(panic, panic_sz, "csv.getCells");
+        }
+        for (r = 0; r < xLen; r++) {
+            flat_value_release(coll, pool, &cols[r]);
+        }
+        *out_is_object = 1;
+        return 0;
+    }
 }
 
 static int format_set_common(FlatCsvSession *s, const char *val, int kind, char *panic,

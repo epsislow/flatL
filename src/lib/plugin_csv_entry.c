@@ -25,5 +25,6 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_CSV_WRITE_ROWS, flat_native_csv_write_rows);
     reg(FLAT_NATIVE_CSV_WRITE_COLS, flat_native_csv_write_cols);
     reg(FLAT_NATIVE_CSV_FLUSH, flat_native_csv_flush);
+    reg(FLAT_NATIVE_CSV_GET_CELLS, flat_native_csv_get_cells);
     return 0;
 }

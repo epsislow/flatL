@@ -1,0 +1,28 @@
+use native csv
+use native vcx
+
+#main
+  fp = file.createCtx('x.dat')
+  file.write(fp, 'a')
+  file.close(fp)
+  wid = file.createCtx('w.dat')
+  csv.writer(wid) -> w
+  mem.infoResId(w, 'csv') -> wkind
+  wkind == 'csv.writer'
+  csv.close(w)
+  file.close(wid)
+  ctx = vcx.create(8)
+  mem.infoResId(ctx, 'vcx') -> vkind
+  vkind == 'vcx'
+  mem.infoResId(ctx, 'file') -> ctx_not_file
+  ctx_not_file == 'unknown'
+  fp2 = file.createCtx('y.dat')
+  mem.infoResId(fp2, 'file') -> fkind
+  fkind == 'file'
+  mem.infoResId(1, 'vcx') -> gvcx
+  gvcx == 'vcx'
+  mem.infoResId(99999, 'vcx') -> bad
+  bad == 'unknown'
+  file.close(fp2)
+  io.outln('info-res-ok')
+  OK

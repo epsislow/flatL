@@ -48,6 +48,7 @@ static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_SLOT_TYPE, flat_native_mem_slot_type);
     flat_native_plugin_register(FLAT_NATIVE_MEM_SLOT_FROZEN, flat_native_mem_slot_frozen);
     flat_native_plugin_register(FLAT_NATIVE_MEM_SLOT_CONST, flat_native_mem_slot_const);
+    flat_native_plugin_register(FLAT_NATIVE_MEM_INFO_RES_ID, flat_native_mem_info_res_id);
 }
 
 static void register_embedded_date(void) {
@@ -300,6 +301,7 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_CSV_WRITE_ROWS, flat_native_csv_write_rows);
         flat_native_plugin_register(FLAT_NATIVE_CSV_WRITE_COLS, flat_native_csv_write_cols);
         flat_native_plugin_register(FLAT_NATIVE_CSV_FLUSH, flat_native_csv_flush);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_GET_CELLS, flat_native_csv_get_cells);
         g_loaded_csv = 1;
         return 0;
     }

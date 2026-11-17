@@ -127,6 +127,7 @@ int flat_native_mem_type_of(FlatNativeCtx *ctx);
 int flat_native_mem_slot_type(FlatNativeCtx *ctx);
 int flat_native_mem_slot_frozen(FlatNativeCtx *ctx);
 int flat_native_mem_slot_const(FlatNativeCtx *ctx);
+int flat_native_mem_info_res_id(FlatNativeCtx *ctx);
 
 int flat_native_file_read_ctx(FlatNativeCtx *ctx);
 int flat_native_file_create_ctx(FlatNativeCtx *ctx);
@@ -208,5 +209,6 @@ int flat_native_csv_set_quote(FlatNativeCtx *ctx);
 int flat_native_csv_write_rows(FlatNativeCtx *ctx);
 int flat_native_csv_write_cols(FlatNativeCtx *ctx);
 int flat_native_csv_flush(FlatNativeCtx *ctx);
+int flat_native_csv_get_cells(FlatNativeCtx *ctx);
 
 #endif

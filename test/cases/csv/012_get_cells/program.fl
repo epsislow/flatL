@@ -1,0 +1,26 @@
+use native csv
+use native list
+use native obj
+
+#main
+  fp = file.createCtx('grid.csv')
+  file.writeln(fp, 'a,b,c')
+  file.writeln(fp, '1,2,3')
+  file.writeln(fp, '4,5,6')
+  file.close(fp)
+  fp = file.readCtx('grid.csv')
+  rid = csv.reader(fp)
+  block = csv.getCells(rid, 0, 0, 2, 2)
+  list.get(block, 0) -> row0
+  list.get(row0, 0) -> c00
+  c00 == 'a'
+  list.get(row0, 1) -> c01
+  c01 == 'b'
+  grid = csv.getCells(rid, 1, 1, 2, 2, 'obj')
+  obj.get(grid, '"0"') -> col0
+  list.get(col0, 0) -> v00
+  v00 == '2'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('cells-ok')
+  OK
