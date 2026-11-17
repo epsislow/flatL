@@ -299,16 +299,17 @@ static int ep_bind_from_value(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint 
             return 0;
         }
     }
-    if (v->tag == VAL_FILE) {
-        if (!flat_file_is_live(io->files, v->u.file_id)) {
-            goto invalid;
+    {
+        uint32_t fid;
+
+        if (flat_value_get_file_handle(v, io->files, &fid)) {
+            if (!allow_in && !allow_out && !allow_err) {
+                goto invalid;
+            }
+            ep->kind = EP_FILE;
+            ep->file_id = fid;
+            return 0;
         }
-        if (!allow_in && !allow_out && !allow_err) {
-            goto invalid;
-        }
-        ep->kind = EP_FILE;
-        ep->file_id = v->u.file_id;
-        return 0;
     }
     if (v->tag == VAL_STR_REF) {
         if (!allow_out && !allow_err && !allow_in) {

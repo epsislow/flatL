@@ -38,13 +38,12 @@ static int path_from_expr(FlatNativeCtx *ctx, const char *expr, char *path, size
 static int require_fp(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) {
     FlatValue v;
 
-    if (parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_FILE) {
+    if (parse_expr(ctx, expr, &v) != 0) {
         return -1;
     }
-    if (!ctx->file_tbl || !flat_file_is_live(ctx->file_tbl, v.u.file_id)) {
+    if (!ctx->file_tbl || !flat_value_get_file_handle(&v, ctx->file_tbl, out_id)) {
         return -1;
     }
-    *out_id = v.u.file_id;
     return 0;
 }
 
@@ -62,7 +61,7 @@ static int open_path_native(FlatNativeCtx *ctx, FlatFileMode mode) {
         return -1;
     }
     *ctx->io_status = FLAT_IO_OK;
-    return flat_value_set_file(ctx->out, id);
+    return flat_value_set_file_handle(ctx->out, id);
 }
 
 int flat_native_file_read_ctx(FlatNativeCtx *ctx) {

@@ -114,10 +114,26 @@ static int value_same_storage(const FlatValue *a, const FlatValue *b) {
     case VAL_LIST:
     case VAL_OBJECT:
         return a->u.coll_id == b->u.coll_id;
+    case VAL_NUMBER:
+        return flat_number_equals(a, b);
     case VAL_FILE:
         return a->u.file_id == b->u.file_id;
     default:
         return 0;
+    }
+}
+
+static void vcx_file_release_if_handle(FlatFileTable *files, const FlatValue *v) {
+    uint32_t id;
+    if (files && v && flat_value_get_file_handle(v, files, &id)) {
+        flat_file_release(files, id);
+    }
+}
+
+static void vcx_file_retain_if_handle(FlatFileTable *files, const FlatValue *v) {
+    uint32_t id;
+    if (files && v && flat_value_get_file_handle(v, files, &id)) {
+        flat_file_retain(files, id);
     }
 }
 
@@ -228,13 +244,9 @@ static int ctx_set_var(FlatVcxRuntime *rt, FlatVcxContext *ctx, const char *name
         if (value_same_storage(&ctx->vars[i].val, val)) {
             return 0;
         }
-        if (ctx->vars[i].val.tag == VAL_FILE && files) {
-            flat_file_release(files, ctx->vars[i].val.u.file_id);
-        }
+        vcx_file_release_if_handle(files, &ctx->vars[i].val);
         flat_value_retain(coll, pool, val);
-        if (val->tag == VAL_FILE && files) {
-            flat_file_retain(files, val->u.file_id);
-        }
+        vcx_file_retain_if_handle(files, val);
         if (live) {
             flat_value_live_replace(live, &ctx->vars[i].val, val);
         }
@@ -252,9 +264,7 @@ static int ctx_set_var(FlatVcxRuntime *rt, FlatVcxContext *ctx, const char *name
         return -1;
     }
     flat_value_retain(coll, pool, val);
-    if (val->tag == VAL_FILE && files) {
-        flat_file_retain(files, val->u.file_id);
-    }
+    vcx_file_retain_if_handle(files, val);
     if (live) {
         flat_value_live_bind(live, val);
     }
@@ -339,14 +349,14 @@ int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectio
         }
         return flat_value_set_str_ref(dst, rid);
     }
-    case VAL_FILE:
-        if (!files) {
+    case VAL_FILE: {
+        uint32_t fid;
+
+        if (!files || !flat_value_get_file_handle(src, files, &fid)) {
             return -1;
         }
-        /* File refcount: binder (e.g. ctx_set_var) retains once; do not retain here. */
-        dst->tag = VAL_FILE;
-        dst->u.file_id = src->u.file_id;
-        return 0;
+        return flat_value_set_file_handle(dst, fid);
+    }
     case VAL_LIST: {
         FlatValue *items = NULL;
 
@@ -503,9 +513,7 @@ static void release_context_vars(FlatVcxContext *ctx, FlatCollectionPool *coll,
         return;
     }
     for (i = 0; i < ctx->var_count; i++) {
-        if (ctx->vars[i].val.tag == VAL_FILE && files) {
-            flat_file_release(files, ctx->vars[i].val.u.file_id);
-        }
+        vcx_file_release_if_handle(files, &ctx->vars[i].val);
         flat_value_release(coll, pool, &ctx->vars[i].val);
     }
 }

@@ -38,6 +38,9 @@ FILE *flat_file_fp(FlatFileTable *tbl, uint32_t id);
 void flat_file_retain(FlatFileTable *tbl, uint32_t id);
 void flat_file_release(FlatFileTable *tbl, uint32_t id);
 
-int flat_value_set_file(FlatValue *v, uint32_t file_id);
+int flat_value_set_file_handle(FlatValue *v, uint32_t file_id);
+
+/* fp is a whole NUMBER; live slot id in [0, FLAT_FILE_MAX_HANDLES). */
+int flat_value_get_file_handle(const FlatValue *v, const FlatFileTable *tbl, uint32_t *out_id);
 
 #endif

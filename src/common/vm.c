@@ -449,6 +449,20 @@ static void var_names_table(VmState *st, char (*names)[64]) {
     }
 }
 
+static void vm_file_release_if_handle(VmState *st, const FlatValue *v) {
+    uint32_t id;
+    if (st && v && flat_value_get_file_handle(v, &st->files, &id)) {
+        flat_file_release(&st->files, id);
+    }
+}
+
+static void vm_file_retain_if_handle(VmState *st, const FlatValue *v) {
+    uint32_t id;
+    if (st && v && flat_value_get_file_handle(v, &st->files, &id)) {
+        flat_file_retain(&st->files, id);
+    }
+}
+
 static int flat_value_same_storage(const FlatValue *a, const FlatValue *b) {
     if (!a || !b || a->tag != b->tag) {
         return 0;
@@ -460,6 +474,8 @@ static int flat_value_same_storage(const FlatValue *a, const FlatValue *b) {
         return a->u.coll_id == b->u.coll_id;
     case VAL_OBJECT:
         return a->u.coll_id == b->u.coll_id;
+    case VAL_NUMBER:
+        return flat_number_equals(a, b);
     case VAL_FILE:
         return a->u.file_id == b->u.file_id;
     default:
@@ -541,13 +557,9 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
             }
             return 0;
         }
-        if (st->vars[i].val.tag == VAL_FILE) {
-            flat_file_release(&st->files, st->vars[i].val.u.file_id);
-        }
+        vm_file_release_if_handle(st, &st->vars[i].val);
         flat_value_retain(st->coll, st->pool, use);
-        if (use->tag == VAL_FILE) {
-            flat_file_retain(&st->files, use->u.file_id);
-        }
+        vm_file_retain_if_handle(st, use);
         flat_value_live_replace(&st->live, &st->vars[i].val, use);
         flat_value_release(st->coll, st->pool, &st->vars[i].val);
         st->vars[i].val = *use;
@@ -603,9 +615,7 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         use = &staged;
     }
     flat_value_retain(st->coll, st->pool, use);
-    if (use->tag == VAL_FILE) {
-        flat_file_retain(&st->files, use->u.file_id);
-    }
+    vm_file_retain_if_handle(st, use);
     flat_value_live_bind(&st->live, use);
     snprintf(st->vars[st->var_count].name, sizeof st->vars[st->var_count].name, "%s", name);
     st->vars[st->var_count].val = *use;
@@ -676,9 +686,7 @@ static int apply_free(VmState *st, const char *varname) {
     if (i < 0) {
         return 0;
     }
-    if (st->vars[i].val.tag == VAL_FILE) {
-        flat_file_release(&st->files, st->vars[i].val.u.file_id);
-    }
+    vm_file_release_if_handle(st, &st->vars[i].val);
     flat_value_release(st->coll, st->pool, &st->vars[i].val);
     flat_value_set_null(&nullv);
     flat_value_live_replace(&st->live, &st->vars[i].val, &nullv);

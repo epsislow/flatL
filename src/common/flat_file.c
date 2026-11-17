@@ -1,4 +1,5 @@
 #include "flat_file.h"
+#include "flat_number.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -144,11 +145,43 @@ int flat_file_close(FlatFileTable *tbl, uint32_t id) {
     return 0;
 }
 
-int flat_value_set_file(FlatValue *v, uint32_t file_id) {
-    if (!v) {
+int flat_value_set_file_handle(FlatValue *v, uint32_t file_id) {
+    if (!v || file_id >= FLAT_FILE_MAX_HANDLES) {
         return -1;
     }
-    v->tag = VAL_FILE;
-    v->u.file_id = file_id;
+    flat_number_set_whole_u64(v, file_id);
     return 0;
+}
+
+int flat_value_get_file_handle(const FlatValue *v, const FlatFileTable *tbl, uint32_t *out_id) {
+    uint64_t n;
+
+    if (!v || !tbl || !out_id) {
+        return 0;
+    }
+    if (v->tag == VAL_FILE) {
+        *out_id = v->u.file_id;
+        return flat_file_is_live(tbl, *out_id);
+    }
+    if (v->tag != VAL_NUMBER || !flat_number_is_number(v)) {
+        return 0;
+    }
+    if (flat_number_class(v) != FLAT_NUM_CLASS_WHOLE) {
+        return 0;
+    }
+    switch (flat_number_stor(v)) {
+    case FLAT_NUM_STOR_U8:
+    case FLAT_NUM_STOR_U16:
+    case FLAT_NUM_STOR_U32:
+    case FLAT_NUM_STOR_U64:
+        n = v->u.number.payload.u64;
+        break;
+    default:
+        return 0;
+    }
+    if (n >= FLAT_FILE_MAX_HANDLES) {
+        return 0;
+    }
+    *out_id = (uint32_t)n;
+    return flat_file_is_live(tbl, *out_id);
 }

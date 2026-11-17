@@ -1,0 +1,6 @@
+#main
+  fp = file.createCtx('fp_id.bin')
+  io.outln(fp)
+  file.write(fp, 'x')
+  file.close(fp)
+  OK

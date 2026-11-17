@@ -129,8 +129,6 @@ static const char *mem_logical_type_name(FlatValueTag tag) {
         return "object";
     case VAL_NULL:
         return "null";
-    case VAL_FILE:
-        return "file";
     case VAL_EMPTY:
         return "empty";
     default:

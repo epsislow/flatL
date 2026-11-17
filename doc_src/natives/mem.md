@@ -39,8 +39,9 @@ Returns the **logical** type (not VM storage detail). Inline STRING and STRING R
 | `list` | LIST values |
 | `object` | OBJECT values |
 | `null` | **`null`** |
-| `file` | open file handle |
 | `empty` | unassigned slot (rare in normal programs) |
+
+Open file ids from **`file.readCtx`** and related calls are **`number`** values (`mem.type_of` reports **`number`**).
 
 ```text
 #main
