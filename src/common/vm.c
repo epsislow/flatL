@@ -17,6 +17,7 @@
 #include "flat_csv_runtime.h"
 #include "flat_vcx.h"
 #include "flat_executor.h"
+#include "flat_list_typed.h"
 #include "flat_slot_type.h"
 #include "flat_obj_path.h"
 #include "flat_schema.h"
@@ -896,9 +897,15 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             rc = 0;
             goto done;
         }
-        if (flat_value_parse_assign_rhs(rhs, &v, st->pool, st->coll, vals, st->var_count, names) !=
-            0) {
-            rc = 0;
+        st->panic_reason[0] = '\0';
+        if (flat_value_parse_assign_rhs_typed(rhs, &v, st->pool, st->coll, vals, st->var_count,
+                                            names, bc ? &bc->schemas : NULL, NULL, NULL,
+                                            st->panic_reason, sizeof st->panic_reason) != 0) {
+            if (st->panic_reason[0] != '\0') {
+                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            } else {
+                rc = 0;
+            }
             goto done;
         }
         if (root_vi >= 0) {
@@ -1032,9 +1039,27 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         }
         goto done;
     }
-    if (flat_value_parse_assign_rhs(rhs, &v, st->pool, st->coll, vals, st->var_count, names) != 0) {
-        rc = 0;
-        goto done;
+    {
+        FlatSlotType lit_ty;
+        int has_lit = 0;
+
+        st->panic_reason[0] = '\0';
+        if (flat_value_parse_assign_rhs_typed(rhs, &v, st->pool, st->coll, vals, st->var_count,
+                                            names, bc ? &bc->schemas : NULL, &lit_ty, &has_lit,
+                                            st->panic_reason, sizeof st->panic_reason) != 0) {
+            if (st->panic_reason[0] != '\0') {
+                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            } else {
+                rc = 0;
+            }
+            goto done;
+        }
+        if (has_lit && lhs_has_ty &&
+            flat_slot_type_literal_suffix_compatible(&lhs_ty, &lit_ty, st->panic_reason,
+                                                     sizeof st->panic_reason) != 0) {
+            rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
+            goto done;
+        }
     }
     if (set_var_value(st, slot_name, &v, lhs_has_ty ? &lhs_ty : NULL, lhs_has_ty, lhs_dynamic,
                       lhs_dynamic ? lhs_dyn_expr : NULL, bind_const) != 0) {

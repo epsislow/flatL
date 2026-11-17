@@ -1,3 +1,4 @@
+#include "flat_list_typed.h"
 #include "flat_number.h"
 #include "flat_obj_path.h"
 #include "flat_schema.h"
@@ -784,12 +785,25 @@ static int resolve_path_contract(const FlatPathStep *steps, int step_i, int nste
     }
     if (steps[step_i].kind == FLAT_PATH_STEP_INDEX) {
         if (step_i == nsteps - 1) {
+            if (cur_contract && cur_contract->list_rank > 0) {
+                FlatSlotType inner;
+                if (flat_slot_type_list_index_contract(cur_contract, &inner) == 0) {
+                    *out = inner;
+                    return 0;
+                }
+            }
             if (cur_contract) {
                 *out = *cur_contract;
             } else {
                 flat_slot_type_clear(out);
             }
             return 0;
+        }
+        if (cur_contract && cur_contract->list_rank > 0) {
+            FlatSlotType inner;
+            if (flat_slot_type_list_index_contract(cur_contract, &inner) == 0) {
+                return resolve_path_contract(steps, step_i + 1, nsteps, &inner, cat, out, typed);
+            }
         }
         return resolve_path_contract(steps, step_i + 1, nsteps, cur_contract, cat, out, typed);
     }

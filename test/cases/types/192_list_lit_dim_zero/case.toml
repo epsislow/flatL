@@ -1,0 +1,7 @@
+suite = "types"
+id = 192
+desc = "compile [=0]"
+kind = "exec"
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "type.list.dim.zero"

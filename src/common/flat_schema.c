@@ -1,3 +1,4 @@
+#include "flat_list_typed.h"
 #include "flat_schema.h"
 
 #include <ctype.h>
@@ -211,9 +212,6 @@ static int parse_schema_ref_name(const char *spec, char *name_out, size_t name_s
 static int parse_field_spec(const char *spec, FlatSlotType *out, uint8_t *list_flag,
                             const FlatSchemaCatalog *cat, int self_schema_ix, char *err,
                             size_t err_sz) {
-    char sname[FLAT_SCHEMA_NAME_MAX + 1];
-    const char *rest;
-
     if (!spec || !spec[0] || !out) {
         snprintf(err, err_sz, "invalid field type");
         return -1;
@@ -223,55 +221,21 @@ static int parse_field_spec(const char *spec, FlatSlotType *out, uint8_t *list_f
     }
     flat_slot_type_clear(out);
     if (spec[0] == '<') {
-        unsigned long maxn = 0;
-        int is_list = 0;
         int sid;
 
-        if (parse_schema_ref_name(spec, sname, sizeof sname, &rest) != 0) {
+        if (flat_slot_type_parse_spec(spec, out, cat, err, err_sz) != 0) {
+            return -1;
+        }
+        if (out->kind != FLAT_SLOT_TYPE_SCHEMA) {
             snprintf(err, err_sz, "invalid field type: %s", spec);
             return -1;
         }
-        if (*rest == '[') {
-            char *endptr;
-            const char *p = rest + 1;
-            is_list = 1;
-            if (*p == ']') {
-                p++;
-                maxn = 0;
-            } else {
-                if (!isdigit((unsigned char)*p)) {
-                    snprintf(err, err_sz, "invalid list bound in: %s", spec);
-                    return -1;
-                }
-                maxn = strtoul(p, &endptr, 10);
-                if (endptr == p || maxn == 0 || maxn > UINT16_MAX || *endptr != ']') {
-                    snprintf(err, err_sz, "invalid list bound in: %s", spec);
-                    return -1;
-                }
-                p = endptr + 1;
-            }
-            if (*p != '\0') {
-                snprintf(err, err_sz, "invalid list syntax: %s", spec);
-                return -1;
-            }
-        } else if (*rest != '\0') {
-            snprintf(err, err_sz, "invalid field type: %s", spec);
+        sid = (int)out->schema_id;
+        if (out->list_rank == 0 && sid == self_schema_ix) {
+            snprintf(err, err_sz, "type.schema.cycle: %s", cat->defs[sid].name);
             return -1;
         }
-
-        sid = flat_schema_find_id(cat, sname);
-        if (sid < 0) {
-            snprintf(err, err_sz, "type.schema.unknown: %s", sname);
-            return -1;
-        }
-        if (!is_list && sid == self_schema_ix) {
-            snprintf(err, err_sz, "type.schema.cycle: %s", sname);
-            return -1;
-        }
-        out->kind = FLAT_SLOT_TYPE_SCHEMA;
-        out->schema_id = (uint16_t)sid;
-        out->list_max = (uint16_t)maxn;
-        if (is_list && list_flag) {
+        if (out->list_rank > 0 && list_flag) {
             *list_flag = FLAT_SCH_FIELD_LIST;
         }
         return 0;
@@ -450,6 +414,9 @@ int flat_bind_validate_lhs(const char *lhs, const FlatSchemaCatalog *cat, char *
     char root_bind[128];
 
     if (!lhs) {
+        if (err && err_sz) {
+            snprintf(err, err_sz, "invalid typed bind lhs");
+        }
         return -1;
     }
     if (flat_assign_lhs_has_path(lhs)) {
@@ -467,6 +434,14 @@ int flat_bind_validate_lhs(const char *lhs, const FlatSchemaCatalog *cat, char *
     spec = colon + 1;
     while (*spec && isspace((unsigned char)*spec)) {
         spec++;
+    }
+    if (spec[0] == 't' && isdigit((unsigned char)spec[1])) {
+        char *endp = NULL;
+        unsigned long tn = strtoul(spec + 1, &endp, 10);
+        if (endp && *endp == '\0' && tn > FLAT_SLOT_TYPE_AUX_T_MAX) {
+            snprintf(err, err_sz, "invalid type: %s", spec);
+            return -1;
+        }
     }
     if (*spec == '/') {
         FlatSlotType ty;
@@ -500,10 +475,14 @@ int flat_bind_validate_lhs(const char *lhs, const FlatSchemaCatalog *cat, char *
                 tyspec++;
             }
             if (flat_slot_type_parse_spec(tyspec, &dummy, cat, suberr, sizeof suberr) != 0) {
-                snprintf(err, err_sz, "%s", suberr);
+                snprintf(err, err_sz, "%s", suberr[0] ? suberr : "invalid type");
             } else {
                 snprintf(err, err_sz, "invalid typed bind lhs: %s", lhs);
             }
+            return -1;
+        }
+        if (ty.kind == FLAT_SLOT_TYPE_TN && ty.aux > FLAT_SLOT_TYPE_AUX_T_MAX) {
+            snprintf(err, err_sz, "invalid type: t%u", (unsigned)ty.aux);
             return -1;
         }
     }
@@ -557,6 +536,10 @@ int flat_schema_check_field_value(const FlatSchemaField *field, const FlatValue 
         return 0;
     }
     if (field->flags & FLAT_SCH_FIELD_LIST) {
+        if (field->slot.list_rank > 0) {
+            return flat_list_typed_check_value(&field->slot, val, pool, coll, cat, inout_val,
+                                               panic, panic_sz);
+        }
         FlatValue items[FLAT_LIST_MAX_ELEMS];
         uint32_t new_id;
 

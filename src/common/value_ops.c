@@ -1,5 +1,7 @@
+#include "flat_list_typed.h"
 #include "flat_number.h"
 #include "flat_obj_path.h"
+#include "flat_schema.h"
 #include "flat_str.h"
 #include "flat_value.h"
 #include "flat_slot_type.h"
@@ -535,17 +537,55 @@ static int flat_value_parse_at(const char **p, FlatValue *out, FlatStringPool *p
     return -1;
 }
 
-int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPool *pool,
-                                FlatCollectionPool *coll, FlatValue *vars, int var_count,
-                                const char (*var_names)[64]) {
+static const char *list_rhs_type_suffix(const char *rhs) {
+    const char *p = skip_ws(rhs);
+    int depth = 0;
+
+    if (*p != '[') {
+        return NULL;
+    }
+    for (; *p; p++) {
+        if (*p == '[') {
+            depth++;
+        } else if (*p == ']') {
+            depth--;
+            if (depth == 0) {
+                p++;
+                p = skip_ws(p);
+                if (*p == ':') {
+                    return p;
+                }
+                return NULL;
+            }
+        }
+    }
+    return NULL;
+}
+
+int flat_value_parse_assign_rhs_typed(const char *rhs_in, FlatValue *out, FlatStringPool *pool,
+                                      FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                                      const char (*var_names)[64], const FlatSchemaCatalog *schemas,
+                                      FlatSlotType *literal_type_out, int *has_literal_type_out,
+                                      char *panic, size_t panic_sz) {
     char rhs[4096];
     const char *p;
+    const char *colon;
+    char spec[256];
+    FlatSlotType lit_ty;
+    FlatValue staged;
 
+    if (panic && panic_sz > 0) {
+        panic[0] = '\0';
+    }
+    if (has_literal_type_out) {
+        *has_literal_type_out = 0;
+    }
     if (!rhs_in || !out) {
         return -1;
     }
     snprintf(rhs, sizeof rhs, "%s", rhs_in);
     trim(rhs);
+    colon = list_rhs_type_suffix(rhs);
 
     if (parse_ref_call(rhs, out, pool) == 0) {
         return 0;
@@ -558,6 +598,15 @@ int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPo
         }
     }
     p = rhs;
+    if (colon) {
+        size_t n = (size_t)(colon - rhs);
+        if (n >= sizeof rhs) {
+            return -1;
+        }
+        rhs[n] = '\0';
+        trim(rhs);
+        p = rhs;
+    }
     if (flat_value_parse_at(&p, out, pool, coll, vars, var_count, var_names) != 0) {
         return -1;
     }
@@ -565,7 +614,45 @@ int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPo
     if (*p != '\0') {
         return -1;
     }
+    if (!colon || out->tag != VAL_LIST) {
+        return 0;
+    }
+    snprintf(spec, sizeof spec, "%s", colon + 1);
+    trim(spec);
+    if (flat_slot_type_parse_spec(spec, &lit_ty, schemas, panic, panic_sz) != 0) {
+        return -1;
+    }
+    if (lit_ty.list_rank > 0) {
+        int skip_depth = (lit_ty.kind == FLAT_SLOT_TYPE_L && lit_ty.list_rank == 1 &&
+                          lit_ty.list_leaf_sublist);
+        if (!skip_depth) {
+            int vr = flat_list_value_rank(coll, out->u.coll_id);
+            if (vr >= 0 && vr != (int)lit_ty.list_rank) {
+                snprintf(panic, panic_sz, "type.assign.list.depth");
+                return -1;
+            }
+        }
+        staged = *out;
+        if (flat_list_typed_check_value(&lit_ty, out, pool, coll, schemas, &staged, panic,
+                                        panic_sz) != 0) {
+            return -1;
+        }
+        *out = staged;
+    }
+    if (literal_type_out) {
+        *literal_type_out = lit_ty;
+    }
+    if (has_literal_type_out) {
+        *has_literal_type_out = lit_ty.list_rank > 0 || lit_ty.kind != FLAT_SLOT_TYPE_NONE ? 1 : 0;
+    }
     return 0;
+}
+
+int flat_value_parse_assign_rhs(const char *rhs_in, FlatValue *out, FlatStringPool *pool,
+                                FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                                const char (*var_names)[64]) {
+    return flat_value_parse_assign_rhs_typed(rhs_in, out, pool, coll, vars, var_count, var_names,
+                                             NULL, NULL, NULL, NULL, 0);
 }
 
 static int literal_to_value(const char *lit, FlatValue *out) {

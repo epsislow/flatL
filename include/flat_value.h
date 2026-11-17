@@ -3,6 +3,9 @@
 
 #include "fgir.h"
 
+typedef struct FlatSchemaCatalog FlatSchemaCatalog;
+typedef struct FlatSlotType FlatSlotType;
+
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -159,6 +162,12 @@ int flat_value_str_equal_cstr(const FlatValue *v, const FlatStringPool *pool, co
 int flat_value_parse_assign_rhs(const char *rhs, FlatValue *out, FlatStringPool *pool,
                                 FlatCollectionPool *coll, FlatValue *vars, int var_count,
                                 const char (*var_names)[64]);
+
+int flat_value_parse_assign_rhs_typed(const char *rhs, FlatValue *out, FlatStringPool *pool,
+                                      FlatCollectionPool *coll, FlatValue *vars, int var_count,
+                                      const char (*var_names)[64], const FlatSchemaCatalog *schemas,
+                                      FlatSlotType *literal_type_out, int *has_literal_type_out,
+                                      char *panic, size_t panic_sz);
 
 typedef enum {
     FLAT_ASSIGN_SPLIT_EQ = 0,

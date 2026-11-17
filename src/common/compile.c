@@ -511,6 +511,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 return -1;
             }
             if (emit_instr(code, OP_ASSIGN, payload, plen) != 0) {
+                snprintf(err, err_size, "out of memory");
                 return -1;
             }
             break;

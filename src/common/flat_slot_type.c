@@ -1,3 +1,4 @@
+#include "flat_list_typed.h"
 #include "flat_number.h"
 #include "flat_slot_type.h"
 #include "flat_schema.h"
@@ -46,34 +47,83 @@ static int parse_unsigned_type(const char *spec, FlatSlotType *out) {
   return -1;
 }
 
-static int parse_bracket_list_max(const char *rest, uint16_t *max_out, const char **rest_out, char *err,
-                                 size_t err_sz) {
+static int parse_one_axis(const char **p, uint8_t *mode_out, uint16_t *val_out, char *err,
+                          size_t err_sz) {
+    const char *s;
     char *endptr;
-    const char *p;
-    unsigned long maxn;
+    unsigned long n;
 
-    if (!rest || rest[0] != '[') {
+    if (!p || !*p || **p != '[') {
         return -1;
     }
-    p = rest + 1;
-    if (*p == ']') {
+    s = *p + 1;
+    if (*s == ']') {
+        *mode_out = FLAT_AXIS_FREE;
+        *val_out = 0;
+        *p = s + 1;
+        return 0;
+    }
+    if (*s == '=') {
+        s++;
+        if (!isdigit((unsigned char)*s)) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "type.list.dim.zero");
+            }
+            return -1;
+        }
+        n = strtoul(s, &endptr, 10);
+        if (endptr == s || n == 0 || n > UINT16_MAX || *endptr != ']') {
+            if (err && err_sz) {
+                snprintf(err, err_sz, n == 0 ? "type.list.dim.zero" : "invalid list bound");
+            }
+            return -1;
+        }
+        *mode_out = FLAT_AXIS_EXACT;
+        *val_out = (uint16_t)n;
+        *p = endptr + 1;
+        return 0;
+    }
+    if (!isdigit((unsigned char)*s)) {
+        if (err && err_sz) {
+            snprintf(err, err_sz, "invalid list bound");
+        }
+        return -1;
+    }
+    n = strtoul(s, &endptr, 10);
+    if (endptr == s || n == 0 || n > UINT16_MAX || *endptr != ']') {
+        if (err && err_sz) {
+            snprintf(err, err_sz, n == 0 ? "type.list.dim.zero" : "invalid list bound");
+        }
+        return -1;
+    }
+    *mode_out = FLAT_AXIS_CAP;
+    *val_out = (uint16_t)n;
+    *p = endptr + 1;
+    return 0;
+}
+
+static int parse_axes_suffix(const char *rest, FlatSlotType *out, char *err, size_t err_sz) {
+    const char *p;
+    int rank = 0;
+
+    if (!rest || rest[0] != '[') {
+        return 0;
+    }
+    p = rest;
+    while (*p == '[') {
+        if (rank >= FLAT_LIST_TYPED_MAX_RANK) {
+            if (err && err_sz) {
+                snprintf(err, err_sz, "type.list.rank.max");
+            }
+            return -1;
+        }
+        if (parse_one_axis(&p, &out->axis_mode[rank], &out->axis_val[rank], err, err_sz) != 0) {
+            return -1;
+        }
+        rank++;
+    }
+    while (*p && isspace((unsigned char)*p)) {
         p++;
-        maxn = 0;
-    } else {
-        if (!isdigit((unsigned char)*p)) {
-            if (err && err_sz) {
-                snprintf(err, err_sz, "invalid list bound");
-            }
-            return -1;
-        }
-        maxn = strtoul(p, &endptr, 10);
-        if (endptr == p || maxn == 0 || maxn > UINT16_MAX || *endptr != ']') {
-            if (err && err_sz) {
-                snprintf(err, err_sz, "invalid list bound");
-            }
-            return -1;
-        }
-        p = endptr + 1;
     }
     if (*p != '\0') {
         if (err && err_sz) {
@@ -81,18 +131,19 @@ static int parse_bracket_list_max(const char *rest, uint16_t *max_out, const cha
         }
         return -1;
     }
-    *max_out = (uint16_t)maxn;
-    if (rest_out) {
-        *rest_out = p;
+    if (rank == 0) {
+        return 0;
+    }
+    out->list_rank = (uint8_t)rank;
+    out->list_slot = 1;
+    if (rank == 1 && out->axis_mode[0] == FLAT_AXIS_CAP) {
+        out->list_max = out->axis_val[0];
     }
     return 0;
 }
 
-static int parse_type_spec(const char *spec, FlatSlotType *out) {
+static int parse_type_spec_core(const char *spec, FlatSlotType *out) {
     if (!spec || !spec[0] || !out) {
-        return -1;
-    }
-    if (strchr(spec, '[') != NULL) {
         return -1;
     }
     memset(out, 0, sizeof *out);
@@ -131,9 +182,47 @@ static int parse_type_spec(const char *spec, FlatSlotType *out) {
         }
         out->kind = FLAT_SLOT_TYPE_TN;
         out->aux = (uint16_t)maxn;
+        if (out->aux > FLAT_SLOT_TYPE_AUX_T_MAX) {
+            return -1;
+        }
         return 0;
     }
     return parse_unsigned_type(spec, out);
+}
+
+static int parse_type_spec(const char *spec, FlatSlotType *out, char *err, size_t err_sz) {
+    char base[64];
+    size_t blen;
+    const char *bracket;
+
+    if (!spec || !spec[0] || !out) {
+        return -1;
+    }
+    if (spec[0] == '[') {
+        flat_slot_type_clear(out);
+        out->kind = FLAT_SLOT_TYPE_L;
+        return parse_axes_suffix(spec, out, err, err_sz);
+    }
+    bracket = strchr(spec, '[');
+    if (!bracket) {
+        return parse_type_spec_core(spec, out);
+    }
+    blen = (size_t)(bracket - spec);
+    if (blen >= sizeof base) {
+        return -1;
+    }
+    memcpy(base, spec, blen);
+    base[blen] = '\0';
+    if (parse_type_spec_core(base, out) != 0) {
+        return -1;
+    }
+    if (parse_axes_suffix(bracket, out, err, err_sz) != 0) {
+        return -1;
+    }
+    if (strcmp(base, "l") == 0 && out->list_rank == 1) {
+        out->list_leaf_sublist = 1;
+    }
+    return 0;
 }
 
 int flat_bind_parse_lhs(const char *lhs, char *name_out, size_t name_sz, FlatSlotType *type_out,
@@ -227,15 +316,12 @@ int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSch
             rest++;
         }
         if (*rest == '[') {
-            uint16_t lmax = 0;
-            if (parse_bracket_list_max(rest, &lmax, &rest, err, err_sz) != 0) {
+            if (parse_axes_suffix(rest, out, err, err_sz) != 0) {
                 if (err && err_sz && !err[0]) {
                     snprintf(err, err_sz, "invalid schema list type: %s", spec);
                 }
                 return -1;
             }
-            out->list_slot = 1;
-            out->list_max = lmax;
         } else if (*rest != '\0') {
             if (err && err_sz) {
                 snprintf(err, err_sz, "invalid schema type: %s", spec);
@@ -267,8 +353,8 @@ int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSch
         out->kind = FLAT_SLOT_TYPE_DYNAMIC;
         return 0;
     }
-    if (parse_type_spec(spec, out) != 0) {
-        if (err && err_sz) {
+    if (parse_type_spec(spec, out, err, err_sz) != 0) {
+        if (err && err_sz && !err[0]) {
             snprintf(err, err_sz, "invalid type: %s", spec);
         }
         return -1;
@@ -318,6 +404,28 @@ int flat_slot_type_equals(const FlatSlotType *a, const FlatSlotType *b) {
     if (a->kind == FLAT_SLOT_TYPE_TN || a->kind == FLAT_SLOT_TYPE_T) {
         return a->aux == b->aux;
     }
+    if (a->list_rank > 0 || b->list_rank > 0) {
+        int i;
+        if (a->list_rank != b->list_rank || a->list_slot != b->list_slot ||
+            a->list_leaf_sublist != b->list_leaf_sublist) {
+            return 0;
+        }
+        if (a->kind != b->kind) {
+            return 0;
+        }
+        if (a->kind == FLAT_SLOT_TYPE_TN && a->aux != b->aux) {
+            return 0;
+        }
+        if (a->kind == FLAT_SLOT_TYPE_SCHEMA && a->schema_id != b->schema_id) {
+            return 0;
+        }
+        for (i = 0; i < (int)a->list_rank; i++) {
+            if (a->axis_mode[i] != b->axis_mode[i] || a->axis_val[i] != b->axis_val[i]) {
+                return 0;
+            }
+        }
+        return 1;
+    }
     if (a->kind == FLAT_SLOT_TYPE_SCHEMA) {
         return a->schema_id == b->schema_id && a->list_max == b->list_max && a->list_slot == b->list_slot;
     }
@@ -330,6 +438,22 @@ int flat_slot_type_equals(const FlatSlotType *a, const FlatSlotType *b) {
 void flat_slot_type_clear(FlatSlotType *t) {
     if (t) {
         memset(t, 0, sizeof *t);
+    }
+}
+
+static void append_axis_spec(char *out, size_t out_sz, uint8_t mode, uint16_t val) {
+    size_t len = strlen(out);
+    char piece[24];
+
+    if (mode == FLAT_AXIS_EXACT) {
+        snprintf(piece, sizeof piece, "[=%u]", (unsigned)val);
+    } else if (mode == FLAT_AXIS_CAP) {
+        snprintf(piece, sizeof piece, "[%u]", (unsigned)val);
+    } else {
+        snprintf(piece, sizeof piece, "[]");
+    }
+    if (len + strlen(piece) + 1 < out_sz) {
+        snprintf(out + len, out_sz - len, "%s", piece);
     }
 }
 
@@ -350,19 +474,35 @@ int flat_slot_type_format_spec(const FlatSlotType *t, const FlatSchemaCatalog *c
     }
     if (t->kind == FLAT_SLOT_TYPE_SCHEMA) {
         const char *sname = "<?>";
+        int i;
         if (cat && t->schema_id < (uint16_t)cat->count) {
             sname = cat->defs[t->schema_id].name;
         }
-        if (t->list_slot || t->list_max > 0) {
-            if (t->list_max > 0) {
-                snprintf(out, out_sz, "<%s>[%u]", sname, (unsigned)t->list_max);
-            } else {
-                snprintf(out, out_sz, "<%s>[]", sname);
+        snprintf(out, out_sz, "<%s>", sname);
+        if (t->list_rank > 0) {
+            for (i = 0; i < (int)t->list_rank; i++) {
+                append_axis_spec(out, out_sz, t->axis_mode[i], t->axis_val[i]);
             }
-        } else {
-            snprintf(out, out_sz, "<%s>", sname);
         }
         return 0;
+    }
+    if (t->list_rank > 0 && t->kind == FLAT_SLOT_TYPE_L && t->axis_mode[0] == FLAT_AXIS_FREE &&
+        t->list_leaf_sublist == 0) {
+        int only_shape = 1;
+        int i;
+        for (i = 0; i < (int)t->list_rank; i++) {
+            if (t->axis_mode[i] != FLAT_AXIS_FREE) {
+                only_shape = 0;
+                break;
+            }
+        }
+        if (only_shape) {
+            out[0] = '\0';
+            for (i = 0; i < (int)t->list_rank; i++) {
+                append_axis_spec(out, out_sz, FLAT_AXIS_FREE, 0);
+            }
+            return 0;
+        }
     }
     switch (t->kind) {
     case FLAT_SLOT_TYPE_U8:
@@ -415,6 +555,12 @@ int flat_slot_type_format_spec(const FlatSlotType *t, const FlatSchemaCatalog *c
         return 0;
     }
     snprintf(out, out_sz, "%s", scalar);
+    if (t->list_rank > 0) {
+        int i;
+        for (i = 0; i < (int)t->list_rank; i++) {
+            append_axis_spec(out, out_sz, t->axis_mode[i], t->axis_val[i]);
+        }
+    }
     return 0;
 }
 
@@ -495,12 +641,23 @@ int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *va
     if (!contract || contract->kind == FLAT_SLOT_TYPE_NONE) {
         return 0;
     }
+    if (contract->list_rank > 0) {
+        return flat_list_typed_check_value(contract, val, pool, coll, schemas, inout_val, panic,
+                                         panic_sz);
+    }
     if (contract->list_slot && contract->kind == FLAT_SLOT_TYPE_SCHEMA && schemas) {
         memset(&list_field, 0, sizeof list_field);
         list_field.flags = FLAT_SCH_FIELD_LIST;
         list_field.slot.kind = FLAT_SLOT_TYPE_SCHEMA;
         list_field.slot.schema_id = contract->schema_id;
         list_field.slot.list_max = contract->list_max;
+        list_field.slot.list_rank = contract->list_max > 0 ? 1 : 0;
+        if (contract->list_max > 0) {
+            list_field.slot.list_rank = 1;
+            list_field.slot.list_slot = 1;
+            list_field.slot.axis_mode[0] = FLAT_AXIS_CAP;
+            list_field.slot.axis_val[0] = contract->list_max;
+        }
         return flat_schema_check_field_value(&list_field, val, pool, coll, schemas, inout_val,
                                              panic, panic_sz);
     }
@@ -520,6 +677,9 @@ int flat_slot_type_check_value(const FlatSlotType *contract, const FlatValue *va
         }
         return 0;
     case FLAT_SLOT_TYPE_L:
+        if (val->tag == VAL_NULL) {
+            return 0;
+        }
         if (val->tag != VAL_LIST) {
             snprintf(panic, panic_sz, "type.assign.incompatible");
             return -1;

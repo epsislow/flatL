@@ -1,0 +1,7 @@
+<stock>:
+  qty: u16
+#main
+  rows:<stock>[2] = []
+  a:<stock> = {qty: 1}
+  rows = [a, a]
+  OK

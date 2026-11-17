@@ -38,13 +38,13 @@ Two contexts may bind the same name to different contracts without conflict.
 | Float | `f32`, `f64` | Same check as `f64` today (any `VAL_NUMBER`); precision at AOT — [LANGUAGE_TYPES.md §6](./LANGUAGE_TYPES.md#6-static-slot-contracts-strict-types). `f8`, `q4p4` **deferred** |
 | Bool | `b` | `true` / `false` |
 | String | `t` (= **`t127`**), `tN` (**`1…8192`**) | Length at assign; REF OK peste 127 octeți |
-| List | `l`, `o[]`, `l[]`, `elemType[]`, `elemType[N]` | `[N]` = max length, snapshot at bind |
+| List | `l`, `o[]`, `l[]`, `elemType[]…`, `[][]`, `<schema>[]…` | Axe per nivel: `[]` liber, `[n]` cap, `[=n]` exact; rank max **4** — [LIST_LITERALS.md](./LIST_LITERALS.md) |
 | Object open | `o` | Add fields on assign; read missing field → panic |
 | Schema | `<name>` | Closed at root; null-fill on `{}` |
 
 **Lists:** `products:t255[]` = unbounded count, elements `t255`. `selected:<stock>[4] = []` = max 4, may start empty.
 
-**List slot (variable):** `xs:<stock>[4] = []` — the slot type is a **list of `<stock>`** capped at **4** items (`list_max` snapshot at bind). Assign `xs = [a, b, …]` checks length → **`type.assign.list.len`**. This is **not** path index syntax; `xs[0] = row` is a path on an existing list slot.
+**List slot (variable):** `xs:<stock>[4] = []` — listă de `<stock>` cu cap **≤4** pe axa exterioară; listă goală la bind e permisă. Multidimensional: `table:<stock>[2][=5]`, `M:f64[][]`, `G:t255[][]` — validare la `=` / re-assign (`type.assign.shape`, `type.assign.list.jagged`, …). Literal RHS opțional: `[ … ]:f64[][]` (assert parse; contractul de axe e **doar pe LHS**). Vezi [LIST_LITERALS.md](./LIST_LITERALS.md).
 
 **No implicit conversion** at assign/COW — use **`math.convert`** / **`list.convert`** / **`str.convert`** (`m.` / `L.` / `str.` aliases).
 

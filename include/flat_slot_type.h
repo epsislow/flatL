@@ -29,12 +29,24 @@ typedef enum {
     FLAT_SLOT_TYPE_DYNAMIC /* LHS :/expr — resolved at assign (not stored on slot) */
 } FlatSlotTypeKind;
 
-typedef struct {
+#define FLAT_LIST_TYPED_MAX_RANK 4
+
+typedef enum {
+    FLAT_AXIS_FREE = 0,
+    FLAT_AXIS_CAP = 1,
+    FLAT_AXIS_EXACT = 2,
+} FlatAxisMode;
+
+typedef struct FlatSlotType {
     FlatSlotTypeKind kind;
     uint16_t aux; /* tN → N (1..8192); t → 127 */
     uint16_t schema_id;
-    uint16_t list_max; /* schema field or list slot: 0 = unbounded [] */
-    uint8_t list_slot; /* 1 when variable slot is a LIST (e.g. xs:<stock>[4]) */
+    uint16_t list_max; /* legacy schema 1D cap when list_rank==0 */
+    uint8_t list_slot; /* 1 when slot holds LIST (schema list or typed mdim) */
+    uint8_t list_rank; /* 0 = scalar / legacy; 1..FLAT_LIST_TYPED_MAX_RANK */
+    uint8_t axis_mode[FLAT_LIST_TYPED_MAX_RANK]; /* FlatAxisMode */
+    uint16_t axis_val[FLAT_LIST_TYPED_MAX_RANK];
+    uint8_t list_leaf_sublist; /* l[]: elements must be LIST */
     char dynamic_expr[FLAT_VAR_NAME_MAX + 1]; /* FLAT_SLOT_TYPE_DYNAMIC */
 } FlatSlotType;
 

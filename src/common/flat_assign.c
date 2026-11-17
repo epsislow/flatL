@@ -41,15 +41,24 @@ static const char *find_arrow_outside_quotes(const char *s) {
 
 static char *find_single_assign_eq(char *s) {
     char *p = s;
+    int depth = 0;
 
     if (!s) {
         return NULL;
     }
-    while ((p = strchr(p, '=')) != NULL) {
-        if (p[1] != '=') {
-            return p;
+    for (p = s; *p; p++) {
+        if (*p == '[') {
+            depth++;
+        } else if (*p == ']') {
+            if (depth > 0) {
+                depth--;
+            }
+        } else if (*p == '=' && depth == 0) {
+            if (p[1] != '=') {
+                return p;
+            }
+            p++;
         }
-        p += 2;
     }
     return NULL;
 }
@@ -86,6 +95,20 @@ int flat_assign_split_line(char *line_buf, char **bind_out, char **value_out,
     return (*bind_out)[0] != '\0' && (*value_out)[0] != '\0' ? 0 : -1;
 }
 
+static const char *skip_list_axis_specs(const char *p) {
+    while (*p == '[') {
+        const char *rb = strchr(p, ']');
+        if (!rb) {
+            return p;
+        }
+        p = rb + 1;
+        while (*p && isspace((unsigned char)*p)) {
+            p++;
+        }
+    }
+    return p;
+}
+
 /* First `.` or `[` that starts a value path (not `<schema>[N]` list-slot type suffix). */
 static const char *lhs_path_start(const char *lhs) {
     const char *colon;
@@ -111,16 +134,7 @@ static const char *lhs_path_start(const char *lhs) {
         while (*p && isspace((unsigned char)*p)) {
             p++;
         }
-        if (*p == '[') {
-            const char *rb = strchr(p, ']');
-            if (!rb) {
-                return NULL;
-            }
-            p = rb + 1;
-            while (*p && isspace((unsigned char)*p)) {
-                p++;
-            }
-        }
+        p = skip_list_axis_specs(p);
         return strpbrk(p, ".[");
     }
     if (*p == '/') {
@@ -135,12 +149,17 @@ static const char *lhs_path_start(const char *lhs) {
     if (*p == '\0') {
         return NULL;
     }
+    if (*p == '[') {
+        p = skip_list_axis_specs(p);
+        return strpbrk(p, ".[");
+    }
     while (*p && !isspace((unsigned char)*p) && *p != '.' && *p != '[') {
         p++;
     }
     while (*p && isspace((unsigned char)*p)) {
         p++;
     }
+    p = skip_list_axis_specs(p);
     return strpbrk(p, ".[");
 }
 
