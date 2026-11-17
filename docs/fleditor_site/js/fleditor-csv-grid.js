@@ -57,6 +57,74 @@
     }
   }
 
+  function cellIndexFromTarget(target) {
+    if (!target || !target.closest) return null;
+    const inp = target.closest('input.fleditor-csv-grid-cell[data-row][data-col]');
+    if (!inp) return null;
+    const r = parseInt(inp.getAttribute('data-row'), 10);
+    const c = parseInt(inp.getAttribute('data-col'), 10);
+    if (!Number.isFinite(r) || !Number.isFinite(c)) return null;
+    return { r: r, c: c };
+  }
+
+  function bindTouchRangeSelection(container, getOpts) {
+    if (!container) return;
+    container._fleditorCsvGetOpts = getOpts;
+    if (container._fleditorCsvTouchBound) return;
+    container._fleditorCsvTouchBound = true;
+    let touchSel = null;
+
+    container.addEventListener(
+      'pointerdown',
+      function (e) {
+        if (e.pointerType === 'mouse') return;
+        const cell = cellIndexFromTarget(e.target);
+        if (!cell) return;
+        touchSel = { anchor: cell, pointerId: e.pointerId, drag: false };
+        try {
+          container.setPointerCapture(e.pointerId);
+        } catch (_e) { /* ignore */ }
+      },
+      true
+    );
+
+    container.addEventListener('pointermove', function (e) {
+      if (!touchSel || touchSel.pointerId !== e.pointerId) return;
+      const opts = container._fleditorCsvGetOpts && container._fleditorCsvGetOpts();
+      if (!opts) return;
+      const cell = cellIndexFromTarget(document.elementFromPoint(e.clientX, e.clientY));
+      if (!cell) return;
+      if (!touchSel.drag) {
+        if (cell.r === touchSel.anchor.r && cell.c === touchSel.anchor.c) return;
+        touchSel.drag = true;
+        e.preventDefault();
+        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+        opts.pendingSelect = 'replace';
+        if (opts.onCellSelect) opts.onCellSelect(touchSel.anchor.r, touchSel.anchor.c);
+      }
+      if (touchSel.drag) {
+        e.preventDefault();
+        opts.pendingSelect = 'extend';
+        if (opts.onCellExtendSelect) opts.onCellExtendSelect(cell.r, cell.c);
+      }
+    });
+
+    function finishTouch(e) {
+      if (!touchSel || touchSel.pointerId !== e.pointerId) return;
+      const opts = container._fleditorCsvGetOpts && container._fleditorCsvGetOpts();
+      if (!touchSel.drag && opts) {
+        opts.pendingSelect = 'replace';
+        focusCell(container, touchSel.anchor.r, touchSel.anchor.c);
+      }
+      touchSel = null;
+      try {
+        container.releasePointerCapture(e.pointerId);
+      } catch (_e2) { /* ignore */ }
+    }
+    container.addEventListener('pointerup', finishTouch);
+    container.addEventListener('pointercancel', finishTouch);
+  }
+
   function focusCell(container, r, c, kind) {
     const sel = kind === 'append-col'
       ? 'input.fleditor-csv-grid-cell--append-col[data-row="' + r + '"]'
@@ -93,6 +161,15 @@
     inp.addEventListener('input', function () {
       if (opts.onCellChange) opts.onCellChange(r, c, inp.value);
       inp.className = cellInputClass(inp.value !== savedValue);
+    });
+    inp.addEventListener('paste', function (e) {
+      if (!opts.onPasteText) return;
+      const dt = e.clipboardData;
+      if (!dt) return;
+      const text = dt.getData('text/plain');
+      if (!text) return;
+      e.preventDefault();
+      opts.onPasteText(r, c, text);
     });
     inp.addEventListener('keydown', function (e) {
       const cols = opts.colCount();
@@ -232,7 +309,8 @@
       th.setAttribute('aria-label', 'Select column ' + (c + 1));
       th.setAttribute('data-csv-col', String(c));
       const colIdx = c;
-      th.addEventListener('mousedown', function (e) {
+      th.addEventListener('pointerup', function (e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         e.preventDefault();
         if (options.onColHeaderSelect) options.onColHeaderSelect(colIdx, e.shiftKey);
       });
@@ -258,6 +336,7 @@
       onCellFocus: options.onCellFocus,
       onCopy: options.onCopy,
       onPaste: options.onPaste,
+      onPasteText: options.onPasteText,
       isMultiCellSelection: options.isMultiCellSelection,
     };
     for (let r = 0; r < rows.length; r++) {
@@ -272,7 +351,8 @@
       rowLabel.setAttribute('aria-label', 'Select row ' + (r + 1));
       rowLabel.setAttribute('data-csv-row', String(r));
       const rowIdx = r;
-      rowLabel.addEventListener('mousedown', function (e) {
+      rowLabel.addEventListener('pointerup', function (e) {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
         e.preventDefault();
         if (options.onRowHeaderSelect) options.onRowHeaderSelect(rowIdx, e.shiftKey);
       });
@@ -307,6 +387,9 @@
     tbody.appendChild(trPlus);
     table.appendChild(tbody);
     container.appendChild(table);
+    bindTouchRangeSelection(container, function () {
+      return gridOpts;
+    });
     if (options.getSelection) {
       const sel = options.getSelection();
       applySelectionHighlights(container, sel && sel.anchor, sel && sel.focus);

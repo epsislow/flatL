@@ -610,7 +610,15 @@ body.fleditor-resize-active * {
   line-height: 1;
 }
 .fleditor-editor-wrap--csv .CodeMirror { display: none !important; }
+.fleditor-csv-paste-area {
+  width: 100%;
+  min-height: 6rem;
+  resize: vertical;
+  font-family: inherit;
+  box-sizing: border-box;
+}
 .fleditor-csv-grid-host {
+  touch-action: manipulation;
   flex: 1 1 0;
   min-height: 0;
   min-width: 0;
