@@ -1,0 +1,21 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('out.csv')
+  wid = csv.writer(fp)
+  list.pack('n', 'v') -> hdr
+  list.pack('a', '42') -> dat
+  list.pack(hdr, dat) -> rows
+  csv.writeRows(wid, rows)
+  csv.close(wid)
+  file.close(fp)
+  fp = file.readCtx('out.csv')
+  rid = csv.reader(fp)
+  csv.next(rid) -> _
+  row = csv.next(rid)
+  csv.close(rid)
+  file.close(fp)
+  list.get(row, 1) -> val
+  io.outln(val)
+  OK

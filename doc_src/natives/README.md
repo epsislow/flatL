@@ -37,7 +37,7 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `list`, `obj`, `vcx`, `executor`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
@@ -71,3 +71,4 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `obj` | [obj.md](./obj.md) |
 | `vcx` | [vcx.md](./vcx.md) |
 | `executor` | [executor.md](./executor.md) |
+| `csv` | [csv.md](./csv.md) |

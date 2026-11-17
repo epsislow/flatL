@@ -1,0 +1,10 @@
+suite = "csv"
+id = 6
+desc = "reader on createCtx panics"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 1
+stderr_contains = "csv.reader.mode"
+stdout_contains = "unhandled PANIC"

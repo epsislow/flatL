@@ -1,0 +1,15 @@
+use native csv
+
+#main
+  fp = file.createCtx('d.csv')
+  file.writeln(fp, 'x')
+  file.writeln(fp, 'y')
+  file.writeln(fp, 'z')
+  file.close(fp)
+  fp = file.readCtx('d.csv')
+  rid = csv.reader(fp)
+  csv.rows(rid) -> n
+  csv.close(rid)
+  file.close(fp)
+  io.outln(n)
+  OK

@@ -189,4 +189,24 @@ int flat_native_executor_unique_end(FlatNativeCtx *ctx);
 int flat_native_executor_global_begin(FlatNativeCtx *ctx);
 int flat_native_executor_global_end(FlatNativeCtx *ctx);
 
+int flat_native_csv_reader(FlatNativeCtx *ctx);
+int flat_native_csv_writer(FlatNativeCtx *ctx);
+int flat_native_csv_close(FlatNativeCtx *ctx);
+int flat_native_csv_reset(FlatNativeCtx *ctx);
+int flat_native_csv_is_eof(FlatNativeCtx *ctx);
+int flat_native_csv_rows(FlatNativeCtx *ctx);
+int flat_native_csv_cols(FlatNativeCtx *ctx);
+int flat_native_csv_get_row(FlatNativeCtx *ctx);
+int flat_native_csv_get_col(FlatNativeCtx *ctx);
+int flat_native_csv_set_row(FlatNativeCtx *ctx);
+int flat_native_csv_next(FlatNativeCtx *ctx);
+int flat_native_csv_next_cells(FlatNativeCtx *ctx);
+int flat_native_csv_set_separator(FlatNativeCtx *ctx);
+int flat_native_csv_set_line_endings(FlatNativeCtx *ctx);
+int flat_native_csv_set_encoding(FlatNativeCtx *ctx);
+int flat_native_csv_set_quote(FlatNativeCtx *ctx);
+int flat_native_csv_write_rows(FlatNativeCtx *ctx);
+int flat_native_csv_write_cols(FlatNativeCtx *ctx);
+int flat_native_csv_flush(FlatNativeCtx *ctx);
+
 #endif

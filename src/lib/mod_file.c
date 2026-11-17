@@ -1,3 +1,4 @@
+#include "flat_csv_runtime.h"
 #include "flat_number.h"
 #include "flat_file.h"
 #include "flat_number.h"
@@ -510,6 +511,13 @@ int flat_native_file_close(FlatNativeCtx *ctx) {
         return -1;
     }
     if (require_fp(ctx, ctx->inner, &fid) != 0) {
+        return -1;
+    }
+    if (ctx->csv && flat_csv_fp_busy(ctx->csv, fid)) {
+        if (ctx->io_status) {
+            *ctx->io_status = FLAT_IO_ERR;
+        }
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "file.close.busy");
         return -1;
     }
     if (ctx->io_ctx) {

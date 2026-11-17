@@ -1,0 +1,7 @@
+use native csv
+
+#main
+  fp = file.createCtx('x.csv')
+  csv.reader(fp) -> rid
+  io.outln(rid)
+  OK

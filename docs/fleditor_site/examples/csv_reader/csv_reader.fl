@@ -1,0 +1,22 @@
+use native csv
+use native list
+
+#main
+  fp = file.readCtx('stock.csv')
+  rid = csv.reader(fp)
+  csv.rows(rid) -> nrows
+  nrows > 0
+  for(nrows, i, "#row")
+  csv.close(rid)
+  file.close(fp)
+  OK
+
+#row
+  line = csv.next(rid)
+  foreach(line, cell, "#cell")
+  OK
+
+#cell
+  io.out(cell)
+  io.out(',')
+  next

@@ -26,14 +26,15 @@ FBDUMP_SRCS = src/fbdump/main.c $(DISASM_SRC) $(FB_TOOL_SRC) $(NATIVE_FLC_SRC)
 NATIVE_VM_PLUGIN = src/lib/native_plugin_host.c
 ifeq ($(OS),Windows_NT)
 NATIVE_VM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math.c \
-                 src/lib/flat_math_calc.c src/lib/mod_list.c src/lib/mod_obj.c
+                 src/lib/flat_math_calc.c src/lib/mod_list.c src/lib/mod_obj.c src/lib/mod_csv.c
 VM_EXTRA_LIBS =
 PLUGIN_TARGET =
 else
 NATIVE_VM_MATH =
 VM_EXTRA_LIBS = -ldl
 PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
-                $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so $(BINDIR)/libflat_obj.so
+                $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so $(BINDIR)/libflat_obj.so \
+                $(BINDIR)/libflat_csv.so
 PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/flat_native_tag_common.c \
                src/common/flat_native_tag_runtime.c src/common/value_parse.c src/common/value_ops.c \
                src/common/value_json.c src/common/flat_number.c src/common/value_pool.c \
@@ -46,6 +47,8 @@ PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c src/lib/flat_m
                $(PLUGIN_COMMON_SRCS)
 PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_OBJ_SRCS = src/lib/plugin_obj_entry.c src/lib/mod_obj.c $(PLUGIN_COMMON_SRCS)
+PLUGIN_CSV_SRCS = src/lib/plugin_csv_entry.c src/lib/mod_csv.c src/common/flat_csv.c \
+               src/common/flat_csv_runtime.c src/common/flat_file.c $(PLUGIN_COMMON_SRCS)
 endif
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c \
@@ -61,8 +64,8 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/flat_vcx.c src/common/flat_executor.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/flat_native_tag_common.c src/common/flat_native_tag_runtime.c \
-          src/common/value_json.c src/common/flat_file.c src/common/flat_io_ctx.c \
-          src/common/flat_memstream.c \
+          src/common/value_json.c           src/common/flat_file.c src/common/flat_csv.c src/common/flat_csv_runtime.c \
+          src/common/flat_io_ctx.c src/common/flat_memstream.c \
           $(STR_SRC) $(NATIVE_VM_SRC)
 FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
@@ -214,6 +217,9 @@ $(BINDIR)/libflat_list.so: $(PLUGIN_LIST_SRCS) | $(BINDIR)
 
 $(BINDIR)/libflat_obj.so: $(PLUGIN_OBJ_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_OBJ_SRCS) $(LDFLAGS) -lm
+
+$(BINDIR)/libflat_csv.so: $(PLUGIN_CSV_SRCS) | $(BINDIR)
+	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_CSV_SRCS) $(LDFLAGS) -lm
 
 $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(DISASM_SRC) $(PORT_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(DISASM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -lm

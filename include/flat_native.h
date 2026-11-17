@@ -181,6 +181,25 @@ typedef enum {
     FLAT_NATIVE_EXECUTOR_UNIQUE_END,
     FLAT_NATIVE_EXECUTOR_GLOBAL_BEGIN,
     FLAT_NATIVE_EXECUTOR_GLOBAL_END,
+    FLAT_NATIVE_CSV_READER,
+    FLAT_NATIVE_CSV_WRITER,
+    FLAT_NATIVE_CSV_CLOSE,
+    FLAT_NATIVE_CSV_RESET,
+    FLAT_NATIVE_CSV_ISEOF,
+    FLAT_NATIVE_CSV_ROWS,
+    FLAT_NATIVE_CSV_COLS,
+    FLAT_NATIVE_CSV_GET_ROW,
+    FLAT_NATIVE_CSV_GET_COL,
+    FLAT_NATIVE_CSV_SET_ROW,
+    FLAT_NATIVE_CSV_NEXT,
+    FLAT_NATIVE_CSV_NEXT_CELLS,
+    FLAT_NATIVE_CSV_SET_SEPARATOR,
+    FLAT_NATIVE_CSV_SET_LINE_ENDINGS,
+    FLAT_NATIVE_CSV_SET_ENCODING,
+    FLAT_NATIVE_CSV_SET_QUOTE,
+    FLAT_NATIVE_CSV_WRITE_ROWS,
+    FLAT_NATIVE_CSV_WRITE_COLS,
+    FLAT_NATIVE_CSV_FLUSH,
     FLAT_NATIVE_MEM_SLOT_TYPE,
     FLAT_NATIVE_MEM_SLOT_FROZEN,
     FLAT_NATIVE_MEM_SLOT_CONST,
@@ -199,8 +218,10 @@ typedef enum {
 #define FLAT_NATIVE_MODULE_FILE "file"
 #define FLAT_NATIVE_MODULE_VCX "vcx"
 #define FLAT_NATIVE_MODULE_EXECUTOR "executor"
+#define FLAT_NATIVE_MODULE_CSV "csv"
 
 struct FlatVcxRuntime;
+struct FlatCsvRuntime;
 
 typedef struct {
     FlatStringPool *pool;
@@ -225,6 +246,7 @@ typedef struct {
     struct FlatFileTable *file_tbl;
     struct FlatVcxRuntime *vcx;
     char panic_detail[64];
+    struct FlatCsvRuntime *csv; /* after panic_detail — ABI for optional .so plugins */
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

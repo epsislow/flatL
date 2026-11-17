@@ -1,0 +1,10 @@
+suite = "csv"
+id = 7
+desc = "file.close with open csv reader"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 1
+stderr_contains = "file.close.busy"
+stdout_contains = "unhandled PANIC"

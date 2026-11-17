@@ -1,0 +1,27 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('d.csv')
+  file.writeln(fp, 'a,b')
+  file.writeln(fp, '1,2')
+  file.close(fp)
+  fp = file.readCtx('d.csv')
+  rid = csv.reader(fp)
+  head = csv.next(rid)
+  row = csv.next(rid)
+  csv.close(rid)
+  file.close(fp)
+  list.get(head, 0) -> h0
+  list.get(head, 1) -> h1
+  list.get(row, 0) -> v0
+  list.get(row, 1) -> v1
+  io.out(h0)
+  io.out('|')
+  io.out(h1)
+  io.out('|')
+  io.out(v0)
+  io.out('|')
+  io.out(v1)
+  io.outln('')
+  OK

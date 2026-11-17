@@ -14,6 +14,7 @@
 #include "flat_str.h"
 #include "flat_number.h"
 #include "flat_value.h"
+#include "flat_csv_runtime.h"
 #include "flat_vcx.h"
 #include "flat_executor.h"
 #include "flat_slot_type.h"
@@ -83,6 +84,7 @@ typedef struct {
     uint32_t *jump_block_entry_count;
     const FlatVmOptions *run_opts;
     FlatVcxRuntime *vcx;
+    FlatCsvRuntime *csv;
 } VmState;
 
 static VmState *g_vm_call_instr;
@@ -1000,6 +1002,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.io_ctx = st->io_ctx;
             ctx.file_tbl = &st->files;
             ctx.vcx = st->vcx;
+            ctx.csv = st->csv;
             ctx.var_slot_types = slot_types;
             ctx.var_has_slot_type = has_types;
             ctx.var_slot_frozen = frozen_flags;
@@ -1294,6 +1297,10 @@ static void vm_teardown(VmState *st, int rc) {
     }
     flat_executor_bind_vm(NULL);
     flat_executor_reset_session();
+    if (st->csv) {
+        flat_csv_runtime_destroy(st->csv);
+        st->csv = NULL;
+    }
     if (st->vcx) {
         flat_vcx_runtime_destroy(st->vcx, st->coll, st->pool, &st->files);
         st->vcx = NULL;
@@ -1953,6 +1960,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.io_ctx = st->io_ctx;
     ctx.file_tbl = &st->files;
     ctx.vcx = st->vcx;
+    ctx.csv = st->csv;
     ctx.var_slot_types = slot_types;
     ctx.var_has_slot_type = has_types;
     ctx.var_slot_frozen = frozen_flags;
@@ -2069,7 +2077,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     st.coll = flat_coll_create();
     flat_mem_stats_init(&st.live);
     st.vcx = flat_vcx_runtime_create(scratch_n);
-    if (!st.vcx || !st.pool || !st.coll) {
+    st.csv = flat_csv_runtime_create();
+    if (!st.vcx || !st.csv || !st.pool || !st.coll) {
         return vm_fail_setup(&st, opts);
     }
     flat_vcx_runtime_attach_vm(st.vcx,

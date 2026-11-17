@@ -1,0 +1,10 @@
+suite = "csv"
+id = 8
+desc = "second csv session on same fp"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 1
+stderr_contains = "csv.fp.busy"
+stdout_contains = "unhandled PANIC"

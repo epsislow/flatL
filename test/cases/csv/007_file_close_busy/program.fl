@@ -1,0 +1,11 @@
+use native csv
+
+#main
+  fp = file.createCtx('d.csv')
+  file.write(fp, 'a\n')
+  file.close(fp)
+  fp = file.readCtx('d.csv')
+  rid = csv.reader(fp)
+  file.close(fp)
+  csv.close(rid)
+  OK

@@ -23,6 +23,7 @@ static int g_loaded_list;
 static int g_loaded_obj;
 static int g_loaded_vcx;
 static int g_loaded_executor;
+static int g_loaded_csv;
 
 static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_VARS_MAX, flat_native_mem_vars_max);
@@ -275,6 +276,33 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         register_embedded_executor();
         return 0;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_CSV) == 0) {
+        if (g_loaded_csv) {
+            return 0;
+        }
+        flat_native_plugin_register(FLAT_NATIVE_CSV_READER, flat_native_csv_reader);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_WRITER, flat_native_csv_writer);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_CLOSE, flat_native_csv_close);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_RESET, flat_native_csv_reset);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_ISEOF, flat_native_csv_is_eof);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_ROWS, flat_native_csv_rows);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_COLS, flat_native_csv_cols);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_GET_ROW, flat_native_csv_get_row);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_GET_COL, flat_native_csv_get_col);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_SET_ROW, flat_native_csv_set_row);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_NEXT, flat_native_csv_next);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_NEXT_CELLS, flat_native_csv_next_cells);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_SET_SEPARATOR, flat_native_csv_set_separator);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_SET_LINE_ENDINGS,
+                                    flat_native_csv_set_line_endings);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_SET_ENCODING, flat_native_csv_set_encoding);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_SET_QUOTE, flat_native_csv_set_quote);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_WRITE_ROWS, flat_native_csv_write_rows);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_WRITE_COLS, flat_native_csv_write_cols);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_FLUSH, flat_native_csv_flush);
+        g_loaded_csv = 1;
+        return 0;
+    }
     snprintf(err, err_size, "optional native module not available: \"%s\"", mod);
     return -1;
 }
@@ -340,6 +368,9 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         return 0;
     }
     if (strcmp(mod, FLAT_NATIVE_MODULE_EXECUTOR) == 0 && g_loaded_executor) {
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_CSV) == 0 && g_loaded_csv) {
         return 0;
     }
 
@@ -418,10 +449,15 @@ ok:
     if (strcmp(mod, FLAT_NATIVE_MODULE_EXECUTOR) == 0) {
         g_loaded_executor = 1;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_CSV) == 0) {
+        g_loaded_csv = 1;
+    }
     return 0;
 }
 
 void flat_native_runtime_reset(void) {
+    char saved_search[sizeof g_search_dir];
+    snprintf(saved_search, sizeof saved_search, "%s", g_search_dir);
     memset(g_handlers, 0, sizeof g_handlers);
     g_manifest_count = 0;
     g_loaded_math_trig = 0;
@@ -431,7 +467,8 @@ void flat_native_runtime_reset(void) {
     g_loaded_obj = 0;
     g_loaded_vcx = 0;
     g_loaded_executor = 0;
-    g_search_dir[0] = '\0';
+    g_loaded_csv = 0;
+    snprintf(g_search_dir, sizeof g_search_dir, "%s", saved_search);
     register_embedded_mem();
     register_embedded_file();
     register_embedded_date();

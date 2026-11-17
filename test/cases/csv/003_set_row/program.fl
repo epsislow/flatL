@@ -1,0 +1,19 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('d.csv')
+  file.writeln(fp, 'one')
+  file.writeln(fp, 'beta')
+  file.writeln(fp, 'gamma')
+  file.close(fp)
+  fp = file.readCtx('d.csv')
+  rid = csv.reader(fp)
+  csv.rows(rid) -> n
+  csv.setRow(rid, 1)
+  line = csv.next(rid)
+  csv.close(rid)
+  file.close(fp)
+  list.get(line, 0) -> c
+  io.outln(c)
+  OK

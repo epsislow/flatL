@@ -1,0 +1,12 @@
+use native csv
+
+#main
+  fp = file.createCtx('d.csv')
+  file.writeln(fp, 'a')
+  file.close(fp)
+  fp = file.readWriteCtx('d.csv')
+  rid = csv.reader(fp)
+  csv.writer(fp) -> wid
+  io.outln(wid)
+  csv.close(rid)
+  OK

@@ -1,0 +1,7 @@
+use native csv
+
+#main
+  fp = file.appendCtx('a.csv')
+  csv.writer(fp) -> wid
+  io.outln(wid)
+  OK
