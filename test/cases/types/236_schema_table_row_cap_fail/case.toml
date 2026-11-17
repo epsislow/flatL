@@ -1,0 +1,9 @@
+suite = "types"
+id = 236
+desc = "L.1b row cap [1] with 2 rows"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "type.assign.shape"

@@ -291,41 +291,46 @@ int flat_list_typed_check_value(const FlatSlotType *contract, const FlatValue *v
     if (validate_level(contract, coll, pool, schemas, val->u.coll_id, 0, panic, panic_sz) != 0) {
         return -1;
     }
-    if (!inout_val || contract->list_rank != 1 || contract->list_leaf_sublist ||
-        contract->kind == FLAT_SLOT_TYPE_L) {
-        if (inout_val) {
-            *inout_val = *val;
-        }
+    if (!inout_val) {
         return 0;
     }
     if (contract->kind == FLAT_SLOT_TYPE_SCHEMA && schemas) {
-        if (flat_list_len(coll, val->u.coll_id, &len) != 0) {
-            snprintf(panic, panic_sz, "type.assign.incompatible");
-            return -1;
-        }
-        for (i = 0; i < len; i++) {
-            FlatValue el;
-            FlatValue checked;
-            if (flat_list_get(coll, val->u.coll_id, i, &el) != 0) {
+        if (contract->list_rank == 1) {
+            if (flat_list_len(coll, val->u.coll_id, &len) != 0) {
                 snprintf(panic, panic_sz, "type.assign.incompatible");
                 return -1;
             }
-            checked = el;
-            if (flat_schema_bind_value(schemas, contract->schema_id, &checked, pool, coll, panic,
-                                       panic_sz) != 0) {
+            for (i = 0; i < len; i++) {
+                FlatValue el;
+                FlatValue checked;
+                if (flat_list_get(coll, val->u.coll_id, i, &el) != 0) {
+                    snprintf(panic, panic_sz, "type.assign.incompatible");
+                    return -1;
+                }
+                checked = el;
+                if (flat_schema_bind_value(schemas, contract->schema_id, &checked, pool, coll,
+                                           panic, panic_sz) != 0) {
+                    return -1;
+                }
+                if (n >= FLAT_LIST_MAX_ELEMS) {
+                    snprintf(panic, panic_sz, "type.assign.list.len");
+                    return -1;
+                }
+                items[n++] = checked;
+            }
+            if (flat_list_build(coll, pool, items, n, &new_id) != 0) {
+                snprintf(panic, panic_sz, "type.assign.incompatible");
                 return -1;
             }
-            if (n >= FLAT_LIST_MAX_ELEMS) {
-                snprintf(panic, panic_sz, "type.assign.list.len");
-                return -1;
-            }
-            items[n++] = checked;
+            flat_value_set_list(inout_val, new_id);
+            return 0;
         }
-        if (flat_list_build(coll, pool, items, n, &new_id) != 0) {
-            snprintf(panic, panic_sz, "type.assign.incompatible");
-            return -1;
-        }
-        flat_value_set_list(inout_val, new_id);
+        *inout_val = *val;
+        return 0;
+    }
+    if (contract->list_rank != 1 || contract->list_leaf_sublist ||
+        contract->kind == FLAT_SLOT_TYPE_L) {
+        *inout_val = *val;
         return 0;
     }
     if (flat_list_len(coll, val->u.coll_id, &len) != 0) {

@@ -1,0 +1,5 @@
+<stock>:
+  qty: u16
+#main
+  table:<stock>[2][=3] = [[{qty: 1}, {qty: 2}], [{qty: 3}, {qty: 4}]]
+  OK

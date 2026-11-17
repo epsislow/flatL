@@ -1,0 +1,9 @@
+<stock>:
+  qty: u16
+  tag: t4
+#main
+  rows:<stock>[] = []
+  a:<stock> = {qty: 1, tag: "ab"}
+  b:<stock> = {qty: 2}
+  rows = [a, b, a]
+  OK

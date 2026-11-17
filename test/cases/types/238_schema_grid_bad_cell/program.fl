@@ -1,0 +1,5 @@
+<stock>:
+  qty: u16
+#main
+  grid:<stock>[][] = [[{qty: 1}, 7], [{}, {}]]
+  OK

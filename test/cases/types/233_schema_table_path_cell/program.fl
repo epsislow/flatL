@@ -1,0 +1,6 @@
+<stock>:
+  qty: u16
+#main
+  table:<stock>[2][=2] = [[{}, {}], [{}, {}]]
+  table[0][1].qty = 42
+  OK

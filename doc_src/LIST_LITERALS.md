@@ -55,6 +55,33 @@ buf = [[1, 2], [3, 4]]:f64[][]       # fără LHS — doar parse + assert sufix
 | `o[]`, `o[][]` | 1 / 2–4 | `o` OBJECT la frunză |
 | `[][]` | 2–4 | da, frunză mixtă (≠ `l[]`) |
 
+## Liste `<schema>` 1D (L.1a)
+
+Frunza = obiect **`<schema>`** (null-fill pe `{}`); aceleași axe ca la numeric:
+
+```text
+rows:<stock>[]              # lungime liberă
+rows:<stock>[4]             # cap ≤ 4
+rows:<stock>[=2] = [{}, {qty: 1}]   # exact 2 elemente
+rows:<stock>[2] = [{qty: 9}, {}]    # fără sufix literal (D15)
+rows = [{}, {}]:<stock>[]    # assert parse pe sufix
+```
+
+Câmp în declarație schema: `stocks: <stock>[4]` — același contract.
+
+## Liste `<schema>` 2D+ (L.1b)
+
+Rank 2–4, **rect** obligatoriu, fiecare celulă `<schema>` cu null-fill la assign:
+
+```text
+table:<stock>[2][=5]     # ≤2 rânduri, exact 5 coloane
+grid:<stock>[][]         # 2D liber + rect
+table:<stock>[2][=2] = [[{}, {}], [{}, {}]]
+table[0][1].qty = 42      # path în grilă (contract frunză pe câmp)
+```
+
+Literal: `… :<stock>[][]` (depth + tip; axe opțional assert). Validare la assign: rect + `flat_schema_bind_value` per celulă; rank 1 reconstruiește lista legată.
+
 ## Path (L.2)
 
 `M:f64[][]` — `M[i][j] = …` rezolvă contractul frunză (`f64`) pentru indexare; assign pe celulă trece prin `flat_slot_type_check_value`.
