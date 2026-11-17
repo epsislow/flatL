@@ -44,6 +44,12 @@ typedef struct {
     int explicit_spec;
 } CategFilter;
 
+typedef struct {
+    char suite[FLAT_CASE_SUITE_LEN];
+    int id;
+    char desc[FLAT_CASE_MAX_DESC];
+} FailEntry;
+
 static void print_help(const char *prog) {
     printf("flatL test runner\n\n");
     printf("Usage:\n");
@@ -408,6 +414,41 @@ static void filters_free(FilterList *fl) {
     memset(fl, 0, sizeof *fl);
 }
 
+static int fail_list_push(FailEntry **items, int *count, int *cap, const FlatCase *c) {
+    FailEntry *p;
+
+    if (*count >= *cap) {
+        int n = *cap ? *cap * 2 : 8;
+        p = realloc(*items, (size_t)n * sizeof(FailEntry));
+        if (!p) {
+            return -1;
+        }
+        *items = p;
+        *cap = n;
+    }
+    snprintf((*items)[*count].suite, sizeof (*items)[*count].suite, "%s", c->suite);
+    (*items)[*count].id = c->id;
+    snprintf((*items)[*count].desc, sizeof (*items)[*count].desc, "%s", c->desc);
+    (*count)++;
+    return 0;
+}
+
+static void fail_list_print(const FailEntry *items, int count) {
+    int i;
+
+    if (count <= 0) {
+        return;
+    }
+    printf("Fails list:\n");
+    for (i = 0; i < count; i++) {
+        printf("%s#%d — %s\n", items[i].suite, items[i].id, items[i].desc);
+    }
+}
+
+static void fail_list_free(FailEntry *items) {
+    free(items);
+}
+
 static void catalog_emit_suite(const char *suite, int count, int min_id, int max_id, int *suite_count,
                                int *case_total) {
     if (count <= 0) {
@@ -503,6 +544,9 @@ int main(int argc, char **argv) {
     int i;
     double session_t0;
     FlatCaseRunOptions run_opts = {0};
+    FailEntry *fail_list = NULL;
+    int fail_list_count = 0;
+    int fail_list_cap = 0;
 
     categ_filter_init_default(&categ);
 
@@ -593,6 +637,9 @@ int main(int argc, char **argv) {
                 passed++;
             } else {
                 failed++;
+                if (!each) {
+                    (void)fail_list_push(&fail_list, &fail_list_count, &fail_list_cap, c);
+                }
             }
             if (each && show_time) {
                 progress_on_result(&progress, ok, c, verbose, each, 1, use_flatl, &timing, err);
@@ -610,7 +657,11 @@ int main(int argc, char **argv) {
     printf("Passed: %s%d%s Failed: %s%d%s Total: %s%d%s\n", ANSI_YELLOW, passed, ANSI_RESET,
            ANSI_YELLOW, failed, ANSI_RESET, ANSI_YELLOW, passed + failed, ANSI_RESET);
     flat_time_print_tests_footer(flat_time_monotonic_ms() - session_t0);
+    if (!each) {
+        fail_list_print(fail_list, fail_list_count);
+    }
 
+    fail_list_free(fail_list);
     flat_discover_free(cases);
     filters_free(&filters);
     return failed ? 1 : 0;
