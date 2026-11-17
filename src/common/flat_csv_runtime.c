@@ -1304,10 +1304,35 @@ int flat_csv_writer_write_cols(FlatCsvRuntime *rt, uint32_t wid, const FlatValue
     return 0;
 }
 
+static FlatCsvEncoding writer_output_encoding(const FlatCsvSession *s) {
+    if (!s) {
+        return FLAT_CSV_ENC_UTF8;
+    }
+    if (s->fmt.encoding_auto) {
+        return FLAT_CSV_ENC_UTF8;
+    }
+    return s->fmt.encoding;
+}
+
+static int writer_fwrite_all(FILE *fp, const void *data, size_t len) {
+    const unsigned char *p = data;
+    size_t left = len;
+    while (left > 0) {
+        size_t n = fwrite(p, 1, left, fp);
+        if (n == 0) {
+            return -1;
+        }
+        p += n;
+        left -= n;
+    }
+    return 0;
+}
+
 int flat_csv_writer_flush(FlatCsvRuntime *rt, uint32_t wid, FlatFileTable *files, char *panic,
                           size_t panic_sz) {
     FlatCsvSession *s = sess_by_id(rt, wid);
     FILE *fp;
+    FlatCsvEncoding enc;
     if (!s || s->kind != FLAT_CSV_SESS_WRITER) {
         return panic_msg(panic, panic_sz, "csv.flush");
     }
@@ -1318,8 +1343,29 @@ int flat_csv_writer_flush(FlatCsvRuntime *rt, uint32_t wid, FlatFileTable *files
     if (fseek(fp, 0, SEEK_SET) != 0) {
         return panic_msg(panic, panic_sz, "csv.flush");
     }
-    if (s->write_len > 0 && fwrite(s->write_buf, 1, s->write_len, fp) != s->write_len) {
-        return panic_msg(panic, panic_sz, "csv.flush");
+    enc = writer_output_encoding(s);
+    if (enc == FLAT_CSV_ENC_UTF16_LE || enc == FLAT_CSV_ENC_UTF16_BE) {
+        unsigned char *out = NULL;
+        size_t out_len = 0;
+        if (flat_csv_utf8_to_utf16(s->write_buf, s->write_len, enc, &out, &out_len) != 0) {
+            free(out);
+            return panic_msg(panic, panic_sz, "csv.flush");
+        }
+        if (writer_fwrite_all(fp, out, out_len) != 0) {
+            free(out);
+            return panic_msg(panic, panic_sz, "csv.flush");
+        }
+        free(out);
+    } else {
+        if (enc == FLAT_CSV_ENC_UTF8_BOM) {
+            static const unsigned char bom[3] = {0xef, 0xbb, 0xbf};
+            if (writer_fwrite_all(fp, bom, sizeof bom) != 0) {
+                return panic_msg(panic, panic_sz, "csv.flush");
+            }
+        }
+        if (s->write_len > 0 && writer_fwrite_all(fp, s->write_buf, s->write_len) != 0) {
+            return panic_msg(panic, panic_sz, "csv.flush");
+        }
     }
     fflush(fp);
     return 0;

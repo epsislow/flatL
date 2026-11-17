@@ -1,0 +1,9 @@
+suite = "csv"
+id = 14
+desc = "writer UTF-16 LE and BE round-trip"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "writer-utf16-ok"

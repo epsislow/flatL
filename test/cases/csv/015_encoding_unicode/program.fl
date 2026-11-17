@@ -1,0 +1,26 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('uni.csv')
+  wid = csv.writer(fp)
+  csv.setEncoding(wid, 'UTF-16-LE')
+  csv.setLineEndings(wid, 'LF')
+  list.pack('lit', 'wide') -> hdr
+  list.pack('ă', '😀') -> row
+  list.pack(hdr, row) -> rows
+  csv.writeRows(wid, rows)
+  csv.close(wid)
+  file.close(fp)
+  fp = file.readCtx('uni.csv')
+  rid = csv.reader(fp)
+  csv.next(rid) -> _
+  line = csv.next(rid)
+  list.get(line, 0) -> a
+  a == 'ă'
+  list.get(line, 1) -> e
+  e == '😀'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('enc-unicode-ok')
+  OK

@@ -361,6 +361,7 @@ fleditor-csv-smoke:
 	$(NODE) test/fleditor/csv_roundtrip.mjs
 	$(NODE) test/fleditor/csv_selection_stats.mjs
 	$(NODE) test/fleditor/csv_vm_parity.mjs
+	$(NODE) test/fleditor/csv_writer_encoding_bytes.mjs
 
 fleditor-examples-smoke:
 	$(NODE) test/fleditor/examples_smoke.mjs

@@ -1,0 +1,9 @@
+suite = "csv"
+id = 17
+desc = "UTF-16 LE reader without BOM"
+kind = "pipeline"
+source = "program.fl"
+compile = "cp {root}/test/cases/csv/fixtures/utf16le_nobom.csv {tmp}/data.csv && {root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "enc-nobom-ok"

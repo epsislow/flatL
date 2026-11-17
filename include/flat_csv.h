@@ -78,4 +78,8 @@ size_t flat_csv_strip_utf8_bom(const unsigned char *data, size_t len);
 int flat_csv_utf16_to_utf8(const unsigned char *data, size_t data_len, FlatCsvEncoding enc,
                            char **out_utf8, size_t *out_len);
 
+/* Encodes UTF-8 text to UTF-16 with BOM. Allocates *out_bytes; caller frees. */
+int flat_csv_utf8_to_utf16(const char *utf8, size_t utf8_len, FlatCsvEncoding enc,
+                           unsigned char **out_bytes, size_t *out_len);
+
 #endif

@@ -1,0 +1,20 @@
+use native csv
+use native list
+
+#main
+  fp = file.readCtx('data.csv')
+  rid = csv.reader(fp)
+  line = csv.next(rid)
+  list.get(line, 0) -> k
+  k == 'k'
+  list.get(line, 1) -> v
+  v == 'v'
+  line = csv.next(rid)
+  list.get(line, 0) -> a
+  a == 'a'
+  list.get(line, 1) -> one
+  one == '1'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('enc-nobom-ok')
+  OK

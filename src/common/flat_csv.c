@@ -184,6 +184,46 @@ int flat_csv_detect_line_ending(const char *sample, size_t sample_len, FlatCsvLi
     return 0;
 }
 
+static int utf16_ascii_le_score(const unsigned char *data, size_t data_len) {
+    size_t pairs = 0;
+    size_t hits = 0;
+    size_t i;
+
+    if (data_len < 4 || (data_len & 1u)) {
+        return 0;
+    }
+    for (i = 0; i + 1 < data_len; i += 2) {
+        pairs++;
+        if (data[i + 1] == 0x00 && data[i] != 0x00 && data[i] < 0x80u) {
+            hits++;
+        }
+    }
+    if (pairs < 2) {
+        return 0;
+    }
+    return (hits * 2 >= pairs) ? 1 : 0;
+}
+
+static int utf16_ascii_be_score(const unsigned char *data, size_t data_len) {
+    size_t pairs = 0;
+    size_t hits = 0;
+    size_t i;
+
+    if (data_len < 4 || (data_len & 1u)) {
+        return 0;
+    }
+    for (i = 0; i + 1 < data_len; i += 2) {
+        pairs++;
+        if (data[i] == 0x00 && data[i + 1] != 0x00 && data[i + 1] < 0x80u) {
+            hits++;
+        }
+    }
+    if (pairs < 2) {
+        return 0;
+    }
+    return (hits * 2 >= pairs) ? 1 : 0;
+}
+
 int flat_csv_detect_encoding(const unsigned char *data, size_t data_len, FlatCsvEncoding *out_enc) {
     if (!out_enc) {
         return -1;
@@ -194,6 +234,10 @@ int flat_csv_detect_encoding(const unsigned char *data, size_t data_len, FlatCsv
         *out_enc = FLAT_CSV_ENC_UTF16_BE;
     } else if (data_len >= 3 && data[0] == 0xef && data[1] == 0xbb && data[2] == 0xbf) {
         *out_enc = FLAT_CSV_ENC_UTF8_BOM;
+    } else if (utf16_ascii_le_score(data, data_len)) {
+        *out_enc = FLAT_CSV_ENC_UTF16_LE;
+    } else if (utf16_ascii_be_score(data, data_len)) {
+        *out_enc = FLAT_CSV_ENC_UTF16_BE;
     } else {
         *out_enc = FLAT_CSV_ENC_UTF8;
     }
@@ -651,6 +695,139 @@ int flat_csv_utf16_to_utf8(const unsigned char *data, size_t data_len, FlatCsvEn
     }
   if (!buf) {
         (*out_utf8)[0] = '\0';
+    }
+    *out_len = used;
+    return 0;
+}
+
+static int utf8_next_cp(const char *s, size_t len, size_t *pos, unsigned int *out_cp) {
+    size_t i;
+    unsigned char c0;
+    unsigned int cp;
+    int need;
+    int j;
+
+    if (!s || !pos || !out_cp || *pos >= len) {
+        return -1;
+    }
+    i = *pos;
+    c0 = (unsigned char)s[i];
+    if (c0 < 0x80u) {
+        *out_cp = c0;
+        *pos = i + 1;
+        return 0;
+    }
+    if ((c0 & 0xe0u) == 0xc0u) {
+        need = 2;
+        cp = c0 & 0x1fu;
+    } else if ((c0 & 0xf0u) == 0xe0u) {
+        need = 3;
+        cp = c0 & 0x0fu;
+    } else if ((c0 & 0xf8u) == 0xf0u) {
+        need = 4;
+        cp = c0 & 0x07u;
+    } else {
+        return -1;
+    }
+    if (i + (size_t)need > len) {
+        return -1;
+    }
+    for (j = 1; j < need; j++) {
+        unsigned char c = (unsigned char)s[i + (size_t)j];
+        if ((c & 0xc0u) != 0x80u) {
+            return -1;
+        }
+        cp = (cp << 6) | (c & 0x3fu);
+    }
+    *out_cp = cp;
+    *pos = i + (size_t)need;
+    return 0;
+}
+
+static int u16_push(unsigned char **buf, size_t *cap, size_t *used, uint16_t cu, int le) {
+    size_t need;
+    unsigned char b[2];
+
+    if (!buf || !cap || !used) {
+        return -1;
+    }
+    if (le) {
+        b[0] = (unsigned char)(cu & 0xffu);
+        b[1] = (unsigned char)((cu >> 8) & 0xffu);
+    } else {
+        b[0] = (unsigned char)((cu >> 8) & 0xffu);
+        b[1] = (unsigned char)(cu & 0xffu);
+    }
+    need = *used + 2;
+    if (need > *cap) {
+        size_t nc = *cap ? *cap * 2 : 4096;
+        unsigned char *nb;
+        while (nc < need) {
+            nc *= 2;
+        }
+        nb = realloc(*buf, nc);
+        if (!nb) {
+            return -1;
+        }
+        *buf = nb;
+        *cap = nc;
+    }
+    memcpy(*buf + *used, b, 2);
+    *used += 2;
+    return 0;
+}
+
+int flat_csv_utf8_to_utf16(const char *utf8, size_t utf8_len, FlatCsvEncoding enc,
+                             unsigned char **out_bytes, size_t *out_len) {
+    unsigned char *buf = NULL;
+    size_t cap = 0;
+    size_t used = 0;
+    size_t pos = 0;
+    int le;
+
+    if (!out_bytes || !out_len) {
+        return -1;
+    }
+    if (enc != FLAT_CSV_ENC_UTF16_LE && enc != FLAT_CSV_ENC_UTF16_BE) {
+        return -1;
+    }
+    if (!utf8) {
+        utf8_len = 0;
+    }
+    le = enc == FLAT_CSV_ENC_UTF16_LE;
+    if (u16_push(&buf, &cap, &used, 0xfeffu, le) != 0) {
+        free(buf);
+        return -1;
+    }
+    while (pos < utf8_len) {
+        unsigned int cp;
+        if (utf8_next_cp(utf8, utf8_len, &pos, &cp) != 0) {
+            free(buf);
+            return -1;
+        }
+        if (cp <= 0xffffu) {
+            if (u16_push(&buf, &cap, &used, (uint16_t)cp, le) != 0) {
+                free(buf);
+                return -1;
+            }
+        } else if (cp <= 0x10ffffu) {
+            uint32_t v = cp - 0x10000u;
+            uint16_t hi = (uint16_t)(0xd800u | (v >> 10));
+            uint16_t lo = (uint16_t)(0xdc00u | (v & 0x3ffu));
+            if (u16_push(&buf, &cap, &used, hi, le) != 0 ||
+                u16_push(&buf, &cap, &used, lo, le) != 0) {
+                free(buf);
+                return -1;
+            }
+        } else {
+            free(buf);
+            return -1;
+        }
+    }
+    *out_bytes = buf ? buf : calloc(2, 1);
+    if (!*out_bytes) {
+        free(buf);
+        return -1;
     }
     *out_len = used;
     return 0;

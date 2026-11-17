@@ -10,7 +10,7 @@ use native obj
 
 Writer **`writeCols`** needs **`obj`**. Format is auto-detected on first read; override with **`setSeparator`**, **`setLineEndings`**, **`setEncoding`**, **`setQuote`**. Pass **`""`** to any setter to re-enable auto for that field.
 
-**Encoding (read):** UTF-8, UTF-8-BOM, **UTF-16 LE/BE** (BOM optional on read). **Writer** output remains UTF-8 only in v1.
+**Encoding:** UTF-8, UTF-8-BOM, **UTF-16 LE/BE**. Reader auto-detects BOM; UTF-16 **without** BOM uses a lightweight ASCII-oriented heuristic (use **`setEncoding(rid, 'UTF-16-LE')`** when unsure). Writer emits bytes per **`setEncoding`** (`UTF-8` default when encoding is still auto); UTF-16 and UTF-8-BOM outputs include a BOM at flush.
 
 ## Reader
 

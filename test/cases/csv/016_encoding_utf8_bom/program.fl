@@ -1,0 +1,32 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('bom.csv')
+  wid = csv.writer(fp)
+  csv.setEncoding(wid, 'UTF-8-BOM')
+  csv.setLineEndings(wid, 'LF')
+  list.pack('h', 'v') -> hdr
+  list.pack('x', '9') -> row
+  list.pack(hdr, row) -> rows
+  csv.writeRows(wid, rows)
+  csv.close(wid)
+  file.close(fp)
+  fp = file.readCtx('bom.csv')
+  head = file.read(fp, 3)
+  file.close(fp)
+  head != ''
+  fp = file.readCtx('bom.csv')
+  rid = csv.reader(fp)
+  line = csv.next(rid)
+  list.get(line, 0) -> k
+  k == 'h'
+  list.get(line, 1) -> val
+  val == 'v'
+  csv.next(rid) -> r2
+  list.get(r2, 1) -> n
+  n == '9'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('enc-utf8-bom-ok')
+  OK
