@@ -1,0 +1,10 @@
+suite = "csv"
+id = 11
+desc = "str.join on csv.next list"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "x|y"
+stdout_contains_2 = "p|q"

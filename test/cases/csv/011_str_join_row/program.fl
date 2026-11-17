@@ -1,0 +1,19 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('t.csv')
+  file.writeln(fp, 'x,y')
+  file.writeln(fp, 'p,q')
+  file.close(fp)
+  fp = file.readCtx('t.csv')
+  rid = csv.reader(fp)
+  line1 = csv.next(rid)
+  line2 = csv.next(rid)
+  csv.close(rid)
+  file.close(fp)
+  str.join('|', line1) -> s1
+  str.join('|', line2) -> s2
+  io.outln(s1)
+  io.outln(s2)
+  OK

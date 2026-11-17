@@ -1,0 +1,26 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('t.csv')
+  file.writeln(fp, 'a,b')
+  file.writeln(fp, '1,2')
+  file.close(fp)
+  fp = file.readCtx('t.csv')
+  rid = csv.reader(fp)
+  for(2, i, "#row")
+  csv.close(rid)
+  file.close(fp)
+  OK
+
+#row
+  line = csv.next(rid)
+  foreach(line, cell, "#cell")
+  io.out('|')
+  io.outln('')
+  next
+
+#cell
+  io.out(cell)
+  io.out(',')
+  next
