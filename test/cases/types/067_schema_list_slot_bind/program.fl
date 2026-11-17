@@ -2,6 +2,7 @@
   qty: u16
 #main
   xs:<stock>[2] = []
+  xs = [{}, {}]:<stock>[]
   s:<stock> = {qty: 1}
   xs[0] = s
   OK

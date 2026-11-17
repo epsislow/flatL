@@ -64,7 +64,7 @@ typedef struct {
 
 int flat_path_set2(FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *vars, int var_count,
                    const char (*var_names)[64], const char *path_expr, const FlatValue *val,
-                   uint32_t *out_root_obj, FlatPathErr *err_out,
+                   FlatValue *out_new_root, FlatPathErr *err_out,
                    const FlatPathTypedCtx *typed);
 
 double flat_path_resolve_number(const char *name, const char **rest,

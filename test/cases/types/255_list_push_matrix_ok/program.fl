@@ -1,0 +1,6 @@
+use native list with L
+
+#main
+M:f64[][] = [[1, 2], [3, 4]]
+L.push(M, [5, 6]) -> M
+OK

@@ -225,7 +225,7 @@ int flat_native_obj_set(FlatNativeCtx *ctx) {
     }
     if (is_simple_ident(obj_e) && ctx->var_names && ctx->var_slot_types && ctx->var_has_slot_type) {
         char full[512];
-        uint32_t root_obj;
+        FlatValue new_root;
         FlatPathErr perr = FLAT_PATH_OK;
         FlatPathTypedCtx ptc;
 
@@ -238,8 +238,10 @@ int flat_native_obj_set(FlatNativeCtx *ctx) {
             ptc.type_panic_sz = sizeof ctx->panic_detail;
             ctx->panic_detail[0] = '\0';
             if (flat_path_set2(ctx->coll, ctx->pool, ctx->vars, ctx->var_count, ctx->var_names,
-                               full, &val, &root_obj, &perr, &ptc) == 0) {
-                return flat_value_set_object(ctx->out, root_obj);
+                               full, &val, &new_root, &perr, &ptc) == 0) {
+                *ctx->out = new_root;
+                flat_value_retain(ctx->coll, ctx->pool, ctx->out);
+                return 0;
             }
             if (ctx->panic_detail[0] != '\0') {
                 return io_err(ctx);
@@ -338,8 +340,9 @@ int flat_native_obj_set2(FlatNativeCtx *ctx) {
     char *path_e;
     char *val_e;
     FlatValue val;
-    uint32_t root_id;
+    FlatValue new_root;
     FlatPathErr err = FLAT_PATH_OK;
+    int i;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
         return -1;
@@ -354,6 +357,33 @@ int flat_native_obj_set2(FlatNativeCtx *ctx) {
         return io_err(ctx);
     }
     {
+        const char *rp = path_e;
+        char root_name[64];
+        size_t rn = 0;
+
+        while (*rp && isspace((unsigned char)*rp)) {
+            rp++;
+        }
+        while (rp[rn] && (isalnum((unsigned char)rp[rn]) || rp[rn] == '_') &&
+               rn + 1 < sizeof root_name) {
+            rn++;
+        }
+        if (rn > 0) {
+            memcpy(root_name, rp, rn);
+            root_name[rn] = '\0';
+            for (i = 0; i < ctx->var_count; i++) {
+                if (ctx->var_names && strcmp(ctx->var_names[i], root_name) == 0) {
+                    if (ctx->vars[i].tag != VAL_OBJECT) {
+                        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s",
+                                 "obj.set2.root");
+                        return io_err(ctx);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    {
         FlatPathTypedCtx ptc;
 
         memset(&ptc, 0, sizeof ptc);
@@ -365,14 +395,16 @@ int flat_native_obj_set2(FlatNativeCtx *ctx) {
         ptc.var_slot_types = ctx->var_slot_types;
         ptc.var_has_slot_type = ctx->var_has_slot_type;
         if (flat_path_set2(ctx->coll, ctx->pool, ctx->vars, ctx->var_count, ctx->var_names, path_e,
-                           &val, &root_id, &err, &ptc) != 0) {
+                           &val, &new_root, &err, &ptc) != 0) {
             if (ctx->panic_detail[0] == '\0') {
                 flat_path_reason(err, "set2", ctx->panic_detail, sizeof ctx->panic_detail);
             }
             return io_err(ctx);
         }
     }
-    return flat_value_set_object(ctx->out, root_id);
+    *ctx->out = new_root;
+    flat_value_retain(ctx->coll, ctx->pool, ctx->out);
+    return 0;
 }
 
 static int build_key_value_lists(FlatNativeCtx *ctx, uint32_t obj_id, int keys_not_values,

@@ -1,6 +1,6 @@
 # Liste tipizate și literali (AM-LIST-LIT)
 
-**Status:** **L-core** + **L-ext** (`l`/`o`/`[][]`, rank 1–4, §2.2.4–2.2.5); **L.1a/b** MVP; **L.2** parțial.  
+**Status:** **L-core** + **L-ext** + **L.2** ✅; **L.1a/b** MVP (fără **L.1b+** rebuild mdim).  
 **Legături:** [TYPED_BIND.md](./TYPED_BIND.md), [STRICT_TYPES.md](./STRICT_TYPES.md), plan `vect-matrix-rect-roadmap`.
 
 ## Sintaxă axe (LHS și sufix literal)
@@ -84,9 +84,13 @@ table[0][1].qty = 42      # path în grilă (contract frunză pe câmp)
 
 Literal: `… :<stock>[][]` (depth + tip; axe opțional assert). Validare la assign: rect + `flat_schema_bind_value` per celulă; rank 1 reconstruiește lista legată.
 
-## Path (L.2)
+## Path și mutatori (L.2)
 
-`M:f64[][]` — `M[i][j] = …` rezolvă contractul frunză (`f64`) pentru indexare; assign pe celulă trece prin `flat_slot_type_check_value`.
+`M:f64[][]` — `M[i][j] = …` rezolvă contractul frunză (`f64`) la fiecare nivel LIST; rădăcină LIST sau OBJECT (schema). Tip greșit → `type.assign.incompatible`; range numeric → `type.assign.range`.
+
+`L.push(M, row) -> M` pe slot `M:f64[][]` = assign pe lista rezultată (rect / jagged ca la `=` root).
+
+`def f(g:f64[][]) -> out:f64[][]` — validare la apel și return ca assign root.
 
 ## Erori frecvente
 

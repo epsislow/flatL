@@ -389,85 +389,6 @@ int flat_path_read_suffixes(const char **p, FlatValue *cur, FlatStringPool *pool
     return 0;
 }
 
-static int parse_lvalue_steps(const char *expr, FlatStringPool *pool, FlatCollectionPool *coll,
-                              FlatValue *vars, int var_count, const char (*var_names)[64],
-                              int *out_root_vi, FlatPathStep *steps, int *out_nsteps,
-                              FlatPathErr *err_out) {
-    char ident[64];
-    const char *p;
-    int n = 0;
-    int vi;
-
-    if (err_out) {
-        *err_out = FLAT_PATH_OK;
-    }
-    p = skip_ws(expr);
-    if (parse_ident_segment(&p, ident, sizeof ident) != 0) {
-        if (err_out) {
-            *err_out = FLAT_PATH_SYNTAX;
-        }
-        return -1;
-    }
-    vi = find_var_index(ident, var_count, var_names);
-    if (vi < 0 || vars[vi].tag != VAL_OBJECT) {
-        if (err_out) {
-            *err_out = FLAT_PATH_ROOT;
-        }
-        return -1;
-    }
-    *out_root_vi = vi;
-    for (;;) {
-        p = skip_ws(p);
-        if (*p == '\0') {
-            if (n == 0) {
-                if (err_out) {
-                    *err_out = FLAT_PATH_SYNTAX;
-                }
-                return -1;
-            }
-            *out_nsteps = n;
-            return 0;
-        }
-        if (*p == '.') {
-            if (n >= FLAT_OBJ_PATH_MAX_SEG) {
-                if (err_out) {
-                    *err_out = FLAT_PATH_SYNTAX;
-                }
-                return -1;
-            }
-            steps[n].kind = FLAT_PATH_STEP_FIELD;
-            if (parse_field_suffix(&p, steps[n].key, sizeof steps[n].key) != 0) {
-                if (err_out) {
-                    *err_out = FLAT_PATH_SYNTAX;
-                }
-                return -1;
-            }
-            n++;
-            continue;
-        }
-        if (*p == '[') {
-            p++;
-            if (n >= FLAT_OBJ_PATH_MAX_SEG) {
-                if (err_out) {
-                    *err_out = FLAT_PATH_SYNTAX;
-                }
-                return -1;
-            }
-            steps[n].kind = FLAT_PATH_STEP_INDEX;
-            if (parse_bracket_index(&p, pool, coll, vars, var_count, var_names, &steps[n].index,
-                                    err_out) != 0) {
-                return -1;
-            }
-            n++;
-            continue;
-        }
-        if (err_out) {
-            *err_out = FLAT_PATH_SYNTAX;
-        }
-        return -1;
-    }
-}
-
 static int materialize_child_field(const FlatSchemaField *field, FlatCollectionPool *pool,
                                    FlatStringPool *str_pool, const FlatSchemaCatalog *cat,
                                    FlatValue *out, char *panic, size_t panic_sz) {
@@ -558,18 +479,25 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
             FlatValue checked = *val;
             const FlatValue *write_val_idx = val;
             char panic[64];
+            FlatSlotType leaf_contract;
+            const FlatSlotType *check_contract = cur_contract;
 
             if (cur.tag != VAL_LIST) {
                 return -2;
             }
-            if (cur_contract && cur_contract->kind != FLAT_SLOT_TYPE_NONE &&
+            flat_slot_type_clear(&leaf_contract);
+            if (cur_contract && cur_contract->list_rank > 0 &&
+                flat_slot_type_list_index_contract(cur_contract, &leaf_contract) == 0) {
+                check_contract = &leaf_contract;
+            }
+            if (check_contract && check_contract->kind != FLAT_SLOT_TYPE_NONE &&
                 flat_slot_type_check_value(
-                    cur_contract, val, str_pool, pool,
+                    check_contract, val, str_pool, pool,
                     typed && typed->schemas ? (const FlatSchemaCatalog *)typed->schemas : NULL,
                     &checked, panic, sizeof panic) != 0) {
                 return type_panic_write(typed, panic[0] ? panic : "type.assign.incompatible");
             }
-            if (cur_contract && cur_contract->kind != FLAT_SLOT_TYPE_NONE) {
+            if (check_contract && check_contract->kind != FLAT_SLOT_TYPE_NONE) {
                 write_val_idx = &checked;
             }
             if (flat_list_set_copy(pool, str_pool, cur.u.coll_id, steps[step_i].index, write_val_idx,
@@ -652,8 +580,18 @@ static int write_at_step(FlatCollectionPool *pool, FlatStringPool *str_pool, Fla
         if (flat_list_get(pool, cur.u.coll_id, steps[step_i].index, &elem) != 0) {
             return -3;
         }
-        rc = write_at_step(pool, str_pool, elem, steps, step_i + 1, nsteps, val, &elem_new,
-                           cur_contract, typed);
+        {
+            FlatSlotType next_contract;
+            const FlatSlotType *child_contract = cur_contract;
+
+            flat_slot_type_clear(&next_contract);
+            if (cur_contract && cur_contract->list_rank > 0 &&
+                flat_slot_type_list_index_contract(cur_contract, &next_contract) == 0) {
+                child_contract = &next_contract;
+            }
+            rc = write_at_step(pool, str_pool, elem, steps, step_i + 1, nsteps, val, &elem_new,
+                               child_contract, typed);
+        }
         if (rc != 0) {
             return rc;
         }
@@ -885,7 +823,7 @@ int flat_path_resolve_slot_lvalue(const char *expr, FlatStringPool *pool, FlatCo
 
 int flat_path_set2(FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *vars, int var_count,
                    const char (*var_names)[64], const char *path_expr, const FlatValue *val,
-                   uint32_t *out_root_obj, FlatPathErr *err_out, const FlatPathTypedCtx *typed) {
+                   FlatValue *out_new_root, FlatPathErr *err_out, const FlatPathTypedCtx *typed) {
     FlatPathStep steps[FLAT_OBJ_PATH_MAX_SEG];
     int nsteps = 0;
     int root_vi;
@@ -896,14 +834,14 @@ int flat_path_set2(FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *va
     if (err_out) {
         *err_out = FLAT_PATH_OK;
     }
-    if (!coll || !pool || !vars || !path_expr || !val || !out_root_obj) {
+    if (!coll || !pool || !vars || !path_expr || !val || !out_new_root) {
         if (err_out) {
             *err_out = FLAT_PATH_SYNTAX;
         }
         return -1;
     }
-    if (parse_lvalue_steps(path_expr, pool, coll, vars, var_count, var_names, &root_vi, steps,
-                           &nsteps, err_out) != 0) {
+    if (parse_slot_path_steps(path_expr, pool, coll, vars, var_count, var_names, &root_vi, steps,
+                              &nsteps, err_out) != 0) {
         return -1;
     }
     root = vars[root_vi];
@@ -942,13 +880,13 @@ int flat_path_set2(FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *va
         }
         return -1;
     }
-    if (new_root.tag != VAL_OBJECT) {
+    if (new_root.tag != VAL_OBJECT && new_root.tag != VAL_LIST) {
         if (err_out) {
             *err_out = FLAT_PATH_SET;
         }
         return -1;
     }
-    *out_root_obj = new_root.u.coll_id;
+    *out_new_root = new_root;
     return 0;
 }
 

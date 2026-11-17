@@ -840,7 +840,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         char root_name[FLAT_VAR_NAME_MAX + 1];
         FlatSlotType root_ty;
         int root_has_ty = 0;
-        uint32_t root_obj_id = 0;
+        FlatValue new_root;
         FlatPathErr perr = FLAT_PATH_OK;
         FlatPathTypedCtx ptc;
         int root_vi;
@@ -928,24 +928,22 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         ptc.type_panic_sz = sizeof st->panic_reason;
         st->panic_reason[0] = '\0';
         if (flat_path_set2(st->coll, st->pool, vals, st->var_count, names, path_expr, &v,
-                           &root_obj_id, &perr, &ptc) != 0) {
-            if (st->panic_reason[0] != '\0') {
-                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
-            } else {
-                rc = 0;
+                           &new_root, &perr, &ptc) != 0) {
+            if (st->panic_reason[0] == '\0') {
+                char pbuf[64];
+                snprintf(st->panic_reason, sizeof st->panic_reason, "%s",
+                         flat_path_reason(perr, "assign", pbuf, sizeof pbuf));
             }
+            rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
             goto done;
         }
         {
-            FlatValue nv;
-
-            flat_value_set_object(&nv, root_obj_id);
-            flat_value_retain(st->coll, st->pool, &nv);
-            flat_value_live_replace(&st->live, &st->vars[root_vi].val, &nv);
+            flat_value_retain(st->coll, st->pool, &new_root);
+            flat_value_live_replace(&st->live, &st->vars[root_vi].val, &new_root);
             flat_value_release(st->coll, st->pool, &st->vars[root_vi].val);
-            st->vars[root_vi].val = nv;
+            st->vars[root_vi].val = new_root;
             if (st->io_ctx) {
-                flat_io_ctx_var_updated(st->io_ctx, root_vi, &nv);
+                flat_io_ctx_var_updated(st->io_ctx, root_vi, &new_root);
             }
         }
         rc = 0;
