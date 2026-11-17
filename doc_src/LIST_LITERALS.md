@@ -1,6 +1,6 @@
 # Liste tipizate și literali (AM-LIST-LIT)
 
-**Status:** L-core → L.2 în `flvm` (axe multidimensionale, literali, `l`/`o`/`[][]`, liste `<schema>` mdim).  
+**Status:** **L-core complet** (rank 1–4, `f64`/`tN`/`b`/numeric, literali, rect); apoi L.1a/b, L-ext, L.2.  
 **Legături:** [TYPED_BIND.md](./TYPED_BIND.md), [STRICT_TYPES.md](./STRICT_TYPES.md), plan `vect-matrix-rect-roadmap`.
 
 ## Sintaxă axe (LHS și sufix literal)
@@ -29,6 +29,8 @@ bags:o[]             # vector de obiecte
 zone:[][]            # shape-only 2D (≠ `l[]` rank 1)
 ```
 
+**Doar contract (fără valoare):** nu există linie `M:f64[][]` fără `=` — folosește `M:f64[][] = null` (sau assign imediat). Aliniat cu restul bind-urilor tipizate din sursă.
+
 ## Literal RHS
 
 ```text
@@ -40,7 +42,8 @@ buf = [[1, 2], [3, 4]]:f64[][]       # fără LHS — doar parse + assert sufix
 - Sufixul imediat după `]`-ul exterior: `:[…]:tip` sau `:[=2][3]` pe shape-only.
 - `type.assign.literal.type` dacă elementul sufixului ≠ contractul slotului (ex. `u32[]` vs `:f64[]`).
 - `type.assign.list.depth` dacă adâncimea LIST ≠ numărul de axe din sufix.
-- **Rect** la rank ≥2: lățimi de rând egale → altfel `type.assign.list.jagged` (unde e implementat) sau `type.assign.shape` pe axe exacte.
+- **Rect** la rank ≥2: lățimi de rând egale pe fiecare axă interior → `type.assign.list.jagged` sau `type.assign.shape` pe axe exacte.
+- Literale **nested** cu mai mulți frați la același nivel păstrează subliste vii până la `flat_list_build` (pin la parse).
 
 ## Tipuri container
 

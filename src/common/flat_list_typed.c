@@ -162,40 +162,6 @@ int flat_slot_type_list_index_contract(const FlatSlotType *list, FlatSlotType *i
     return flat_slot_type_list_inner_contract(list, inner);
 }
 
-static int enforce_rect_at_depth(FlatCollectionPool *coll, uint32_t list_id, int depth,
-                                 int target_depth) {
-    int len = 0;
-    int i;
-    int expect = -1;
-
-    if (depth >= target_depth) {
-        return 0;
-    }
-    if (flat_list_len(coll, list_id, &len) != 0) {
-        return -1;
-    }
-    for (i = 0; i < len; i++) {
-        FlatValue row;
-        int row_len;
-
-        if (flat_list_get(coll, list_id, i, &row) != 0 || row.tag != VAL_LIST) {
-            return -1;
-        }
-        if (enforce_rect_at_depth(coll, row.u.coll_id, depth + 1, target_depth) != 0) {
-            return -1;
-        }
-        if (flat_list_len(coll, row.u.coll_id, &row_len) != 0) {
-            return -1;
-        }
-        if (expect < 0) {
-            expect = row_len;
-        } else if (row_len != expect) {
-            return -1;
-        }
-    }
-    return 0;
-}
-
 int flat_list_value_rank(FlatCollectionPool *coll, uint32_t list_id) {
     int len = 0;
     int i;

@@ -1,0 +1,7 @@
+suite = "types"
+id = 197
+desc = "compile reject cap [0] axis"
+kind = "exec"
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 1
+stderr_contains = "type.list.dim.zero"

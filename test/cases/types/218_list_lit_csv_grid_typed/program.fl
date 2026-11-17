@@ -1,0 +1,14 @@
+use native csv
+
+#main
+  fp = file.createCtx('lit218.csv')
+  file.writeln(fp, 'a,b')
+  file.writeln(fp, '1,2')
+  file.close(fp)
+  fp = file.readCtx('lit218.csv')
+  rid = csv.reader(fp)
+  raw = csv.getCells(rid, 0, 0, 2, 2)
+  G:t255[][] = raw
+  csv.close(rid)
+  file.close(fp)
+  OK

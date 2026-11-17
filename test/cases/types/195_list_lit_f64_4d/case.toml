@@ -1,0 +1,8 @@
+suite = "types"
+id = 195
+desc = "f64 4D rect smoke"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

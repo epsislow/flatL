@@ -1,6 +1,6 @@
 suite = "types"
 id = 175
-desc = "f64 2D mixed exact axes cap (smoke before full 3D)"
+desc = "f64 3D tensor mix [=2][3][=2] + literal suffix"
 kind = "pipeline"
 source = "program.fl"
 compile = "{root}/bin/flc -o {tmp}/out.fb {src}"

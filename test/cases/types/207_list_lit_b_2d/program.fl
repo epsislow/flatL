@@ -1,0 +1,3 @@
+#main
+B:b[][] = [[true, false], [false, true]]
+OK

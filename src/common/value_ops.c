@@ -199,9 +199,15 @@ static int parse_list_literal(const char **p, FlatValue *out, FlatStringPool *po
             cap = ncap;
         }
         if (flat_value_parse_at(p, &items[count], pool, coll, vars, var_count, var_names) != 0) {
+            int j;
+            for (j = 0; j < count; j++) {
+                flat_value_release(coll, pool, &items[j]);
+            }
             free(items);
             return -1;
         }
+        /* Keep earlier siblings alive until this list is built (flat_list_empty reaps unbound). */
+        flat_value_retain(coll, pool, &items[count]);
         count++;
         *p = skip_ws(*p);
         if (**p == ',') {
@@ -220,8 +226,18 @@ static int parse_list_literal(const char **p, FlatValue *out, FlatStringPool *po
         return -1;
     }
     if (flat_list_build(coll, pool, items, count, &id) != 0) {
+        int j;
+        for (j = 0; j < count; j++) {
+            flat_value_release(coll, pool, &items[j]);
+        }
         free(items);
         return -1;
+    }
+    {
+        int j;
+        for (j = 0; j < count; j++) {
+            flat_value_release(coll, pool, &items[j]);
+        }
     }
     free(items);
     return flat_value_set_list(out, id);
