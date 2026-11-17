@@ -184,31 +184,6 @@ int flat_schema_find_id(const FlatSchemaCatalog *cat, const char *name) {
     return -1;
 }
 
-static int parse_schema_ref_name(const char *spec, char *name_out, size_t name_sz, const char **rest) {
-    const char *p;
-    const char *end;
-    size_t nlen;
-
-    if (!spec || spec[0] != '<') {
-        return -1;
-    }
-    p = spec + 1;
-    end = strchr(p, '>');
-    if (!end) {
-        return -1;
-    }
-    nlen = (size_t)(end - p);
-    if (nlen == 0 || nlen >= name_sz) {
-        return -1;
-    }
-    memcpy(name_out, p, nlen);
-    name_out[nlen] = '\0';
-  if (rest) {
-        *rest = end + 1;
-    }
-    return 0;
-}
-
 static int parse_field_spec(const char *spec, FlatSlotType *out, uint8_t *list_flag,
                             const FlatSchemaCatalog *cat, int self_schema_ix, char *err,
                             size_t err_sz) {
