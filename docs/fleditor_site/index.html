@@ -62,8 +62,10 @@
               <button type="button" id="csvHeaderRowBtn" class="fleditor-csv-header-btn" title="Highlight row 1 (display only)" aria-pressed="false">Header</button>
               <button type="button" id="csvTableSizeBtn" title="Set row and column count">Size…</button>
               <button type="button" id="csvFormatBtn" title="Separator, quote, line endings, encoding">Format…</button>
+              <button type="button" id="csvSelectExtendBtn" class="fleditor-csv-header-btn" title="Extend selection on next tap (like Shift)" aria-pressed="false">Select</button>
               <button type="button" id="csvCopyBtn" title="Copy selection to clipboard">Copy</button>
               <button type="button" id="csvPasteBtn" title="Paste from clipboard into grid">Paste</button>
+              <span id="csvSelectionStats" class="fleditor-csv-selection-stats" aria-live="polite"></span>
             </div>
             <div class="fleditor-csv-row">
               <label class="fleditor-csv-field">Pos
@@ -429,7 +431,7 @@
   <script src="js/fleditor-hex-grid.js?v=6"></script>
   <script src="js/fleditor-text-format.js?v=1"></script>
   <script src="js/fleditor-csv-parse.js?v=6"></script>
-  <script src="js/fleditor-csv-grid.js?v=9"></script>
+  <script src="js/fleditor-csv-grid.js?v=11"></script>
   <script src="js/fleditor-project.js?v=7"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
@@ -437,6 +439,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=66"></script>
+  <script src="js/fleditor.js?v=69"></script>
 </body>
 </html>

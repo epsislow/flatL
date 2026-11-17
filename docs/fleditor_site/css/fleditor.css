@@ -557,6 +557,12 @@ body.fleditor-resize-active * {
   gap: 0.35rem 0.65rem;
 }
 .fleditor-csv-meta { margin-right: 0.35rem; color: var(--fl-text); }
+.fleditor-csv-selection-stats {
+  margin-left: 0.35rem;
+  color: var(--fl-text);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .fleditor-csv-field {
   display: inline-flex;
   align-items: center;

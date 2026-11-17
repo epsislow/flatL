@@ -353,6 +353,7 @@ fleditor-csv-smoke:
 	$(NODE) test/fleditor/csv_parse.mjs
 	$(NODE) test/fleditor/text_format.mjs
 	$(NODE) test/fleditor/csv_roundtrip.mjs
+	$(NODE) test/fleditor/csv_selection_stats.mjs
 
 fleditor-examples-smoke:
 	$(NODE) test/fleditor/examples_smoke.mjs

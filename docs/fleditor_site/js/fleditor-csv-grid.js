@@ -4,6 +4,9 @@
 
   const P = root.FleditorCsvParse;
   const APPEND = '+';
+  const SEL_MAX_CELLS = 9999;
+  const SEL_MAX_SUM = 9999;
+  const SEL_MIN_SUM = -9999;
 
   function cellInputClass(dirty) {
     return 'fleditor-csv-grid-cell' + (dirty ? ' fleditor-csv-grid-cell--dirty' : '');
@@ -57,72 +60,58 @@
     }
   }
 
-  function cellIndexFromTarget(target) {
-    if (!target || !target.closest) return null;
-    const inp = target.closest('input.fleditor-csv-grid-cell[data-row][data-col]');
-    if (!inp) return null;
-    const r = parseInt(inp.getAttribute('data-row'), 10);
-    const c = parseInt(inp.getAttribute('data-col'), 10);
-    if (!Number.isFinite(r) || !Number.isFinite(c)) return null;
-    return { r: r, c: c };
+  function parseCellNumber(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return null;
+    const t = s.replace(/\s/g, '');
+    if (/^-?\d+$/.test(t)) return parseInt(t, 10);
+    if (/^-?\d+[.,]\d+$/.test(t)) {
+      const dot = t.lastIndexOf('.');
+      const comma = t.lastIndexOf(',');
+      if (dot >= 0 && comma >= 0) return null;
+      const normalized = comma > dot ? t.replace(',', '.') : t;
+      const v = parseFloat(normalized);
+      return Number.isFinite(v) ? v : null;
+    }
+    return null;
   }
 
-  function bindTouchRangeSelection(container, getOpts) {
-    if (!container) return;
-    container._fleditorCsvGetOpts = getOpts;
-    if (container._fleditorCsvTouchBound) return;
-    container._fleditorCsvTouchBound = true;
-    let touchSel = null;
-
-    container.addEventListener(
-      'pointerdown',
-      function (e) {
-        if (e.pointerType === 'mouse') return;
-        const cell = cellIndexFromTarget(e.target);
-        if (!cell) return;
-        touchSel = { anchor: cell, pointerId: e.pointerId, drag: false };
-        try {
-          container.setPointerCapture(e.pointerId);
-        } catch (_e) { /* ignore */ }
-      },
-      true
-    );
-
-    container.addEventListener('pointermove', function (e) {
-      if (!touchSel || touchSel.pointerId !== e.pointerId) return;
-      const opts = container._fleditorCsvGetOpts && container._fleditorCsvGetOpts();
-      if (!opts) return;
-      const cell = cellIndexFromTarget(document.elementFromPoint(e.clientX, e.clientY));
-      if (!cell) return;
-      if (!touchSel.drag) {
-        if (cell.r === touchSel.anchor.r && cell.c === touchSel.anchor.c) return;
-        touchSel.drag = true;
-        e.preventDefault();
-        if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
-        opts.pendingSelect = 'replace';
-        if (opts.onCellSelect) opts.onCellSelect(touchSel.anchor.r, touchSel.anchor.c);
-      }
-      if (touchSel.drag) {
-        e.preventDefault();
-        opts.pendingSelect = 'extend';
-        if (opts.onCellExtendSelect) opts.onCellExtendSelect(cell.r, cell.c);
-      }
-    });
-
-    function finishTouch(e) {
-      if (!touchSel || touchSel.pointerId !== e.pointerId) return;
-      const opts = container._fleditorCsvGetOpts && container._fleditorCsvGetOpts();
-      if (!touchSel.drag && opts) {
-        opts.pendingSelect = 'replace';
-        focusCell(container, touchSel.anchor.r, touchSel.anchor.c);
-      }
-      touchSel = null;
-      try {
-        container.releasePointerCapture(e.pointerId);
-      } catch (_e2) { /* ignore */ }
+  function formatSumForDisplay(sum) {
+    const rounded = Math.round(sum * 100) / 100;
+    if (rounded > SEL_MAX_SUM) return 'MAX(sum)';
+    if (rounded < SEL_MIN_SUM) return '-MAX(sum)';
+    if (Number.isInteger(rounded) || Math.abs(rounded - Math.round(rounded)) < 1e-9) {
+      return String(Math.round(rounded)) + '(sum)';
     }
-    container.addEventListener('pointerup', finishTouch);
-    container.addEventListener('pointercancel', finishTouch);
+    const s = rounded.toFixed(2).replace(/\.?0+$/, '');
+    return s + '(sum)';
+  }
+
+  function selectionStats(rows, anchor, focus) {
+    const b = normalizeSelection(anchor, focus);
+    if (!b || !rows.length) return { cells: 0, sum: 0 };
+    let cells = 0;
+    let sum = 0;
+    for (let r = b.r0; r <= b.r1; r++) {
+      for (let c = b.c0; c <= b.c1; c++) {
+        cells++;
+        const line = rows[r] || [];
+        const n = parseCellNumber(line[c]);
+        if (n !== null && Number.isFinite(n)) sum += n;
+      }
+    }
+    return { cells: cells, sum: sum };
+  }
+
+  function formatSelectionSummary(rows, anchor, focus) {
+    const st = selectionStats(rows, anchor, focus);
+    const cPart = st.cells > SEL_MAX_CELLS ? 'MAX(c)' : String(st.cells) + '(c)';
+    const sumPart = formatSumForDisplay(st.sum);
+    return cPart + ' ' + sumPart;
+  }
+
+  function selectionExtendFromEvent(opts, e) {
+    return !!(e && (e.shiftKey || (opts.isSelectExtend && opts.isSelectExtend())));
   }
 
   function focusCell(container, r, c, kind) {
@@ -145,8 +134,8 @@
     inp.spellcheck = false;
     inp.autocomplete = 'off';
     inp.setAttribute('aria-label', 'Cell row ' + (r + 1) + ' column ' + (c + 1));
-    inp.addEventListener('mousedown', function (e) {
-      opts.pendingSelect = e.shiftKey ? 'extend' : 'replace';
+    inp.addEventListener('pointerdown', function (e) {
+      opts.pendingSelect = selectionExtendFromEvent(opts, e) ? 'extend' : 'replace';
     });
     inp.addEventListener('focus', function () {
       const mode = opts.pendingSelect;
@@ -174,7 +163,10 @@
     inp.addEventListener('keydown', function (e) {
       const cols = opts.colCount();
       const rows = opts.rowCount();
-      if (e.shiftKey && (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      if (
+        (e.shiftKey || (opts.isSelectExtend && opts.isSelectExtend())) &&
+        (e.key === 'ArrowRight' || e.key === 'ArrowLeft' || e.key === 'ArrowDown' || e.key === 'ArrowUp')
+      ) {
         let nr = r;
         let nc = c;
         if (e.key === 'ArrowRight' && c + 1 < cols) nc = c + 1;
@@ -312,7 +304,8 @@
       th.addEventListener('pointerup', function (e) {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         e.preventDefault();
-        if (options.onColHeaderSelect) options.onColHeaderSelect(colIdx, e.shiftKey);
+        const extend = e.shiftKey || (options.isSelectExtend && options.isSelectExtend());
+        if (options.onColHeaderSelect) options.onColHeaderSelect(colIdx, extend);
       });
       hr.appendChild(th);
     }
@@ -337,6 +330,7 @@
       onCopy: options.onCopy,
       onPaste: options.onPaste,
       onPasteText: options.onPasteText,
+      isSelectExtend: options.isSelectExtend,
       isMultiCellSelection: options.isMultiCellSelection,
     };
     for (let r = 0; r < rows.length; r++) {
@@ -354,7 +348,8 @@
       rowLabel.addEventListener('pointerup', function (e) {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
         e.preventDefault();
-        if (options.onRowHeaderSelect) options.onRowHeaderSelect(rowIdx, e.shiftKey);
+        const extend = e.shiftKey || (options.isSelectExtend && options.isSelectExtend());
+        if (options.onRowHeaderSelect) options.onRowHeaderSelect(rowIdx, extend);
       });
       tr.appendChild(rowLabel);
       const line = rows[r];
@@ -387,9 +382,6 @@
     tbody.appendChild(trPlus);
     table.appendChild(tbody);
     container.appendChild(table);
-    bindTouchRangeSelection(container, function () {
-      return gridOpts;
-    });
     if (options.getSelection) {
       const sel = options.getSelection();
       applySelectionHighlights(container, sel && sel.anchor, sel && sel.focus);
@@ -464,6 +456,9 @@
     parseCellPos,
     matchIndexForAnchor,
     applySearchHighlights,
+    parseCellNumber,
+    selectionStats,
+    formatSelectionSummary,
     isCellDirty(val, saved) {
       return String(val) !== String(saved);
     },
