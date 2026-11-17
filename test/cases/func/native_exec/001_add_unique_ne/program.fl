@@ -1,0 +1,15 @@
+use "../../../../../blocks/native-exec.fl" as #ne_
+use native executor with E
+use native vcx with V
+use native math with m
+
+func:executor #ne_executor.unique.scope
+
+def add(a, b) -> sum
+  m.calc('a + b') -> sum
+  return
+
+#main
+  add(2, 3) -> r
+  io.outln(r)
+  OK

@@ -184,4 +184,9 @@ int flat_native_vcx_copy_call_return(FlatNativeCtx *ctx);
 int flat_native_vcx_dschema_allow(FlatNativeCtx *ctx);
 int flat_native_vcx_dschema_list(FlatNativeCtx *ctx);
 
+int flat_native_executor_unique_begin(FlatNativeCtx *ctx);
+int flat_native_executor_unique_end(FlatNativeCtx *ctx);
+int flat_native_executor_global_begin(FlatNativeCtx *ctx);
+int flat_native_executor_global_end(FlatNativeCtx *ctx);
+
 #endif

@@ -1,0 +1,16 @@
+use "../../../../../blocks/native-exec.fl" as #ne_
+use native executor with E
+use native vcx with V
+
+func:executor #ne_executor.global.scope
+
+def both() -> u, v
+  u = 41
+  v = 1
+  return
+
+#main
+  both() -> a, b
+  io.outln(a)
+  io.outln(b)
+  OK

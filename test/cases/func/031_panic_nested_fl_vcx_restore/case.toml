@@ -1,0 +1,10 @@
+suite = "func"
+id = 31
+desc = "fl executor: after nested PANIC, handler sees global VCX (V.current=1)"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "math.calc.divzero"
+stdout_contains_2 = "1"

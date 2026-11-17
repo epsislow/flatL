@@ -1,0 +1,13 @@
+use native executor with E
+
+#executor.unique.scope
+  blockId = E.uniqueBegin()
+  call block blockId
+  E.uniqueEnd()
+  return
+
+#executor.global.scope
+  blockId = E.globalBegin()
+  call block blockId
+  E.globalEnd()
+  return

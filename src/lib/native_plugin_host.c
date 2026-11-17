@@ -22,6 +22,7 @@ static int g_loaded_math;
 static int g_loaded_list;
 static int g_loaded_obj;
 static int g_loaded_vcx;
+static int g_loaded_executor;
 
 static void register_embedded_mem(void) {
     flat_native_plugin_register(FLAT_NATIVE_MEM_VARS_MAX, flat_native_mem_vars_max);
@@ -89,6 +90,14 @@ static void register_embedded_vcx(void) {
     flat_native_plugin_register(FLAT_NATIVE_VCX_BIND_CALL_PARAMS, flat_native_vcx_bind_call_params);
     flat_native_plugin_register(FLAT_NATIVE_VCX_COPY_CALL_RETURN, flat_native_vcx_copy_call_return);
     g_loaded_vcx = 1;
+}
+
+static void register_embedded_executor(void) {
+    flat_native_plugin_register(FLAT_NATIVE_EXECUTOR_UNIQUE_BEGIN, flat_native_executor_unique_begin);
+    flat_native_plugin_register(FLAT_NATIVE_EXECUTOR_UNIQUE_END, flat_native_executor_unique_end);
+    flat_native_plugin_register(FLAT_NATIVE_EXECUTOR_GLOBAL_BEGIN, flat_native_executor_global_begin);
+    flat_native_plugin_register(FLAT_NATIVE_EXECUTOR_GLOBAL_END, flat_native_executor_global_end);
+    g_loaded_executor = 1;
 }
 
 static void register_embedded_file(void) {
@@ -259,6 +268,13 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         g_loaded_vcx = 1;
         return 0;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_EXECUTOR) == 0) {
+        if (g_loaded_executor) {
+            return 0;
+        }
+        register_embedded_executor();
+        return 0;
+    }
     snprintf(err, err_size, "optional native module not available: \"%s\"", mod);
     return -1;
 }
@@ -321,6 +337,9 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         return 0;
     }
     if (strcmp(mod, FLAT_NATIVE_MODULE_VCX) == 0 && g_loaded_vcx) {
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_EXECUTOR) == 0 && g_loaded_executor) {
         return 0;
     }
 
@@ -396,6 +415,9 @@ ok:
     if (strcmp(mod, FLAT_NATIVE_MODULE_VCX) == 0) {
         g_loaded_vcx = 1;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_EXECUTOR) == 0) {
+        g_loaded_executor = 1;
+    }
     return 0;
 }
 
@@ -408,11 +430,13 @@ void flat_native_runtime_reset(void) {
     g_loaded_list = 0;
     g_loaded_obj = 0;
     g_loaded_vcx = 0;
+    g_loaded_executor = 0;
     g_search_dir[0] = '\0';
     register_embedded_mem();
     register_embedded_file();
     register_embedded_date();
     register_embedded_vcx();
+    register_embedded_executor();
 }
 
 void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count) {

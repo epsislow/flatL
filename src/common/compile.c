@@ -392,6 +392,28 @@ static int validate_line_label_handlers(const FgirProgram *prog, char *err, size
     return 0;
 }
 
+static int validate_panic_handlers_no_return(const FgirProgram *prog, char *err, size_t err_size) {
+    int bi, ii;
+
+    for (bi = 0; bi < prog->block_count; bi++) {
+        const char *lab = prog->blocks[bi].label;
+
+        if (strncmp(lab, "#panic.", 7) != 0 && strcmp(lab, "#panic.any") != 0) {
+            continue;
+        }
+        for (ii = 0; ii < prog->blocks[bi].instr_count; ii++) {
+            if (prog->blocks[bi].instr[ii].kind == FGIR_RETURN) {
+                snprintf(err, err_size,
+                         "return is not allowed in panic handler block \"%s\" (use OK, FAIL, or "
+                         "jump)",
+                         lab);
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
 typedef struct {
     size_t abs_offset;
 } BlockOff;
@@ -877,6 +899,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
     if (validate_line_label_handlers(prog, err, err_size) != 0) {
+        return -1;
+    }
+    if (validate_panic_handlers_no_return(prog, err, err_size) != 0) {
         return -1;
     }
     if (flat_native_use_validate_program(prog, err, err_size) != 0) {

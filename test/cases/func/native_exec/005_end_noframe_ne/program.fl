@@ -1,0 +1,14 @@
+use "../../../../../blocks/native-exec.fl" as #ne_
+use native executor with E
+use native vcx with V
+
+func:executor #ne_executor.unique.scope
+
+#probe
+  E.uniqueEnd()
+  return
+
+#main
+  call #probe
+  io.outln('unreachable')
+  OK

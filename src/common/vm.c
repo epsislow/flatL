@@ -15,6 +15,7 @@
 #include "flat_number.h"
 #include "flat_value.h"
 #include "flat_vcx.h"
+#include "flat_executor.h"
 #include "flat_slot_type.h"
 #include "flat_obj_path.h"
 #include "flat_schema.h"
@@ -234,6 +235,28 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
                              int trace) {
     size_t i;
     uint32_t want = flat_label_hash("#panic.any");
+    char exec_panic[64];
+    uint32_t instr_stack[VM_MAX_CALL];
+    int ci;
+
+    if (st && st->vcx && bc) {
+        flat_executor_bind_vm(&(FlatExecutorVmBind){
+            .vcx = st->vcx,
+            .coll = st->coll,
+            .pool = st->pool,
+            .files = &st->files,
+            .live = &st->live,
+            .bc = bc,
+        });
+        exec_panic[0] = '\0';
+        for (ci = 0; ci < st->call_sp && ci < VM_MAX_CALL; ci++) {
+            instr_stack[ci] = st->calls[ci].func_instr_ctx;
+        }
+        flat_executor_panic_drain_calls(bc, instr_stack, st->call_sp, exec_panic, sizeof exec_panic);
+        while (st->call_sp > 0 && st->calls[st->call_sp - 1].func_instr_ctx != 0u) {
+            st->call_sp--;
+        }
+    }
 
     vm_note_caught_panic(st, reason);
 
@@ -1261,6 +1284,8 @@ static void vm_teardown(VmState *st, int rc) {
         flat_vcx_set_call_instr_resolver(NULL);
         flat_vm_instr_stack_clear();
     }
+    flat_executor_bind_vm(NULL);
+    flat_executor_reset_session();
     if (st->vcx) {
         flat_vcx_runtime_destroy(st->vcx, st->coll, st->pool, &st->files);
         st->vcx = NULL;
@@ -2046,6 +2071,15 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     flat_vcx_runtime_set_active(st.vcx);
     g_vm_call_instr = &st;
     flat_vcx_set_call_instr_resolver(vm_resolve_call_instr_ctx);
+    flat_executor_reset_session();
+    flat_executor_bind_vm(&(FlatExecutorVmBind){
+        .vcx = st.vcx,
+        .coll = st.coll,
+        .pool = st.pool,
+        .files = &st.files,
+        .live = &st.live,
+        .bc = bc,
+    });
     if (!st.vars) {
         return vm_fail_setup(&st, opts);
     }

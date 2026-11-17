@@ -39,7 +39,7 @@ static void flc_print_time(double link_ms, double compile_ms, int units, int fmo
 
 int main(int argc, char **argv) {
     FgirProgram *prog;
-    char err[512];
+    char err[512] = {0};
     const char *in_path = NULL;
     const char *out_path = NULL;
     int dump_ir = 0;

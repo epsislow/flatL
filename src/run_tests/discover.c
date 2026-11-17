@@ -73,7 +73,13 @@ static int on_case_dir(const char *case_dir_name, void *ctx) {
         return 0;
     }
     if (flat_case_load(toml, &c) != 0) {
-        return 0;
+        SuiteScanCtx nested = *sctx;
+
+        if (snprintf(nested.suite_path, sizeof nested.suite_path, "%s/%s", sctx->suite_path,
+                     case_dir_name) >= (int)sizeof nested.suite_path) {
+            return 0;
+        }
+        return flat_port_scan_dir(nested.suite_path, on_case_dir, &nested);
     }
     if (c.suite[0] == '\0') {
         copy_suite_dir_name(c.suite, sizeof c.suite, sctx->suite_name);

@@ -8,6 +8,20 @@ use native vcx with V
 
 Compile-time variable **names** remain program-wide (no lexical scope). VCX duplicates **values** per context ID, not names.
 
+## User functions (`def`)
+
+**VCX is the runtime model behind user `def` functions:** call contexts (**instr** / **callee**), parameter bind, and return copy. You do not call all of these APIs by hand for every `def` — executors (`blocks/executor.fl` or `blocks/native-exec.fl`) and call lowering do it — but the implementation is still **`vcx`**.
+
+**Per-file declaration:** any **`.fl` file** that contains **`def`** definitions and **call sites** in blocks defined in that file needs **`use native vcx`** in **that file’s header** when **`func:callVM 0`** is in effect (default). Imported modules keep their own declarations; linking does **not** grant your entry blocks the importer’s alias.
+
+**Strategy A (desugar):** `flc` expands each `def` call into a sequence of **`vcx`** native calls **in the caller’s block** in that same file, then `call`s the **`func:executor`** block. Generated calls use your declared qualifier: alias from **`use native vcx with …`**, or **`vcx.`** if you declared **`use native vcx`** without `with`.
+
+**Strategy B (`func:callVM 1`):** the VM prepares instr VCX in C (`OP_CALL_FUNCTION`); entry files often omit `use native vcx` unless your own source calls `vcx` / your alias.
+
+**Executors:** `blocks/executor.fl` uses **`V.*`** throughout and must declare `use native vcx` in that file. `blocks/native-exec.fl` uses the optional **`executor`** native (`E.*`) for scope setup but still relies on VCX at runtime for `def` calls.
+
+Full contract: [USER_FUNCTIONS.md](../USER_FUNCTIONS.md) (`func:executor`, `func:callVM`, unique vs global).
+
 **Concurrent contexts:** at most **`FLAT_VCX_MAX_CONTEXTS` (64)** including global (ID **1**). Further **`V.create`** → PANIC **`vcx.create.limit`**. **`V.destroy(ctx)`** frees a non-global context and its values so the slot can be reused by a later **`create`**.
 
 ## Quick example

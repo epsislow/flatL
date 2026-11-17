@@ -1,0 +1,27 @@
+use "../../../../blocks/native-exec.fl" as #ne_
+use native vcx with V
+use native math with m
+
+func:executor #ne_executor.global.scope
+func:callVM 1
+
+def ginc(n) -> r
+  m.calc('n + 1') -> r
+  return
+
+func:executor #ne_executor.unique.scope
+func:callVM 1
+
+def ustep(n) -> r
+  ginc(n) -> r
+  return
+
+#main
+  s = 0
+  for(12000, i, '#iter')
+  io.outln(s)
+  OK
+
+#iter
+  ustep(s) -> s
+  next

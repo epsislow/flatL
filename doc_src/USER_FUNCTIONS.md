@@ -6,6 +6,8 @@ User functions are declared with `def`, run under a VCX **executor**, and are ca
 
 ```flat
 use "blocks/executor.fl" as #fl_
+; or: use "blocks/native-exec.fl" as #ne_  +  use native executor with E
+;     func:executor #ne_executor.unique.scope  (see doc_src/natives/executor.md)
 
 func:executor #fl_executor.global.scope   ; or #fl_executor.unique.scope
 
@@ -18,6 +20,21 @@ def add(a, b) -> sum
 - Optional `func:varSlots N` is an **initial capacity seed** for the unique executor’s `V.createAuto(...)` (see below). **`0`** or omitted → default seed (**4**). Capacity grows at runtime up to **`FLAT_MAX_VARS`**.
 - Optional `func:callVM N` selects **how** user calls are lowered (see below). Omitted = same as **`0`**.
 - The name after `->` on `def` is the formal return slot (here `sum`).
+
+### `use native vcx` (per file)
+
+Every **`.fl` file** that declares **`def`** and **call sites** in its own blocks must declare **`use native vcx`** in **that file’s header** when calls use **strategy A** (**`func:callVM 0`**, the default). Validation is per linked unit: declarations from an imported module (e.g. `blocks/executor.fl`) apply only to blocks **defined in that module**, not to your `#main` or your `def` bodies in the entry file.
+
+| `func:callVM` | Entry file needs `use native vcx`? |
+|---------------|-------------------------------------|
+| **`0`** (default) | **Yes** — `flc` **desugars** each user call into **`vcx.*` natives inserted into your blocks** (see below). |
+| **`1`** | Often **no** — calls become **`OP_CALL_FUNCTION`**; the VM builds instr VCX in C. Exceptions: **global** executor may still inject **`V.set(1)`** at some call sites. |
+
+**Desugar alias:** strategy A reads **`use native vcx`** from **that file’s** native unit. If you use an alias (`with ctx`), lowered call sites emit **`ctx.current()`**, **`ctx.varsCopyByNames`**, etc. If you declare **`use native vcx`** without `with`, lowered lines use **`vcx.*`**. You must still declare **`use native vcx`** in the entry file; linking an executor module does not substitute for that declaration when strategy A applies.
+
+Programs **without** `def` that only **`call`** imported executor blocks do **not** need `vcx` in the entry file when the executor module already declares it (see [vcx.md](./natives/vcx.md) § User functions).
+
+See [vcx.md](./natives/vcx.md) for the VCX API used by executors and call lowering.
 - **Typed formals / return (T6):** `def add(a:u8, b) -> out:u16` — `a` and `out` carry slot contracts; `b` stays untyped. Invalid arguments panic at bind (**`type.assign.range`**, **`type.call.arg`**, …). Types are stored in **FFUN** (`.fb` **v7**).
 
 ### `func:callVM` — call lowering (A vs B)
@@ -159,6 +176,8 @@ Growth is the same as [`vcx.createAuto`](./natives/vcx.md): **`varsMax`** increa
 | `#executor.unique.scope` | Body runs on a dedicated VCX; params via **`V.bindCallParams`**, return via **`V.copyCallReturn`** (typed when declared on `def`). |
 
 Source: `blocks/executor.fl` (use with prefix `as #fl_` → labels `#fl_executor.*`).
+
+**Native fast path:** `blocks/native-exec.fl` with prefix `#ne_` and **`use native executor with E`** — same contract, implemented in C ([executor.md](./natives/executor.md)). On PANIC in the body, open executor state unwinds before `#panic.*` (native frames and/or VM cleanup for `#fl_*`); `E.*End` without `Begin` → **`executor.end.noframe`**. Comparative microbench **`#ne_` vs `#fl_`**: [executor.md § Benchmarks](./natives/executor.md#benchmarks-ne_-vs-fl_).
 
 ## Expressions in the body
 

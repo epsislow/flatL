@@ -1,0 +1,24 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+use native math with m
+
+func:executor #fl_executor.unique.scope
+func:callVM 1
+
+def boom() -> r
+  m.calc('1 / 0') -> r
+  return
+
+def outer() -> r
+  boom() -> r
+  return
+
+#panic.any
+  panicReason() -> why
+  io.outln(why)
+  OK
+
+#main
+  outer() -> x
+  io.outln('after')
+  OK

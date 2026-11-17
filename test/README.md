@@ -47,13 +47,18 @@ See [doc_src/TOOLCHAIN.md](../doc_src/TOOLCHAIN.md#flatl-driver-optional-ux). Pi
 
 AM-1 call-site check: **20 000** nested `inc(s)` calls — **desugar** vs **`OP_CALL_FUNCTION`**.
 
+**Native executor (`#ne_`) vs FlatL (`#fl_`)** — pairs **`004`–`011`**: tight loops, triple-nested unique chain, unique→global mixed calls, outer with two inner unique calls (all **`func:callVM 1`**). Case **`012`** runs `compare_ne_fl_executor.sh` (4 scenarios, `flvm --time`, min run ms over **`FLAT_NE_FL_BENCH_ROUNDS`**).
+
 ```bash
 make test-bench
 bin/run_tests --categ=bench
-sh test/bench/compare_callvm_loop.sh .   # timing + fbdump summary on stderr
+sh test/bench/compare_callvm_loop.sh .      # desugar vs opcode
+sh test/bench/compare_ne_fl_executor.sh .  # #ne_ vs #fl_ timings on stderr
 ```
 
-Cases use **`categ = "bench"`** — excluded from **`make test`** / **`--categ=default`**. Case **`003`** gates **P1-lite**: B not slower than A (+5% slack). Override rounds: `FLAT_CALLVM_BENCH_ROUNDS=5`.
+Cases use **`categ = "bench"`** — excluded from **`make test`** / **`--categ=default`**. Case **`003`** gates **P1-lite**: B not slower than A (+5% slack). Case **`012`** is informational unless **`FLAT_NE_FL_REQUIRE_FASTER=1`** (then ne must be ≤ fl + **`FLAT_NE_FL_BENCH_SLACK`** %). Override rounds: `FLAT_CALLVM_BENCH_ROUNDS=5`, `FLAT_NE_FL_BENCH_ROUNDS=5`.
+
+Reference **`#ne_` vs `#fl_`** numbers and how to read **`ne_vs_fl_pct`**: [doc_src/natives/executor.md § Benchmarks](../doc_src/natives/executor.md#benchmarks-ne_-vs-fl_).
 
 ### Optional natives (`cases/native/`)
 

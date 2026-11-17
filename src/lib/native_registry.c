@@ -1,5 +1,6 @@
 #include "flat_native.h"
 #include "flat_native_util.h"
+#include "fgir.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -186,6 +187,10 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("vcx", "dSchemaList", "vcx.dSchemaList(ctx, list)"),
     META_SIG("vcx", "bindCallParams", "vcx.bindCallParams(instrCtx, dstCtx)"),
     META_SIG("vcx", "copyCallReturn", "vcx.copyCallReturn(srcCtx, dstCtx, instrCtx)"),
+    META_SIG("executor", "uniqueBegin", "executor.uniqueBegin()"),
+    META_SIG("executor", "uniqueEnd", "executor.uniqueEnd()"),
+    META_SIG("executor", "globalBegin", "executor.globalBegin()"),
+    META_SIG("executor", "globalEnd", "executor.globalEnd()"),
     META_SIG("mem", "slot_type", "mem.slot_type(expr)"),
     META_SIG("mem", "slot_frozen", "mem.slot_frozen(expr)"),
     META_SIG("mem", "slot_const", "mem.slot_const(expr)"),
@@ -214,6 +219,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_LIST,
         FLAT_NATIVE_MODULE_OBJ,
         FLAT_NATIVE_MODULE_VCX,
+        FLAT_NATIVE_MODULE_EXECUTOR,
         NULL,
     };
     int i;
@@ -377,7 +383,7 @@ static int looks_like_typed_number_literal(const char *line) {
 int flat_native_is_call_line(const char *line) {
     char mod[64];
     char func[32];
-    char inner[64];
+    char inner[FGIR_MAX_LINE];
     const char *lp;
     const char *p;
 

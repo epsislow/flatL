@@ -1,0 +1,9 @@
+suite = "bench"
+id = 12
+categ = "bench"
+desc = "microbench: native #ne_ executor vs #fl_ (flvm --time, 4 scenarios)"
+kind = "exec"
+
+cmd = "sh {root}/test/bench/compare_ne_fl_executor.sh {root}"
+expect_exit = 0
+stderr_contains = "ne_fl_bench: ok"

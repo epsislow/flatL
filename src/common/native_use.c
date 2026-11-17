@@ -15,6 +15,7 @@ static const char *const KNOWN_OPTIONAL_MODULES[] = {
     FLAT_NATIVE_MODULE_LIST,
     FLAT_NATIVE_MODULE_OBJ,
     FLAT_NATIVE_MODULE_VCX,
+    FLAT_NATIVE_MODULE_EXECUTOR,
     NULL,
 };
 
@@ -45,7 +46,18 @@ static char *trim(char *s) {
 }
 
 static int starts_with_use_native(const char *s) {
-    return strncmp(s, "use", 3) == 0 && isspace((unsigned char)s[3]);
+    const char *p;
+    if (!s || strncmp(s, "use", 3) != 0 || !isspace((unsigned char)s[3])) {
+        return 0;
+    }
+    p = s + 3;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p == '"') {
+        return 0;
+    }
+    return strncmp(p, "native", 6) == 0 && (p[6] == '\0' || isspace((unsigned char)p[6]));
 }
 
 static int validate_alias(const char *alias, char *err, size_t err_size) {
@@ -299,9 +311,9 @@ int flat_native_use_scan_file(const char *path, FlatOptionalNativeDecl *decls, i
         }
     }
     fclose(f);
-    if (check_alias_func_collisions(decls, seen_count, err, err_size) != 0) {
+    if (seen_count > 1 && check_alias_func_collisions(decls, seen_count, err, err_size) != 0) {
         char sub[256];
-        snprintf(sub, sizeof sub, "%s", err);
+        snprintf(sub, sizeof sub, "%s", err[0] ? err : "native alias collision");
         snprintf(err, err_size, "%s: %s", path, sub);
         return -1;
     }
@@ -390,6 +402,33 @@ static int resolve_module_from_decls(const char *mod_in, const FlatOptionalNativ
 int flat_native_resolve_module_name(const char *mod_in, const FlatOptionalNativeDecl *decls,
                                     int decl_count, char *mod_out, size_t mod_out_sz) {
     return resolve_module_from_decls(mod_in, decls, decl_count, mod_out, mod_out_sz);
+}
+
+int flat_native_use_call_prefix(const FgirProgram *prog, int native_unit_index, const char *module,
+                                char *prefix_out, size_t prefix_sz) {
+    const FlatOptionalNativeDecl *decls = NULL;
+    int decl_count = 0;
+    int i;
+
+    if (!prog || !module || !prefix_out || prefix_sz == 0) {
+        return -1;
+    }
+    prefix_out[0] = '\0';
+    if (native_unit_index >= 0 && native_unit_index < prog->native_unit_count) {
+        decls = prog->native_units[native_unit_index].decls;
+        decl_count = prog->native_units[native_unit_index].decl_count;
+    }
+    for (i = 0; i < decl_count; i++) {
+        if (strcmp(decls[i].module, module) == 0) {
+            if (decls[i].alias[0]) {
+                snprintf(prefix_out, prefix_sz, "%s", decls[i].alias);
+            } else {
+                snprintf(prefix_out, prefix_sz, "%s", decls[i].module);
+            }
+            return 0;
+        }
+    }
+    return -1;
 }
 
 static int canonical_forbidden(const char *prefix, const FlatOptionalNativeDecl *decls,

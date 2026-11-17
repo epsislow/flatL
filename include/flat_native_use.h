@@ -19,4 +19,7 @@ int flat_native_split_call_decls(const char *line, const FlatOptionalNativeDecl 
 int flat_native_split_call_prog(const char *line, const FgirProgram *prog, int native_unit_index,
                                 uint16_t *out_id, char *inner, size_t inner_max, char *err,
                                 size_t err_size);
+/* Qualifier for generated optional-native calls in native_unit_index (alias if set, else module). */
+int flat_native_use_call_prefix(const FgirProgram *prog, int native_unit_index, const char *module,
+                                char *prefix_out, size_t prefix_sz);
 #endif

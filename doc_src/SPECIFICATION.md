@@ -214,7 +214,9 @@ If no handler exists for that index, control falls through to **`#panic.any`** (
 - **`panicReason() -> name`** — binds the **last infrastructure panic reason** (same string as VM / unhandled stderr: `io.parse`, `for.ntimes_type`, `jump.block.reached.max`, qualified native name, `type.assign.*`, …). Empty string when none was recorded.
 - **`panicReset()`** — clears the stored reason; the next **`panicReason()`** returns `""` until another panic is recorded.
 
-The reason is updated on each PANIC routed to a handler (`#panic.*` / `#panic.any`). It is **not** cleared when the handler returns unless the program calls **`panicReset()`**.
+The reason is updated on each PANIC routed to a handler (`#panic.*` / `#panic.any`). It is **not** cleared when the handler runs unless the program calls **`panicReset()`**.
+
+**Panic handler blocks** (`#panic.*`, `#panic.any`) must **not** use the **`return`** statement. Handlers end with **`OK`**, **`FAIL`**, or a **`jump`** to another block. **`return` in a panic handler is a compile error** (`flc`).
 
 **Stderr:** only **unhandled** PANIC (no matching `#panic.*` handler) writes `flvm: unhandled PANIC: <reason>` to stderr. A **recovered** PANIC routed to a handler does **not** log to stderr (the program may use **`panicReason()`** or its own logging). With **`--trace`**, recovered routing may still log `[trace] panic reason=…` for debugging.
 
@@ -229,7 +231,7 @@ Example:
 
 #panic.#check_balance.2
   redis.log('Balance lookup failed')
-  return false
+  FAIL
 ```
 
 ### 1.4 Iteration

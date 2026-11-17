@@ -1,6 +1,7 @@
 #include "flat_func.h"
 #include "flat_func_tag.h"
 #include "flat_native.h"
+#include "flat_native_use.h"
 #include "flat_native_tag.h"
 #include "flat_native_util.h"
 #include "flat_schema.h"
@@ -1065,7 +1066,7 @@ static int block_id_for_label(const char *label) {
 static void ins_init_assign(FgirInstr *ins, const char *line) {
     memset(ins, 0, sizeof *ins);
     ins->kind = FGIR_ASSIGN;
-    if (flat_native_is_call_line(line) || (line[0] == 'V' && line[1] == '.' && strchr(line, '('))) {
+    if (flat_native_is_call_line(line)) {
         ins->kind = FGIR_IO;
     }
     snprintf(ins->text, sizeof ins->text, "%s", line);
@@ -1199,6 +1200,15 @@ static int caller_body_needs_global_vcx(const FgirProgram *prog, const FgirBlock
     return caller->is_global_executor ? 1 : 0;
 }
 
+static int vcx_prefix_for_block(const FgirProgram *prog, const FgirBlock *b, char *pfx, size_t pfx_sz,
+                                char *err, size_t err_size) {
+    if (flat_native_use_call_prefix(prog, b->native_unit_index, "vcx", pfx, pfx_sz) != 0) {
+        snprintf(err, err_size, "def call lowering requires use native vcx in this file");
+        return -1;
+    }
+    return 0;
+}
+
 static int call_site_uses_vm(const FgirProgram *prog, const FgirBlock *caller_block,
                              const FgirFunction *callee) {
     const FgirFunction *caller;
@@ -1307,7 +1317,13 @@ static int lower_one_call_vm(FgirProgram *prog, FgirBlock *b, int at, const Fgir
     expanded[n].kind = FGIR_FUNC_CALL_VM;
     n++;
     if (caller_body_needs_global_vcx(prog, b)) {
-        ins_init_assign(&expanded[n++], "V.set(1)");
+        char vcx_pfx[FGIR_NATIVE_ALIAS_LEN];
+
+        if (vcx_prefix_for_block(prog, b, vcx_pfx, sizeof vcx_pfx, err, err_size) != 0) {
+            return -1;
+        }
+        snprintf(line, sizeof line, "%s.set(1)", vcx_pfx);
+        ins_init_assign(&expanded[n++], line);
     }
     if (fn->is_global_executor) {
         int ri;
@@ -1347,6 +1363,7 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     char line[FGIR_MAX_LINE];
     char plist[FGIR_MAX_LINE];
     char pin_list[FGIR_MAX_LINE];
+    char vcx_pfx[FGIR_NATIVE_ALIAS_LEN];
     uint32_t target_id;
     int cap;
     int i;
@@ -1366,6 +1383,9 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     }
     if (call_site_uses_vm(prog, b, fn)) {
         return lower_one_call_vm(prog, b, at, call, err, err_size);
+    }
+    if (vcx_prefix_for_block(prog, b, vcx_pfx, sizeof vcx_pfx, err, err_size) != 0) {
+        return -1;
     }
     snprintf(args_buf, sizeof args_buf, "%s", call->func_args);
     if ((args_buf[0] == '\0' || strchr(args_buf, ',') == NULL) && call->text[0] != '\0' &&
@@ -1391,8 +1411,9 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     target_id = (uint32_t)block_id_for_label(fn->impl_label);
     cap = (int)(FLAT_FUNC_INSTR_VCX_FIXED + (uint32_t)fn->param_count);
 
-    ins_init_assign(&expanded[n++], FLAT_FUNC_RESERVED_CALLE_VAR " = V.current()");
-    snprintf(line, sizeof line, "%s = V.create(%d)", FLAT_FUNC_RESERVED_INSTR_VAR, cap);
+    snprintf(line, sizeof line, "%s = %s.current()", FLAT_FUNC_RESERVED_CALLE_VAR, vcx_pfx);
+    ins_init_assign(&expanded[n++], line);
+    snprintf(line, sizeof line, "%s = %s.create(%d)", FLAT_FUNC_RESERVED_INSTR_VAR, vcx_pfx, cap);
     ins_init_assign(&expanded[n++], line);
 
     if (emit_call_arg_slots(expanded, &n, arg_count, arg_parts, line, sizeof line, err,
@@ -1438,18 +1459,18 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     }
     ins_init_assign(&expanded[n++], line);
     snprintf(line, sizeof line,
-             "V.varsCopyByNames(%s, %s, "
+             "%s.varsCopyByNames(%s, %s, "
              "['__fl_targetBlock','__fl_calleVcx','__fl_funcParamNames'], "
              "['targetBlock','calleVcx','funcParamNames'])",
-             FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR);
+             vcx_pfx, FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR);
     ins_init_assign(&expanded[n++], line);
     if (fn->return_count <= 1) {
         snprintf(line, sizeof line,
-                 "V.varsCopyByNames(%s, %s, "
+                 "%s.varsCopyByNames(%s, %s, "
                  "['__fl_returnVar','__fl_calleReturnVar','__fl_funcVcxSlots','__fl_paramSrcNames',"
                  "'__fl_funcIndex'], "
                  "['returnVar','calleReturnVar','funcVcxSlots','paramSrcNames','__fl_funcIndex'])",
-                 FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR);
+                 vcx_pfx, FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR);
         ins_init_assign(&expanded[n++], line);
     } else {
         char src_list[384];
@@ -1462,10 +1483,10 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
             return -1;
         }
         pos = snprintf(line, sizeof line,
-                       "V.varsCopyByNames(%s, %s, "
+                       "%s.varsCopyByNames(%s, %s, "
                        "%.*s,'__fl_funcVcxSlots','__fl_paramSrcNames','__fl_funcIndex'], "
                        "%.*s,'funcVcxSlots','paramSrcNames','__fl_funcIndex'])",
-                       FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR,
+                       vcx_pfx, FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR,
                        (int)(strlen(src_list) - 1), src_list, (int)(strlen(dst_list) - 1),
                        dst_list);
         if (pos < 0 || (size_t)pos >= sizeof line) {
@@ -1500,8 +1521,8 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
                 snprintf(err, err_size, "lowered copy list too long");
                 return -1;
             }
-            hlen = snprintf(pfx, sizeof pfx, "V.varsCopyByNames(%s, %s, ", FLAT_FUNC_RESERVED_CALLE_VAR,
-                            FLAT_FUNC_RESERVED_INSTR_VAR);
+            hlen = snprintf(pfx, sizeof pfx, "%s.varsCopyByNames(%s, %s, ", vcx_pfx,
+                            FLAT_FUNC_RESERVED_CALLE_VAR, FLAT_FUNC_RESERVED_INSTR_VAR);
             if (hlen < 0 || (size_t)hlen >= sizeof pfx) {
                 snprintf(err, err_size, "lowered copy prefix too long");
                 return -1;
@@ -1525,7 +1546,8 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
     }
     ins_init_call(&expanded[n++], fn->executor_label);
     if (caller_body_needs_global_vcx(prog, b)) {
-        ins_init_assign(&expanded[n++], "V.set(1)");
+        snprintf(line, sizeof line, "%s.set(1)", vcx_pfx);
+        ins_init_assign(&expanded[n++], line);
     }
     if (fn->is_global_executor) {
         int ri;

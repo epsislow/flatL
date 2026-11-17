@@ -1,0 +1,28 @@
+use "../../../../blocks/native-exec.fl" as #ne_
+use native vcx with V
+use native math with m
+
+func:executor #ne_executor.unique.scope
+func:callVM 1
+
+def leaf(a) -> r
+  m.calc('a + 1') -> r
+  return
+
+def mid(a) -> r
+  leaf(a) -> r
+  return
+
+def step(a) -> r
+  mid(a) -> r
+  return
+
+#main
+  s = 0
+  for(8000, i, '#iter')
+  io.outln(s)
+  OK
+
+#iter
+  step(s) -> s
+  next

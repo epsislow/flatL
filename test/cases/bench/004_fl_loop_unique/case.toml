@@ -1,0 +1,10 @@
+suite = "bench"
+id = 4
+categ = "bench"
+desc = "fl unique executor: 20000 inc loop (callVM 1)"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "20000"

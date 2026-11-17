@@ -425,6 +425,9 @@ static int starts_with_use_native(const char *s) {
     while (*p && isspace((unsigned char)*p)) {
         p++;
     }
+    if (*p == '"') {
+        return 0; /* use "path.fl" — not use native … */
+    }
     return strncmp(p, "native", 6) == 0 &&
            (p[6] == '\0' || isspace((unsigned char)p[6]));
 }

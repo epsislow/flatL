@@ -50,7 +50,7 @@ endif
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
@@ -58,7 +58,7 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
           src/common/flat_slot_type.c src/common/flat_schema.c src/common/flat_dynamic_bind.c \
           src/common/value_ops.c src/common/flat_obj_path.c \
-          src/common/flat_vcx.c \
+          src/common/flat_vcx.c src/common/flat_executor.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/flat_native_tag_common.c src/common/flat_native_tag_runtime.c \
           src/common/value_json.c src/common/flat_file.c src/common/flat_io_ctx.c \
