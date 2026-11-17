@@ -1,0 +1,7 @@
+suite = "csv"
+id = 9
+desc = "test1_csv_* utf-8 parity vs FleditorCsvParse"
+kind = "exec"
+cmd = "node {root}/test/fleditor/csv_vm_parity.mjs"
+expect_exit = 0
+stdout_contains = "OK: csv_vm_parity"

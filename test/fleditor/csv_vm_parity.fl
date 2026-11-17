@@ -1,0 +1,16 @@
+use native csv
+use native list
+
+#main
+  fp = file.readCtx('data.csv')
+  rid = csv.reader(fp)
+  for(8, i, "#row")
+  csv.close(rid)
+  file.close(fp)
+  OK
+
+#row
+  line = csv.next(rid)
+  str.join('|', line) -> s
+  io.outln(s)
+  next

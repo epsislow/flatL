@@ -13,10 +13,6 @@ use native list
 
 #row
   line = csv.next(rid)
-  foreach(line, cell, "#cell")
-  OK
-
-#cell
-  io.out(cell)
-  io.out(',')
+  str.join(',', line) -> s
+  io.outln(s)
   next

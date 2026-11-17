@@ -393,11 +393,10 @@ static int ensure_line_index(FlatCsvSession *s, FILE *fp) {
     }
     {
         int physical = 0;
+        s->row_count = s->line_offset_count > 0 ? s->line_offset_count : 1;
         if (flat_csv_count_physical_lines_file(fp, mark, s->fmt.line_ending, s->fmt.quote,
-                                               &physical) == 0) {
+                                               &physical) == 0 && physical > s->row_count) {
             s->row_count = physical;
-        } else {
-            s->row_count = s->line_offset_count > 0 ? s->line_offset_count : 1;
         }
     }
     s->row_count_cached = 1;

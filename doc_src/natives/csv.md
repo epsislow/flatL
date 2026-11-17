@@ -44,6 +44,11 @@ Format setters work on **`rid`** or **`wid`**.
 - One active **`rid`** **or** **`wid`** per `fpId` — opening the other → **`csv.fp.busy`**.
 - **`file.close(fpId)`** while CSV session open → **`file.close.busy`** (call **`csv.close`** first).
 
+## FLEditor / tests
+
+- Example: `docs/fleditor_site/examples/csv_reader/` (MEMFS **`stock.csv`**, **`use native csv`**).
+- Parity: `test/fleditor/csv_vm_parity.mjs` compares **`csv.next`** output to **FleditorCsvParse** on `test1_csv_*` (UTF-8 exports only; UTF-16 deferred).
+
 ## Example
 
 ```text

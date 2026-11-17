@@ -423,7 +423,8 @@ int flat_csv_count_physical_lines_file(FILE *fp, long bookmark, FlatCsvLineEndin
             break;
         }
     }
-    if (saw_any && trailing_le) {
+    /* Last row without trailing LE still counts (align splitPhysicalLines in FLEditor). */
+    if (saw_any && !trailing_le) {
         lines++;
     }
     if (fseek(fp, bookmark, SEEK_SET) != 0) {

@@ -194,7 +194,7 @@ After **Run**, the runtime **`chdir`s to `/fleditor`**, so paths like `file.read
 
 | Topic | Guidance |
 |-------|----------|
-| **Reading** | `file.read` returns the file body as a FlatL string (UTF-8 bytes in MEMFS). For CSV you parse in FlatL or treat as text. |
+| **Reading** | `file.read` returns the file body as a FlatL string (UTF-8 bytes in MEMFS). For tables, declare **`use native csv`**, then **`csv.reader(fp)`** / **`csv.next`** (see [natives/csv.md](./natives/csv.md)). Example project: **`examples/csv_reader/`** (`stock.csv` at project root). |
 | **Writing** | `file.write` should emit the **same bytes** the editor would: same **separator**, **line endings**, and **encoding** (use **Format…** in the editor as the reference). |
 | **Encoding** | UTF-8 plain in project → UTF-8 bytes on MEMFS. UTF-8 BOM / UTF-16 → editor stores a wrapper; sync writes BOM bytes. |
 | **Round-trip** | Edit in grid → **Save** → **Run** → program reads `/fleditor/your.csv`. If the program writes a new file, sync pulls it back with `bytesToProjectValue` (opens in CSV grid when decodable). |
@@ -209,7 +209,7 @@ make fleditor-csv-smoke
 make fleditor-wasm-csv-smoke   # needs make fleditor-wasm
 ```
 
-`fleditor-csv-smoke` runs parse, text format, and round-trip (including Excel exports under `examples/`). `fleditor-wasm-csv-smoke` reads a CSV from MEMFS via WASM `file.read`.
+`fleditor-csv-smoke` runs parse, text format, round-trip (Excel exports under `examples/`), and **`csv_vm_parity`** (FlatL `csv.*` vs JS on `test1_csv_*` UTF-8 fixtures). `fleditor-wasm-csv-smoke` reads CSV via WASM `file.read` and runs **`examples/csv_reader/csv_reader.fl`** with **`use native csv`** on MEMFS.
 
 ## Hex editor (binary files)
 

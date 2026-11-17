@@ -360,6 +360,7 @@ fleditor-csv-smoke:
 	$(NODE) test/fleditor/text_format.mjs
 	$(NODE) test/fleditor/csv_roundtrip.mjs
 	$(NODE) test/fleditor/csv_selection_stats.mjs
+	$(NODE) test/fleditor/csv_vm_parity.mjs
 
 fleditor-examples-smoke:
 	$(NODE) test/fleditor/examples_smoke.mjs
@@ -369,6 +370,7 @@ fleditor-block-map-smoke:
 
 fleditor-wasm-csv-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_csv_smoke.mjs
+	$(NODE) test/fleditor/wasm_csv_reader_smoke.mjs
 
 fleditor-wasm-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_smoke.mjs
