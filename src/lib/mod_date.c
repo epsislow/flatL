@@ -127,8 +127,21 @@ int flat_native_date_format(FlatNativeCtx *ctx) {
     if (flat_date_value_to_utc_sec(&src, ctx->pool, &sec, st) != 0) {
         return io_err(ctx);
     }
-    if (flat_date_format(sec, b ? b : "YYYY-MM-DD", out, sizeof out, st) != 0) {
-        return io_err(ctx);
+    {
+        const char *pattern = "YYYY-MM-DD";
+        char fmtbuf[256];
+
+        if (b) {
+            FlatValue vf;
+            if (parse_expr(ctx, b, &vf) != 0 ||
+                string_from_value(&vf, ctx->pool, fmtbuf, sizeof fmtbuf) != 0) {
+                return io_err(ctx);
+            }
+            pattern = fmtbuf;
+        }
+        if (flat_date_format(sec, pattern, out, sizeof out, st) != 0) {
+            return io_err(ctx);
+        }
     }
     return emit_string(ctx, out);
 }
