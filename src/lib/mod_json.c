@@ -8,8 +8,7 @@ static int string_from_inner(FlatNativeCtx *ctx, char *token, size_t token_size)
     char inner_buf[4096];
 
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
-    if (flat_value_parse_assign_rhs(flat_native_trim(inner_buf), &src, ctx->pool, ctx->coll,
-                                    ctx->vars, ctx->var_count, ctx->var_names) != 0) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &src) != 0) {
         return -1;
     }
     if (src.tag != VAL_STR_INLINE && src.tag != VAL_STR_REF) {
@@ -39,8 +38,7 @@ int flat_native_json_stringify(FlatNativeCtx *ctx) {
     }
     *ctx->io_status = FLAT_IO_OK;
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
-    if (flat_value_parse_assign_rhs(flat_native_trim(inner_buf), &v, ctx->pool, ctx->coll,
-                                    ctx->vars, ctx->var_count, ctx->var_names) != 0) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }

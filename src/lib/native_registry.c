@@ -223,6 +223,17 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("list", "is_vector", "list.is_vector(list)"),
     META_SIG("str", "from_num", "str.from_num(x, decimals, group?)"),
     META_SIG("io", "outcls", "io.outcls()"),
+    META_SIG("math.mdim", "add", "math.mdim.add(a, b)"),
+    META_SIG("math.mdim", "subtract", "math.mdim.subtract(a, b)"),
+    META_SIG("math.mdim", "multiply", "math.mdim.multiply(a, b)"),
+    META_SIG("math.mdim", "divide", "math.mdim.divide(a, b)"),
+    META_SIG("math.mdim", "sum", "math.mdim.sum(x)"),
+    META_SIG("math.mdim", "min", "math.mdim.min(x)"),
+    META_SIG("math.mdim", "max", "math.mdim.max(x)"),
+    META_SIG("math.mdim", "avg", "math.mdim.avg(x)"),
+    META_SIG("math.mdim", "dot", "math.mdim.dot(u, v)"),
+    META_SIG("math.mdim", "transpose", "math.mdim.transpose(m)"),
+    META_SIG("math.mdim", "matmul", "math.mdim.matmul(A, B)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -244,6 +255,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,
         FLAT_NATIVE_MODULE_MATH_STATS,
+        FLAT_NATIVE_MODULE_MATH_MDIM,
         FLAT_NATIVE_MODULE_MATH,
         FLAT_NATIVE_MODULE_LIST,
         FLAT_NATIVE_MODULE_OBJ,

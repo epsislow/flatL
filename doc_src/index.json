@@ -22,6 +22,7 @@
     { "id": "math", "label": "Native math", "file": "natives/math.md" },
     { "id": "math-trig", "label": "Native math.trig", "file": "natives/math.trig.md" },
     { "id": "math-stats", "label": "Native math.stats", "file": "natives/math.stats.md" },
+    { "id": "math-mdim", "label": "Native math.mdim", "file": "natives/math_mdim.md" },
     { "id": "list-native", "label": "Native list", "file": "natives/list.md" },
     { "id": "str-native", "label": "Native str", "file": "natives/str.md" },
     { "id": "date-native", "label": "Native date", "file": "natives/date.md" },

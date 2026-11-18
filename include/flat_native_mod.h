@@ -60,6 +60,18 @@ int flat_native_math_stats_median(FlatNativeCtx *ctx);
 int flat_native_math_stats_var(FlatNativeCtx *ctx);
 int flat_native_math_stats_stdev(FlatNativeCtx *ctx);
 
+int flat_native_math_mdim_add(FlatNativeCtx *ctx);
+int flat_native_math_mdim_subtract(FlatNativeCtx *ctx);
+int flat_native_math_mdim_multiply(FlatNativeCtx *ctx);
+int flat_native_math_mdim_divide(FlatNativeCtx *ctx);
+int flat_native_math_mdim_sum(FlatNativeCtx *ctx);
+int flat_native_math_mdim_min(FlatNativeCtx *ctx);
+int flat_native_math_mdim_max(FlatNativeCtx *ctx);
+int flat_native_math_mdim_avg(FlatNativeCtx *ctx);
+int flat_native_math_mdim_dot(FlatNativeCtx *ctx);
+int flat_native_math_mdim_transpose(FlatNativeCtx *ctx);
+int flat_native_math_mdim_matmul(FlatNativeCtx *ctx);
+
 int flat_native_math_pow(FlatNativeCtx *ctx);
 int flat_native_math_sqrt(FlatNativeCtx *ctx);
 int flat_native_math_exp(FlatNativeCtx *ctx);

@@ -6,7 +6,7 @@ Scalar **libm** helpers, simple **list aggregations**, and numeric constants. **
 use native math with m
 ```
 
-Does **not** load `math.trig` or `math.stats`; each optional module needs its own `use native` line.
+Does **not** load `math.trig`, `math.stats`, or `math.mdim`; each optional module needs its own `use native` line. For **rectangular numeric arrays** (matrix add, `matmul`, …), see [math_mdim.md](./math_mdim.md).
 
 ## Syntax
 

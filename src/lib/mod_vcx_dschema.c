@@ -24,22 +24,12 @@ static FlatVcxRuntime *rt_from(FlatNativeCtx *ctx) {
     return ctx && ctx->vcx ? ctx->vcx : flat_vcx_runtime_active();
 }
 
-static int parse_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    char buf[512];
-    if (!expr || !out) {
-        return -1;
-    }
-    snprintf(buf, sizeof buf, "%s", expr);
-    return flat_value_parse_assign_rhs(flat_native_trim(buf), out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
-}
-
 static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) {
     FlatValue v;
     if (!expr || !out_id) {
         return -1;
     }
-    if (parse_expr(ctx, expr, &v) != 0) {
+    if (flat_native_parse_expr(ctx, expr, &v) != 0) {
         return -1;
     }
     if (v.tag != VAL_NUMBER) {
@@ -87,7 +77,7 @@ int flat_native_vcx_dschema_allow(FlatNativeCtx *ctx) {
     if (parse_ctx_id(ctx, a, &cid) != 0) {
         return vcx_fail(ctx, "vcx.dSchemaAllow.arg");
     }
-    if (parse_expr(ctx, b, &allow_v) != 0 || allow_v.tag != VAL_NUMBER) {
+    if (flat_native_parse_expr(ctx, b, &allow_v) != 0 || allow_v.tag != VAL_NUMBER) {
         return vcx_fail(ctx, "vcx.dSchemaAllow.arg");
     }
     if (flat_number_as_f64(&allow_v) != 0.0 && flat_number_as_f64(&allow_v) != 1.0) {
@@ -122,7 +112,7 @@ int flat_native_vcx_dschema_list(FlatNativeCtx *ctx) {
     if (parse_ctx_id(ctx, a, &cid) != 0) {
         return vcx_fail(ctx, "vcx.dSchemaList.arg");
     }
-    if (parse_expr(ctx, b, &list_v) != 0) {
+    if (flat_native_parse_expr(ctx, b, &list_v) != 0) {
         return vcx_fail(ctx, "vcx.dSchemaList.arg");
     }
     if (flat_vcx_dschema_list(rt, cid, &list_v, ctx->coll, ctx->pool, ctx->panic_detail,

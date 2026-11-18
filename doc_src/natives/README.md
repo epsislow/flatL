@@ -37,7 +37,7 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
@@ -67,8 +67,21 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `math` | [math.md](./math.md) |
 | `math.trig` | [math.trig.md](./math.trig.md) |
 | `math.stats` | [math.stats.md](./math.stats.md) |
+| `math.mdim` | [math_mdim.md](./math_mdim.md) |
 | `list` | [list.md](./list.md) |
 | `obj` | [obj.md](./obj.md) |
 | `vcx` | [vcx.md](./vcx.md) |
 | `executor` | [executor.md](./executor.md) |
 | `csv` | [csv.md](./csv.md) |
+
+## Native handlers: parsing call arguments
+
+When a native splits `inner` into several RHS expressions and parses them **one after another**, ephemeral **LIST** / **OBJECT** literals from the first parse can lose their slot before the next parse runs. Handlers live in `src/lib/mod_*.c`; shared helpers are in [`flat_native_util.h`](../../include/flat_native_util.h) and [`native_parse_rhs.c`](../../src/lib/native_parse_rhs.c).
+
+| Helper | Use when |
+|--------|----------|
+| `flat_native_parse_expr` | Single operand, last operand, or only scalars (STRING/NUMBER/BOOL). |
+| `flat_native_parse_rhs` | Operand parsed **before** another `parse_*` in the same call. |
+| `flat_native_parse_rhs_release` | On every exit path after a pinned operand (including errors). |
+
+Rule of thumb: if a later argument can be a literal `[…]` or `{…}` and you still need the earlier collection id, **pin** the earlier operands with `parse_rhs` until the handler finishes. Variadic builders (e.g. `list.pack`) pin each element in the loop. Tests: `test/cases/vm_fixes/006_*`, `007_*`, `math_mdim/007_*`.

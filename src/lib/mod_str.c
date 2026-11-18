@@ -11,16 +11,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int parse_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    char buf[512];
-    if (!expr || !out) {
-        return -1;
-    }
-    snprintf(buf, sizeof buf, "%s", expr);
-    return flat_value_parse_assign_rhs(flat_native_trim(buf), out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
-}
-
 static int split_two_args(char *inner, char **left, char **right) {
     int depth = 0;
     char quote = 0;
@@ -160,7 +150,7 @@ static int emit_bytes(FlatNativeCtx *ctx, const void *data, size_t len) {
 
 static int parse_whole_number(FlatNativeCtx *ctx, const char *expr, double *out) {
     FlatValue v;
-    if (parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) {
+    if (flat_native_parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) {
         return -1;
     }
     if (flat_number_as_f64(&v) != floor(flat_number_as_f64(&v))) {
@@ -189,7 +179,7 @@ static int parse_int_expr(FlatNativeCtx *ctx, const char *expr, int *out) {
 }
 
 static int parse_str_arg(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    if (parse_expr(ctx, expr, out) != 0) {
+    if (flat_native_parse_expr(ctx, expr, out) != 0) {
         return -1;
     }
     if (out->tag != VAL_STR_INLINE && out->tag != VAL_STR_REF) {
@@ -717,7 +707,7 @@ int flat_native_str_join(FlatNativeCtx *ctx) {
         return io_err(ctx);
     }
     io_ok(ctx);
-    if (parse_str_arg(ctx, sep_e, &sep) != 0 || parse_expr(ctx, list_e, &list_v) != 0 ||
+    if (parse_str_arg(ctx, sep_e, &sep) != 0 || flat_native_parse_expr(ctx, list_e, &list_v) != 0 ||
         list_v.tag != VAL_LIST) {
         return io_err(ctx);
     }
@@ -1106,7 +1096,7 @@ int flat_native_str_from_num(FlatNativeCtx *ctx) {
     }
     {
         FlatValue xv;
-        if (parse_expr(ctx, x_expr, &xv) != 0 || xv.tag != VAL_NUMBER) {
+        if (flat_native_parse_expr(ctx, x_expr, &xv) != 0 || xv.tag != VAL_NUMBER) {
             return io_err(ctx);
         }
         x = flat_number_as_f64(&xv);

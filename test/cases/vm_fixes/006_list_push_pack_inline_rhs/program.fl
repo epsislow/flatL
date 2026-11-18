@@ -1,0 +1,10 @@
+use native list with L
+
+#main
+  L.push([1], [2]) -> a
+  L.pack([3], [4]) -> b
+  io.out(a[0])
+  io.out(a[1])
+  io.out(b[0])
+  io.out(b[1])
+  OK

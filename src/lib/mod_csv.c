@@ -19,16 +19,6 @@ static int csv_fail(FlatNativeCtx *ctx, const char *reason) {
     return -1;
 }
 
-static int parse_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    char buf[4096];
-    if (!expr || !out) {
-        return -1;
-    }
-    snprintf(buf, sizeof buf, "%s", expr);
-    return flat_value_parse_assign_rhs(flat_native_trim(buf), out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
-}
-
 static int split_variadic_args(char *inner, char *parts[], int max_parts, int *out_count) {
     int depth = 0;
     int n = 0;
@@ -94,7 +84,7 @@ static int split_two_args(char *inner, char **left, char **right) {
 
 static int require_fp(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) {
     FlatValue v;
-    if (parse_expr(ctx, expr, &v) != 0) {
+    if (flat_native_parse_expr(ctx, expr, &v) != 0) {
         return -1;
     }
     if (!ctx->file_tbl || !flat_value_get_file_handle(&v, ctx->file_tbl, out_id)) {
@@ -106,7 +96,7 @@ static int require_fp(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) {
 static int require_sess_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) {
     FlatValue v;
     double d;
-    if (parse_expr(ctx, expr, &v) != 0) {
+    if (flat_native_parse_expr(ctx, expr, &v) != 0) {
         return -1;
     }
     if (v.tag != VAL_NUMBER) {
@@ -123,7 +113,7 @@ static int require_sess_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_i
 static int require_int(FlatNativeCtx *ctx, const char *expr, int *out) {
     FlatValue v;
     double d;
-    if (parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) {
+    if (flat_native_parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) {
         return -1;
     }
     d = flat_number_as_f64(&v);
@@ -350,7 +340,7 @@ static int format_set_string(FlatNativeCtx *ctx, int kind) {
     if (require_sess_id(ctx, left, &sid) != 0) {
         return csv_fail(ctx, "csv.set");
     }
-    if (parse_expr(ctx, right, &v) != 0 || flat_value_get_cstr(&v, ctx->pool, str, sizeof str) != 0) {
+    if (flat_native_parse_expr(ctx, right, &v) != 0 || flat_value_get_cstr(&v, ctx->pool, str, sizeof str) != 0) {
         return csv_fail(ctx, "csv.set");
     }
     ctx->panic_detail[0] = '\0';
@@ -402,7 +392,7 @@ int flat_native_csv_write_rows(FlatNativeCtx *ctx) {
     if (split_two_args(buf, &left, &right) != 0) {
         return csv_fail(ctx, "csv.writeRows");
     }
-    if (require_sess_id(ctx, left, &wid) != 0 || parse_expr(ctx, right, &rows) != 0) {
+    if (require_sess_id(ctx, left, &wid) != 0 || flat_native_parse_expr(ctx, right, &rows) != 0) {
         return csv_fail(ctx, "csv.writeRows");
     }
     ctx->panic_detail[0] = '\0';
@@ -424,7 +414,7 @@ int flat_native_csv_write_cols(FlatNativeCtx *ctx) {
     if (split_two_args(buf, &left, &right) != 0) {
         return csv_fail(ctx, "csv.writeCols");
     }
-    if (require_sess_id(ctx, left, &wid) != 0 || parse_expr(ctx, right, &cols) != 0) {
+    if (require_sess_id(ctx, left, &wid) != 0 || flat_native_parse_expr(ctx, right, &cols) != 0) {
         return csv_fail(ctx, "csv.writeCols");
     }
     ctx->panic_detail[0] = '\0';
@@ -475,7 +465,7 @@ int flat_native_csv_get_cells(FlatNativeCtx *ctx) {
     }
     if (argc == 6) {
         char mode_buf[32];
-        if (parse_expr(ctx, parts[5], &mode) != 0 ||
+        if (flat_native_parse_expr(ctx, parts[5], &mode) != 0 ||
             flat_value_get_cstr(&mode, ctx->pool, mode_buf, sizeof mode_buf) != 0) {
             return csv_fail(ctx, "csv.getCells");
         }

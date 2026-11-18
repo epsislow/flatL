@@ -1,0 +1,7 @@
+use native math.mdim with D
+
+#main
+  A = [[1, 2], [3]]
+  B = [[1, 2], [3, 4]]
+  D.add(A, B) -> C
+  OK

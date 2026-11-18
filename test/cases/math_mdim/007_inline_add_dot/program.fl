@@ -1,0 +1,10 @@
+use native math.mdim with D
+
+#main
+  D.add([1, 2], [5, 6]) -> r
+  D.dot([1, 2, 3], [4, 5, 6]) -> d
+  io.out('start')
+  io.out(r[0])
+  io.out(d)
+  io.out('end')
+  OK

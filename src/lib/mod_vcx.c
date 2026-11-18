@@ -50,16 +50,6 @@ static int vcx_fail(FlatNativeCtx *ctx, const char *reason) {
     return -1;
 }
 
-static int parse_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    char buf[512];
-    if (!expr || !out) {
-        return -1;
-    }
-    snprintf(buf, sizeof buf, "%s", expr);
-    return flat_value_parse_assign_rhs(flat_native_trim(buf), out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
-}
-
 static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) {
     FlatValue v;
     char buf[512];
@@ -73,7 +63,7 @@ static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) 
         if (flat_native_eval_call(ctx, buf, &v) != 0) {
             return -1;
         }
-    } else if (parse_expr(ctx, expr, &v) != 0) {
+    } else if (flat_native_parse_expr(ctx, expr, &v) != 0) {
         return -1;
     }
     if (v.tag != VAL_NUMBER) {
@@ -90,7 +80,7 @@ static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) 
 
 static int parse_name_string(FlatNativeCtx *ctx, const char *expr, char *name, size_t name_sz) {
     FlatValue v;
-    if (parse_expr(ctx, expr, &v) != 0) {
+    if (flat_native_parse_expr(ctx, expr, &v) != 0) {
         return -1;
     }
     if (v.tag == VAL_STR_INLINE) {
@@ -241,7 +231,7 @@ static int parse_name_list_expr(FlatNativeCtx *ctx, const char *expr,
         return -1;
     }
     *out_n = 0;
-    if (parse_expr(ctx, expr, &v) != 0) {
+    if (flat_native_parse_expr(ctx, expr, &v) != 0) {
         return -1;
     }
     if (v.tag != VAL_LIST) {
@@ -344,7 +334,7 @@ int flat_native_vcx_create(FlatNativeCtx *ctx) {
     }
     ctx->panic_detail[0] = '\0';
     snprintf(inner, sizeof inner, "%s", ctx->inner ? ctx->inner : "");
-    if (inner[0] == '\0' || parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
+    if (inner[0] == '\0' || flat_native_parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
         return vcx_fail(ctx, "vcx.create.arg");
     }
     if (vcx_number_to_uint32_strict(flat_number_as_f64(&capv), &cap) != 0 || cap < 1u) {
@@ -371,7 +361,7 @@ int flat_native_vcx_create_auto(FlatNativeCtx *ctx) {
     if (inner[0] != '\0') {
         FlatValue capv;
 
-        if (parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
+        if (flat_native_parse_expr(ctx, inner, &capv) != 0 || capv.tag != VAL_NUMBER) {
             return vcx_fail(ctx, "vcx.createAuto.arg");
         }
         if (vcx_number_to_uint32_strict(flat_number_as_f64(&capv), &seed) != 0) {

@@ -20,8 +20,7 @@ static int number_from_inner(FlatNativeCtx *ctx, double *out_num) {
         return -1;
     }
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
-    if (flat_value_parse_assign_rhs(flat_native_trim(inner_buf), &src, ctx->pool, ctx->coll,
-                                    ctx->vars, ctx->var_count, ctx->var_names) != 0) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &src) != 0) {
         return -1;
     }
     if (src.tag != VAL_NUMBER) {

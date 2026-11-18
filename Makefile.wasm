@@ -24,8 +24,9 @@ STR_SRC = src/common/flat_str.c
 PORT_SRC = src/port/flat_port_posix.c
 FB_SRC = src/common/fb_format.c
 
-WASM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math.c \
-            src/lib/flat_math_calc.c src/lib/mod_list.c src/lib/mod_obj.c src/lib/mod_csv.c \
+WASM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math_mdim.c \
+            src/lib/mod_math.c src/lib/flat_math_calc.c src/lib/mod_list.c src/lib/mod_obj.c \
+            src/lib/mod_csv.c \
             src/lib/mod_vcx.c \
             src/lib/mod_vcx_dschema.c src/lib/mod_executor.c
 

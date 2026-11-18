@@ -42,21 +42,10 @@ static int split_two_args(char *inner, char **left, char **right) {
     return -1;
 }
 
-static int parse_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    char buf[512];
-
-    if (!expr || !out) {
-        return -1;
-    }
-    snprintf(buf, sizeof buf, "%s", expr);
-    return flat_value_parse_assign_rhs(flat_native_trim(buf), out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
-}
-
 static int number_from_expr(FlatNativeCtx *ctx, const char *expr, double *out_num) {
     FlatValue src;
 
-    if (parse_expr(ctx, expr, &src) != 0 || src.tag != VAL_NUMBER) {
+    if (flat_native_parse_expr(ctx, expr, &src) != 0 || src.tag != VAL_NUMBER) {
         return -1;
     }
     *out_num = flat_number_as_f64(&src);
@@ -162,11 +151,14 @@ static int list_to_numbers(FlatNativeCtx *ctx, const FlatValue *list_val, double
 static int list_from_inner(FlatNativeCtx *ctx, const char *inner, double *nums, int max_nums,
                            int *out_count) {
     FlatValue src;
+    int rc;
 
-    if (parse_expr(ctx, inner, &src) != 0) {
+    if (flat_native_parse_rhs(ctx, inner, &src) != 0) {
         return -1;
     }
-    return list_to_numbers(ctx, &src, nums, max_nums, out_count);
+    rc = list_to_numbers(ctx, &src, nums, max_nums, out_count);
+    flat_native_parse_rhs_release(ctx, &src);
+    return rc;
 }
 
 static int unary_list_agg(FlatNativeCtx *ctx, double (*fn)(const double *, int)) {
@@ -516,7 +508,7 @@ int flat_native_math_calc(FlatNativeCtx *ctx) {
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
-    if (parse_expr(ctx, expr_e, &src) != 0) {
+    if (flat_native_parse_expr(ctx, expr_e, &src) != 0) {
         return calc_set_panic_arg(ctx);
     }
     if (string_from_value(ctx, &src, expr, sizeof expr) != 0) {

@@ -18,6 +18,7 @@ static int g_manifest_count;
 static char g_search_dir[512];
 static int g_loaded_math_trig;
 static int g_loaded_math_stats;
+static int g_loaded_math_mdim;
 static int g_loaded_math;
 static int g_loaded_list;
 static int g_loaded_obj;
@@ -182,6 +183,24 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_MATH_STATS_VAR, flat_native_math_stats_var);
         flat_native_plugin_register(FLAT_NATIVE_MATH_STATS_STDEV, flat_native_math_stats_stdev);
         g_loaded_math_stats = 1;
+        return 0;
+    }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_MDIM) == 0) {
+        if (g_loaded_math_mdim) {
+            return 0;
+        }
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_ADD, flat_native_math_mdim_add);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_SUBTRACT, flat_native_math_mdim_subtract);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_MULTIPLY, flat_native_math_mdim_multiply);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_DIVIDE, flat_native_math_mdim_divide);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_SUM, flat_native_math_mdim_sum);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_MIN, flat_native_math_mdim_min);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_MAX, flat_native_math_mdim_max);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_AVG, flat_native_math_mdim_avg);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_DOT, flat_native_math_mdim_dot);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_TRANSPOSE, flat_native_math_mdim_transpose);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_MATMUL, flat_native_math_mdim_matmul);
+        g_loaded_math_mdim = 1;
         return 0;
     }
     if (strcmp(mod, FLAT_NATIVE_MODULE_MATH) == 0) {
@@ -367,6 +386,9 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
     if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_STATS) == 0 && g_loaded_math_stats) {
         return 0;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_MDIM) == 0 && g_loaded_math_mdim) {
+        return 0;
+    }
     if (strcmp(mod, FLAT_NATIVE_MODULE_MATH) == 0 && g_loaded_math) {
         return 0;
     }
@@ -446,6 +468,9 @@ ok:
     if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_STATS) == 0) {
         g_loaded_math_stats = 1;
     }
+    if (strcmp(mod, FLAT_NATIVE_MODULE_MATH_MDIM) == 0) {
+        g_loaded_math_mdim = 1;
+    }
     if (strcmp(mod, FLAT_NATIVE_MODULE_MATH) == 0) {
         g_loaded_math = 1;
     }
@@ -474,6 +499,7 @@ void flat_native_runtime_reset(void) {
     g_manifest_count = 0;
     g_loaded_math_trig = 0;
     g_loaded_math_stats = 0;
+    g_loaded_math_mdim = 0;
     g_loaded_math = 0;
     g_loaded_list = 0;
     g_loaded_obj = 0;

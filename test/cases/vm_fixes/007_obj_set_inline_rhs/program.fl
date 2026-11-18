@@ -1,0 +1,10 @@
+use native obj with O
+
+#main
+  O.set({a: 1}, 'b', {c: 2}) -> o
+  O.get(o, 'a') -> av
+  O.get(o, 'b') -> bv
+  O.get(bv, 'c') -> cv
+  io.out(av)
+  io.out(cv)
+  OK

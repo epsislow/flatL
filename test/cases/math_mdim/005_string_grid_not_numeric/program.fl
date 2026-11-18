@@ -1,0 +1,6 @@
+use native math.mdim with D
+
+#main
+  G:t255[][] = [["a", "b"], ["c", "d"]]
+  D.add(G, G) -> H
+  OK

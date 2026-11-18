@@ -22,16 +22,6 @@ static int io_err(FlatNativeCtx *ctx) {
     return -1;
 }
 
-static int parse_expr(FlatNativeCtx *ctx, const char *expr, FlatValue *out) {
-    char buf[512];
-    if (!expr || !out) {
-        return -1;
-    }
-    snprintf(buf, sizeof buf, "%s", expr);
-    return flat_value_parse_assign_rhs(flat_native_trim(buf), out, ctx->pool, ctx->coll, ctx->vars,
-                                       ctx->var_count, ctx->var_names);
-}
-
 static int split_two_args(char *inner, char **left, char **right) {
     int depth = 0;
     char quote = 0;
@@ -97,7 +87,7 @@ static int string_from_inner(FlatNativeCtx *ctx, char *token, size_t token_size)
     FlatValue src;
     char inner_buf[4096];
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
-    if (parse_expr(ctx, inner_buf, &src) != 0) {
+    if (flat_native_parse_expr(ctx, inner_buf, &src) != 0) {
         return -1;
     }
     return string_from_value(&src, ctx->pool, token, token_size);
@@ -121,10 +111,12 @@ int flat_native_date_format(FlatNativeCtx *ctx) {
         a = flat_native_trim(inner_buf);
         b = NULL;
     }
-    if (parse_expr(ctx, a, &src) != 0) {
+    memset(&src, 0, sizeof src);
+    if (flat_native_parse_rhs(ctx, a, &src) != 0) {
         return io_err(ctx);
     }
     if (flat_date_value_to_utc_sec(&src, ctx->pool, &sec, st) != 0) {
+        flat_native_parse_rhs_release(ctx, &src);
         return io_err(ctx);
     }
     {
@@ -133,16 +125,19 @@ int flat_native_date_format(FlatNativeCtx *ctx) {
 
         if (b) {
             FlatValue vf;
-            if (parse_expr(ctx, b, &vf) != 0 ||
+            if (flat_native_parse_expr(ctx, b, &vf) != 0 ||
                 string_from_value(&vf, ctx->pool, fmtbuf, sizeof fmtbuf) != 0) {
+                flat_native_parse_rhs_release(ctx, &src);
                 return io_err(ctx);
             }
             pattern = fmtbuf;
         }
         if (flat_date_format(sec, pattern, out, sizeof out, st) != 0) {
+            flat_native_parse_rhs_release(ctx, &src);
             return io_err(ctx);
         }
     }
+    flat_native_parse_rhs_release(ctx, &src);
     return emit_string(ctx, out);
 }
 
@@ -157,7 +152,7 @@ int flat_native_date_parse_auto(FlatNativeCtx *ctx) {
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
-    if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0) {
         return io_err(ctx);
     }
     if (v.tag == VAL_NUMBER) {
@@ -198,16 +193,21 @@ int flat_native_date_parse(FlatNativeCtx *ctx) {
     }
     {
         FlatValue vs;
-        if (parse_expr(ctx, s, &vs) != 0 || string_from_value(&vs, ctx->pool, stok, sizeof stok) != 0) {
+        memset(&vs, 0, sizeof vs);
+        if (flat_native_parse_rhs(ctx, s, &vs) != 0 ||
+            string_from_value(&vs, ctx->pool, stok, sizeof stok) != 0) {
+            flat_native_parse_rhs_release(ctx, &vs);
             return io_err(ctx);
         }
-    }
-    {
-        FlatValue vf;
-        if (parse_expr(ctx, fmt, &vf) != 0 ||
-            string_from_value(&vf, ctx->pool, ftok, sizeof ftok) != 0) {
-            return io_err(ctx);
+        {
+            FlatValue vf;
+            if (flat_native_parse_expr(ctx, fmt, &vf) != 0 ||
+                string_from_value(&vf, ctx->pool, ftok, sizeof ftok) != 0) {
+                flat_native_parse_rhs_release(ctx, &vs);
+                return io_err(ctx);
+            }
         }
+        flat_native_parse_rhs_release(ctx, &vs);
     }
     if (ftok[0] == '\0') {
         return io_err(ctx);
@@ -257,23 +257,28 @@ int flat_native_date_add(FlatNativeCtx *ctx) {
     if (split_two_args(inner_buf, &base, &mod) != 0) {
         return io_err(ctx);
     }
-    if (parse_expr(ctx, base, &vb) != 0) {
+    memset(&vb, 0, sizeof vb);
+    if (flat_native_parse_rhs(ctx, base, &vb) != 0) {
         return io_err(ctx);
     }
     if (flat_date_value_to_utc_sec(&vb, ctx->pool, &sec, st) != 0) {
+        flat_native_parse_rhs_release(ctx, &vb);
         return io_err(ctx);
     }
     {
         FlatValue vm;
         char modtok[128];
-        if (parse_expr(ctx, mod, &vm) != 0 ||
+        if (flat_native_parse_expr(ctx, mod, &vm) != 0 ||
             string_from_value(&vm, ctx->pool, modtok, sizeof modtok) != 0) {
+            flat_native_parse_rhs_release(ctx, &vb);
             return io_err(ctx);
         }
         if (flat_date_add_modifier(sec, modtok, &sec) != 0) {
+            flat_native_parse_rhs_release(ctx, &vb);
             return io_err(ctx);
         }
     }
+    flat_native_parse_rhs_release(ctx, &vb);
     if (vb.tag == VAL_NUMBER) {
         return flat_value_set_number(ctx->out, (double)sec);
     }
@@ -301,13 +306,23 @@ int flat_native_date_cmp(FlatNativeCtx *ctx) {
     if (split_two_args(inner_buf, &a, &b) != 0) {
         return io_err(ctx);
     }
-    if (parse_expr(ctx, a, &va) != 0 || parse_expr(ctx, b, &vb) != 0) {
+    memset(&va, 0, sizeof va);
+    memset(&vb, 0, sizeof vb);
+    if (flat_native_parse_rhs(ctx, a, &va) != 0) {
+        return io_err(ctx);
+    }
+    if (flat_native_parse_rhs(ctx, b, &vb) != 0) {
+        flat_native_parse_rhs_release(ctx, &va);
         return io_err(ctx);
     }
     if (flat_date_value_to_utc_sec(&va, ctx->pool, &sa, st) != 0 ||
         flat_date_value_to_utc_sec(&vb, ctx->pool, &sb, st) != 0) {
+        flat_native_parse_rhs_release(ctx, &va);
+        flat_native_parse_rhs_release(ctx, &vb);
         return io_err(ctx);
     }
+    flat_native_parse_rhs_release(ctx, &va);
+    flat_native_parse_rhs_release(ctx, &vb);
     if (sa < sb) {
         return flat_value_set_number(ctx->out, -1.0);
     }
@@ -328,7 +343,7 @@ int flat_native_date_to_seconds(FlatNativeCtx *ctx) {
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
-    if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0) {
         return io_err(ctx);
     }
     if (flat_date_value_to_utc_sec(&v, ctx->pool, &sec, st) != 0) {
@@ -348,7 +363,7 @@ int flat_native_date_from_seconds(FlatNativeCtx *ctx) {
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
-    if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
         return io_err(ctx);
     }
     sec = (int64_t)flat_number_as_f64(&v);
@@ -379,7 +394,7 @@ int flat_native_date_from_ms(FlatNativeCtx *ctx) {
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
-    if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
         return io_err(ctx);
     }
     sec = (int64_t)(flat_number_as_f64(&v) / 1000.0);
@@ -416,7 +431,7 @@ int flat_native_date_sec_to_time(FlatNativeCtx *ctx) {
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
-    if (parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
+    if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
         return io_err(ctx);
     }
     sec = (int)flat_number_as_f64(&v);

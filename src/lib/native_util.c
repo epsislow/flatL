@@ -1,7 +1,6 @@
-#include "flat_native.h"
+#include "flat_native_util.h"
 
 #include <ctype.h>
-#include <stdio.h>
 #include <string.h>
 
 char *flat_native_trim(char *s) {
