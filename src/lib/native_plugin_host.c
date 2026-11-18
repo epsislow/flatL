@@ -124,6 +124,7 @@ static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_SETPOS_REL, flat_native_file_setposrel);
     flat_native_plugin_register(FLAT_NATIVE_FILE_ISEOF, flat_native_file_iseof);
     flat_native_plugin_register(FLAT_NATIVE_FILE_CLOSE, flat_native_file_close);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_TRUNCATE, flat_native_file_truncate);
 }
 
 static int manifest_has_module(const char *mod) {

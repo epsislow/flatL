@@ -58,6 +58,40 @@ FILE *flat_file_fp(FlatFileTable *tbl, uint32_t id) {
     return tbl->slots[id].fp;
 }
 
+int flat_file_truncate(FlatFileTable *tbl, uint32_t id, uint64_t len) {
+    FILE *fp;
+    FlatFileSlot *s;
+    long pos;
+
+    if (!flat_file_is_live(tbl, id)) {
+        return -1;
+    }
+    s = &tbl->slots[id];
+    if (s->mode == FLAT_FILE_MODE_READ) {
+        return -1;
+    }
+    fp = s->fp;
+    if (!fp) {
+        return -1;
+    }
+#ifdef _WIN32
+    if (_chsize(_fileno(fp), (long)len) != 0) {
+        return -1;
+    }
+#else
+    if (ftruncate(fileno(fp), (off_t)len) != 0) {
+        return -1;
+    }
+#endif
+    pos = ftell(fp);
+    if (pos >= 0 && (uint64_t)pos > len) {
+        if (fseek(fp, (long)len, SEEK_SET) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int flat_file_truncate_zero(FlatFileTable *tbl, uint32_t id) {
     FILE *fp;
 
@@ -65,22 +99,10 @@ int flat_file_truncate_zero(FlatFileTable *tbl, uint32_t id) {
         return -1;
     }
     fp = tbl->slots[id].fp;
-    if (!fp) {
+    if (!fp || fseek(fp, 0, SEEK_SET) != 0) {
         return -1;
     }
-    if (fseek(fp, 0, SEEK_SET) != 0) {
-        return -1;
-    }
-#ifdef _WIN32
-    if (_chsize(_fileno(fp), 0) != 0) {
-        return -1;
-    }
-#else
-    if (ftruncate(fileno(fp), 0) != 0) {
-        return -1;
-    }
-#endif
-    return 0;
+    return flat_file_truncate(tbl, id, 0);
 }
 
 void flat_file_retain(FlatFileTable *tbl, uint32_t id) {

@@ -504,6 +504,38 @@ int flat_native_file_iseof(FlatNativeCtx *ctx) {
     return flat_value_set_bool(ctx->out, feof(fp) ? 1 : 0);
 }
 
+int flat_native_file_truncate(FlatNativeCtx *ctx) {
+    char inner_buf[4096];
+    char *left;
+    char *right;
+    uint32_t fid;
+    FlatValue n;
+    double len_f;
+
+    if (!ctx->io_status || !ctx->inner) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        return -1;
+    }
+    if (require_fp(ctx, left, &fid) != 0) {
+        return -1;
+    }
+    if (parse_expr(ctx, right, &n) != 0 || n.tag != VAL_NUMBER) {
+        return -1;
+    }
+    len_f = flat_number_as_f64(&n);
+    if (len_f < 0.0 || len_f != (double)(uint64_t)len_f) {
+        return -1;
+    }
+    if (flat_file_truncate(ctx->file_tbl, fid, (uint64_t)len_f) != 0) {
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
 int flat_native_file_close(FlatNativeCtx *ctx) {
     uint32_t fid;
 

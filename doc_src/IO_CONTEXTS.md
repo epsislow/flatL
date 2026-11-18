@@ -58,7 +58,7 @@ Clears the current **`ctxout`** destination (not `ctxerr`):
 | **`tout`** / terminal | ANSI clear + cursor home (`ESC [2J`, `ESC [H`) — Fleditor xterm |
 | STRING **REF** var | Pool body length **0**; variable keeps same ref — **`io.ctx_stale`** rules unchanged |
 | Inline STRING (snapshot) | Internal capture buffer cleared |
-| **`file`** handle | Truncate file to **0** bytes, write position **0** |
+| **`file`** handle | Truncate file to **0** bytes, write position **0** (same effect as **`file.truncate(fp, 0)`** on that handle) |
 
 Does not apply to invalid **`ctxout`** targets (e.g. literal on input). Panic **`io.context`** when the active output endpoint cannot be cleared (read-only file, wrong binding).
 

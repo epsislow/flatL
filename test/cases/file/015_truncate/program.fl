@@ -1,0 +1,14 @@
+#main
+  fp = file.createCtx('trunc.dat')
+  file.write(fp, 'HelloWorld')
+  file.truncate(fp, 5)
+  file.setpos(fp, 0)
+  file.read(fp) -> head
+  file.size(fp) -> sz
+  file.truncate(fp, 0)
+  file.size(fp) -> empty
+  file.close(fp)
+  io.outln(head)
+  io.outln(sz)
+  io.outln(empty)
+  OK

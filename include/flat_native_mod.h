@@ -153,6 +153,7 @@ int flat_native_file_setpos(FlatNativeCtx *ctx);
 int flat_native_file_setposrel(FlatNativeCtx *ctx);
 int flat_native_file_iseof(FlatNativeCtx *ctx);
 int flat_native_file_close(FlatNativeCtx *ctx);
+int flat_native_file_truncate(FlatNativeCtx *ctx);
 
 int flat_native_str_to_date(FlatNativeCtx *ctx);
 int flat_native_str_to_time(FlatNativeCtx *ctx);

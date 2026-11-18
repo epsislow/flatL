@@ -150,6 +150,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("file", "setposrel", "file.setposrel(fp, delta)"),
     META_SIG("file", "iseof", "file.iseof(fp)"),
     META_SIG("file", "close", "file.close(fp)"),
+    META_SIG("file", "truncate", "file.truncate(fp, len)"),
     META_SIG("str", "to_date", "str.to_date(s)"),
     META_SIG("str", "to_time", "str.to_time(s)"),
     META_SIG("str", "to_datetime", "str.to_datetime(s)"),

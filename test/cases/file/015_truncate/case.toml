@@ -1,0 +1,10 @@
+suite = "file"
+id = 15
+desc = "file.truncate(fp, len) shortens file"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "Hello"

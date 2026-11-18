@@ -33,6 +33,7 @@ Returns a **NUMBER** file id bound to a variable or `->` target.
 | `file.size(fp)` | File size in bytes (NUMBER) | **`file.size`** |
 | `file.setpos(fp, n)` | Seek: **`n >= 0`** absolute from start; **`n < 0`** from EOF (e.g. `-3` = 3 bytes before end) | **`file.setpos`** |
 | `file.setposrel(fp, delta)` | Seek relative to current position (`SEEK_CUR`) | **`file.setposrel`** |
+| `file.truncate(fp, len)` | Set file size to **`len`** bytes (non-negative whole byte count); read-only handle invalid | **`file.truncate`** |
 | `file.iseof(fp)` | BOOL after reads | **`file.iseof`** |
 
 ### Seeking
@@ -41,6 +42,11 @@ Returns a **NUMBER** file id bound to a variable or `->` target.
 - **`file.setpos(fp, n)`** with **`n >= 0`** — byte offset from the beginning.
 - **`file.setpos(fp, n)`** with **`n < 0`** — offset from end of file (same idea as `SEEK_END`; `-1` is the last byte).
 - **`file.setposrel(fp, delta)`** — move the cursor by **delta** bytes forward (positive) or backward (negative) without changing the meaning of **`setpos`**.
+
+### Truncating
+
+- **`file.truncate(fp, len)`** — host **`ftruncate`** / size set: file becomes exactly **`len`** bytes. Shorter than the previous size drops the tail without rewriting from the start (unlike **`file.writeCtx`** + **`file.write`**, which only overwrites from the current cursor). **`len == 0`** empties the file; if the cursor was past the new size it is moved to **`len`**.
+- **`file.createCtx(path)`** still truncates on **open** (`w+`). **`io.outcls()`** with **`io.ctxout(fp)`** also truncates to **0** on the active output sink ([IO_CONTEXTS.md](../IO_CONTEXTS.md)).
 
 Binary reads/writes use the current position; combine **`setpos`** / **`setposrel`** with **`file.read(fp, n)`** and **`file.writeBytes`** for opaque blobs.
 | `file.close(fp)` | Close handle; revert active **`io.ctx*`** if needed | **`file.close`** |
