@@ -726,6 +726,27 @@ int flat_native_io_err(FlatNativeCtx *ctx) {
     return 0;
 }
 
+int flat_native_io_outcls(FlatNativeCtx *ctx) {
+    if (!ctx->io_status) {
+        return -1;
+    }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
+        return flat_io_ctx_clear_out(ctx->io_ctx, ctx);
+    }
+    {
+        static const char seq[] = "\x1b[2J\x1b[H";
+#ifdef FLAT_WASM_BUILD
+        flat_wasm_io_write_stdout(seq, sizeof seq - 1);
+#else
+        fwrite(seq, 1, sizeof seq - 1, stdout);
+        fflush(stdout);
+#endif
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
 int flat_native_io_errln(FlatNativeCtx *ctx) {
     FlatValue v;
     if (!ctx->io_status) {

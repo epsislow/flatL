@@ -1,8 +1,14 @@
 #include "flat_file.h"
 #include "flat_number.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <unistd.h>
+#else
+#include <io.h>
+#endif
 
 void flat_file_table_init(FlatFileTable *tbl) {
     if (tbl) {
@@ -50,6 +56,31 @@ FILE *flat_file_fp(FlatFileTable *tbl, uint32_t id) {
         return NULL;
     }
     return tbl->slots[id].fp;
+}
+
+int flat_file_truncate_zero(FlatFileTable *tbl, uint32_t id) {
+    FILE *fp;
+
+    if (!flat_file_is_live(tbl, id)) {
+        return -1;
+    }
+    fp = tbl->slots[id].fp;
+    if (!fp) {
+        return -1;
+    }
+    if (fseek(fp, 0, SEEK_SET) != 0) {
+        return -1;
+    }
+#ifdef _WIN32
+    if (_chsize(_fileno(fp), 0) != 0) {
+        return -1;
+    }
+#else
+    if (ftruncate(fileno(fp), 0) != 0) {
+        return -1;
+    }
+#endif
+    return 0;
 }
 
 void flat_file_retain(FlatFileTable *tbl, uint32_t id) {

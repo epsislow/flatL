@@ -15,7 +15,7 @@ Three **independent** redirects:
 | Call | Selects source/sink for |
 |------|-------------------------|
 | `io.ctxin(source)` | `io.in*` |
-| `io.ctxout(destination)` | `io.out*` / `io.outvar` |
+| `io.ctxout(destination)` | `io.out*` / `io.outvar` / **`io.outcls`** |
 | `io.ctxerr(destination)` | `io.err*` / `io.errln` |
 
 | Token | Role |
@@ -49,6 +49,33 @@ The VM records **which variable name** and **which pool `ref_id`** were passed t
 
 On panic, the I/O context resets to terminals before the `#panic.any` handler runs (if present).
 
+### `io.outcls`
+
+Clears the current **`ctxout`** destination (not `ctxerr`):
+
+| Target | Effect |
+|--------|--------|
+| **`tout`** / terminal | ANSI clear + cursor home (`ESC [2J`, `ESC [H`) — Fleditor xterm |
+| STRING **REF** var | Pool body length **0**; variable keeps same ref — **`io.ctx_stale`** rules unchanged |
+| Inline STRING (snapshot) | Internal capture buffer cleared |
+| **`file`** handle | Truncate file to **0** bytes, write position **0** |
+
+Does not apply to invalid **`ctxout`** targets (e.g. literal on input). Panic **`io.context`** when the active output endpoint cannot be cleared (read-only file, wrong binding).
+
+#### Fleditor / WASM
+
+On **`tout`**, **`io.outcls()`** emits the same ANSI clear sequence as native **`bin/flvm`** (`ESC [2J`, `ESC [H`). In the browser playground, **`tout`** is the xterm.js output pane ([FLEDITOR.md](./FLEDITOR.md)); WASM uses `flat_wasm_io_write_stdout` — no escape bytes are written into REF, inline snapshot, or **file** sinks. After compiler or I/O changes, rebuild with **`make fleditor-wasm`** (or **`make rebuild`**) so the editor bundle picks up the behavior.
+
+```text
+buf = mem.ref_empty()
+io.ctxout(buf)
+io.out('draft')
+io.outcls()
+io.out('final')
+io.ctxout(tout)
+io.outln(buf)
+```
+
 ## 3. Examples
 
 Capture to REF (prefer **`mem.ref_empty()`** over test-only **`__ref__`**):
@@ -76,7 +103,7 @@ file.close(fp)
 
 | Suite | Path |
 |-------|------|
-| I/O contexts | `test/cases/io_ctx/` |
+| I/O contexts | `test/cases/io_ctx/` (incl. `011_*`–`013_*` **`io.outcls`**) |
 | VCX + `io.ctx*` | `test/cases/vcx/` (e.g. `011_*`, `012_*`, `013_*`) |
 | File + `io.ctx*` | `test/cases/file/` |
 | `mem.ref_*` | `test/cases/memory/006_mem_ref_empty/` |

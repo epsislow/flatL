@@ -207,6 +207,29 @@ int flat_pool_alloc_empty(FlatStringPool *pool, uint32_t *out_id) {
     return 0;
 }
 
+int flat_pool_clear_owned(FlatStringPool *pool, uint32_t id) {
+    PoolSlot *s;
+
+    if (!pool || !pool_slot_active(pool, (int)id)) {
+        return -1;
+    }
+    s = &pool->slots[id];
+    if (s->parent_id >= 0) {
+        return -1;
+    }
+    if (s->data) {
+        if (pool->total_bytes >= s->len) {
+            pool->total_bytes -= s->len;
+        } else {
+            pool->total_bytes = 0;
+        }
+        free(s->data);
+        s->data = NULL;
+    }
+    s->len = 0;
+    return 0;
+}
+
 int flat_pool_append(FlatStringPool *pool, uint32_t id, const void *data, size_t len) {
     PoolSlot *s;
     uint8_t *grown;

@@ -1,0 +1,10 @@
+#main
+  slot = ''
+  fill = 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+  io.ctxout(slot)
+  io.out(fill)
+  io.outcls()
+  io.out(fill)
+  io.ctxout(tout)
+  io.outln('snapshot_ok')
+  OK

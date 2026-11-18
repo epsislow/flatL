@@ -34,6 +34,8 @@ int flat_file_open(FlatFileTable *tbl, const char *path, FlatFileMode mode, uint
 int flat_file_close(FlatFileTable *tbl, uint32_t id);
 int flat_file_is_live(const FlatFileTable *tbl, uint32_t id);
 FILE *flat_file_fp(FlatFileTable *tbl, uint32_t id);
+/* Seek 0 and truncate to empty (write-capable handle). */
+int flat_file_truncate_zero(FlatFileTable *tbl, uint32_t id);
 
 void flat_file_retain(FlatFileTable *tbl, uint32_t id);
 void flat_file_release(FlatFileTable *tbl, uint32_t id);

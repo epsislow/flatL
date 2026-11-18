@@ -1,0 +1,9 @@
+#main
+  buf = mem.ref_empty()
+  io.ctxout(buf)
+  io.out('first')
+  io.outcls()
+  io.out('second')
+  io.ctxout(tout)
+  io.outln(buf)
+  OK

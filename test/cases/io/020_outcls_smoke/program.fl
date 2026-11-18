@@ -1,0 +1,4 @@
+#main
+  io.outcls()
+  io.outln('after')
+  OK

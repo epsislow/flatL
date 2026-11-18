@@ -17,6 +17,7 @@ int flat_native_io_docs(FlatNativeCtx *ctx);
 int flat_native_io_ctxin(FlatNativeCtx *ctx);
 int flat_native_io_ctxout(FlatNativeCtx *ctx);
 int flat_native_io_ctxerr(FlatNativeCtx *ctx);
+int flat_native_io_outcls(FlatNativeCtx *ctx);
 int flat_native_io_err(FlatNativeCtx *ctx);
 int flat_native_io_errln(FlatNativeCtx *ctx);
 int flat_native_str_to_num(FlatNativeCtx *ctx);

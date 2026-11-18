@@ -1,4 +1,5 @@
 #include "flat_io_ctx.h"
+#include "flat_file.h"
 #include "flat_memstream.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
@@ -7,6 +8,20 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static const char FLAT_IO_TTY_CLEAR[] = "\x1b[2J\x1b[H";
+
+static int write_tty_clear(void) {
+#ifdef FLAT_WASM_BUILD
+    flat_wasm_io_write_stdout(FLAT_IO_TTY_CLEAR, sizeof FLAT_IO_TTY_CLEAR - 1);
+#else
+    if (fwrite(FLAT_IO_TTY_CLEAR, 1, sizeof FLAT_IO_TTY_CLEAR - 1, stdout) != sizeof FLAT_IO_TTY_CLEAR - 1) {
+        return -1;
+    }
+    fflush(stdout);
+#endif
+    return 0;
+}
 
 typedef enum {
     EP_TIN,
@@ -242,6 +257,56 @@ static int write_bytes_to_ep(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint *
         *st = FLAT_IO_PANIC_CTX;
         return -1;
     }
+    return 0;
+}
+
+int flat_io_ctx_clear_out(FlatIOContext *io, FlatNativeCtx *ctx) {
+    IoEndpoint *ep;
+    FlatIoStatus st = FLAT_IO_OK;
+
+    if (!io || !ctx || !ctx->io_status) {
+        return -1;
+    }
+    ep = &io->out;
+    if (ep->kind == EP_REF && !ref_still_bound(io, ep, ctx->pool, ctx)) {
+        ctx_panic(io, "io.ctx_stale");
+        *ctx->io_status = FLAT_IO_PANIC_CTX;
+        return 0;
+    }
+    switch (ep->kind) {
+    case EP_TOUT:
+        if (write_tty_clear() != 0) {
+            return -1;
+        }
+        break;
+    case EP_REF:
+        if (flat_pool_clear_owned(ctx->pool, ep->ref_id) != 0) {
+            return -1;
+        }
+        break;
+    case EP_SNAPSHOT:
+        ep->len = 0;
+        if (ep->buf) {
+            ep->buf[0] = '\0';
+        }
+        break;
+    case EP_FILE:
+        if (!io->files || flat_file_truncate_zero(io->files, ep->file_id) != 0) {
+            ctx_panic(io, "io.context");
+            *ctx->io_status = FLAT_IO_PANIC_CTX;
+            return 0;
+        }
+        break;
+    case EP_TERR:
+    case EP_TIN:
+    case EP_LITERAL:
+    default:
+        ctx_panic(io, "io.context");
+        *ctx->io_status = FLAT_IO_PANIC_CTX;
+        return 0;
+    }
+    (void)st;
+    *ctx->io_status = FLAT_IO_OK;
     return 0;
 }
 

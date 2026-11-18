@@ -73,6 +73,8 @@ void flat_pool_destroy(FlatStringPool *pool);
 int flat_pool_alloc_copy(FlatStringPool *pool, const void *data, size_t len, uint32_t *out_id);
 int flat_pool_alloc_empty(FlatStringPool *pool, uint32_t *out_id);
 int flat_pool_append(FlatStringPool *pool, uint32_t id, const void *data, size_t len);
+/* Clear owned slot body (len 0); slice views unchanged. Returns -1 if slice child or inactive. */
+int flat_pool_clear_owned(FlatStringPool *pool, uint32_t id);
 int flat_pool_slice(FlatStringPool *pool, uint32_t parent_id, size_t offset, size_t len,
                     uint32_t *out_id);
 const uint8_t *flat_pool_read(const FlatStringPool *pool, uint32_t id, size_t *out_len);

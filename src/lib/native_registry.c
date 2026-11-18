@@ -221,6 +221,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("list", "is_matrix", "list.is_matrix(list)"),
     META_SIG("list", "is_vector", "list.is_vector(list)"),
     META_SIG("str", "from_num", "str.from_num(x, decimals, group?)"),
+    META_SIG("io", "outcls", "io.outcls()"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -310,6 +311,9 @@ int flat_native_is_optional_id(uint16_t id) {
         return 0;
     }
     if (id >= (uint16_t)FLAT_NATIVE_IO_CTXIN && id <= (uint16_t)FLAT_NATIVE_IO_ERRLN) {
+        return 0;
+    }
+    if (id == (uint16_t)FLAT_NATIVE_IO_OUTCLS) {
         return 0;
     }
     return id >= (uint16_t)FLAT_NATIVE_CORE_COUNT && id < (uint16_t)FLAT_NATIVE_COUNT;

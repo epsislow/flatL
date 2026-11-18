@@ -16,6 +16,11 @@ Implementation: `src/lib/mod_io.c`, registry `src/lib/native_registry.c`.
 | `io.out(expr)` | Print value, no newline | **`io.out`** — bad expr / I/O context error |
 | `io.outln(expr)` | Print value + `\n` | **`io.outln`** — bad expr / context |
 | `io.outvar(name)` | Print variable value + `\n` | **`io.outvar`** — unknown variable |
+| `io.outcls()` | Clear **`ctxout`** sink (see below) | **`io.outcls`**, **`io.context`**, **`io.ctx_stale`** |
+
+**`io.outcls()`** — no arguments. Effect depends on the active **`ctxout`** target ([IO_CONTEXTS.md](../IO_CONTEXTS.md)): **`tout`** / terminal → ANSI clear screen; **STRING REF** → empty body (same `ref_id`); **inline** STRING snapshot → empty; **`file`** handle → truncate to 0 bytes at position 0. Invalid / unsupported target → **`io.context`**. Default **`tout`** when no redirect matches direct `io.out*`.
+
+**Fleditor / WASM:** terminal clear uses the same ANSI bytes; stdout in the editor is the xterm pane (see [FLEDITOR.md](../FLEDITOR.md)). Non-terminal sinks are unchanged in WASM builds.
 
 Formatting: [IO.md §2](../IO.md#2-output-ioout).
 
