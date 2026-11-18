@@ -1,0 +1,8 @@
+suite = "types"
+id = 264
+desc = "shape introspection după L.push (walk, fără stamp)"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

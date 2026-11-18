@@ -1,0 +1,8 @@
+use native list with L
+
+#main
+  v:f64[=3] = [1, 2, 3]
+  L.is_vector(v) == true
+  L.is_matrix(v) == false
+  L.rank(v) == 1
+  OK

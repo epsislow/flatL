@@ -50,6 +50,13 @@ Recoverable errors → **PANIC** **`list.<fn>`** by default; **`?`** / **`~`** p
 | `range(start, stop)` | LIST | **`list.range`** — same |
 | `range(start, stop, step)` | LIST | **`list.range`** — same (**`step == 0`** fails) |
 | `repeat(n, value)` | LIST | **`list.repeat`** — bad **`n`** or types |
+| `is_rect(list)` | BOOL | **`list.shape`** — bad operand; walk/stamp § AM-RECT-MD |
+| `dims(list)` | LIST | **`type.list.not_rect`** dacă !rect; else lungimi pe axe |
+| `rank(list)` | NUMBER | 0 dacă !rect; altfel 1=vector, 2=matrix, … |
+| `is_matrix(list)` | BOOL | rect + rank 2 + numeric omogen |
+| `is_vector(list)` | BOOL | rect + rank 1 + numeric omogen |
+
+Shape: la assign tipizat / literal cu sufix se pune **stamp** pe `list_id`; altfel **walk** (memo pe id). După mutatori COW (`push`, …) listă nouă fără stamp — walk la primul `list.*`.
 
 **`range`** follows Python-style half-open bounds (same spirit as **`list.slice`**). Element count is capped at **`FLAT_LIST_MAX_ELEMS` (1024)**. Floating-point NUMBER elements are stored as NUMBER (whole-number arguments only at the API).
 

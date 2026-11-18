@@ -93,6 +93,10 @@ table[0][1].qty == null
 
 **Notă COW:** la literale, aceleași referințe `{}` în același rând înainte de un obiect cu câmpuri pot împărți slot în parse; rebuild clonează înainte de bind, dar ordinea în rând poate afecta valori — preferă câmpuri explicite (`{sku: null}`) sau assign după grilă.
 
+## Shape / `rect` (faza R)
+
+La assign pe slot tipizat / literal cu sufix, runtime păstrează **stamp** (`rect`, `dims`, rank) pe `list_id`. Introspecție: `use native list with L` → `L.is_rect`, `L.dims`, `L.rank`, `L.is_matrix`, `L.is_vector` (vezi [natives/list.md](natives/list.md)). După mutatori COW (`L.push`, …) lista nouă nu moștenește stamp — se folosește **walk** cu memo.
+
 ## Path și mutatori (L.2)
 
 `M:f64[][]` — `M[i][j] = …` rezolvă contractul frunză (`f64`) la fiecare nivel LIST; rădăcină LIST sau OBJECT (schema). Tip greșit → `type.assign.incompatible`; range numeric → `type.assign.range`.

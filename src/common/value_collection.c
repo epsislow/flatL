@@ -1,3 +1,4 @@
+#include "flat_list_shape.h"
 #include "flat_mem_stats.h"
 #include "flat_value.h"
 
@@ -28,6 +29,14 @@ struct FlatCollectionPool {
     unsigned char list_active[FLAT_COLL_MAX_LISTS];
     int list_free[FLAT_COLL_MAX_LISTS];
     int list_free_n;
+    unsigned char list_sh_valid[FLAT_COLL_MAX_LISTS];
+    unsigned char list_sh_rect[FLAT_COLL_MAX_LISTS];
+    unsigned char list_sh_rank[FLAT_COLL_MAX_LISTS];
+    unsigned char list_sh_dims_n[FLAT_COLL_MAX_LISTS];
+    uint16_t list_sh_dims[FLAT_COLL_MAX_LISTS][FLAT_LIST_TYPED_MAX_RANK];
+    unsigned char list_sh_elem_kind[FLAT_COLL_MAX_LISTS];
+    unsigned char list_sh_elem_known[FLAT_COLL_MAX_LISTS];
+    unsigned char list_sh_source[FLAT_COLL_MAX_LISTS];
 
     ObjBody objects[FLAT_COLL_MAX_OBJECTS];
     int obj_bind[FLAT_COLL_MAX_OBJECTS];
@@ -140,6 +149,7 @@ static void list_slot_destroy(FlatCollectionPool *pool, FlatStringPool *str_pool
     memset(lb, 0, sizeof *lb);
     pool->list_bind[id] = 0;
     pool->list_active[id] = 0;
+    flat_coll_shape_slot_clear(pool, id);
     if (pool->list_free_n < FLAT_COLL_MAX_LISTS) {
         pool->list_free[pool->list_free_n++] = (int)id;
     }
@@ -247,6 +257,7 @@ static int list_slot_alloc(FlatCollectionPool *pool, FlatStringPool *str_pool, u
     memset(&pool->lists[id], 0, sizeof pool->lists[id]);
     pool->list_bind[id] = 0;
     pool->list_active[id] = 1;
+    flat_coll_shape_slot_clear(pool, id);
     *out_id = id;
     return 0;
 }
@@ -936,4 +947,61 @@ int flat_value_set_object(FlatValue *v, uint32_t obj_id) {
     v->tag = VAL_OBJECT;
     v->u.coll_id = obj_id;
     return 0;
+}
+
+void flat_coll_shape_slot_clear(FlatCollectionPool *pool, uint32_t id) {
+    if (!pool || id >= (uint32_t)FLAT_COLL_MAX_LISTS) {
+        return;
+    }
+    pool->list_sh_valid[id] = 0;
+    pool->list_sh_rect[id] = 0;
+    pool->list_sh_rank[id] = 0;
+    pool->list_sh_dims_n[id] = 0;
+    pool->list_sh_elem_kind[id] = (unsigned char)FLAT_SLOT_TYPE_NONE;
+    pool->list_sh_elem_known[id] = 0;
+    pool->list_sh_source[id] = (unsigned char)FLAT_LIST_SHAPE_SRC_NONE;
+    memset(pool->list_sh_dims[id], 0, sizeof pool->list_sh_dims[id]);
+}
+
+int flat_coll_shape_slot_read(const FlatCollectionPool *pool, uint32_t id, FlatListShapeInfo *out) {
+    int i;
+
+    if (!pool || !out || id >= (uint32_t)FLAT_COLL_MAX_LISTS || !pool->list_sh_valid[id]) {
+        return -1;
+    }
+    memset(out, 0, sizeof *out);
+    out->valid = 1;
+    out->rect = pool->list_sh_rect[id];
+    out->rank = pool->list_sh_rank[id];
+    out->dims_n = pool->list_sh_dims_n[id];
+    for (i = 0; i < (int)out->dims_n && i < FLAT_LIST_TYPED_MAX_RANK; i++) {
+        out->dims[i] = pool->list_sh_dims[id][i];
+    }
+    out->elem_kind = (FlatSlotTypeKind)pool->list_sh_elem_kind[id];
+    out->elem_known = pool->list_sh_elem_known[id];
+    out->source = (FlatListShapeSource)pool->list_sh_source[id];
+    return 0;
+}
+
+void flat_coll_shape_slot_write(FlatCollectionPool *pool, uint32_t id, const FlatListShapeInfo *info) {
+    int i;
+
+    if (!pool || !info || id >= (uint32_t)FLAT_COLL_MAX_LISTS) {
+        return;
+    }
+    if (!info->valid) {
+        flat_coll_shape_slot_clear(pool, id);
+        return;
+    }
+    pool->list_sh_valid[id] = 1;
+    pool->list_sh_rect[id] = info->rect;
+    pool->list_sh_rank[id] = info->rank;
+    pool->list_sh_dims_n[id] = info->dims_n;
+    memset(pool->list_sh_dims[id], 0, sizeof pool->list_sh_dims[id]);
+    for (i = 0; i < (int)info->dims_n && i < FLAT_LIST_TYPED_MAX_RANK; i++) {
+        pool->list_sh_dims[id][i] = info->dims[i];
+    }
+    pool->list_sh_elem_kind[id] = (unsigned char)info->elem_kind;
+    pool->list_sh_elem_known[id] = info->elem_known;
+    pool->list_sh_source[id] = (unsigned char)info->source;
 }

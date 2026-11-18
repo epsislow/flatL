@@ -215,6 +215,11 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("mem", "slot_frozen", "mem.slot_frozen(expr)"),
     META_SIG("mem", "slot_const", "mem.slot_const(expr)"),
     META_SIG("mem", "infoResId", "mem.infoResId(id, kind)"),
+    META_SIG("list", "is_rect", "list.is_rect(list)"),
+    META_SIG("list", "dims", "list.dims(list)"),
+    META_SIG("list", "rank", "list.rank(list)"),
+    META_SIG("list", "is_matrix", "list.is_matrix(list)"),
+    META_SIG("list", "is_vector", "list.is_vector(list)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

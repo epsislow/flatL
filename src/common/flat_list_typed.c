@@ -1,8 +1,17 @@
 #include "flat_list_typed.h"
 
+#include "flat_list_shape.h"
 #include "flat_schema.h"
 
 #include <string.h>
+
+static void stamp_list_assign(FlatCollectionPool *coll, const FlatSlotType *contract,
+                              const FlatValue *inout_val, FlatListShapeSource src) {
+    if (coll && contract && contract->list_rank > 0 && inout_val &&
+        inout_val->tag == VAL_LIST) {
+        flat_list_shape_stamp_typed(coll, inout_val->u.coll_id, contract, src);
+    }
+}
 
 static int axis_len_ok(uint8_t mode, uint16_t val, int len, int depth, int list_rank, char *panic,
                       size_t panic_sz) {
@@ -469,6 +478,7 @@ int flat_list_typed_check_value(const FlatSlotType *contract, const FlatValue *v
                 return -1;
             }
             flat_value_set_list(inout_val, new_id);
+            stamp_list_assign(coll, contract, inout_val, FLAT_LIST_SHAPE_SRC_CONTRACT);
             return 0;
         }
         {
@@ -478,12 +488,14 @@ int flat_list_typed_check_value(const FlatSlotType *contract, const FlatValue *v
                 return -1;
             }
             *inout_val = rebuilt;
+            stamp_list_assign(coll, contract, inout_val, FLAT_LIST_SHAPE_SRC_CONTRACT);
             return 0;
         }
     }
     if (contract->list_rank != 1 || contract->list_leaf_sublist ||
         contract->kind == FLAT_SLOT_TYPE_L) {
         *inout_val = *val;
+        stamp_list_assign(coll, contract, inout_val, FLAT_LIST_SHAPE_SRC_CONTRACT);
         return 0;
     }
     if (flat_list_len(coll, val->u.coll_id, &len) != 0) {
@@ -518,5 +530,6 @@ int flat_list_typed_check_value(const FlatSlotType *contract, const FlatValue *v
         return -1;
     }
     flat_value_set_list(inout_val, new_id);
+    stamp_list_assign(coll, contract, inout_val, FLAT_LIST_SHAPE_SRC_CONTRACT);
     return 0;
 }

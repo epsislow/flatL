@@ -1,6 +1,6 @@
+#include "flat_list_shape.h"
 #include "flat_number.h"
 #include "flat_native_mod.h"
-#include "flat_number.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
 
@@ -685,4 +685,130 @@ int flat_native_list_repeat(FlatNativeCtx *ctx) {
         return -1;
     }
     return flat_value_set_list(ctx->out, id);
+}
+
+static int native_list_one(FlatNativeCtx *ctx, FlatValue *list_v) {
+    if (!ctx || !list_v) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    *ctx->io_status = FLAT_IO_OK;
+    if (parse_expr(ctx, ctx->inner, list_v) != 0 || list_v->tag != VAL_LIST) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.shape");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return 0;
+}
+
+int flat_native_list_is_rect(FlatNativeCtx *ctx) {
+    FlatValue list_v;
+    FlatListShapeInfo info;
+
+    if (!ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    if (native_list_one(ctx, &list_v) != 0) {
+        return -1;
+    }
+    if (flat_list_shape_query(ctx->coll, list_v.u.coll_id, &info) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.shape");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_bool(ctx->out, info.rect ? 1 : 0);
+}
+
+int flat_native_list_dims(FlatNativeCtx *ctx) {
+    FlatValue list_v;
+    FlatListShapeInfo info;
+    FlatValue items[FLAT_LIST_TYPED_MAX_RANK];
+    int i;
+    uint32_t id;
+
+    if (!ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    if (native_list_one(ctx, &list_v) != 0) {
+        return -1;
+    }
+    if (flat_list_shape_query(ctx->coll, list_v.u.coll_id, &info) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.shape");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (!info.rect) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "type.list.not_rect");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    for (i = 0; i < (int)info.dims_n; i++) {
+        if (flat_value_set_number(&items[i], (double)info.dims[i]) != 0) {
+            *ctx->io_status = FLAT_IO_ERR;
+            return -1;
+        }
+    }
+    if (flat_list_build(ctx->coll, ctx->pool, items, (int)info.dims_n, &id) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.dims");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_list(ctx->out, id);
+}
+
+int flat_native_list_rank(FlatNativeCtx *ctx) {
+    FlatValue list_v;
+    FlatListShapeInfo info;
+
+    if (!ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    if (native_list_one(ctx, &list_v) != 0) {
+        return -1;
+    }
+    if (flat_list_shape_query(ctx->coll, list_v.u.coll_id, &info) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.shape");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (!info.rect) {
+        return flat_value_set_number(ctx->out, 0.0);
+    }
+    return flat_value_set_number(ctx->out, (double)info.rank);
+}
+
+int flat_native_list_is_matrix(FlatNativeCtx *ctx) {
+    FlatValue list_v;
+    FlatListShapeInfo info;
+
+    if (!ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    if (native_list_one(ctx, &list_v) != 0) {
+        return -1;
+    }
+    if (flat_list_shape_query(ctx->coll, list_v.u.coll_id, &info) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.shape");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_bool(ctx->out, flat_list_shape_info_is_matrix(&info) ? 1 : 0);
+}
+
+int flat_native_list_is_vector(FlatNativeCtx *ctx) {
+    FlatValue list_v;
+    FlatListShapeInfo info;
+
+    if (!ctx->out || !ctx->io_status || !ctx->coll) {
+        return -1;
+    }
+    if (native_list_one(ctx, &list_v) != 0) {
+        return -1;
+    }
+    if (flat_list_shape_query(ctx->coll, list_v.u.coll_id, &info) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.shape");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return flat_value_set_bool(ctx->out, flat_list_shape_info_is_vector(&info) ? 1 : 0);
 }

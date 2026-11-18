@@ -1,0 +1,11 @@
+use native list with L
+
+#main
+  M:f64[][] = [[1, 2], [3, 4]]
+  L.is_rect(M) == true
+  L.rank(M) == 2
+  L.is_matrix(M) == true
+  dims = L.dims(M)
+  L.get(dims, 0) == 2
+  L.get(dims, 1) == 2
+  OK

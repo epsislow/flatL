@@ -225,6 +225,11 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_LIST_SPLICE, flat_native_list_splice);
         flat_native_plugin_register(FLAT_NATIVE_LIST_RANGE, flat_native_list_range);
         flat_native_plugin_register(FLAT_NATIVE_LIST_REPEAT, flat_native_list_repeat);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_IS_RECT, flat_native_list_is_rect);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_DIMS, flat_native_list_dims);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_RANK, flat_native_list_rank);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_IS_MATRIX, flat_native_list_is_matrix);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_IS_VECTOR, flat_native_list_is_vector);
         g_loaded_list = 1;
         return 0;
     }

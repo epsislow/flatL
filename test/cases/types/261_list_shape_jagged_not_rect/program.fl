@@ -1,0 +1,6 @@
+use native list with L
+
+#main
+  J = [[1, 2], [3]]
+  L.is_rect(J) == false
+  OK

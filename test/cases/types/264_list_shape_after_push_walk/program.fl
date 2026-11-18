@@ -1,0 +1,8 @@
+use native list with L
+
+#main
+  M:f64[][] = [[1, 2], [3, 4]]
+  L.push(M, [5, 6]) -> N
+  L.is_rect(N) == true
+  L.rank(N) == 2
+  OK

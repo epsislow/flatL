@@ -94,6 +94,11 @@ int flat_native_list_slice(FlatNativeCtx *ctx);
 int flat_native_list_splice(FlatNativeCtx *ctx);
 int flat_native_list_range(FlatNativeCtx *ctx);
 int flat_native_list_repeat(FlatNativeCtx *ctx);
+int flat_native_list_is_rect(FlatNativeCtx *ctx);
+int flat_native_list_dims(FlatNativeCtx *ctx);
+int flat_native_list_rank(FlatNativeCtx *ctx);
+int flat_native_list_is_matrix(FlatNativeCtx *ctx);
+int flat_native_list_is_vector(FlatNativeCtx *ctx);
 
 int flat_native_obj_empty(FlatNativeCtx *ctx);
 int flat_native_obj_get(FlatNativeCtx *ctx);

@@ -21,5 +21,10 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_LIST_SPLICE, flat_native_list_splice);
     reg(FLAT_NATIVE_LIST_RANGE, flat_native_list_range);
     reg(FLAT_NATIVE_LIST_REPEAT, flat_native_list_repeat);
+    reg(FLAT_NATIVE_LIST_IS_RECT, flat_native_list_is_rect);
+    reg(FLAT_NATIVE_LIST_DIMS, flat_native_list_dims);
+    reg(FLAT_NATIVE_LIST_RANK, flat_native_list_rank);
+    reg(FLAT_NATIVE_LIST_IS_MATRIX, flat_native_list_is_matrix);
+    reg(FLAT_NATIVE_LIST_IS_VECTOR, flat_native_list_is_vector);
     return 0;
 }

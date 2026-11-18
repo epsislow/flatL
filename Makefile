@@ -19,7 +19,8 @@ STR_SRC = src/common/flat_str.c
 PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
 FB_TOOL_SRC = $(FB_SRC) src/common/flat_assign.c src/common/flat_schema.c \
-              src/common/flat_slot_type.c src/common/flat_list_typed.c src/common/flat_number.c \
+              src/common/flat_slot_type.c src/common/flat_list_typed.c src/common/flat_list_shape.c \
+              src/common/flat_number.c \
               src/common/value_pool.c \
               src/common/value_collection.c src/common/value_live.c
 DISASM_SRC = src/common/flat_disasm.c
@@ -41,7 +42,7 @@ PLUGIN_COMMON_SRCS = src/lib/native_util.c src/common/flat_native_tag_common.c \
                src/common/value_json.c src/common/flat_number.c src/common/value_pool.c \
                src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
                src/common/flat_obj_path.c src/common/flat_schema.c src/common/flat_slot_type.c \
-               src/common/flat_list_typed.c src/common/flat_str.c
+               src/common/flat_list_typed.c src/common/flat_list_shape.c src/common/flat_str.c
 PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c src/lib/flat_math_calc.c \
@@ -60,7 +61,8 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
-          src/common/flat_slot_type.c src/common/flat_list_typed.c src/common/flat_schema.c \
+          src/common/flat_slot_type.c src/common/flat_list_typed.c src/common/flat_list_shape.c \
+          src/common/flat_schema.c \
           src/common/flat_dynamic_bind.c \
           src/common/value_ops.c src/common/flat_obj_path.c \
           src/common/flat_vcx.c src/common/flat_executor.c \
@@ -72,7 +74,8 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
 FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
                src/common/flat_func_tag.c src/common/flat_assign.c src/common/flat_slot_type.c \
-               src/common/flat_list_typed.c src/common/flat_schema.c src/common/flat_number.c \
+               src/common/flat_list_typed.c src/common/flat_list_shape.c src/common/flat_schema.c \
+               src/common/flat_number.c \
                src/common/value_pool.c \
                src/common/value_collection.c src/common/value_live.c \
                src/common/line_label.c src/common/flat_jump_block.c \
