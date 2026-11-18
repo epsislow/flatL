@@ -1,0 +1,11 @@
+<item>:
+  qty: u16
+  sku: t8
+#main
+  table:<item>[2][=2] = [[{qty: 1}, {}], [{sku: null}, {qty: 2}]]:<item>[][]
+  table[0][0].sku == null
+  table[0][1].sku == null
+  table[1][0].sku == null
+  table[1][1].sku == null
+  table[1][1].qty == 2
+  OK

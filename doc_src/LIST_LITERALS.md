@@ -1,6 +1,6 @@
 # Liste tipizate și literali (AM-LIST-LIT)
 
-**Status:** **L-core** + **L-ext** + **L.2** ✅; **L.1a/b** MVP (fără **L.1b+** rebuild mdim).  
+**Status:** **L-core** + **L-ext** + **L.2** + **L.1a/b/b+** ✅ (rebuild mdim schema cu null-fill celulă).  
 **Legături:** [TYPED_BIND.md](./TYPED_BIND.md), [STRICT_TYPES.md](./STRICT_TYPES.md), plan `vect-matrix-rect-roadmap`.
 
 ## Sintaxă axe (LHS și sufix literal)
@@ -82,7 +82,16 @@ table:<stock>[2][=2] = [[{}, {}], [{}, {}]]
 table[0][1].qty = 42      # path în grilă (contract frunză pe câmp)
 ```
 
-Literal: `… :<stock>[][]` (depth + tip; axe opțional assert). Validare la assign: rect + `flat_schema_bind_value` per celulă; rank 1 reconstruiește lista legată.
+Literal: `… :<stock>[][]` (depth + tip; axe opțional assert). Validare la assign: rect + shape pe axe.
+
+**L.1b+** (assign grile schema): la `=` / literal cu sufix, rank 1 **și** 2–4 reconstruiesc un arbore LIST nou; fiecare celulă trece prin `flat_schema_bind_value` → obiecte **complete** (câmpuri lipsă = `null`, ca la `rows:<stock>[N]` rank 1). Exemplu:
+
+```text
+table:<item>[2][=2] = [[{qty: 1}, {}], [{sku: null}, {qty: 2}]]
+table[0][1].qty == null
+```
+
+**Notă COW:** la literale, aceleași referințe `{}` în același rând înainte de un obiect cu câmpuri pot împărți slot în parse; rebuild clonează înainte de bind, dar ordinea în rând poate afecta valori — preferă câmpuri explicite (`{sku: null}`) sau assign după grilă.
 
 ## Path și mutatori (L.2)
 
