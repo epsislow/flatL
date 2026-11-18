@@ -1,0 +1,6 @@
+#main
+  date.format(1790769600, 'YYYY-MM-DD HH:mm:ss') -> d
+  io.out('start')
+  io.out(d)
+  io.out('end')
+  OK

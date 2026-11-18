@@ -1,0 +1,7 @@
+#main
+  date.parse_auto('now') -> s
+  date.format(s, 'YYYY-MM-DD HH:mm:ss') -> d
+  io.out('start')
+  io.out(d)
+  io.out('end')
+  OK
