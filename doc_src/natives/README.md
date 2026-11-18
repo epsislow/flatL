@@ -85,3 +85,5 @@ When a native splits `inner` into several RHS expressions and parses them **one 
 | `flat_native_parse_rhs_release` | On every exit path after a pinned operand (including errors). |
 
 Rule of thumb: if a later argument can be a literal `[…]` or `{…}` and you still need the earlier collection id, **pin** the earlier operands with `parse_rhs` until the handler finishes. Variadic builders (e.g. `list.pack`) pin each element in the loop. Tests: `test/cases/vm_fixes/006_*`, `007_*`, `math_mdim/007_*`.
+
+User **`def` calls** with multiple inline literals are lowered to sequential `__fl_tmp_i = …` assignments (retain per slot). **`flc`** must split call arguments with bracket-aware commas (`()`, `[]`, `{}`) in `flat_func_split_param_list` / `split_call_param_list` (`flat_func.c`, `flat_func_tag.c`) — otherwise `[1, 2], [3, 4]` is parsed as too many args. Regression: `test/cases/func/032_*` … `035_*`.

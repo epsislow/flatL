@@ -1,0 +1,19 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx
+use native obj with O
+
+func:executor #fl_executor.global.scope
+func:callVM 1
+
+def both(a, b) -> left, right
+  left = a
+  right = b
+  return
+
+#main
+  both({p: 6, x: 0}, {q: 7, y: 0}) -> A, B
+  O.get(A, 'p') -> u
+  O.get(B, 'q') -> v
+  io.out(u)
+  io.out(v)
+  OK

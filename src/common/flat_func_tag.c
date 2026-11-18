@@ -28,9 +28,9 @@ static int split_call_param_list(char *inner, char out[][64], int max_out, int *
         } else if (c == '"' && !in_s) {
             in_d = !in_d;
         } else if (!in_s && !in_d) {
-            if (c == '(') {
+            if (c == '(' || c == '[' || c == '{') {
                 depth++;
-            } else if (c == ')' && depth > 0) {
+            } else if ((c == ')' || c == ']' || c == '}') && depth > 0) {
                 depth--;
             } else if ((c == ',' && depth == 0) || c == '\0') {
                 size_t seg_len = i - start;

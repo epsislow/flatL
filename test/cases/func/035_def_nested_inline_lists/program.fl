@@ -1,0 +1,23 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native vcx with V
+use native list with L
+
+func:executor #fl_executor.unique.scope
+func:callVM 1
+
+def leaf(u, v) -> ou, ov
+  ou = u
+  ov = v
+  return
+
+def wrap() -> left, right
+  leaf([1, 2, 3], [4, 5, 6, 7]) -> left, right
+  return
+
+#main
+  wrap() -> A, B
+  L.len(A) -> la
+  L.len(B) -> lb
+  io.out(la)
+  io.out(lb)
+  OK
