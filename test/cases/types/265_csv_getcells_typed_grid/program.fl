@@ -1,0 +1,17 @@
+use native csv
+use native list with L
+
+#main
+  fp = file.createCtx('g265.csv')
+  file.writeln(fp, 'a,b')
+  file.writeln(fp, 'ok,no')
+  file.close(fp)
+  fp = file.readCtx('g265.csv')
+  rid = csv.reader(fp)
+  raw = csv.getCells(rid, 0, 0, 2, 2)
+  G:t16[][] = raw
+  L.is_rect(G) == true
+  L.rank(G) == 2
+  csv.close(rid)
+  file.close(fp)
+  OK

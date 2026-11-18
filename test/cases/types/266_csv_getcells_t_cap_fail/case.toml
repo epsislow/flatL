@@ -1,0 +1,9 @@
+suite = "types"
+id = 266
+desc = "getCells → G:t8[][] string len panic"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 1
+stderr_contains = "type.assign.string.len"

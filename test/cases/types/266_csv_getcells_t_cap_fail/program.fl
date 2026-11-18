@@ -1,0 +1,14 @@
+use native csv
+
+#main
+  fp = file.createCtx('g266.csv')
+  file.writeln(fp, 'a,b')
+  file.writeln(fp, 'tiny,overflow_field_here')
+  file.close(fp)
+  fp = file.readCtx('g266.csv')
+  rid = csv.reader(fp)
+  raw = csv.getCells(rid, 0, 0, 2, 2)
+  G:t8[][] = raw
+  csv.close(rid)
+  file.close(fp)
+  OK

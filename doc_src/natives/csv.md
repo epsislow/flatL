@@ -30,6 +30,15 @@ Writer **`writeCols`** needs **`obj`**. Format is auto-detected on first read; o
 
 **`getCells`** — rectangle from top-left **`(x0, y0)`** with size **`xLen × yLen`**. Default **`mode`** **`"list"`** → LIST of LIST (row-major). **`"obj"`** → OBJECT with keys **`"0"`…`"xLen-1"`** and LIST values (column-major); requires **`use native obj`** at compile time. Numeric object keys: **`obj.get(grid, '"0"')`** (path DSL, see **`obj.get`**).
 
+Returned cells are **untyped STRING** values (not `t255` in storage). **Cap and rect** come from the **typed slot on assign** (AM-LIST-LIT + assign check), not from `getCells`:
+
+```text
+raw = csv.getCells(rid, 0, 0, cols, rows)
+G:t255[][] = raw          # any tN: t8, t16, t1024, …
+```
+
+Mismatch shape or `type.assign.string.len` → panic at **`=`**; use **`L.is_rect` / `L.dims`** after assign (see **`list.md`**). Example: `docs/fleditor_site/examples/csv_reader/grid_typed.fl`; tests **`types/218`**, **`265`**, **`266`**.
+
 ## Writer
 
 Starts at byte **0** and truncates the file. Not for `file.appendCtx` or read-only handles.
@@ -51,7 +60,7 @@ Format setters work on **`rid`** or **`wid`**.
 
 ## FLEditor / tests
 
-- Example: `docs/fleditor_site/examples/csv_reader/` (MEMFS **`stock.csv`**, **`use native csv`**).
+- Example: `docs/fleditor_site/examples/csv_reader/` (MEMFS **`stock.csv`**, **`use native csv`**); typed grid: **`grid_typed.fl`**.
 - Parity: `test/fleditor/csv_vm_parity.mjs` compares **`csv.next`** output to **FleditorCsvParse** on `test1_csv_*` (including UTF-16 LE/BE).
 
 ## Example

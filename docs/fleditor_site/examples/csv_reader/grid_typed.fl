@@ -1,0 +1,14 @@
+use native csv
+use native list with L
+
+#main
+  fp = file.readCtx('stock.csv')
+  rid = csv.reader(fp)
+  cols = csv.cols(rid)
+  rows = csv.rows(rid)
+  raw = csv.getCells(rid, 0, 0, cols, rows)
+  grid:t255[][] = raw
+  L.is_rect(grid) == true
+  csv.close(rid)
+  file.close(fp)
+  OK
