@@ -41,7 +41,7 @@ async function runEntry(files) {
     'flat_wasm_run_entry',
     'number',
     ['string', 'number', 'number'],
-    [MEMFS_ROOT + '/csv_reader.fl', errBuf, 4096],
+    [MEMFS_ROOT + '/examples/csv_reader/csv_reader.fl', errBuf, 4096],
     { async: true }
   );
   if (rc && typeof rc.then === 'function') rc = await rc;
@@ -50,7 +50,10 @@ async function runEntry(files) {
   return { rc, out, err };
 }
 
-const r = await runEntry({ 'csv_reader.fl': mainFl, 'stock.csv': stockCsv });
+const r = await runEntry({
+  'examples/csv_reader/csv_reader.fl': mainFl,
+  'examples/csv_reader/stock.csv': stockCsv,
+});
 if (r.rc !== 0) {
   console.error('wasm_csv_reader_smoke: run failed', r.rc, r.err);
   process.exit(1);

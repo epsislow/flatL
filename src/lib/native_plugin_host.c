@@ -102,6 +102,10 @@ static void register_embedded_executor(void) {
     g_loaded_executor = 1;
 }
 
+static void register_embedded_str_extras(void) {
+    flat_native_plugin_register(FLAT_NATIVE_STR_FROM_NUM, flat_native_str_from_num);
+}
+
 static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_READ_CTX, flat_native_file_read_ctx);
     flat_native_plugin_register(FLAT_NATIVE_FILE_CREATE_CTX, flat_native_file_create_ctx);
@@ -481,6 +485,7 @@ void flat_native_runtime_reset(void) {
     register_embedded_date();
     register_embedded_vcx();
     register_embedded_executor();
+    register_embedded_str_extras();
 }
 
 void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count) {

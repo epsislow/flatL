@@ -12,6 +12,7 @@
     "obj2.fl",
     "guess_number/guess_number.fl",
     "csv_reader/csv_reader.fl",
+    "csv_reader/grid_row_build.fl",
     "csv_reader/stock.csv",
     "test1_csv_commadel.csv",
     "test1_csv_msdos.csv",

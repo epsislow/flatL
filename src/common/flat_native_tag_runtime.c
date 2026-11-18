@@ -125,6 +125,17 @@ static int tag_policy_numeric_only(uint16_t native_id, const char tokens[][FLAT_
     return 0;
 }
 
+static int tag_policy_from_num(uint16_t native_id, const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
+    (void)native_id;
+    if (n == 0) {
+        return 0;
+    }
+    if (n == 1 && strcmp(tokens[0], "trim") == 0) {
+        return 0;
+    }
+    return -1;
+}
+
 static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FLAT_TAG_TOKEN_LEN],
                                       int n) {
     switch ((FlatNativeId)native_id) {
@@ -137,6 +148,8 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
     case FLAT_NATIVE_STR_TO_NUM:
     case FLAT_NATIVE_IO_INLN:
         return tag_policy_numeric_only(native_id, tokens, n);
+    case FLAT_NATIVE_STR_FROM_NUM:
+        return tag_policy_from_num(native_id, tokens, n);
     default:
         if (n > 0) {
             return -1;
@@ -267,6 +280,42 @@ int flat_native_tag_resolve_type(FlatNativeCtx *ctx, uint16_t native_id, FlatSlo
     }
     if (has_tag) {
         *has_tag = 1;
+    }
+    return 0;
+}
+
+int flat_native_tag_resolve_trim(FlatNativeCtx *ctx, uint16_t native_id, int *trim_out) {
+    char spec[256];
+    char tokens[FLAT_TAG_MAX_TOKENS][FLAT_TAG_TOKEN_LEN];
+    int ntok;
+
+    if (trim_out) {
+        *trim_out = 0;
+    }
+    if (!ctx || native_id != FLAT_NATIVE_STR_FROM_NUM) {
+        return 0;
+    }
+    if (!ctx->tag_expr || ctx->tag_expr[0] == '\0') {
+        return 0;
+    }
+    if (eval_tag_string(ctx, ctx->tag_expr, spec, sizeof spec) != 0) {
+        return -1;
+    }
+    if (tokenize_sort(tokens, &ntok, spec) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    if (ntok == 0) {
+        return 0;
+    }
+    if (validate_tokens_for_native(native_id, tokens, ntok) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    if (strcmp(tokens[0], "trim") == 0) {
+        if (trim_out) {
+            *trim_out = 1;
+        }
     }
     return 0;
 }

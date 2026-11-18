@@ -27,8 +27,9 @@ Split pe `;` respectă ghilimele și parantezele (depth 0), ca virgulele în arg
 | `m.sum2` / `min2` / `max2` | tip numeric | Rezultat verificat în native |
 | `io.inln` / `in_num` / `in_bool` | `tN` sau numeric | Contract după citire |
 | `str.to_num(s ; "u32")` | tip numeric | Parse în tip |
+| `str.from_num(x, d ; "trim")` | format **`trim`** | Taie zerouri zecimale trailing (nu tip numeric) |
 
-Orice alt native cu `; "…"` → **`type.tag.not_accepted`**.
+Alte tag-uri pe **`str.from_num`** (ex. `; "u32"`) → **`type.tag.not_accepted`**. Orice alt native cu `; "…"` → **`type.tag.not_accepted`** (dacă native-ul nu acceptă tag-uri).
 
 ## Panic-uri
 

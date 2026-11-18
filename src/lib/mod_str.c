@@ -930,3 +930,209 @@ int flat_native_str_replace(FlatNativeCtx *ctx) {
 int flat_native_str_replace_all(FlatNativeCtx *ctx) {
     return replace_impl(ctx, 1);
 }
+
+#define FLAT_STR_FROM_NUM_DEC_MAX 15
+
+static double from_num_round_half_away(double x) {
+    if (x >= 0.0) {
+        return floor(x + 0.5);
+    }
+    return ceil(x - 0.5);
+}
+
+static void from_num_trim_fraction(char *s) {
+    char *dot;
+    char *end;
+
+    if (!s) {
+        return;
+    }
+    dot = strchr(s, '.');
+    if (!dot) {
+        return;
+    }
+    end = s + strlen(s);
+    while (end > dot + 1 && end[-1] == '0') {
+        end--;
+    }
+    if (end == dot) {
+        end--;
+    }
+    *end = '\0';
+}
+
+static int from_num_group_integer(const char *digits, char sep, char *out, size_t out_sz) {
+    size_t n;
+    size_t first;
+    size_t pos = 0;
+    size_t i;
+
+    if (!digits || !out || out_sz == 0) {
+        return -1;
+    }
+    n = strlen(digits);
+    if (n == 0) {
+        snprintf(out, out_sz, "0");
+        return 0;
+    }
+    first = n % 3;
+    if (first == 0) {
+        first = 3;
+    }
+    if (pos + first >= out_sz) {
+        return -1;
+    }
+    memcpy(out + pos, digits, first);
+    pos += first;
+    for (i = first; i < n; i += 3) {
+        if (pos + 2 >= out_sz) {
+            return -1;
+        }
+        out[pos++] = sep;
+        if (pos + 3 >= out_sz) {
+            return -1;
+        }
+        memcpy(out + pos, digits + i, 3);
+        pos += 3;
+    }
+    out[pos] = '\0';
+    return 0;
+}
+
+static int from_num_format(double x, int decimals, int trim_frac, char group_ch, int has_group,
+                         char *out, size_t out_sz) {
+    double scale;
+    double rounded;
+    int negative;
+    double ax;
+    char body[96];
+    char int_raw[96];
+    char int_grp[64];
+    char frac[FLAT_STR_FROM_NUM_DEC_MAX + 2];
+    char *dot;
+    const char *int_part;
+    const char *frac_part;
+    size_t total_len;
+
+    if (!out || out_sz == 0 || decimals < 0 || decimals > FLAT_STR_FROM_NUM_DEC_MAX) {
+        return -1;
+    }
+    if (!isfinite(x)) {
+        return -1;
+    }
+    scale = pow(10.0, (double)decimals);
+    rounded = from_num_round_half_away(x * scale) / scale;
+    negative = rounded < 0.0;
+    ax = negative ? -rounded : rounded;
+
+    if (decimals == 0) {
+        snprintf(body, sizeof body, "%.0f", ax);
+    } else {
+        snprintf(body, sizeof body, "%.*f", decimals, ax);
+    }
+    if (trim_frac) {
+        from_num_trim_fraction(body);
+    }
+
+    dot = strchr(body, '.');
+    if (dot) {
+        size_t ilen = (size_t)(dot - body);
+        if (ilen >= sizeof int_raw) {
+            return -1;
+        }
+        memcpy(int_raw, body, ilen);
+        int_raw[ilen] = '\0';
+        frac_part = dot + 1;
+    } else {
+        snprintf(int_raw, sizeof int_raw, "%s", body);
+        frac_part = "";
+    }
+    int_part = int_raw;
+
+    if (has_group) {
+        if (from_num_group_integer(int_part, group_ch, int_grp, sizeof int_grp) != 0) {
+            return -1;
+        }
+        int_part = int_grp;
+    }
+
+    if (frac_part[0] != '\0') {
+        snprintf(frac, sizeof frac, ".%s", frac_part);
+    } else {
+        frac[0] = '\0';
+    }
+
+    total_len = (negative ? 1 : 0) + strlen(int_part) + strlen(frac);
+    if (total_len + 1 > out_sz) {
+        return -1;
+    }
+    if (negative) {
+        snprintf(out, out_sz, "-%s%s", int_part, frac);
+    } else {
+        snprintf(out, out_sz, "%s%s", int_part, frac);
+    }
+    return 0;
+}
+
+int flat_native_str_from_num(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *x_expr;
+    char *dec_expr;
+    char *grp_expr;
+    double x;
+    int decimals;
+    int trim_frac = 0;
+    FlatValue grp_val;
+    const uint8_t *gbp;
+    size_t glen;
+    char group_ch = 0;
+    int has_group = 0;
+    char out[128];
+
+    if (!ctx->out || !ctx->io_status || !ctx->inner) {
+        return -1;
+    }
+    io_ok(ctx);
+    if (flat_native_tag_resolve_trim(ctx, FLAT_NATIVE_STR_FROM_NUM, &trim_frac) != 0) {
+        return io_err(ctx);
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_three_args(inner_buf, &x_expr, &dec_expr, &grp_expr) != 0) {
+        snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+        if (split_two_args(inner_buf, &x_expr, &dec_expr) != 0) {
+            return io_err(ctx);
+        }
+        grp_expr = NULL;
+    }
+    {
+        FlatValue xv;
+        if (parse_expr(ctx, x_expr, &xv) != 0 || xv.tag != VAL_NUMBER) {
+            return io_err(ctx);
+        }
+        x = flat_number_as_f64(&xv);
+    }
+    if (parse_nonneg_int(ctx, dec_expr, &decimals) != 0 ||
+        decimals > FLAT_STR_FROM_NUM_DEC_MAX) {
+        return io_err(ctx);
+    }
+    if (grp_expr) {
+        if (parse_str_arg(ctx, grp_expr, &grp_val) != 0) {
+            return io_err(ctx);
+        }
+        if (str_bytes(&grp_val, ctx->pool, &gbp, &glen) != 0) {
+            return io_err(ctx);
+        }
+        if (glen > 1) {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "str.from_num.group");
+            return io_err(ctx);
+        }
+        if (glen == 1) {
+            has_group = 1;
+            group_ch = (char)gbp[0];
+        }
+    }
+    if (from_num_format(x, decimals, trim_frac, group_ch, has_group, out, sizeof out) != 0) {
+        return io_err(ctx);
+    }
+    return emit_bytes(ctx, out, strlen(out));
+}

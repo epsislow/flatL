@@ -1,0 +1,22 @@
+use native str with S
+
+#main
+  S.from_num(9.99, 2) -> a
+  a == '9.99'
+  S.from_num(10, 2) -> b
+  b == '10.00'
+  S.from_num(10, 2 ; "trim") -> c
+  c == '10'
+  S.from_num(9.9, 2 ; "trim") -> d
+  d == '9.9'
+  S.from_num(1234567.891, 2, ',') -> e
+  e == '1,234,567.89'
+  S.from_num(1234.50, 2, ',' ; "trim") -> f
+  f == '1,234.5'
+  S.from_num(-1.25, 2) -> g
+  g == '-1.25'
+  mode = "trim"
+  S.from_num(1.0, 2 ; mode) -> h
+  h == '1'
+  io.outln('ok')
+  OK

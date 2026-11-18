@@ -60,7 +60,7 @@ Format setters work on **`rid`** or **`wid`**.
 
 ## FLEditor / tests
 
-- Example: `docs/fleditor_site/examples/csv_reader/` (MEMFS **`stock.csv`**, **`use native csv`**); typed grid: **`grid_typed.fl`**.
+- Examples: `docs/fleditor_site/examples/csv_reader/` (Fleditor: **`file.readCtx('examples/csv_reader/stock.csv')`**) — **`grid_typed.fl`**, **`grid_row_build.fl`**.
 - Parity: `test/fleditor/csv_vm_parity.mjs` compares **`csv.next`** output to **FleditorCsvParse** on `test1_csv_*` (including UTF-16 LE/BE).
 
 ## Example

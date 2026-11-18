@@ -220,6 +220,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("list", "rank", "list.rank(list)"),
     META_SIG("list", "is_matrix", "list.is_matrix(list)"),
     META_SIG("list", "is_vector", "list.is_vector(list)"),
+    META_SIG("str", "from_num", "str.from_num(x, decimals, group?)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

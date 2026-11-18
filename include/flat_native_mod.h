@@ -20,6 +20,7 @@ int flat_native_io_ctxerr(FlatNativeCtx *ctx);
 int flat_native_io_err(FlatNativeCtx *ctx);
 int flat_native_io_errln(FlatNativeCtx *ctx);
 int flat_native_str_to_num(FlatNativeCtx *ctx);
+int flat_native_str_from_num(FlatNativeCtx *ctx);
 int flat_native_str_to_bool(FlatNativeCtx *ctx);
 int flat_native_str_len(FlatNativeCtx *ctx);
 int flat_native_str_repeat(FlatNativeCtx *ctx);

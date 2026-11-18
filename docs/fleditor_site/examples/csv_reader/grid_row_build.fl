@@ -1,0 +1,69 @@
+-- stock.csv → grilă LIST×LIST (fără getCells): csv.next + L.push, assign tipizat, total inventar.
+-- Fleditor: Run din proiectul examples (Reset project); cwd MEMFS = /fleditor → calea de mai jos.
+
+use "../blocks/executor.fl" as #fl_
+use native vcx with V
+use native csv
+use native list with L
+use native math with m
+use native str with s
+
+func:executor #fl_executor.global.scope
+
+#main
+  fp = file.readCtx('examples/csv_reader/stock.csv')
+  rid = csv.reader(fp)
+  csv.rows(rid) -> nrows
+  grid = []
+  for(nrows, i, "#take_row")
+  csv.close(rid)
+  file.close(fp)
+
+  sheet:t16[][] = grid
+  L.rank(sheet) == 2
+  L.is_rect(sheet) == true
+
+  m.calc('nrows - 1') -> data_n
+  grand = 0
+  io.outln('sku,qty,price,line_total')
+  for(data_n, k, "#value_row")
+
+  io.outln('---')
+  io.outln(grand)
+
+  fp2 = file.createCtx('examples/csv_reader/sheet_out.csv')
+  wid = csv.writer(fp2)
+  csv.writeRows(wid, sheet)
+  csv.close(wid)
+  file.close(fp2)
+  io.outln('wrote sheet_out.csv')
+  OK
+
+#take_row
+  line = csv.next(rid)
+  L.push(grid, line) -> grid
+  next
+
+#value_row
+  call #line_total
+  next
+
+#line_total
+  m.calc('k + 1') -> ri
+  L.get(sheet, ri) -> row
+  L.get(row, 0) -> sku
+  L.get(row, 1) -> qty_s
+  L.get(row, 2) -> price_s
+  s.to_num(qty_s) -> qty
+  s.to_num(price_s) -> price
+  m.calc('qty * price') -> line_total
+  m.calc('grand + line_total') -> grand
+  s.from_num(line_total, 2 ; "trim") -> tot_s
+  io.out(sku)
+  io.out(',')
+  io.out(qty_s)
+  io.out(',')
+  io.out(price_s)
+  io.out(',')
+  io.outln(tot_s)
+  return

@@ -27,6 +27,9 @@ int flat_native_tag_resolve_type(FlatNativeCtx *ctx, uint16_t native_id, FlatSlo
 /* If tag section has tokens but native does not accept tags -> not_accepted (runtime). */
 int flat_native_tag_reject_untagged_native(FlatNativeCtx *ctx, uint16_t native_id);
 
+/* str.from_num: optional format tag `trim` (not a type tag). */
+int flat_native_tag_resolve_trim(FlatNativeCtx *ctx, uint16_t native_id, int *trim_out);
+
 int flat_native_native_accepts_tags(uint16_t native_id);
 
 int flat_native_tag_validate_program(const FgirProgram *prog, char *err, size_t err_sz);

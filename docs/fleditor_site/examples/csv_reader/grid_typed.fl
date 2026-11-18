@@ -2,7 +2,7 @@ use native csv
 use native list with L
 
 #main
-  fp = file.readCtx('stock.csv')
+  fp = file.readCtx('examples/csv_reader/stock.csv')
   rid = csv.reader(fp)
   cols = csv.cols(rid)
   rows = csv.rows(rid)

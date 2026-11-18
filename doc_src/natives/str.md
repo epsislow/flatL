@@ -57,17 +57,31 @@ Use **`?`** when you want the old silent-fail behavior (binding unchanged).
 
 ## Function reference
 
-### Conversions (`str.to_*`)
+### Conversions (`str.to_*` / `str.from_num`)
 
 No stdin.
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
+| `from_num(x, decimals, group?)` | NUMBER, zecimale 0–15, grup mii opțional | STRING | **`str.from_num`**, **`str.from_num.group`**, **`type.tag.not_accepted`** |
 | `to_num(s)` | 1 STRING | NUMBER | **`str.to_num`** — invalid number text |
 | `to_bool(s)` | 1 STRING | BOOL | **`str.to_bool`** — token not in BOOL table |
 | `to_date(s)` | 1 STRING | STRING `YYYY-MM-DD` | **`str.to_date`** — not ISO day or `DD.MM.YYYY` |
 | `to_time(s)` | 1 STRING | STRING `HH:mm:ss` | **`str.to_time`** — not `HH:mm` / `HH:mm:ss` |
 | `to_datetime(s)` | 1 STRING | STRING (naive or `…Z`) | **`str.to_datetime`** — unrecognised datetime text |
+
+#### `from_num` (NUMBER → STRING)
+
+Virgula zecimală este mereu **`.`** (fără locale `ro`/`en`). Rotunjire: half away from zero (ca **`math.round`** pe scară).
+
+| Mod | Sintaxă | Exemplu |
+|-----|---------|---------|
+| Fixed | `from_num(x, d)` | `from_num(10, 2)` → `"10.00"` |
+| Trim zerouri | `from_num(x, d ; "trim")` | `from_num(10, 2 ; "trim")` → `"10"` |
+| Grupare mii | `from_num(x, d, sep)` | `from_num(1234.5, 1, ",")` → `"1,234.5"` |
+| Ambele | `from_num(x, d, "," ; "trim")` | `"1,234.5"` |
+
+Al 3-lea argument: separator mii (STRING **un** caracter sau `""` = off). Tag **`trim`**: singurul format-tag acceptat la `;` (vezi [TYPE_TAGS.md](../TYPE_TAGS.md)).
 
 Datetime **motor** (format, epoch, offset): [date.md](./date.md). **`json.parse*`** leaves datetime fields as **STRING** — use **`str.to_*`** or **`date.*`** explicitly.
 

@@ -164,10 +164,22 @@ int flat_native_native_accepts_tags(uint16_t native_id) {
     case FLAT_NATIVE_IO_IN_NUM:
     case FLAT_NATIVE_IO_IN_BOOL:
     case FLAT_NATIVE_STR_TO_NUM:
+    case FLAT_NATIVE_STR_FROM_NUM:
         return 1;
     default:
         return 0;
     }
+}
+
+static int tag_policy_from_num(uint16_t native_id, const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
+    (void)native_id;
+    if (n == 0) {
+        return 0;
+    }
+    if (n == 1 && strcmp(tokens[0], "trim") == 0) {
+        return 0;
+    }
+    return -1;
 }
 
 static int tag_policy_numeric_only(uint16_t native_id, const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
@@ -207,6 +219,8 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
     case FLAT_NATIVE_IO_IN_BOOL:
     case FLAT_NATIVE_STR_TO_NUM:
         return tag_policy_numeric_only(native_id, tokens, n);
+    case FLAT_NATIVE_STR_FROM_NUM:
+        return tag_policy_from_num(native_id, tokens, n);
     case FLAT_NATIVE_IO_INLN:
         return tag_policy_numeric_only(native_id, tokens, n);
     default:
