@@ -1,0 +1,12 @@
+use native list with L
+use native str with S
+
+#main
+  ys = ["1", "x", "3"]
+  L.values_to(ys ; "f64 any") -> zs
+  L.get(ys, 1) -> y_mid
+  S.index_of(y_mid, 'x') -> iy
+  io.out(ys)
+  io.out(zs)
+  io.out(iy)
+  OK

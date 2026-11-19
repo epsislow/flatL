@@ -474,6 +474,5 @@ int flat_native_list_values_to(FlatNativeCtx *ctx) {
     }
     rc = 0;
 out:
-    flat_native_parse_rhs_release(ctx, &list_v);
     return rc;
 }
