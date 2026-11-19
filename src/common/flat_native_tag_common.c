@@ -156,7 +156,7 @@ static int numeric_type_token_count(const char tokens[][FLAT_TAG_TOKEN_LEN], int
 
 int flat_native_id_is_mdim(uint16_t native_id) {
     return native_id >= (uint16_t)FLAT_NATIVE_MATH_MDIM_ADD &&
-           native_id <= (uint16_t)FLAT_NATIVE_MATH_MDIM_RESHAPE;
+           native_id <= (uint16_t)FLAT_NATIVE_MATH_MDIM_INVERSE;
 }
 
 static int tag_policy_mdim(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {

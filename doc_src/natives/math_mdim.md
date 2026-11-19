@@ -99,6 +99,31 @@ use native math.mdim with D
 
 Output: `36`
 
+### Example (`determinant` / `inverse`)
+
+```text
+use native math.mdim with D
+
+#main
+  A:f64[][] = [[1, 2], [3, 4]]
+  D.determinant(A) -> d
+  D.inverse(A) -> I
+  D.matmul(A, I) -> E
+  io.outln(d)
+  D.sum(E) -> s
+  io.outln(s)
+  OK
+```
+
+Output:
+
+```text
+-2
+2
+```
+
+`d` is **-2** for this `2×2` matrix. `A · inverse(A)` is (numerically) the identity; **`sum(E)` = 2** is the sum of the diagonal ones (off-diagonal ≈ 0).
+
 ## Errors
 
 ### Shape / tip operanzi (`type.mdim.*`)
