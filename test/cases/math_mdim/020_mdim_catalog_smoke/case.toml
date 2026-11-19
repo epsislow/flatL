@@ -1,0 +1,11 @@
+suite = "math_mdim"
+id = 20
+desc = "math.mdim natives registered in io.docs"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "math.mdim.add"
+stdout_contains_2 = "math.mdim.matmul"
+stdout_contains_3 = "(11 functions)"

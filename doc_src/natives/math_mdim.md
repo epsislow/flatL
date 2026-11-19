@@ -16,7 +16,7 @@ Shape comes from list **stamp** or **walk** (same infrastructure as `list.is_rec
 | Assignment | `s = math.mdim.sum(M)` |
 | Canonical name | `math.mdim.matmul(A, B) -> C` |
 
-**Operands:** LIST trees that are **rect** and whose leaves are **NUMBER** (AM-NUM). **M1** requires **identical shape** for element-wise ops (`add`, `subtract`, `multiply`, `divide`).
+**Operands:** LIST trees that are **rect** and whose leaves are **NUMBER** (AM-NUM). **M1** requires **identical shape** for element-wise ops (`add`, `subtract`, `multiply`, `divide`). Validated for **rank 1–2**; rank ≥3 reductions (`sum`, `min`, `max`, `avg`) work; **rank ≥3 element-wise binary** (`add`, …) tracked for **M2** (sub-list retain on build).
 
 ## Functions
 

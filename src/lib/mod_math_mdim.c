@@ -279,6 +279,7 @@ static int mdim_map_binary_shaped(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_
         if (outer > FLAT_LIST_MAX_ELEMS) {
             return -1;
         }
+        memset(items, 0, sizeof items);
         sub.rank--;
         sub.dims_n--;
         memmove(sub.dims, sub.dims + 1, (size_t)sub.dims_n * sizeof sub.dims[0]);
@@ -300,11 +301,18 @@ static int mdim_map_binary_shaped(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_
                 return -1;
             }
             flat_value_set_list(&items[i], child_dup);
+            flat_value_retain(ctx->coll, ctx->pool, &items[i]);
         }
-        if (mdim_materialize_list_children(ctx, items, outer) != 0) {
+        if (flat_list_build(ctx->coll, ctx->pool, items, outer, out_id) != 0) {
+            for (i = 0; i < outer; i++) {
+                flat_value_release(ctx->coll, ctx->pool, &items[i]);
+            }
             return -1;
         }
-        return flat_list_build(ctx->coll, ctx->pool, items, outer, out_id);
+        for (i = 0; i < outer; i++) {
+            flat_value_release(ctx->coll, ctx->pool, &items[i]);
+        }
+        return 0;
     }
 }
 
@@ -372,6 +380,9 @@ static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
         goto out;
     }
     if (mdim_map_binary_shaped(ctx, a_v.u.coll_id, b_v.u.coll_id, &ia, op, &out_id) != 0) {
+        if (ctx->panic_detail[0] == '\0') {
+            mdim_panic(ctx, "type.mdim.dim_mismatch");
+        }
         goto out;
     }
     mdim_stamp_shape(ctx->coll, out_id, &ia);

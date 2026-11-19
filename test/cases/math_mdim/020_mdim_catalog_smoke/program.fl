@@ -1,0 +1,5 @@
+use native math.mdim with D
+
+#main
+  io.docs('math.mdim')
+  OK
