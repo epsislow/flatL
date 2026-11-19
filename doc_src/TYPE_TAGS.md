@@ -28,8 +28,9 @@ Split pe `;` respectă ghilimele și parantezele (depth 0), ca virgulele în arg
 | `io.inln` / `in_num` / `in_bool` | `tN` sau numeric | Contract după citire |
 | `str.to_num(s ; "u32")` | tip numeric | Parse în tip |
 | `str.from_num(x, d ; "trim")` | format **`trim`** | Taie zerouri zecimale trailing (nu tip numeric) |
+| `math.mdim.*` | `u32` / `f64` / … + opțional `vector` / `matrix` | Coercție rezultat + validare rank (rol per-whitelist); vezi [math_mdim.md](./natives/math_mdim.md) |
 
-Alte tag-uri pe **`str.from_num`** (ex. `; "u32"`) → **`type.tag.not_accepted`**. Orice alt native cu `; "…"` → **`type.tag.not_accepted`** (dacă native-ul nu acceptă tag-uri).
+Alte tag-uri pe **`str.from_num`** (ex. `; "u32"`) → **`type.tag.not_accepted`**. Natives fără suport `;` resping orice tag. Pe **`math.mdim`**, token rol greșit pentru funcție (ex. `; "matrix"` la `dot`) → **`type.tag.not_accepted`**; rol permis dar shape nepotrivit → **`type.mdim.tag_shape`**.
 
 ## Panic-uri
 

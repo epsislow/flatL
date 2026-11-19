@@ -1,0 +1,7 @@
+suite = "math_mdim"
+id = 37
+desc = "unknown tag token on mdim → type.tag.not_accepted (compile)"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+stderr_contains = "type.tag.not_accepted"

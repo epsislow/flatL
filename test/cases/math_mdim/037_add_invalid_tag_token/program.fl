@@ -1,0 +1,8 @@
+use native math.mdim with D
+
+#main
+  A:f64[][] = [[1, 2], [3, 4]]
+  B:f64[][] = [[5, 6], [7, 8]]
+  D.add(A, B ; "tensor") -> _
+  io.out('bad')
+  OK

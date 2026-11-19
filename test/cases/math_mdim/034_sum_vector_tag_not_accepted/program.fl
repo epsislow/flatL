@@ -1,0 +1,7 @@
+use native math.mdim with D
+
+#main
+  V:u32[] = [1, 2, 3]
+  D.sum(V ; "vector") -> _
+  io.out('bad')
+  OK

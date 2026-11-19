@@ -58,13 +58,26 @@ D.sum(v ; "u32")
 D.dot(u, v ; "vector")
 D.matmul(A, B ; "matrix")
 D.add(A, B ; "f64")
+D.matmul(A, B ; "f64 matrix")
 ```
 
 | Token kind | Example | Effect |
 |------------|---------|--------|
 | Numeric type | `; "u32"`, `; "f64"` | Coerce scalar result (`sum`, `dot`, …) or numeric leaves of LIST result (`add`, …) |
 | Shape role | `; "vector"`, `; "matrix"` | Operand shape must match (rank 1 / 2); else **`type.mdim.tag_shape`** |
-| Invalid / mixed | `; "matrix"` on `sum` | **`type.mdim.tag_shape`** or **`type.tag.not_accepted`** |
+| Unknown token | `; "tensor"` | **`type.tag.not_accepted`** |
+| Role not on whitelist | `; "matrix"` on `sum` / `dot` | **`type.tag.not_accepted`** |
+
+**Whitelist role per native**
+
+| Native | `; "vector"` | `; "matrix"` |
+|--------|--------------|--------------|
+| `add`, `subtract`, `multiply`, `divide`, `reshape` | yes (rank 1) | yes (rank 2) |
+| `dot` | yes | no |
+| `transpose`, `matmul` | no | yes |
+| `sum`, `min`, `max`, `avg` | no | no |
+
+Type tags (`u32`, `f64`, …) are allowed on **all** `math.mdim` functions above.
 
 Without `;`, **M3 promotion** infers the result element type: `u32`+`u32`→`u32`, mixed integer widths→wider integer, integer↔`f64` or signed↔unsigned mix→`f64`. Unknown/homogeneous `f64` literals stay `f64`. Failure → **`type.mdim.incompatible`**.
 

@@ -1,0 +1,10 @@
+use native math.mdim with D
+
+#main
+  U:u32[] = [1, 2]
+  V:u32[] = [3, 4]
+  D.dot(U, V ; "vector") -> n
+  io.out('start')
+  io.out(n)
+  io.out('end')
+  OK
