@@ -878,3 +878,33 @@ void flat_number_fprint_decimal(FILE *out, const FlatValue *v) {
     }
     fputs(buf, out);
 }
+
+int flat_number_format_decimal_string(const FlatValue *v, char *buf, size_t buf_sz) {
+    double d;
+
+    if (!buf || buf_sz == 0) {
+        return -1;
+    }
+    buf[0] = '\0';
+    if (!flat_number_is_number(v)) {
+        return -1;
+    }
+    if (flat_number_class(v) == FLAT_NUM_CLASS_WHOLE) {
+        if (flat_number_stor(v) >= FLAT_NUM_STOR_S8 && flat_number_stor(v) <= FLAT_NUM_STOR_S64) {
+            snprintf(buf, buf_sz, "%" PRId64, v->u.number.payload.i64);
+        } else {
+            snprintf(buf, buf_sz, "%" PRIu64, v->u.number.payload.u64);
+        }
+        return 0;
+    }
+    if (flat_number_stor(v) == FLAT_NUM_STOR_F32) {
+        snprintf(buf, buf_sz, "%.9g", (double)v->u.number.payload.f32);
+        return 0;
+    }
+    d = v->u.number.payload.f64;
+    if (isnan(d) || isinf(d)) {
+        return -1;
+    }
+    snprintf(buf, buf_sz, "%.17g", d);
+    return 0;
+}

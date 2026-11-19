@@ -221,6 +221,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("list", "rank", "list.rank(list)"),
     META_SIG("list", "is_matrix", "list.is_matrix(list)"),
     META_SIG("list", "is_vector", "list.is_vector(list)"),
+    META_SIG("list", "values_to", "list.values_to(list ; \"type all|any\")"),
     META_SIG("str", "from_num", "str.from_num(x, decimals, group?)"),
     META_SIG("io", "outcls", "io.outcls()"),
     META_SIG("math.mdim", "add", "math.mdim.add(a, b)"),

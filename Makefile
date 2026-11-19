@@ -28,7 +28,8 @@ FBDUMP_SRCS = src/fbdump/main.c $(DISASM_SRC) $(FB_TOOL_SRC) $(NATIVE_FLC_SRC)
 NATIVE_VM_PLUGIN = src/lib/native_plugin_host.c
 ifeq ($(OS),Windows_NT)
 NATIVE_VM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math_mdim.c \
-                 src/lib/mod_math.c src/lib/flat_math_calc.c src/lib/mod_list.c src/lib/mod_obj.c \
+                 src/lib/mod_math.c src/lib/flat_math_calc.c src/lib/mod_list.c \
+                 src/lib/mod_list_values_to.c src/lib/mod_obj.c \
                  src/lib/mod_csv.c
 VM_EXTRA_LIBS =
 PLUGIN_TARGET =
@@ -49,7 +50,8 @@ PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $
 PLUGIN_MDIM_SRCS = src/lib/plugin_math_mdim_entry.c src/lib/mod_math_mdim.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c src/lib/flat_math_calc.c \
                $(PLUGIN_COMMON_SRCS)
-PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c $(PLUGIN_COMMON_SRCS)
+PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c src/lib/mod_list_values_to.c \
+               $(PLUGIN_COMMON_SRCS)
 PLUGIN_OBJ_SRCS = src/lib/plugin_obj_entry.c src/lib/mod_obj.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_CSV_SRCS = src/lib/plugin_csv_entry.c src/lib/mod_csv.c src/common/flat_csv.c \
                src/common/flat_csv_runtime.c src/common/flat_file.c $(PLUGIN_COMMON_SRCS)

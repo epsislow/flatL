@@ -1,0 +1,7 @@
+suite = "list_values_to"
+id = 6
+desc = "tag tip l respins"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+stderr_contains = "type.tag.not_accepted"

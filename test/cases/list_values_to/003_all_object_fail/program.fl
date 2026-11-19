@@ -1,0 +1,6 @@
+use native list with L
+
+#main
+  row = [10, "20", { "k": 1 }]
+  L.values_to(row ; "f64 all") -> _
+  OK

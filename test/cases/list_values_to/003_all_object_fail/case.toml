@@ -1,0 +1,9 @@
+suite = "list_values_to"
+id = 3
+desc = "all: OBJECT frunză → values_to.fail"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "type.list.values_to.fail"

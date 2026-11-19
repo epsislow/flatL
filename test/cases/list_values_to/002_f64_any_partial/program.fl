@@ -1,0 +1,7 @@
+use native list with L
+
+#main
+  ys = ["1", "x", "3"]
+  L.values_to(ys ; "f64 any") -> zs
+  io.out(zs)
+  OK

@@ -1,0 +1,9 @@
+use native list with L
+
+#main
+  M = [[ "1", "2" ], [ "3", "4" ]]
+  L.values_to(M ; "f64 all") -> G
+  io.out('start')
+  io.out(G)
+  io.out('end')
+  OK

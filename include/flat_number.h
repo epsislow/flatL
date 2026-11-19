@@ -65,6 +65,7 @@ int flat_number_is_negative_literal_token(const char *token);
 int flat_number_is_negative_value(const FlatValue *v);
 
 void flat_number_fprint_decimal(FILE *out, const FlatValue *v);
+int flat_number_format_decimal_string(const FlatValue *v, char *buf, size_t buf_sz);
 
 FlatSlotTypeKind flat_number_stor_to_slot_kind(FlatNumStor stor);
 int flat_number_kind_to_stor(FlatSlotTypeKind kind, FlatNumStor *out);

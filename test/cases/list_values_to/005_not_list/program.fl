@@ -1,0 +1,5 @@
+use native list with L
+
+#main
+  L.values_to(42 ; "f64 all") -> _
+  OK

@@ -55,6 +55,7 @@ Recoverable errors → **PANIC** **`list.<fn>`** by default; **`?`** / **`~`** p
 | `rank(list)` | NUMBER | 0 dacă !rect; altfel 1=vector, 2=matrix, … |
 | `is_matrix(list)` | BOOL | rect + rank 2 + numeric omogen |
 | `is_vector(list)` | BOOL | rect + rank 1 + numeric omogen |
+| `values_to(list ; "type all\|any")` | LIST | Tag obligatoriu: tip (`u8`…`f64`, `b`, `tN`/`t255`) + mod `all` sau `any`. Conversie frunze pe arbore LIST (rank ≤4); structură păstrată (COW). **`all`:** prima frunză neconvertibilă → `type.list.values_to.fail`. **`any`:** parțial; zero conversii → `type.list.values_to.none`. Operand non-LIST → `type.list.values_to.not_list`. |
 
 Shape: la assign tipizat / literal cu sufix se pune **stamp** pe `list_id`; altfel **walk** (memo pe id). După mutatori COW (`push`, …) listă nouă fără stamp — walk la primul `list.*`.
 
@@ -63,6 +64,15 @@ Shape: la assign tipizat / literal cu sufix se pune **stamp** pe `list_id`; altf
 **`repeat`** does not deep-clone LIST/OBJECT internals beyond normal LIST construction (same element **`FlatValue`** repeated **`n`** times).
 
 Elements may be any value type (not only numbers).
+
+### `values_to` (tag)
+
+```text
+L.values_to(G ; "f64 all") -> M    # STRING→AM-NUM pe toate frunzele
+L.values_to(row ; "f64 any") -> row # păstrează neconvertibile (ex. OBJECT)
+```
+
+Debug: `FLAT_LIST_DEBUG=1` pe `flvm` → trace walk pe stderr (`[list] …`).
 
 ### Example
 

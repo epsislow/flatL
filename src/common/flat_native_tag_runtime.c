@@ -125,6 +125,43 @@ static int tag_policy_numeric_only(uint16_t native_id, const char tokens[][FLAT_
     return 0;
 }
 
+static int tag_policy_values_to(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
+    int i;
+    int mode_n = 0;
+    int type_n = 0;
+
+    if (n != 2) {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        FlatSlotType ty;
+        char spec[FLAT_TAG_TOKEN_LEN + 4];
+
+        if (strcmp(tokens[i], "all") == 0 || strcmp(tokens[i], "any") == 0) {
+            mode_n++;
+            continue;
+        }
+        snprintf(spec, sizeof spec, "%s", tokens[i]);
+        if (flat_slot_type_parse_spec(spec, &ty, NULL, NULL, 0) != 0) {
+            return -1;
+        }
+        if (ty.kind == FLAT_SLOT_TYPE_L || ty.kind == FLAT_SLOT_TYPE_O ||
+            ty.kind == FLAT_SLOT_TYPE_SCHEMA || ty.list_rank > 0) {
+            return -1;
+        }
+        if (flat_slot_type_is_numeric(&ty) || ty.kind == FLAT_SLOT_TYPE_B ||
+            ty.kind == FLAT_SLOT_TYPE_T || ty.kind == FLAT_SLOT_TYPE_TN) {
+            type_n++;
+            continue;
+        }
+        return -1;
+    }
+    if (mode_n != 1 || type_n != 1) {
+        return -1;
+    }
+    return 0;
+}
+
 static int tag_policy_mdim(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
     int i;
     int role_n = 0;
@@ -181,6 +218,8 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
         return tag_policy_numeric_only(native_id, tokens, n);
     case FLAT_NATIVE_STR_FROM_NUM:
         return tag_policy_from_num(native_id, tokens, n);
+    case FLAT_NATIVE_LIST_VALUES_TO:
+        return tag_policy_values_to(tokens, n);
     default:
         if (flat_native_id_is_mdim(native_id)) {
             return tag_policy_mdim(tokens, n);
@@ -426,6 +465,73 @@ int flat_native_tag_resolve_mdim(FlatNativeCtx *ctx, uint16_t native_id, FlatSlo
                 *has_ty = 1;
             }
         }
+    }
+    return 0;
+}
+
+int flat_native_tag_resolve_values_to(FlatNativeCtx *ctx, uint16_t native_id, FlatSlotType *out_ty,
+                                      int *has_ty, int *mode_any) {
+    char spec[256];
+    char tokens[FLAT_TAG_MAX_TOKENS][FLAT_TAG_TOKEN_LEN];
+    int ntok;
+    int i;
+    int saw_ty = 0;
+    const FlatSchemaCatalog *cat;
+
+    if (has_ty) {
+        *has_ty = 0;
+    }
+    if (mode_any) {
+        *mode_any = 0;
+    }
+    if (!ctx || !out_ty || native_id != FLAT_NATIVE_LIST_VALUES_TO) {
+        return -1;
+    }
+    if (!ctx->tag_expr || ctx->tag_expr[0] == '\0') {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.arg");
+        return -1;
+    }
+    if (eval_tag_string(ctx, ctx->tag_expr, spec, sizeof spec) != 0) {
+        return -1;
+    }
+    if (tokenize_sort(tokens, &ntok, spec) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    if (ntok != 2) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    if (validate_tokens_for_native(native_id, tokens, ntok) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    cat = ctx->bc ? &ctx->bc->schemas : NULL;
+    for (i = 0; i < ntok; i++) {
+        if (strcmp(tokens[i], "all") == 0) {
+            if (mode_any) {
+                *mode_any = 0;
+            }
+        } else if (strcmp(tokens[i], "any") == 0) {
+            if (mode_any) {
+                *mode_any = 1;
+            }
+        } else {
+            char one[128];
+            snprintf(one, sizeof one, "%s", tokens[i]);
+            if (flat_slot_type_parse_spec(one, out_ty, cat, NULL, 0) != 0) {
+                snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+                return -1;
+            }
+            saw_ty = 1;
+        }
+    }
+    if (!saw_ty) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    if (has_ty) {
+        *has_ty = 1;
     }
     return 0;
 }

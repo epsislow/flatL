@@ -26,5 +26,6 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_LIST_RANK, flat_native_list_rank);
     reg(FLAT_NATIVE_LIST_IS_MATRIX, flat_native_list_is_matrix);
     reg(FLAT_NATIVE_LIST_IS_VECTOR, flat_native_list_is_vector);
+    reg(FLAT_NATIVE_LIST_VALUES_TO, flat_native_list_values_to);
     return 0;
 }

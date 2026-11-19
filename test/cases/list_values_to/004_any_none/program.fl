@@ -1,0 +1,5 @@
+use native list with L
+
+#main
+  L.values_to(["only", "text"] ; "f64 any") -> _
+  OK

@@ -159,6 +159,43 @@ int flat_native_id_is_mdim(uint16_t native_id) {
            native_id <= (uint16_t)FLAT_NATIVE_MATH_MDIM_INVERSE;
 }
 
+static int tag_policy_values_to(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
+    int i;
+    int mode_n = 0;
+    int type_n = 0;
+
+    if (n != 2) {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        FlatSlotType ty;
+        char spec[FLAT_TAG_TOKEN_LEN + 4];
+
+        if (strcmp(tokens[i], "all") == 0 || strcmp(tokens[i], "any") == 0) {
+            mode_n++;
+            continue;
+        }
+        snprintf(spec, sizeof spec, "%s", tokens[i]);
+        if (flat_slot_type_parse_spec(spec, &ty, NULL, NULL, 0) != 0) {
+            return -1;
+        }
+        if (ty.kind == FLAT_SLOT_TYPE_L || ty.kind == FLAT_SLOT_TYPE_O ||
+            ty.kind == FLAT_SLOT_TYPE_SCHEMA || ty.list_rank > 0) {
+            return -1;
+        }
+        if (flat_slot_type_is_numeric(&ty) || ty.kind == FLAT_SLOT_TYPE_B ||
+            ty.kind == FLAT_SLOT_TYPE_T || ty.kind == FLAT_SLOT_TYPE_TN) {
+            type_n++;
+            continue;
+        }
+        return -1;
+    }
+    if (mode_n != 1 || type_n != 1) {
+        return -1;
+    }
+    return 0;
+}
+
 static int tag_policy_mdim(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
     int i;
     int role_n = 0;
@@ -204,6 +241,7 @@ int flat_native_native_accepts_tags(uint16_t native_id) {
     case FLAT_NATIVE_IO_IN_BOOL:
     case FLAT_NATIVE_STR_TO_NUM:
     case FLAT_NATIVE_STR_FROM_NUM:
+    case FLAT_NATIVE_LIST_VALUES_TO:
         return 1;
     default:
         return 0;
@@ -260,6 +298,8 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
         return tag_policy_numeric_only(native_id, tokens, n);
     case FLAT_NATIVE_STR_FROM_NUM:
         return tag_policy_from_num(native_id, tokens, n);
+    case FLAT_NATIVE_LIST_VALUES_TO:
+        return tag_policy_values_to(tokens, n);
     case FLAT_NATIVE_IO_INLN:
         return tag_policy_numeric_only(native_id, tokens, n);
     default:
@@ -323,6 +363,11 @@ int flat_native_tag_compile_check(uint16_t native_id, const char *inner, char *e
     }
     snprintf(buf, sizeof buf, "%s", inner);
     flat_native_split_operands_tag(buf, &operands, &tag_expr, &has_tag);
+
+    if (native_id == FLAT_NATIVE_LIST_VALUES_TO && !has_tag) {
+        snprintf(err, err_sz, "type.tag.arg");
+        return -1;
+    }
 
     if (!has_tag) {
         if (flat_native_native_accepts_tags(native_id)) {

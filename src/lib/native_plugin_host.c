@@ -257,6 +257,7 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_LIST_RANK, flat_native_list_rank);
         flat_native_plugin_register(FLAT_NATIVE_LIST_IS_MATRIX, flat_native_list_is_matrix);
         flat_native_plugin_register(FLAT_NATIVE_LIST_IS_VECTOR, flat_native_list_is_vector);
+        flat_native_plugin_register(FLAT_NATIVE_LIST_VALUES_TO, flat_native_list_values_to);
         g_loaded_list = 1;
         return 0;
     }

@@ -46,4 +46,8 @@ int flat_native_id_is_mdim(uint16_t native_id);
 int flat_native_tag_resolve_mdim(FlatNativeCtx *ctx, uint16_t native_id, FlatSlotType *out_ty,
                                  int *has_ty, FlatMdimTagRole *role_out, int *has_role);
 
+/* list.values_to: target type + mode `all` (mode_any=0) or `any` (mode_any=1). */
+int flat_native_tag_resolve_values_to(FlatNativeCtx *ctx, uint16_t native_id, FlatSlotType *out_ty,
+                                    int *has_ty, int *mode_any);
+
 #endif

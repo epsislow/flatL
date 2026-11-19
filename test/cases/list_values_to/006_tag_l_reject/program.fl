@@ -1,0 +1,5 @@
+use native list with L
+
+#main
+  L.values_to([1] ; "l all") -> _
+  OK

@@ -39,6 +39,9 @@
 #define VM_MAX_CALL 64
 #define VM_MAX_FOREACH 8
 
+/* vm_jump_panic_any trace: fixed prefix + reason (≤64) + handler + loc. */
+#define VM_PANIC_TRACE_BUFLEN (56u + 64u + (FLAT_PANIC_LOC_MAX + 8u) + FLAT_PANIC_LOC_MAX + 8u)
+
 static int vm_block_index(const FlatBytecode *bc, uint32_t ip);
 static int vm_ip_for_block_id(const FlatBytecode *bc, uint32_t block_id, uint32_t *out_ip);
 static void vm_native_decls_at_ip(const FlatBytecode *bc, uint32_t ip,
@@ -304,7 +307,7 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
         snprintf(handler, sizeof handler, "#panic.%s", loc);
         if (vm_ip_for_block_label(bc, handler, &target) == 0) {
             if (trace) {
-                char tbuf[192];
+                char tbuf[VM_PANIC_TRACE_BUFLEN];
                 snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=%s loc=%s\n", reason,
                          handler, loc);
                 vm_write_stderr(tbuf);
@@ -316,7 +319,7 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
 
     if (trace) {
         {
-            char tbuf[160];
+            char tbuf[VM_PANIC_TRACE_BUFLEN];
             snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=#panic.any loc=%s\n",
                      reason, loc[0] ? loc : "");
             vm_write_stderr(tbuf);
