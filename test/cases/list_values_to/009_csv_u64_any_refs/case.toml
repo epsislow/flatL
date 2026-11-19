@@ -1,0 +1,9 @@
+suite = "list_values_to"
+id = 9
+desc = "csv getCells + u64 any: whole convert, decimal STR_REF păstrat"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = '[10,"9.99"]'

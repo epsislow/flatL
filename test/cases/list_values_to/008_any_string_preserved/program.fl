@@ -1,0 +1,14 @@
+use native list with L
+use native str with S
+
+#main
+  ys = ["1", "x", "3"]
+  L.values_to(ys ; "f64 any") -> zs
+  L.get(zs, 1) -> mid
+  S.index_of(mid, 'x') -> at
+  io.out('start')
+  io.out(zs)
+  io.out(mid)
+  io.out(at)
+  io.out('end')
+  OK

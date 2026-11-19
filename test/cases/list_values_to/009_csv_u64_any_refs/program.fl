@@ -1,0 +1,17 @@
+use native csv
+use native list with L
+
+#main
+  fp = file.createCtx('grid.csv')
+  file.writeln(fp, 'a,b')
+  file.writeln(fp, '10,9.99')
+  file.close(fp)
+  fp = file.readCtx('grid.csv')
+  rid = csv.reader(fp)
+  grid = csv.getCells(rid, 0, 0, 2, 2)
+  L.get(grid, 1) -> block
+  L.values_to(block ; "u64 any") -> got
+  io.out(got)
+  csv.close(rid)
+  file.close(fp)
+  OK

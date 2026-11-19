@@ -316,6 +316,16 @@ static int convert_leaf(ValuesToState *st, const FlatValue *src, FlatValue *out)
 
 static int convert_list(ValuesToState *st, uint32_t list_id, int depth, uint32_t *out_id);
 
+/* Borrowed STR_REF/OBJECT from source tree need an extra retain before flat_list_build. */
+static void values_to_pin_build_item(ValuesToState *st, const FlatValue *v) {
+    if (!st || !v) {
+        return;
+    }
+    if (v->tag == VAL_STR_REF || v->tag == VAL_OBJECT) {
+        flat_value_retain(st->ctx->coll, st->ctx->pool, v);
+    }
+}
+
 static int convert_list(ValuesToState *st, uint32_t list_id, int depth, uint32_t *out_id) {
     FlatValue items[FLAT_LIST_MAX_ELEMS];
     int len;
@@ -369,6 +379,7 @@ static int convert_list(ValuesToState *st, uint32_t list_id, int depth, uint32_t
             if (rc > 0) {
                 items[i] = el;
             }
+            values_to_pin_build_item(st, &items[i]);
         }
     }
     if (flat_list_build(st->ctx->coll, st->ctx->pool, items, len, out_id) != 0) {
