@@ -1,0 +1,11 @@
+use native math.mdim with D
+
+#main
+  U:u32[] = [1, 2]
+  V:u32[] = [3, 4]
+  D.add(U, V) -> C
+  D.sum(C) -> s
+  io.out('start')
+  io.out(s)
+  io.out('end')
+  OK

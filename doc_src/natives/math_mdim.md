@@ -66,7 +66,7 @@ D.add(A, B ; "f64")
 | Shape role | `; "vector"`, `; "matrix"` | Operand shape must match (rank 1 / 2); else **`type.mdim.tag_shape`** |
 | Invalid / mixed | `; "matrix"` on `sum` | **`type.mdim.tag_shape`** or **`type.tag.not_accepted`** |
 
-Without `;`, behavior is unchanged (infer wideness from operands).
+Without `;`, **M3 promotion** infers the result element type: `u32`+`u32`→`u32`, mixed integer widths→wider integer, integer↔`f64` or signed↔unsigned mix→`f64`. Unknown/homogeneous `f64` literals stay `f64`. Failure → **`type.mdim.incompatible`**.
 
 ### Example
 
@@ -95,6 +95,7 @@ Output: `36`
 | `type.mdim.dim_mismatch` | Incompatible shapes or bad args |
 | `type.mdim.rank` | Wrong rank (e.g. `matmul` on 1D) |
 | `type.mdim.tag_shape` | Role tag (`vector` / `matrix`) incompatible with operand shape |
+| `type.mdim.incompatible` | Operand element types cannot be promoted together (or explicit `;` tag cannot coerce result) |
 
 ### Operație aritmetică (aliniat cu `math.calc.*`)
 

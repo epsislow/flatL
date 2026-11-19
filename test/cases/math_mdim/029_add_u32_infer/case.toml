@@ -1,0 +1,9 @@
+suite = "math_mdim"
+id = 29
+desc = "M3: u32+u32 add infers u32 result (sum=10)"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "start10end"
