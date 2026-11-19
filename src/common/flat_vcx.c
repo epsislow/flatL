@@ -104,6 +104,13 @@ static void adopt_active_var_count_to_bind(FlatVcxRuntime *rt) {
     *rt->bind.var_count = rt->contexts[rt->active_ix].var_count;
 }
 
+static void vcx_pin_staged_coll(const FlatValue *v, FlatCollectionPool *coll,
+                                FlatStringPool *pool) {
+    if (v && (v->tag == VAL_LIST || v->tag == VAL_OBJECT)) {
+        flat_value_retain(coll, pool, v);
+    }
+}
+
 static int value_same_storage(const FlatValue *a, const FlatValue *b) {
     if (!a || !b || a->tag != b->tag) {
         return 0;
@@ -1051,6 +1058,7 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
             snprintf(panic_detail, panic_sz, "%s.copy", panic_prefix);
             goto fail;
         }
+        vcx_pin_staged_coll(&stage[stage_n].val, coll, pool);
         stage[stage_n].slot_type = src->vars[i].slot_type;
         stage[stage_n].has_slot_type = src->vars[i].has_slot_type;
         stage[stage_n].slot_dynamic = src->vars[i].slot_dynamic;
@@ -1086,6 +1094,8 @@ static int copy_selected(FlatVcxRuntime *rt, uint32_t src_id, uint32_t dst_id,
             dst->vars[di].slot_frozen = stage[i].slot_frozen;
             dst->vars[di].slot_const = stage[i].slot_const;
         }
+        flat_value_release(coll, pool, &stage[i].val);
+        stage[i].valid = 0;
     }
     if (bak) {
         for (i = 0; i < bak_n; i++) {
@@ -1276,6 +1286,7 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
             snprintf(panic_detail, panic_sz, "%s.copy", prefix);
             goto fail;
         }
+        vcx_pin_staged_coll(&stage[i].val, coll, pool);
         stage[i].slot_type = src->vars[src_vi].slot_type;
         stage[i].has_slot_type = src->vars[src_vi].has_slot_type;
         stage[i].slot_dynamic = src->vars[src_vi].slot_dynamic;
@@ -1311,6 +1322,8 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
             dst->vars[di].slot_frozen = stage[i].slot_frozen;
             dst->vars[di].slot_const = stage[i].slot_const;
         }
+        flat_value_release(coll, pool, &stage[i].val);
+        stage[i].valid = 0;
     }
     if (bak) {
         for (i = 0; i < bak_n; i++) {
