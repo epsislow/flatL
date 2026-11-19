@@ -1,0 +1,7 @@
+use native list with L
+
+#main
+  A = ["+inf"]
+  L.values_to(A ; "f64 all") -> B
+  io.out(B)
+  OK

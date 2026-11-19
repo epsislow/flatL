@@ -783,7 +783,7 @@ static int mdim_bcast_layout(FlatNativeCtx *ctx, const FlatListShapeInfo *a,
         if (da == db || da == 1 || db == 1) {
             lo->a_dims[i] = da;
             lo->b_dims[i] = db;
-            lo->out_dims[i] = da > db ? da : db;
+            lo->out_dims[i] = da == 1 ? db : da;
         } else {
             mdim_panic(ctx, "type.mdim.broadcast");
             return -1;
@@ -1703,6 +1703,7 @@ static int mdim_reshape_native(FlatNativeCtx *ctx) {
     int pos = 0;
     int prod = 1;
     uint32_t out_id;
+    uint32_t final_id;
     int rc = -1;
 
     memset(&src_v, 0, sizeof src_v);
@@ -1755,7 +1756,8 @@ static int mdim_reshape_native(FlatNativeCtx *ctx) {
                 goto out;
             }
             d = flat_number_as_f64(&el);
-            if (d <= 0.0 || d != floor(d)) {
+            if (!isfinite(d) || d <= 0.0 || d != floor(d) ||
+                d > (double)(FLAT_LIST_MAX_ELEMS / prod)) {
                 mdim_panic(ctx, "type.mdim.dim_mismatch");
                 goto out;
             }
@@ -1796,7 +1798,14 @@ static int mdim_reshape_native(FlatNativeCtx *ctx) {
         out_info.elem_kind = src_info.elem_kind;
         mdim_stamp_shape(ctx->coll, out_id, &out_info);
     }
-    if (flat_value_set_list(ctx->out, out_id) != 0) {
+    if (mdim_apply_result_list(ctx, out_id, &tags, src_info.elem_kind,
+                               src_info.elem_known, &final_id) != 0) {
+        if (ctx->panic_detail[0] == '\0') {
+            mdim_panic(ctx, "type.mdim.incompatible");
+        }
+        goto out;
+    }
+    if (flat_value_set_list(ctx->out, final_id) != 0) {
         goto out;
     }
     rc = 0;

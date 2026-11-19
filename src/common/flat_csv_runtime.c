@@ -958,11 +958,8 @@ int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
     }
 
     if (!as_object) {
-        FlatValue row_vals[64];
-        uint32_t row_ids[64];
-        if (yLen > 64) {
-            return panic_msg(panic, panic_sz, "csv.getCells");
-        }
+        FlatValue row_vals[FLAT_LIST_MAX_ELEMS];
+        uint32_t row_ids[FLAT_LIST_MAX_ELEMS];
         {
             char arena_buf[FLAT_CSV_RECORD_SZ];
             FlatCsvArena arena = {arena_buf, sizeof arena_buf, 0};
@@ -1007,11 +1004,8 @@ int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
         char arena_buf[FLAT_CSV_RECORD_SZ];
         FlatCsvArena arena = {arena_buf, sizeof arena_buf, 0};
         for (r = 0; r < xLen; r++) {
-            FlatValue cells[64];
+            FlatValue cells[FLAT_LIST_MAX_ELEMS];
             uint32_t col_id;
-            if (yLen > 64) {
-                return panic_msg(panic, panic_sz, "csv.getCells");
-            }
             snprintf(key_bufs[r], sizeof key_bufs[r], "%d", r);
             for (y = 0; y < yLen; y++) {
                 char *fields[FLAT_CSV_MAX_FIELDS];

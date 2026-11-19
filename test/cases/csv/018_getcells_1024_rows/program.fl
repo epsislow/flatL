@@ -1,0 +1,28 @@
+use native csv
+use native list with L
+use native obj
+
+#main
+  fp = file.createCtx('rows.csv')
+  for(1024, i, "#write_row")
+  file.close(fp)
+  fp = file.readCtx('rows.csv')
+  rid = csv.reader(fp)
+  rows = csv.getCells(rid, 0, 0, 1, 1024)
+  L.len(rows) == 1024
+  L.get(rows, 1023) -> last
+  L.get(last, 0) -> value
+  value == 'x'
+  grid_obj = csv.getCells(rid, 0, 0, 1, 1024, 'obj')
+  obj.get(grid_obj, '"0"') -> col
+  L.len(col) == 1024
+  L.get(col, 1023) -> last_value
+  last_value == 'x'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('getcells-1024-ok')
+  OK
+
+#write_row
+  file.writeln(fp, 'x')
+  next

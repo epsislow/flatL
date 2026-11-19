@@ -151,6 +151,13 @@ static int walk_rect_recurse(FlatCollectionPool *coll, uint32_t list_id, FlatLis
             if (flat_list_get(coll, list_id, i, &el) != 0) {
                 return -1;
             }
+            if (el.tag == VAL_LIST) {
+                out->rect = 0;
+                out->rank = (uint8_t)flat_list_value_rank(coll, list_id);
+                out->dims_n = 0;
+                out->elem_known = 0;
+                return 0;
+            }
             if (value_leaf_kind(&el, &k) != 0 || k != out->elem_kind) {
                 out->elem_known = 0;
                 break;

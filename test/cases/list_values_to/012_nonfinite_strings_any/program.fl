@@ -1,0 +1,7 @@
+use native list with L
+
+#main
+  A = ["2", "+inf", "Infinity", "nan(foo)", "1e309"]
+  L.values_to(A ; "f64 any") -> B
+  io.out(B)
+  OK

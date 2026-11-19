@@ -1,0 +1,10 @@
+use native math.mdim with D
+use native list with L
+
+#main
+  A:f64[] = []
+  B:f64[] = [1]
+  D.add(A, B) -> C
+  L.len(C) == 0
+  io.outln('empty-broadcast-ok')
+  OK

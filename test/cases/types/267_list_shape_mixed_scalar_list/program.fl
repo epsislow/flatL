@@ -1,0 +1,9 @@
+use native list with L
+
+#main
+  A = [1, [2]]
+  B = [[1], 2]
+  L.is_rect(A) == false
+  L.is_rect(B) == false
+  io.outln('mixed-shape-ok')
+  OK

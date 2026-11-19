@@ -38,34 +38,6 @@ static void list_debug(const char *fmt, ...) {
     fputc('\n', stderr);
 }
 
-static int ci_equal(const char *a, const char *b) {
-    unsigned char ca;
-    unsigned char cb;
-    if (!a || !b) {
-        return 0;
-    }
-    for (;;) {
-        ca = (unsigned char)*a++;
-        cb = (unsigned char)*b++;
-        if (ca >= 'A' && ca <= 'Z') {
-            ca = (unsigned char)(ca - 'A' + 'a');
-        }
-        if (cb >= 'A' && cb <= 'Z') {
-            cb = (unsigned char)(cb - 'A' + 'a');
-        }
-        if (ca != cb) {
-            return 0;
-        }
-        if (ca == '\0') {
-            return 1;
-        }
-    }
-}
-
-static int str_is_non_numeric_text(const char *tok) {
-    return ci_equal(tok, "nan") || ci_equal(tok, "inf") || ci_equal(tok, "-inf");
-}
-
 static int str_bytes(const FlatValue *v, FlatStringPool *pool, const uint8_t **bp, size_t *len) {
     if (!v || !bp || !len) {
         return -1;
@@ -248,12 +220,13 @@ static int convert_leaf(ValuesToState *st, const FlatValue *src, FlatValue *out)
             if (str_token_buf(st->ctx->pool, src, tok, sizeof tok) != 0) {
                 return values_to_fail(st, NULL);
             }
-            if (str_is_non_numeric_text(flat_native_trim(tok))) {
-                return values_to_fail(st, NULL);
-            }
             if (flat_number_parse_for_slot_kind(flat_native_trim(tok), st->target.kind, out, panic,
                                                 sizeof panic) != 0) {
                 return values_to_fail(st, panic[0] ? panic : NULL);
+            }
+            if (flat_slot_type_is_numeric(&st->target) &&
+                !isfinite(flat_number_as_f64(out))) {
+                return values_to_fail(st, NULL);
             }
             st->changed = 1;
             return 0;
