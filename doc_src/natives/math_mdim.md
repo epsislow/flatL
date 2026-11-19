@@ -27,7 +27,7 @@ Shape comes from list **stamp** or **walk** (same infrastructure as `list.is_rec
 | `add(a, b)` | LIST | Pairwise `a[i…] + b[i…]` |
 | `subtract(a, b)` | LIST | Pairwise difference |
 | `multiply(a, b)` | LIST | Hadamard product (not matrix multiply) |
-| `divide(a, b)` | LIST | Pairwise division; **divide by zero** → panic |
+| `divide(a, b)` | LIST | Pairwise division; **divide by zero** → **`math.mdim.divzero`** (ca `math.calc.divzero`) |
 
 ### Reductions (one operand)
 
@@ -62,7 +62,9 @@ use native math.mdim with D
 
 Output: `36`
 
-## Errors (`type.mdim.*`)
+## Errors
+
+### Shape / tip operanzi (`type.mdim.*`)
 
 | Code | When |
 |------|------|
@@ -70,7 +72,12 @@ Output: `36`
 | `type.mdim.not_numeric` | Non-numeric leaf |
 | `type.mdim.dim_mismatch` | Incompatible shapes or bad args |
 | `type.mdim.rank` | Wrong rank (e.g. `matmul` on 1D) |
-| `type.mdim.divide` | Division by zero |
+
+### Operație aritmetică (aliniat cu `math.calc.*`)
+
+| Code | When |
+|------|------|
+| `math.mdim.divzero` | `divide(a, b)` când vreun element din `b` e 0 |
 
 ## Implementation map
 

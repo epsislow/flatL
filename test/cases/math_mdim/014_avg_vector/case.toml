@@ -1,0 +1,9 @@
+suite = "math_mdim"
+id = 14
+desc = "avg pe vector f64[] → 5"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "start5end"

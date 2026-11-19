@@ -1,0 +1,6 @@
+use native math.mdim with D
+
+#main
+  v:f64[3] = [1, 2, 3]
+  D.transpose(v) -> T
+  OK

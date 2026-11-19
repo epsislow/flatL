@@ -1,0 +1,9 @@
+use native math.mdim with D
+
+#main
+  v:f64[5] = [3, 1, 4, 1, 5]
+  D.max(v) -> m
+  io.out('start')
+  io.out(m)
+  io.out('end')
+  OK

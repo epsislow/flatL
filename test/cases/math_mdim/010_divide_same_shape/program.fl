@@ -1,0 +1,11 @@
+use native math.mdim with D
+
+#main
+  A:f64[][] = [[8, 6], [4, 2]]
+  B:f64[][] = [[2, 2], [2, 1]]
+  D.divide(A, B) -> C
+  D.sum(C) -> s
+  io.out('start')
+  io.out(s)
+  io.out('end')
+  OK

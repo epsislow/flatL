@@ -1,0 +1,9 @@
+suite = "math_mdim"
+id = 11
+desc = "divide by zero → math.mdim.divzero"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "math.mdim.divzero"

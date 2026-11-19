@@ -203,7 +203,7 @@ static int mdim_map_binary_shaped(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_
             }
             orc = op(da, db, &dr);
             if (orc == -2) {
-                mdim_panic(ctx, "type.mdim.divide");
+                mdim_panic(ctx, "math.mdim.divzero");
                 return -1;
             }
             if (orc != 0) {
@@ -245,7 +245,7 @@ static int mdim_map_binary_shaped(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_
                 }
                 orc = op(da, db, &dr);
                 if (orc == -2) {
-                    mdim_panic(ctx, "type.mdim.divide");
+                    mdim_panic(ctx, "math.mdim.divzero");
                     return -1;
                 }
                 if (orc != 0) {
