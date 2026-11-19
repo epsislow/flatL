@@ -1,0 +1,9 @@
+use native math.mdim with D
+
+#main
+  M:f64[][] = [[1, 2], [3, 4]]
+  D.determinant(M) -> d
+  io.out('start')
+  io.out(d)
+  io.out('end')
+  OK

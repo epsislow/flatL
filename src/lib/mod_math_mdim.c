@@ -155,6 +155,8 @@ static int mdim_native_allows_role(uint16_t native_id, FlatMdimTagRole role) {
         return role == FLAT_MDIM_TAG_ROLE_VECTOR;
     case FLAT_NATIVE_MATH_MDIM_TRANSPOSE:
     case FLAT_NATIVE_MATH_MDIM_MATMUL:
+    case FLAT_NATIVE_MATH_MDIM_DETERMINANT:
+    case FLAT_NATIVE_MATH_MDIM_INVERSE:
         return role == FLAT_MDIM_TAG_ROLE_MATRIX;
     case FLAT_NATIVE_MATH_MDIM_ADD:
     case FLAT_NATIVE_MATH_MDIM_SUBTRACT:
@@ -1804,6 +1806,317 @@ out:
     return rc;
 }
 
+#define MDIM_LA_MAX_ORDER 64
+
+static double mdim_la_pivot_tol(int n, const double *a) {
+    double scale = 0.0;
+    int i;
+    int nn = n * n;
+
+    for (i = 0; i < nn; i++) {
+        double av = fabs(a[i]);
+        if (av > scale) {
+            scale = av;
+        }
+    }
+    if (scale == 0.0) {
+        return 1e-15;
+    }
+    return scale * (double)n * 1e-12;
+}
+
+static int mdim_load_square(FlatCollectionPool *coll, uint32_t mat_id, int n, double *out) {
+    int r;
+    int c;
+
+    for (r = 0; r < n; r++) {
+        for (c = 0; c < n; c++) {
+            if (mdim_at2(coll, mat_id, r, c, &out[r * n + c]) != 0) {
+                return -1;
+            }
+        }
+    }
+    return 0;
+}
+
+static int mdim_matrix_det(int n, const double *a_in, double *det_out) {
+    double *a;
+    double tol;
+    int sign = 1;
+    int i;
+    int j;
+    int k;
+    int p;
+    int rc = -1;
+
+    if (!det_out || n <= 0 || n > MDIM_LA_MAX_ORDER) {
+        return -1;
+    }
+    a = (double *)malloc((size_t)n * (size_t)n * sizeof *a);
+    if (!a) {
+        return -1;
+    }
+    memcpy(a, a_in, (size_t)n * (size_t)n * sizeof *a);
+    tol = mdim_la_pivot_tol(n, a);
+    *det_out = 1.0;
+    for (i = 0; i < n; i++) {
+        p = i;
+        for (k = i + 1; k < n; k++) {
+            if (fabs(a[k * n + i]) > fabs(a[p * n + i])) {
+                p = k;
+            }
+        }
+        if (fabs(a[p * n + i]) <= tol) {
+            *det_out = 0.0;
+            rc = 0;
+            goto done;
+        }
+        if (p != i) {
+            for (j = 0; j < n; j++) {
+                double t = a[i * n + j];
+                a[i * n + j] = a[p * n + j];
+                a[p * n + j] = t;
+            }
+            sign = -sign;
+        }
+        *det_out *= a[i * n + i];
+        for (k = i + 1; k < n; k++) {
+            double f = a[k * n + i] / a[i * n + i];
+            for (j = i + 1; j < n; j++) {
+                a[k * n + j] -= f * a[i * n + j];
+            }
+        }
+    }
+    if (sign < 0) {
+        *det_out = -*det_out;
+    }
+    rc = 0;
+done:
+    free(a);
+    return rc;
+}
+
+static int mdim_matrix_inv(int n, const double *a_in, double *inv_out) {
+    double *aug;
+    double tol;
+    int i;
+    int j;
+    int k;
+    int p;
+    int rc = -1;
+    size_t cols = (size_t)(2 * n);
+
+    if (!inv_out || n <= 0 || n > MDIM_LA_MAX_ORDER) {
+        return -1;
+    }
+    aug = (double *)malloc((size_t)n * cols * sizeof *aug);
+    if (!aug) {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++) {
+            aug[i * cols + j] = a_in[i * n + j];
+            aug[i * cols + n + j] = (i == j) ? 1.0 : 0.0;
+        }
+    }
+    tol = mdim_la_pivot_tol(n, a_in);
+    for (i = 0; i < n; i++) {
+        p = i;
+        for (k = i + 1; k < n; k++) {
+            if (fabs(aug[k * cols + i]) > fabs(aug[p * cols + i])) {
+                p = k;
+            }
+        }
+        if (fabs(aug[p * cols + i]) <= tol) {
+            rc = -2;
+            goto done;
+        }
+        if (p != i) {
+            for (j = 0; j < (int)cols; j++) {
+                double t = aug[i * cols + j];
+                aug[i * cols + j] = aug[p * cols + j];
+                aug[p * cols + j] = t;
+            }
+        }
+        {
+            double div = aug[i * cols + i];
+            for (j = 0; j < (int)cols; j++) {
+                aug[i * cols + j] /= div;
+            }
+        }
+        for (k = 0; k < n; k++) {
+            if (k == i) {
+                continue;
+            }
+            {
+                double f = aug[k * cols + i];
+                if (f == 0.0) {
+                    continue;
+                }
+                for (j = 0; j < (int)cols; j++) {
+                    aug[k * cols + j] -= f * aug[i * cols + j];
+                }
+            }
+        }
+    }
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++) {
+            inv_out[i * n + j] = aug[i * cols + n + j];
+        }
+    }
+    rc = 0;
+done:
+    free(aug);
+    return rc;
+}
+
+static int mdim_build_square_from_flat(FlatNativeCtx *ctx, const double *flat, int n,
+                                       uint32_t *out_id) {
+    FlatValue built[MDIM_LA_MAX_ORDER];
+    int r;
+
+    for (r = 0; r < n; r++) {
+        FlatValue cells[MDIM_LA_MAX_ORDER];
+        uint32_t row_id;
+        int c;
+        for (c = 0; c < n; c++) {
+            flat_number_init_legacy_double(&cells[c], flat[r * n + c]);
+        }
+        if (flat_list_build(ctx->coll, ctx->pool, cells, n, &row_id) != 0) {
+            return -1;
+        }
+        if (mdim_dup_list(ctx, row_id, &row_id) != 0) {
+            return -1;
+        }
+        flat_value_set_list(&built[r], row_id);
+        flat_value_retain(ctx->coll, ctx->pool, &built[r]);
+    }
+    if (flat_list_build(ctx->coll, ctx->pool, built, n, out_id) != 0) {
+        for (r = 0; r < n; r++) {
+            flat_value_release(ctx->coll, ctx->pool, &built[r]);
+        }
+        return -1;
+    }
+    for (r = 0; r < n; r++) {
+        flat_value_release(ctx->coll, ctx->pool, &built[r]);
+    }
+    return 0;
+}
+
+static int mdim_square_matrix_native(FlatNativeCtx *ctx, uint16_t native_id, int want_inverse) {
+    FlatValue m_v;
+    FlatListShapeInfo info;
+    MdimCallTags tags;
+    int n;
+    double a[MDIM_LA_MAX_ORDER * MDIM_LA_MAX_ORDER];
+    double work[MDIM_LA_MAX_ORDER * MDIM_LA_MAX_ORDER];
+    uint32_t out_id = 0;
+    uint32_t final_id = 0;
+    int rc = -1;
+
+    memset(&m_v, 0, sizeof m_v);
+    if (!ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    *ctx->io_status = FLAT_IO_OK;
+    if (mdim_resolve_call_tags(ctx, native_id, &tags) != 0) {
+        return -1;
+    }
+    if (mdim_parse_list(ctx, ctx->inner, &m_v) != 0) {
+        goto out;
+    }
+    if (mdim_operand_info(ctx, &m_v, 1, &info) != 0) {
+        goto out;
+    }
+    if (mdim_role_ok(&info, &tags) != 0) {
+        mdim_panic(ctx, "type.mdim.tag_shape");
+        goto out;
+    }
+    mdim_tags_apply_inferred(&tags, info.elem_kind, info.elem_known);
+    if (info.rank != 2) {
+        mdim_panic(ctx, "type.mdim.rank");
+        goto out;
+    }
+    n = (int)info.dims[0];
+    if (n != (int)info.dims[1] || n <= 0 || n > MDIM_LA_MAX_ORDER) {
+        mdim_panic(ctx, "type.mdim.dim_mismatch");
+        goto out;
+    }
+    if (mdim_load_square(ctx->coll, m_v.u.coll_id, n, a) != 0) {
+        goto out;
+    }
+    if (!want_inverse) {
+        double det;
+        if (mdim_matrix_det(n, a, &det) != 0) {
+            goto out;
+        }
+        if (mdim_stage_scalar(ctx, det, &tags) != 0) {
+            goto out;
+        }
+        rc = 0;
+        goto out;
+    }
+    {
+        int inv_rc = mdim_matrix_inv(n, a, work);
+
+        if (inv_rc == -2) {
+            mdim_panic(ctx, "type.mdim.singular");
+            goto out;
+        }
+        if (inv_rc != 0) {
+            goto out;
+        }
+    }
+    if (mdim_build_square_from_flat(ctx, work, n, &out_id) != 0) {
+        goto out;
+    }
+    {
+        FlatListShapeInfo out_info;
+        memset(&out_info, 0, sizeof out_info);
+        out_info.valid = 1;
+        out_info.rect = 1;
+        out_info.rank = 2;
+        out_info.dims_n = 2;
+        out_info.dims[0] = (uint16_t)n;
+        out_info.dims[1] = (uint16_t)n;
+        out_info.elem_known = info.elem_known;
+        out_info.elem_kind = info.elem_kind;
+        if (tags.has_ty) {
+            mdim_shape_apply_elem(&out_info, tags.result_ty.kind, 1);
+        }
+        mdim_stamp_shape(ctx->coll, out_id, &out_info);
+    }
+    if (mdim_apply_result_list(ctx, out_id, &tags, info.elem_kind, info.elem_known, &final_id) !=
+        0) {
+        goto out;
+    }
+    if (final_id != out_id) {
+        FlatListShapeInfo out_info;
+        memset(&out_info, 0, sizeof out_info);
+        out_info.valid = 1;
+        out_info.rect = 1;
+        out_info.rank = 2;
+        out_info.dims_n = 2;
+        out_info.dims[0] = (uint16_t)n;
+        out_info.dims[1] = (uint16_t)n;
+        if (tags.has_ty) {
+            mdim_shape_apply_elem(&out_info, tags.result_ty.kind, 1);
+        } else {
+            out_info.elem_known = info.elem_known;
+            out_info.elem_kind = info.elem_kind;
+        }
+        mdim_stamp_shape(ctx->coll, final_id, &out_info);
+    }
+    if (flat_value_set_list(ctx->out, final_id) != 0) {
+        goto out;
+    }
+    rc = 0;
+out:
+    flat_native_parse_rhs_release(ctx, &m_v);
+    return rc;
+}
+
 int flat_native_math_mdim_add(FlatNativeCtx *ctx) {
     return mdim_binary_native(ctx, FLAT_NATIVE_MATH_MDIM_ADD, mdim_op_add);
 }
@@ -1850,4 +2163,12 @@ int flat_native_math_mdim_matmul(FlatNativeCtx *ctx) {
 
 int flat_native_math_mdim_reshape(FlatNativeCtx *ctx) {
     return mdim_reshape_native(ctx);
+}
+
+int flat_native_math_mdim_determinant(FlatNativeCtx *ctx) {
+    return mdim_square_matrix_native(ctx, FLAT_NATIVE_MATH_MDIM_DETERMINANT, 0);
+}
+
+int flat_native_math_mdim_inverse(FlatNativeCtx *ctx) {
+    return mdim_square_matrix_native(ctx, FLAT_NATIVE_MATH_MDIM_INVERSE, 1);
 }

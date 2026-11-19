@@ -201,6 +201,8 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_TRANSPOSE, flat_native_math_mdim_transpose);
         flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_MATMUL, flat_native_math_mdim_matmul);
         flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_RESHAPE, flat_native_math_mdim_reshape);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_DETERMINANT, flat_native_math_mdim_determinant);
+        flat_native_plugin_register(FLAT_NATIVE_MATH_MDIM_INVERSE, flat_native_math_mdim_inverse);
         g_loaded_math_mdim = 1;
         return 0;
     }

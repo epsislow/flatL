@@ -8,4 +8,4 @@ run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
 expect_exit = 0
 stdout_contains = "math.mdim.add"
 stdout_contains_2 = "math.mdim.matmul"
-stdout_contains_3 = "(12 functions)"
+stdout_contains_3 = "(14 functions)"

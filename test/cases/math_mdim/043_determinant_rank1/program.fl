@@ -1,0 +1,6 @@
+use native math.mdim with D
+
+#main
+  v:f64[] = [1, 2, 3]
+  D.determinant(v) -> _
+  OK

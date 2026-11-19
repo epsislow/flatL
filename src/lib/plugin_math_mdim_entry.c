@@ -18,5 +18,7 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_MATH_MDIM_TRANSPOSE, flat_native_math_mdim_transpose);
     reg(FLAT_NATIVE_MATH_MDIM_MATMUL, flat_native_math_mdim_matmul);
     reg(FLAT_NATIVE_MATH_MDIM_RESHAPE, flat_native_math_mdim_reshape);
+    reg(FLAT_NATIVE_MATH_MDIM_DETERMINANT, flat_native_math_mdim_determinant);
+    reg(FLAT_NATIVE_MATH_MDIM_INVERSE, flat_native_math_mdim_inverse);
     return 0;
 }

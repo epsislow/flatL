@@ -48,6 +48,8 @@ Shape comes from list **stamp** or **walk** (same infrastructure as `list.is_rec
 | `transpose(m)` | LIST | Rank-2 swap rows/columns |
 | `matmul(A, B)` | LIST | Rank-2; inner dimensions must match |
 | `reshape(x, shape)` | LIST | Same element count; `shape` is a 1D list of positive integers (target `dims[]`) |
+| `determinant(m)` | NUMBER | Rank-2 **square** matrix; singular → `0` |
+| `inverse(m)` | LIST | Rank-2 square; **`type.mdim.singular`** if not invertible (order ≤ 64) |
 
 ### Tags (AM-TAGURI v3.0 on `math.mdim`)
 
@@ -74,7 +76,7 @@ D.matmul(A, B ; "f64 matrix")
 |--------|--------------|--------------|
 | `add`, `subtract`, `multiply`, `divide`, `reshape` | yes (rank 1) | yes (rank 2) |
 | `dot` | yes | no |
-| `transpose`, `matmul` | no | yes |
+| `transpose`, `matmul`, `determinant`, `inverse` | no | yes |
 | `sum`, `min`, `max`, `avg` | no | no |
 
 Type tags (`u32`, `f64`, …) are allowed on **all** `math.mdim` functions above.
@@ -109,6 +111,7 @@ Output: `36`
 | `type.mdim.rank` | Wrong rank (e.g. `matmul` on 1D) |
 | `type.mdim.tag_shape` | Role tag (`vector` / `matrix`) incompatible with operand shape |
 | `type.mdim.incompatible` | Operand element types cannot be promoted together (or explicit `;` tag cannot coerce result) |
+| `type.mdim.singular` | `inverse(m)` on a singular square matrix |
 
 ### Operație aritmetică (aliniat cu `math.calc.*`)
 
