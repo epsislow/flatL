@@ -6,9 +6,95 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 typedef int (*MdimBinOpFn)(double a, double b, double *out);
+
+typedef struct MdimBcastLayout MdimBcastLayout;
+
+static int mdim_debug_enabled(void) {
+    static int inited;
+    static int on;
+
+    if (!inited) {
+        const char *env = getenv("FLAT_MDIM_DEBUG");
+        on = (env != NULL && env[0] != '\0' && strcmp(env, "0") != 0);
+        inited = 1;
+    }
+    return on;
+}
+
+#define MDIM_DBG(...)                                                                              \
+    do {                                                                                           \
+        if (mdim_debug_enabled()) {                                                                \
+            fprintf(stderr, "[mdim] " __VA_ARGS__);                                                \
+            fflush(stderr);                                                                        \
+        }                                                                                          \
+    } while (0)
+
+static void mdim_dump_shape(const char *label, const FlatListShapeInfo *info) {
+    int i;
+
+    if (!mdim_debug_enabled() || !info) {
+        return;
+    }
+    MDIM_DBG("shape %s valid=%u rect=%u rank=%u dims_n=%u", label, info->valid, info->rect,
+             info->rank, info->dims_n);
+    for (i = 0; i < (int)info->dims_n && i < FLAT_LIST_TYPED_MAX_RANK; i++) {
+        MDIM_DBG("  dims[%d]=%u", i, info->dims[i]);
+    }
+}
+
+static void mdim_dump_list(FlatCollectionPool *coll, uint32_t id, int depth, int max_depth) {
+    int len;
+    int i;
+    FlatValue el;
+
+    if (!mdim_debug_enabled() || !coll) {
+        return;
+    }
+    if (depth > max_depth) {
+        fprintf(stderr, "[mdim] %*slist#%u ...\n", depth * 2, "", id);
+        fflush(stderr);
+        return;
+    }
+    if (flat_list_len(coll, id, &len) != 0) {
+        fprintf(stderr, "[mdim] %*slist#%u (invalid)\n", depth * 2, "", id);
+        fflush(stderr);
+        return;
+    }
+    fprintf(stderr, "[mdim] %*slist#%u len=%d", depth * 2, "", id, len);
+    for (i = 0; i < len && i < 8; i++) {
+        if (flat_list_get(coll, id, i, &el) != 0) {
+            fprintf(stderr, " ?");
+            continue;
+        }
+        if (el.tag == VAL_NUMBER) {
+            fprintf(stderr, " %.15g", flat_number_as_f64(&el));
+        } else if (el.tag == VAL_LIST) {
+            fprintf(stderr, "\n");
+            mdim_dump_list(coll, el.u.coll_id, depth + 1, max_depth);
+        } else {
+            fprintf(stderr, " tag=%d", (int)el.tag);
+        }
+    }
+    fprintf(stderr, "\n");
+    fflush(stderr);
+}
+
+static void mdim_dump_ix(int depth, const int *ix, int rank) {
+    int i;
+
+    if (!mdim_debug_enabled()) {
+        return;
+    }
+    MDIM_DBG("  ix[%d..%d):", 0, depth + 1);
+    for (i = 0; i < rank && i <= depth; i++) {
+        MDIM_DBG(" %d", ix[i]);
+    }
+    MDIM_DBG("\n");
+}
 
 static int mdim_at2(FlatCollectionPool *coll, uint32_t mat_id, int row, int col, double *out);
 
@@ -41,11 +127,25 @@ static void mdim_panic(FlatNativeCtx *ctx, const char *code) {
     *ctx->io_status = FLAT_IO_ERR;
 }
 
-static int mdim_dims_equal(const FlatListShapeInfo *a, const FlatListShapeInfo *b) {
-    if (!a || !b || a->rank != b->rank || a->dims_n != b->dims_n) {
-        return 0;
+struct MdimBcastLayout {
+    int rank;
+    int a_rank;
+    int b_rank;
+    uint16_t out_dims[FLAT_LIST_TYPED_MAX_RANK];
+    uint16_t a_dims[FLAT_LIST_TYPED_MAX_RANK];
+    uint16_t b_dims[FLAT_LIST_TYPED_MAX_RANK];
+};
+
+static void mdim_dump_layout(const MdimBcastLayout *lo) {
+    int i;
+
+    if (!mdim_debug_enabled() || !lo) {
+        return;
     }
-    return memcmp(a->dims, b->dims, (size_t)a->dims_n * sizeof a->dims[0]) == 0;
+    MDIM_DBG("bcast rank=%d a_rank=%d b_rank=%d", lo->rank, lo->a_rank, lo->b_rank);
+    for (i = 0; i < lo->rank; i++) {
+        MDIM_DBG("  axis %d: out=%u a=%u b=%u", i, lo->out_dims[i], lo->a_dims[i], lo->b_dims[i]);
+    }
 }
 
 static int walk_leaves_numeric(FlatCollectionPool *coll, uint32_t list_id) {
@@ -121,6 +221,80 @@ static int mdim_parse_list(FlatNativeCtx *ctx, const char *expr, FlatValue *out)
     return 0;
 }
 
+static int mdim_gather_subtree_ids(FlatCollectionPool *coll, uint32_t list_id, uint32_t *buf,
+                                   int *n, int cap) {
+    int len;
+    int i;
+    FlatValue el;
+
+    if (!coll || !buf || !n || *n >= cap) {
+        return -1;
+    }
+    for (i = 0; i < *n; i++) {
+        if (buf[i] == list_id) {
+            return 0;
+        }
+    }
+    buf[(*n)++] = list_id;
+    if (flat_list_len(coll, list_id, &len) != 0) {
+        return 0;
+    }
+    for (i = 0; i < len; i++) {
+        if (flat_list_get(coll, list_id, i, &el) != 0) {
+            continue;
+        }
+        if (el.tag == VAL_LIST &&
+            mdim_gather_subtree_ids(coll, el.u.coll_id, buf, n, cap) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int mdim_gather_from_built(FlatNativeCtx *ctx, const FlatValue *built, int len,
+                                  uint32_t *buf, int *n, int cap) {
+    int i;
+
+    if (!ctx || !buf || !n) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        if (built[i].tag != VAL_LIST) {
+            continue;
+        }
+        if (mdim_gather_subtree_ids(ctx->coll, built[i].u.coll_id, buf, n, cap) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int mdim_rehome_list(FlatNativeCtx *ctx, const FlatValue *items, int len, uint32_t *out_id) {
+    int i;
+    int blen;
+
+    if (!ctx || !out_id) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        if (items[i].tag == VAL_LIST && items[i].u.coll_id == *out_id) {
+            uint32_t tmp;
+            if (flat_list_len(ctx->coll, *out_id, &blen) != 0 || blen <= 0) {
+                return -1;
+            }
+            if (flat_list_slice_copy(ctx->coll, ctx->pool, *out_id, 0, blen, &tmp) != 0) {
+                return -1;
+            }
+            if (tmp == *out_id) {
+                return -1;
+            }
+            *out_id = tmp;
+            return 0;
+        }
+    }
+    return 0;
+}
+
 static int mdim_dup_list(FlatNativeCtx *ctx, uint32_t src_id, uint32_t *out_id) {
     int len;
     int i;
@@ -152,20 +326,46 @@ static int mdim_dup_list(FlatNativeCtx *ctx, uint32_t src_id, uint32_t *out_id) 
     return flat_list_build(ctx->coll, ctx->pool, items, len, out_id);
 }
 
-static int mdim_materialize_list_children(FlatNativeCtx *ctx, FlatValue *items, int len) {
+static int mdim_dup_list_disjoint(FlatNativeCtx *ctx, uint32_t src_id, uint32_t *avoid, int *avoid_n,
+                                  int avoid_cap, uint32_t *out_id) {
+    int len;
     int i;
+    FlatValue el;
+    FlatValue items[FLAT_LIST_MAX_ELEMS];
 
+    if (!ctx || !out_id || !avoid || !avoid_n || flat_list_len(ctx->coll, src_id, &len) != 0) {
+        return -1;
+    }
+    if (len > FLAT_LIST_MAX_ELEMS) {
+        return -1;
+    }
+    if (mdim_gather_subtree_ids(ctx->coll, src_id, avoid, avoid_n, avoid_cap) != 0) {
+        return -1;
+    }
     for (i = 0; i < len; i++) {
-        uint32_t dup;
-        if (items[i].tag != VAL_LIST) {
-            continue;
-        }
-        if (mdim_dup_list(ctx, items[i].u.coll_id, &dup) != 0) {
+        if (flat_list_get(ctx->coll, src_id, i, &el) != 0) {
             return -1;
         }
-        flat_value_set_list(&items[i], dup);
+        if (el.tag == VAL_LIST) {
+            uint32_t sub;
+
+            if (mdim_dup_list_disjoint(ctx, el.u.coll_id, avoid, avoid_n, avoid_cap, &sub) != 0) {
+                return -1;
+            }
+            flat_value_set_list(&items[i], sub);
+            if (mdim_gather_subtree_ids(ctx->coll, sub, avoid, avoid_n, avoid_cap) != 0) {
+                return -1;
+            }
+        } else if (el.tag == VAL_NUMBER) {
+            items[i] = el;
+        } else {
+            return -1;
+        }
     }
-    return 0;
+    if (flat_list_build_disjoint(ctx->coll, ctx->pool, items, len, avoid, *avoid_n, out_id) != 0) {
+        return -1;
+    }
+    return mdim_rehome_list(ctx, items, len, out_id);
 }
 
 static int mdim_at1(FlatCollectionPool *coll, uint32_t vec_id, int i, double *out) {
@@ -178,17 +378,125 @@ static int mdim_at1(FlatCollectionPool *coll, uint32_t vec_id, int i, double *ou
     return 0;
 }
 
-static int mdim_map_binary_shaped(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_id,
-                                  const FlatListShapeInfo *info, MdimBinOpFn op,
-                                  uint32_t *out_id) {
-    int i;
-    FlatValue items[FLAT_LIST_MAX_ELEMS];
+static int mdim_bcast_pick(uint16_t dim, int out_ix) {
+    if (dim == 1) {
+        return 0;
+    }
+    return out_ix;
+}
 
-    if (!info || info->rank == 0 || info->dims_n == 0) {
+static int mdim_bcast_layout(FlatNativeCtx *ctx, const FlatListShapeInfo *a,
+                             const FlatListShapeInfo *b, MdimBcastLayout *lo) {
+    int ra;
+    int rb;
+    int r;
+    int pa;
+    int pb;
+    int i;
+
+    if (!a || !b || !lo) {
         return -1;
     }
-    if (info->rank == 1) {
-        int len = (int)info->dims[0];
+    ra = a->rank;
+    rb = b->rank;
+    if (ra <= 0 || rb <= 0) {
+        return -1;
+    }
+    r = ra > rb ? ra : rb;
+    if (r > FLAT_LIST_TYPED_MAX_RANK) {
+        return -1;
+    }
+    pa = r - ra;
+    pb = r - rb;
+    lo->rank = r;
+    lo->a_rank = ra;
+    lo->b_rank = rb;
+    for (i = 0; i < r; i++) {
+        uint16_t da = i < pa ? (uint16_t)1 : a->dims[i - pa];
+        uint16_t db = i < pb ? (uint16_t)1 : b->dims[i - pb];
+
+        if (da == db || da == 1 || db == 1) {
+            lo->a_dims[i] = da;
+            lo->b_dims[i] = db;
+            lo->out_dims[i] = da > db ? da : db;
+        } else {
+            mdim_panic(ctx, "type.mdim.broadcast");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int mdim_sublist_bcast(FlatCollectionPool *coll, uint32_t list_id, const MdimBcastLayout *lo,
+                              int depth, int out_ix, int is_b, uint32_t *sub_out) {
+    int op_rank = is_b ? lo->b_rank : lo->a_rank;
+    int ax = depth - (lo->rank - op_rank);
+    const uint16_t *dims = is_b ? lo->b_dims : lo->a_dims;
+    int pi;
+    FlatValue el;
+
+    if (!sub_out || !lo) {
+        return -1;
+    }
+    if (ax < 0) {
+        *sub_out = list_id;
+        return 0;
+    }
+    pi = mdim_bcast_pick(dims[depth], out_ix);
+    if (flat_list_get(coll, list_id, pi, &el) != 0 || el.tag != VAL_LIST) {
+        MDIM_DBG("sublist fail depth=%d out_ix=%d id=%u dim=%u pi=%d tag=%d\n", depth, out_ix,
+                 list_id, dims[depth], pi, (int)el.tag);
+        return -1;
+    }
+    *sub_out = el.u.coll_id;
+    return 0;
+}
+
+static int mdim_read_num_at(FlatNativeCtx *ctx, uint32_t list_id, const MdimBcastLayout *lo,
+                            const int *ix, int depth, int is_b, double *out) {
+    const uint16_t *dims = is_b ? lo->b_dims : lo->a_dims;
+    int r = lo->rank;
+    int d;
+    uint32_t cur = list_id;
+
+    for (d = depth; d < r - 1; d++) {
+        int pi = mdim_bcast_pick(dims[d], ix[d]);
+        FlatValue el;
+
+        if (flat_list_get(ctx->coll, cur, pi, &el) != 0 || el.tag != VAL_LIST) {
+            MDIM_DBG("read navigate fail d=%d pi=%d cur=%u tag=%d\n", d, pi, cur, (int)el.tag);
+            return -1;
+        }
+        cur = el.u.coll_id;
+    }
+    {
+        int pi = mdim_bcast_pick(dims[r - 1], ix[r - 1]);
+        if (mdim_at1(ctx->coll, cur, pi, out) != 0) {
+            FlatValue el;
+            int tag = -1;
+            if (flat_list_get(ctx->coll, cur, pi, &el) == 0) {
+                tag = (int)el.tag;
+            }
+            MDIM_DBG("read leaf fail depth=%d cur=%u pi=%d leaf_tag=%d", depth, cur, pi, tag);
+            mdim_dump_ix(depth, ix, r);
+            fprintf(stderr, "\n");
+            fflush(stderr);
+            return -1;
+        }
+        return 0;
+    }
+}
+
+static int mdim_build_bcast_level(FlatNativeCtx *ctx, const MdimBcastLayout *lo, int depth,
+                                  uint32_t a_id, uint32_t b_id, int *ix, MdimBinOpFn op,
+                                  uint32_t *out_id) {
+    int r = lo->rank;
+
+    if (depth == r - 1) {
+        int len = lo->out_dims[depth];
+        FlatValue items[FLAT_LIST_MAX_ELEMS];
+        int i;
+
         if (len > FLAT_LIST_MAX_ELEMS) {
             return -1;
         }
@@ -197,7 +505,10 @@ static int mdim_map_binary_shaped(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_
             double db;
             double dr;
             int orc;
-            if (mdim_at1(ctx->coll, a_id, i, &da) != 0 || mdim_at1(ctx->coll, b_id, i, &db) != 0) {
+
+            ix[depth] = i;
+            if (mdim_read_num_at(ctx, a_id, lo, ix, depth, 0, &da) != 0 ||
+                mdim_read_num_at(ctx, b_id, lo, ix, depth, 1, &db) != 0) {
                 mdim_panic(ctx, "type.mdim.not_numeric");
                 return -1;
             }
@@ -211,109 +522,171 @@ static int mdim_map_binary_shaped(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_
             }
             flat_number_init_legacy_double(&items[i], dr);
         }
+        if (lo->rank > 2) {
+            uint32_t avoid[FLAT_LIST_MAX_ELEMS + 8];
+            int avoid_n = 0;
+            uint32_t leaf_id;
+
+            if (mdim_gather_subtree_ids(ctx->coll, a_id, avoid, &avoid_n,
+                                        (int)(sizeof avoid / sizeof avoid[0])) != 0 ||
+                mdim_gather_subtree_ids(ctx->coll, b_id, avoid, &avoid_n,
+                                        (int)(sizeof avoid / sizeof avoid[0])) != 0 ||
+                flat_list_build_disjoint(ctx->coll, ctx->pool, items, len, avoid, avoid_n,
+                                         &leaf_id) != 0) {
+                return -1;
+            }
+            return mdim_dup_list_disjoint(ctx, leaf_id, avoid, &avoid_n,
+                                          (int)(sizeof avoid / sizeof avoid[0]), out_id);
+        }
         return flat_list_build(ctx->coll, ctx->pool, items, len, out_id);
     }
-    if (info->rank == 2) {
-        int rows;
-        int cols;
-        int r;
-        FlatValue probe;
-        FlatValue built[FLAT_LIST_MAX_ELEMS];
-        if (flat_list_len(ctx->coll, a_id, &rows) != 0 || rows <= 0 || rows > FLAT_LIST_MAX_ELEMS) {
-            return -1;
-        }
-        if (flat_list_get(ctx->coll, a_id, 0, &probe) != 0 || probe.tag != VAL_LIST ||
-            flat_list_len(ctx->coll, probe.u.coll_id, &cols) != 0 || cols <= 0 ||
-            cols > FLAT_LIST_MAX_ELEMS) {
-            return -1;
-        }
-        for (r = 0; r < rows; r++) {
-            FlatValue cells[FLAT_LIST_MAX_ELEMS];
-            int c;
-            uint32_t row_id;
-            uint32_t row_dup;
-            memset(cells, 0, sizeof cells);
-            for (c = 0; c < cols; c++) {
-                double da;
-                double db;
-                double dr;
-                int orc;
-                if (mdim_at2(ctx->coll, a_id, r, c, &da) != 0 ||
-                    mdim_at2(ctx->coll, b_id, r, c, &db) != 0) {
-                    mdim_panic(ctx, "type.mdim.not_numeric");
-                    return -1;
-                }
-                orc = op(da, db, &dr);
-                if (orc == -2) {
-                    mdim_panic(ctx, "math.mdim.divzero");
-                    return -1;
-                }
-                if (orc != 0) {
-                    return -1;
-                }
-                flat_number_init_legacy_double(&cells[c], dr);
-            }
-            if (flat_list_build(ctx->coll, ctx->pool, cells, cols, &row_id) != 0) {
-                return -1;
-            }
-            if (flat_list_slice_copy(ctx->coll, ctx->pool, row_id, 0, cols, &row_dup) != 0) {
-                return -1;
-            }
-            flat_value_set_list(&built[r], row_dup);
-            flat_value_retain(ctx->coll, ctx->pool, &built[r]);
-        }
-        if (flat_list_build(ctx->coll, ctx->pool, built, rows, out_id) != 0) {
-            for (r = 0; r < rows; r++) {
-                flat_value_release(ctx->coll, ctx->pool, &built[r]);
-            }
-            return -1;
-        }
-        for (r = 0; r < rows; r++) {
-            flat_value_release(ctx->coll, ctx->pool, &built[r]);
-        }
-        return 0;
-    }
     {
-        int outer = (int)info->dims[0];
-        FlatListShapeInfo sub = *info;
-        if (outer > FLAT_LIST_MAX_ELEMS) {
+        int len = lo->out_dims[depth];
+        FlatValue built[FLAT_LIST_MAX_ELEMS];
+        int i;
+
+        if (len > FLAT_LIST_MAX_ELEMS) {
             return -1;
         }
-        memset(items, 0, sizeof items);
-        sub.rank--;
-        sub.dims_n--;
-        memmove(sub.dims, sub.dims + 1, (size_t)sub.dims_n * sizeof sub.dims[0]);
-        for (i = 0; i < outer; i++) {
-            FlatValue a_el;
-            FlatValue b_el;
-            uint32_t child_id;
+        memset(built, 0, sizeof built);
+        {
+            uint32_t level_avoid[FLAT_LIST_MAX_ELEMS * 4];
+            int level_avoid_n = 0;
+
+            if (lo->rank > 2) {
+                if (mdim_gather_subtree_ids(ctx->coll, a_id, level_avoid, &level_avoid_n,
+                                            (int)(sizeof level_avoid / sizeof level_avoid[0])) != 0 ||
+                    mdim_gather_subtree_ids(ctx->coll, b_id, level_avoid, &level_avoid_n,
+                                            (int)(sizeof level_avoid / sizeof level_avoid[0])) !=
+                        0) {
+                    return -1;
+                }
+            }
+            for (i = 0; i < len; i++) {
+            uint32_t child;
             uint32_t child_dup;
-            if (flat_list_get(ctx->coll, a_id, i, &a_el) != 0 ||
-                flat_list_get(ctx->coll, b_id, i, &b_el) != 0 || a_el.tag != VAL_LIST ||
-                b_el.tag != VAL_LIST) {
+            uint32_t sub_a;
+            uint32_t sub_b;
+
+            int d;
+            ix[depth] = i;
+            for (d = depth + 1; d < lo->rank; d++) {
+                ix[d] = 0;
+            }
+            if (mdim_sublist_bcast(ctx->coll, a_id, lo, depth, i, 0, &sub_a) != 0 ||
+                mdim_sublist_bcast(ctx->coll, b_id, lo, depth, i, 1, &sub_b) != 0) {
+                MDIM_DBG("sublist bcast depth=%d i=%d a_id=%u b_id=%u\n", depth, i, a_id, b_id);
                 return -1;
             }
-            if (mdim_map_binary_shaped(ctx, a_el.u.coll_id, b_el.u.coll_id, &sub, op, &child_id) !=
-                0) {
+            MDIM_DBG("mid depth=%d i=%d sub_a=%u sub_b=%u", depth, i, sub_a, sub_b);
+            mdim_dump_ix(depth, ix, lo->rank);
+            if (mdim_build_bcast_level(ctx, lo, depth + 1, sub_a, sub_b, ix, op, &child) != 0) {
+                MDIM_DBG("child build fail depth=%d i=%d\n", depth, i);
                 return -1;
             }
-            if (mdim_dup_list(ctx, child_id, &child_dup) != 0) {
+            MDIM_DBG(" child=%u", child);
+            mdim_dump_list(ctx->coll, child, 0, 3);
+            if (depth + 1 == lo->rank - 1) {
+                if (lo->rank > 2) {
+                    if (mdim_dup_list_disjoint(ctx, child, level_avoid, &level_avoid_n,
+                                               (int)(sizeof level_avoid / sizeof level_avoid[0]),
+                                               &child_dup) != 0) {
+                        return -1;
+                    }
+                    MDIM_DBG(" row-dup child=%u dup=%u\n", child, child_dup);
+                } else {
+                    int child_len;
+                    if (flat_list_len(ctx->coll, child, &child_len) != 0 || child_len <= 0 ||
+                        child_len > FLAT_LIST_MAX_ELEMS) {
+                        return -1;
+                    }
+                    if (flat_list_slice_copy(ctx->coll, ctx->pool, child, 0, child_len,
+                                            &child_dup) != 0) {
+                        return -1;
+                    }
+                    MDIM_DBG(" slice-row child=%u dup=%u len=%d\n", child, child_dup, child_len);
+                }
+            } else if (lo->rank > 2) {
+                if (mdim_gather_subtree_ids(ctx->coll, child, level_avoid, &level_avoid_n,
+                                            (int)(sizeof level_avoid / sizeof level_avoid[0])) != 0) {
+                    return -1;
+                }
+                child_dup = child;
+                MDIM_DBG(" block-use child=%u\n", child);
+            } else if (mdim_dup_list(ctx, child, &child_dup) != 0) {
+                MDIM_DBG(" dup fail child=%u\n", child);
                 return -1;
+            } else {
+                MDIM_DBG(" dup-tree child=%u -> dup=%u\n", child, child_dup);
             }
-            flat_value_set_list(&items[i], child_dup);
-            flat_value_retain(ctx->coll, ctx->pool, &items[i]);
+            flat_value_set_list(&built[i], child_dup);
+            flat_value_retain(ctx->coll, ctx->pool, &built[i]);
         }
-        if (flat_list_build(ctx->coll, ctx->pool, items, outer, out_id) != 0) {
-            for (i = 0; i < outer; i++) {
-                flat_value_release(ctx->coll, ctx->pool, &items[i]);
+            if (lo->rank > 2) {
+                if (mdim_gather_from_built(ctx, built, len, level_avoid, &level_avoid_n,
+                                           (int)(sizeof level_avoid / sizeof level_avoid[0])) !=
+                    0) {
+                    for (i = 0; i < len; i++) {
+                        flat_value_release(ctx->coll, ctx->pool, &built[i]);
+                    }
+                    return -1;
+                }
+                if (flat_list_build_disjoint(ctx->coll, ctx->pool, built, len, level_avoid,
+                                             level_avoid_n, out_id) != 0) {
+                    MDIM_DBG("flat_list_build_disjoint fail depth=%d len=%d\n", depth, len);
+                    for (i = 0; i < len; i++) {
+                        flat_value_release(ctx->coll, ctx->pool, &built[i]);
+                    }
+                    return -1;
+                }
+                if (mdim_rehome_list(ctx, built, len, out_id) != 0) {
+                    for (i = 0; i < len; i++) {
+                        flat_value_release(ctx->coll, ctx->pool, &built[i]);
+                    }
+                    return -1;
+                }
+            }
+        }
+        if (lo->rank <= 2 && flat_list_build(ctx->coll, ctx->pool, built, len, out_id) != 0) {
+            MDIM_DBG("flat_list_build fail depth=%d len=%d\n", depth, len);
+            for (i = 0; i < len; i++) {
+                flat_value_release(ctx->coll, ctx->pool, &built[i]);
             }
             return -1;
         }
-        for (i = 0; i < outer; i++) {
-            flat_value_release(ctx->coll, ctx->pool, &items[i]);
+        MDIM_DBG("built depth=%d out=%u\n", depth, *out_id);
+        mdim_dump_list(ctx->coll, *out_id, 0, 3);
+        for (i = 0; i < len; i++) {
+            flat_value_release(ctx->coll, ctx->pool, &built[i]);
         }
         return 0;
     }
+}
+
+static int mdim_map_binary_bcast(FlatNativeCtx *ctx, uint32_t a_id, uint32_t b_id,
+                                 const FlatListShapeInfo *ia, const FlatListShapeInfo *ib,
+                                 MdimBinOpFn op, uint32_t *out_id, FlatListShapeInfo *out_info) {
+    MdimBcastLayout lo;
+    int ix[FLAT_LIST_TYPED_MAX_RANK];
+
+    memset(ix, 0, sizeof ix);
+    mdim_dump_shape("operand a", ia);
+    mdim_dump_shape("operand b", ib);
+    if (mdim_bcast_layout(ctx, ia, ib, &lo) != 0) {
+        return -1;
+    }
+    mdim_dump_layout(&lo);
+    MDIM_DBG("map_binary a_id=%u b_id=%u\n", a_id, b_id);
+    mdim_dump_list(ctx->coll, a_id, 0, 3);
+    if (mdim_build_bcast_level(ctx, &lo, 0, a_id, b_id, ix, op, out_id) != 0) {
+        return -1;
+    }
+    memset(out_info, 0, sizeof *out_info);
+    out_info->rank = (unsigned char)lo.rank;
+    out_info->dims_n = (unsigned char)lo.rank;
+    out_info->rect = 1;
+    memcpy(out_info->dims, lo.out_dims, (size_t)lo.rank * sizeof out_info->dims[0]);
+    return 0;
 }
 
 static int mdim_op_add(double a, double b, double *out) {
@@ -349,6 +722,7 @@ static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
     FlatValue b_v;
     FlatListShapeInfo ia;
     FlatListShapeInfo ib;
+    FlatListShapeInfo out_shape;
     uint32_t out_id;
     int rc = -1;
 
@@ -375,17 +749,14 @@ static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
     if (mdim_operand_info(ctx, &a_v, 1, &ia) != 0 || mdim_operand_info(ctx, &b_v, 1, &ib) != 0) {
         goto out;
     }
-    if (!mdim_dims_equal(&ia, &ib)) {
-        mdim_panic(ctx, "type.mdim.dim_mismatch");
-        goto out;
-    }
-    if (mdim_map_binary_shaped(ctx, a_v.u.coll_id, b_v.u.coll_id, &ia, op, &out_id) != 0) {
+    if (mdim_map_binary_bcast(ctx, a_v.u.coll_id, b_v.u.coll_id, &ia, &ib, op, &out_id,
+                              &out_shape) != 0) {
         if (ctx->panic_detail[0] == '\0') {
             mdim_panic(ctx, "type.mdim.dim_mismatch");
         }
         goto out;
     }
-    mdim_stamp_shape(ctx->coll, out_id, &ia);
+    mdim_stamp_shape(ctx->coll, out_id, &out_shape);
     if (flat_value_set_list(ctx->out, out_id) != 0) {
         goto out;
     }

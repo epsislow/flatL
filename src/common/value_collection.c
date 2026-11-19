@@ -262,6 +262,59 @@ static int list_slot_alloc(FlatCollectionPool *pool, FlatStringPool *str_pool, u
     return 0;
 }
 
+static int list_id_in_set(uint32_t id, const uint32_t *ids, int ids_n) {
+    int i;
+
+    if (!ids || ids_n <= 0) {
+        return 0;
+    }
+    for (i = 0; i < ids_n; i++) {
+        if (ids[i] == id) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int list_slot_alloc_avoid(FlatCollectionPool *pool, FlatStringPool *str_pool,
+                                 const uint32_t *avoid, int avoid_n, uint32_t *out_id) {
+    int i;
+    uint32_t id;
+
+    if (!pool || !out_id) {
+        return -1;
+    }
+    list_reap_idle_slots(pool, str_pool);
+    if (coll_live_list_slots(pool) >= FLAT_COLL_MAX_LISTS) {
+        return -1;
+    }
+    for (i = pool->list_free_n - 1; i >= 0; i--) {
+        id = (uint32_t)pool->list_free[i];
+        if (pool->list_active[id]) {
+            continue;
+        }
+        if (list_id_in_set(id, avoid, avoid_n)) {
+            continue;
+        }
+        pool->list_free[i] = pool->list_free[--pool->list_free_n];
+        goto activate;
+    }
+    for (id = 0; id < (uint32_t)FLAT_COLL_MAX_LISTS; id++) {
+        if (!pool->list_active[id] && !list_id_in_set(id, avoid, avoid_n)) {
+            goto activate;
+        }
+    }
+    return -1;
+
+activate:
+    memset(&pool->lists[id], 0, sizeof pool->lists[id]);
+    pool->list_bind[id] = 0;
+    pool->list_active[id] = 1;
+    flat_coll_shape_slot_clear(pool, id);
+    *out_id = id;
+    return 0;
+}
+
 static int obj_slot_alloc(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t *out_id) {
     uint32_t id;
 
@@ -654,6 +707,43 @@ int flat_list_build(FlatCollectionPool *pool, FlatStringPool *str_pool, const Fl
         cow_pin_ephemeral(&items[i], pool, str_pool);
     }
     if (flat_list_empty(pool, str_pool, out_id) != 0) {
+        for (i = 0; i < count; i++) {
+            cow_unpin_ephemeral(&items[i], pool, str_pool);
+        }
+        return -1;
+    }
+    lb = &pool->lists[*out_id];
+    if (count == 0) {
+        return 0;
+    }
+    if (list_grow(lb, count) != 0) {
+        for (i = 0; i < count; i++) {
+            cow_unpin_ephemeral(&items[i], pool, str_pool);
+        }
+        return -1;
+    }
+    for (i = 0; i < count; i++) {
+        lb->items[i] = items[i];
+        elem_bind(pool, str_pool, &lb->items[i]);
+        cow_unpin_ephemeral(&items[i], pool, str_pool);
+    }
+    lb->len = count;
+    return 0;
+}
+
+int flat_list_build_disjoint(FlatCollectionPool *pool, FlatStringPool *str_pool,
+                             const FlatValue *items, int count, const uint32_t *avoid, int avoid_n,
+                             uint32_t *out_id) {
+    ListBody *lb;
+    int i;
+
+    if (!pool || !out_id || count < 0 || count > FLAT_LIST_MAX_ELEMS) {
+        return -1;
+    }
+    for (i = 0; i < count; i++) {
+        cow_pin_ephemeral(&items[i], pool, str_pool);
+    }
+    if (list_slot_alloc_avoid(pool, str_pool, avoid, avoid_n, out_id) != 0) {
         for (i = 0; i < count; i++) {
             cow_unpin_ephemeral(&items[i], pool, str_pool);
         }

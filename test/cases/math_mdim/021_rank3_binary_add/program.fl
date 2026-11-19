@@ -1,0 +1,10 @@
+use native math.mdim with D
+
+#main
+  T:f64[][][] = [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]:f64[][][]
+  D.add(T, T) -> C
+  D.sum(C) -> s
+  io.out('start')
+  io.out(s)
+  io.out('end')
+  OK

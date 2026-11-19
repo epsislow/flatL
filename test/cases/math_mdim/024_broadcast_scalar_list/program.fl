@@ -1,0 +1,9 @@
+use native math.mdim with D
+
+#main
+  D.add([1, 2, 3]:f64[3], [5]:f64[1]) -> R
+  D.sum(R) -> s
+  io.out('start')
+  io.out(s)
+  io.out('end')
+  OK

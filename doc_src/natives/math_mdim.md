@@ -16,7 +16,9 @@ Shape comes from list **stamp** or **walk** (same infrastructure as `list.is_rec
 | Assignment | `s = math.mdim.sum(M)` |
 | Canonical name | `math.mdim.matmul(A, B) -> C` |
 
-**Operands:** LIST trees that are **rect** and whose leaves are **NUMBER** (AM-NUM). **M1** requires **identical shape** for element-wise ops (`add`, `subtract`, `multiply`, `divide`). Validated for **rank 1–2**; rank ≥3 reductions (`sum`, `min`, `max`, `avg`) work; **rank ≥3 element-wise binary** (`add`, …) tracked for **M2** (sub-list retain on build).
+**Operands:** LIST trees that are **rect** and whose leaves are **NUMBER** (AM-NUM). Element-wise ops (`add`, `subtract`, `multiply`, `divide`) use **NumPy-style trailing broadcast**; incompatible shapes → **`type.mdim.broadcast`**. Same-shape and broadcast cases for **rank 1–3** are covered by tests `math_mdim` 001–010 and **021–024**. Rank ≥3 builds use **`flat_list_build_disjoint`** so list pool ids are not reused over live subtrees (see `FLAT_MDIM_DEBUG` below).
+
+**Debug:** set `FLAT_MDIM_DEBUG=1` when running `flvm` to trace broadcast layout, sublist ids, per-depth builds, and list trees on stderr (`[mdim] …`).
 
 ## Functions
 

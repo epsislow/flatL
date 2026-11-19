@@ -138,6 +138,9 @@ int flat_list_index_of(const FlatCollectionPool *pool, const FlatStringPool *str
                        uint32_t list_id, const FlatValue *needle, int *out_index);
 int flat_list_build(FlatCollectionPool *pool, FlatStringPool *str_pool, const FlatValue *items,
                     int count, uint32_t *out_id);
+int flat_list_build_disjoint(FlatCollectionPool *pool, FlatStringPool *str_pool,
+                             const FlatValue *items, int count, const uint32_t *avoid, int avoid_n,
+                             uint32_t *out_id);
 int flat_obj_empty(FlatCollectionPool *pool, FlatStringPool *str_pool, uint32_t *out_id);
 int flat_obj_len(const FlatCollectionPool *pool, uint32_t obj_id, int *out_len);
 int flat_obj_entry_at(const FlatCollectionPool *pool, uint32_t obj_id, int index,

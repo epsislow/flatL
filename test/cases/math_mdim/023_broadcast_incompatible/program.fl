@@ -1,0 +1,5 @@
+use native math.mdim with D
+
+#main
+  D.add([1, 2, 3]:f64[3], [9, 8]:f64[2]) -> _
+  OK
