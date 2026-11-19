@@ -125,6 +125,37 @@ static int tag_policy_numeric_only(uint16_t native_id, const char tokens[][FLAT_
     return 0;
 }
 
+static int tag_policy_mdim(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
+    int i;
+    int role_n = 0;
+    int type_n = 0;
+
+    if (n > 2) {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        FlatSlotType ty;
+        char spec[FLAT_TAG_TOKEN_LEN + 4];
+
+        if (strcmp(tokens[i], "vector") == 0 || strcmp(tokens[i], "matrix") == 0) {
+            role_n++;
+            continue;
+        }
+        snprintf(spec, sizeof spec, "%s", tokens[i]);
+        if (flat_slot_type_parse_spec(spec, &ty, NULL, NULL, 0) == 0 &&
+            (flat_slot_type_is_numeric(&ty) || ty.kind == FLAT_SLOT_TYPE_T ||
+             ty.kind == FLAT_SLOT_TYPE_TN)) {
+            type_n++;
+            continue;
+        }
+        return -1;
+    }
+    if (role_n > 1 || type_n > 1) {
+        return -1;
+    }
+    return 0;
+}
+
 static int tag_policy_from_num(uint16_t native_id, const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
     (void)native_id;
     if (n == 0) {
@@ -151,6 +182,9 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
     case FLAT_NATIVE_STR_FROM_NUM:
         return tag_policy_from_num(native_id, tokens, n);
     default:
+        if (flat_native_id_is_mdim(native_id)) {
+            return tag_policy_mdim(tokens, n);
+        }
         if (n > 0) {
             return -1;
         }
@@ -262,6 +296,10 @@ int flat_native_tag_resolve_type(FlatNativeCtx *ctx, uint16_t native_id, FlatSlo
         snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
         return -1;
     }
+    if (flat_native_id_is_mdim(native_id)) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
     if (validate_tokens_for_native(native_id, tokens, ntok) != 0) {
         snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
         return -1;
@@ -315,6 +353,78 @@ int flat_native_tag_resolve_trim(FlatNativeCtx *ctx, uint16_t native_id, int *tr
     if (strcmp(tokens[0], "trim") == 0) {
         if (trim_out) {
             *trim_out = 1;
+        }
+    }
+    return 0;
+}
+
+int flat_native_tag_resolve_mdim(FlatNativeCtx *ctx, uint16_t native_id, FlatSlotType *out_ty,
+                                 int *has_ty, FlatMdimTagRole *role_out, int *has_role) {
+    char spec[256];
+    char tokens[FLAT_TAG_MAX_TOKENS][FLAT_TAG_TOKEN_LEN];
+    int ntok;
+    int i;
+    const FlatSchemaCatalog *cat;
+
+    if (has_ty) {
+        *has_ty = 0;
+    }
+    if (has_role) {
+        *has_role = 0;
+    }
+    if (role_out) {
+        *role_out = FLAT_MDIM_TAG_ROLE_NONE;
+    }
+    if (!ctx || !out_ty) {
+        return -1;
+    }
+    if (!ctx->tag_expr || ctx->tag_expr[0] == '\0') {
+        return 0;
+    }
+    if (!flat_native_id_is_mdim(native_id)) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    if (eval_tag_string(ctx, ctx->tag_expr, spec, sizeof spec) != 0) {
+        return -1;
+    }
+    if (tokenize_sort(tokens, &ntok, spec) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    if (ntok == 0) {
+        return 0;
+    }
+    if (validate_tokens_for_native(native_id, tokens, ntok) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+        return -1;
+    }
+    cat = ctx->bc ? &ctx->bc->schemas : NULL;
+    for (i = 0; i < ntok; i++) {
+        if (strcmp(tokens[i], "vector") == 0) {
+            if (role_out) {
+                *role_out = FLAT_MDIM_TAG_ROLE_VECTOR;
+            }
+            if (has_role) {
+                *has_role = 1;
+            }
+        } else if (strcmp(tokens[i], "matrix") == 0) {
+            if (role_out) {
+                *role_out = FLAT_MDIM_TAG_ROLE_MATRIX;
+            }
+            if (has_role) {
+                *has_role = 1;
+            }
+        } else {
+            char one[128];
+            snprintf(one, sizeof one, "%s", tokens[i]);
+            if (flat_slot_type_parse_spec(one, out_ty, cat, NULL, 0) != 0) {
+                snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.tag.not_accepted");
+                return -1;
+            }
+            if (has_ty) {
+                *has_ty = 1;
+            }
         }
     }
     return 0;

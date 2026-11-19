@@ -71,6 +71,7 @@ int flat_native_math_mdim_avg(FlatNativeCtx *ctx);
 int flat_native_math_mdim_dot(FlatNativeCtx *ctx);
 int flat_native_math_mdim_transpose(FlatNativeCtx *ctx);
 int flat_native_math_mdim_matmul(FlatNativeCtx *ctx);
+int flat_native_math_mdim_reshape(FlatNativeCtx *ctx);
 
 int flat_native_math_pow(FlatNativeCtx *ctx);
 int flat_native_math_sqrt(FlatNativeCtx *ctx);

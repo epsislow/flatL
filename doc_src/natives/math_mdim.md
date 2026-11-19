@@ -47,6 +47,26 @@ Shape comes from list **stamp** or **walk** (same infrastructure as `list.is_rec
 | `dot(u, v)` | NUMBER | 1D vectors, same length: inner product |
 | `transpose(m)` | LIST | Rank-2 swap rows/columns |
 | `matmul(A, B)` | LIST | Rank-2; inner dimensions must match |
+| `reshape(x, shape)` | LIST | Same element count; `shape` is a 1D list of positive integers (target `dims[]`) |
+
+### Tags (AM-TAGURI v3.0 on `math.mdim`)
+
+Optional trailing section after operands:
+
+```text
+D.sum(v ; "u32")
+D.dot(u, v ; "vector")
+D.matmul(A, B ; "matrix")
+D.add(A, B ; "f64")
+```
+
+| Token kind | Example | Effect |
+|------------|---------|--------|
+| Numeric type | `; "u32"`, `; "f64"` | Coerce scalar result (`sum`, `dot`, …) or numeric leaves of LIST result (`add`, …) |
+| Shape role | `; "vector"`, `; "matrix"` | Operand shape must match (rank 1 / 2); else **`type.mdim.tag_shape`** |
+| Invalid / mixed | `; "matrix"` on `sum` | **`type.mdim.tag_shape`** or **`type.tag.not_accepted`** |
+
+Without `;`, behavior is unchanged (infer wideness from operands).
 
 ### Example
 
@@ -74,6 +94,7 @@ Output: `36`
 | `type.mdim.not_numeric` | Non-numeric leaf |
 | `type.mdim.dim_mismatch` | Incompatible shapes or bad args |
 | `type.mdim.rank` | Wrong rank (e.g. `matmul` on 1D) |
+| `type.mdim.tag_shape` | Role tag (`vector` / `matrix`) incompatible with operand shape |
 
 ### Operație aritmetică (aliniat cu `math.calc.*`)
 

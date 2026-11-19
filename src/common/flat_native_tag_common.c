@@ -154,7 +154,46 @@ static int numeric_type_token_count(const char tokens[][FLAT_TAG_TOKEN_LEN], int
     return c;
 }
 
+int flat_native_id_is_mdim(uint16_t native_id) {
+    return native_id >= (uint16_t)FLAT_NATIVE_MATH_MDIM_ADD &&
+           native_id <= (uint16_t)FLAT_NATIVE_MATH_MDIM_RESHAPE;
+}
+
+static int tag_policy_mdim(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
+    int i;
+    int role_n = 0;
+    int type_n = 0;
+
+    if (n > 2) {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        FlatSlotType ty;
+        char spec[FLAT_TAG_TOKEN_LEN + 4];
+
+        if (strcmp(tokens[i], "vector") == 0 || strcmp(tokens[i], "matrix") == 0) {
+            role_n++;
+            continue;
+        }
+        snprintf(spec, sizeof spec, "%s", tokens[i]);
+        if (flat_slot_type_parse_spec(spec, &ty, NULL, NULL, 0) == 0 &&
+            (flat_slot_type_is_numeric(&ty) || ty.kind == FLAT_SLOT_TYPE_T ||
+             ty.kind == FLAT_SLOT_TYPE_TN)) {
+            type_n++;
+            continue;
+        }
+        return -1;
+    }
+    if (role_n > 1 || type_n > 1) {
+        return -1;
+    }
+    return 0;
+}
+
 int flat_native_native_accepts_tags(uint16_t native_id) {
+    if (flat_native_id_is_mdim(native_id)) {
+        return 1;
+    }
     switch ((FlatNativeId)native_id) {
     case FLAT_NATIVE_MATH_CALC:
     case FLAT_NATIVE_MATH_SUM2:
@@ -224,6 +263,9 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
     case FLAT_NATIVE_IO_INLN:
         return tag_policy_numeric_only(native_id, tokens, n);
     default:
+        if (flat_native_id_is_mdim(native_id)) {
+            return tag_policy_mdim(tokens, n);
+        }
         if (n > 0) {
             return -1;
         }

@@ -234,6 +234,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("math.mdim", "dot", "math.mdim.dot(u, v)"),
     META_SIG("math.mdim", "transpose", "math.mdim.transpose(m)"),
     META_SIG("math.mdim", "matmul", "math.mdim.matmul(A, B)"),
+    META_SIG("math.mdim", "reshape", "math.mdim.reshape(x, shape)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

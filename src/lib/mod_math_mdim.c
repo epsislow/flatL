@@ -1,13 +1,19 @@
 #include "flat_list_shape.h"
+#include "flat_native.h"
 #include "flat_native_mod.h"
+#include "flat_native_tag.h"
 #include "flat_native_util.h"
 #include "flat_number.h"
+#include "flat_slot_type.h"
 #include "flat_value.h"
 
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+static int mdim_gather_subtree_ids(FlatCollectionPool *coll, uint32_t list_id, uint32_t *buf,
+                                   int *n, int cap);
 
 typedef int (*MdimBinOpFn)(double a, double b, double *out);
 
@@ -125,6 +131,206 @@ static void mdim_panic(FlatNativeCtx *ctx, const char *code) {
     }
     snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", code);
     *ctx->io_status = FLAT_IO_ERR;
+}
+
+typedef struct {
+    FlatSlotType result_ty;
+    int has_ty;
+    FlatMdimTagRole role;
+    int has_role;
+} MdimCallTags;
+
+static int mdim_resolve_call_tags(FlatNativeCtx *ctx, uint16_t native_id, MdimCallTags *tags) {
+    if (!ctx || !tags) {
+        return -1;
+    }
+    memset(tags, 0, sizeof *tags);
+    if (flat_native_tag_reject_untagged_native(ctx, native_id) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (flat_native_tag_resolve_mdim(ctx, native_id, &tags->result_ty, &tags->has_ty, &tags->role,
+                                     &tags->has_role) != 0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    return 0;
+}
+
+static int mdim_role_ok(const FlatListShapeInfo *info, const MdimCallTags *tags) {
+    if (!info || !tags || !tags->has_role) {
+        return 0;
+    }
+    if (tags->role == FLAT_MDIM_TAG_ROLE_VECTOR && info->rank != 1) {
+        return -1;
+    }
+    if (tags->role == FLAT_MDIM_TAG_ROLE_MATRIX && info->rank != 2) {
+        return -1;
+    }
+    return 0;
+}
+
+static int mdim_stage_scalar(FlatNativeCtx *ctx, double result, const MdimCallTags *tags) {
+    FlatValue nv;
+    FlatValue staged;
+    char chk[64];
+    const FlatSchemaCatalog *cat = ctx->bc ? &ctx->bc->schemas : NULL;
+
+    if (!tags || !tags->has_ty) {
+        return flat_value_set_number(ctx->out, result);
+    }
+    flat_value_set_number(&nv, result);
+    staged = nv;
+    if (flat_slot_type_check_value(&tags->result_ty, &nv, ctx->pool, ctx->coll, cat, &staged, chk,
+                                   sizeof chk) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.calc.range");
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (staged.tag == VAL_NUMBER) {
+        return flat_value_set_number(ctx->out, flat_number_as_f64(&staged));
+    }
+    *ctx->out = staged;
+    return 0;
+}
+
+static int mdim_rebuild_coerced_level(FlatNativeCtx *ctx, uint32_t src_id, const FlatSlotType *ty,
+                                      uint32_t *out_id) {
+    int len;
+    int i;
+    FlatValue el;
+    FlatValue items[FLAT_LIST_MAX_ELEMS];
+    const FlatSchemaCatalog *cat = ctx->bc ? &ctx->bc->schemas : NULL;
+
+    if (!ctx || !out_id || flat_list_len(ctx->coll, src_id, &len) != 0 || len > FLAT_LIST_MAX_ELEMS) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        if (flat_list_get(ctx->coll, src_id, i, &el) != 0) {
+            return -1;
+        }
+        if (el.tag == VAL_LIST) {
+            uint32_t sub;
+            if (mdim_rebuild_coerced_level(ctx, el.u.coll_id, ty, &sub) != 0) {
+                return -1;
+            }
+            flat_value_set_list(&items[i], sub);
+        } else if (el.tag == VAL_NUMBER) {
+            FlatValue staged = el;
+            char chk[64];
+            if (flat_slot_type_check_value(ty, &el, ctx->pool, ctx->coll, cat, &staged, chk,
+                                           sizeof chk) != 0) {
+                snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", "type.calc.range");
+                *ctx->io_status = FLAT_IO_ERR;
+                return -1;
+            }
+            items[i] = staged;
+        } else {
+            return -1;
+        }
+    }
+    {
+        uint32_t avoid[4];
+        int avoid_n = 0;
+
+        avoid[avoid_n++] = src_id;
+        return flat_list_build_disjoint(ctx->coll, ctx->pool, items, len, avoid, avoid_n, out_id);
+    }
+}
+
+static int mdim_apply_result_list(FlatNativeCtx *ctx, uint32_t src_id, const MdimCallTags *tags,
+                                  uint32_t *out_id) {
+    if (!tags || !tags->has_ty) {
+        *out_id = src_id;
+        return 0;
+    }
+    return mdim_rebuild_coerced_level(ctx, src_id, &tags->result_ty, out_id);
+}
+
+static int mdim_flatten(FlatCollectionPool *coll, uint32_t list_id, double *buf, int cap,
+                        int *count) {
+    int len;
+    int i;
+    FlatValue el;
+
+    if (!coll || !buf || !count || flat_list_len(coll, list_id, &len) != 0) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        if (flat_list_get(coll, list_id, i, &el) != 0) {
+            return -1;
+        }
+        if (el.tag == VAL_LIST) {
+            if (mdim_flatten(coll, el.u.coll_id, buf, cap, count) != 0) {
+                return -1;
+            }
+        } else if (el.tag == VAL_NUMBER) {
+            if (*count >= cap) {
+                return -1;
+            }
+            buf[(*count)++] = flat_number_as_f64(&el);
+        } else {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+static int mdim_build_from_shape(FlatNativeCtx *ctx, const double *vals, int *pos,
+                                 const uint16_t *dims, int depth, int rank, uint32_t *out_id) {
+    int len;
+    int i;
+    FlatValue items[FLAT_LIST_MAX_ELEMS];
+    uint32_t avoid[FLAT_LIST_MAX_ELEMS * 2];
+    int avoid_n = 0;
+
+    if (depth < 0 || depth >= rank) {
+        return -1;
+    }
+    len = (int)dims[depth];
+    if (len > FLAT_LIST_MAX_ELEMS) {
+        return -1;
+    }
+    if (depth == rank - 1) {
+        for (i = 0; i < len; i++) {
+            flat_number_init_legacy_double(&items[i], vals[(*pos)++]);
+        }
+        if (rank > 2) {
+            return flat_list_build_disjoint(ctx->coll, ctx->pool, items, len, avoid, avoid_n,
+                                            out_id);
+        }
+        return flat_list_build(ctx->coll, ctx->pool, items, len, out_id);
+    }
+    for (i = 0; i < len; i++) {
+        uint32_t child;
+        if (mdim_build_from_shape(ctx, vals, pos, dims, depth + 1, rank, &child) != 0) {
+            return -1;
+        }
+        flat_value_set_list(&items[i], child);
+        if (rank > 2 &&
+            mdim_gather_subtree_ids(ctx->coll, child, avoid, &avoid_n,
+                                    (int)(sizeof avoid / sizeof avoid[0])) != 0) {
+            return -1;
+        }
+        flat_value_retain(ctx->coll, ctx->pool, &items[i]);
+    }
+    if (rank > 2) {
+        int rc = flat_list_build_disjoint(ctx->coll, ctx->pool, items, len, avoid, avoid_n, out_id);
+        for (i = 0; i < len; i++) {
+            flat_value_release(ctx->coll, ctx->pool, &items[i]);
+        }
+        return rc;
+    }
+    if (flat_list_build(ctx->coll, ctx->pool, items, len, out_id) != 0) {
+        for (i = 0; i < len; i++) {
+            flat_value_release(ctx->coll, ctx->pool, &items[i]);
+        }
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        flat_value_release(ctx->coll, ctx->pool, &items[i]);
+    }
+    return 0;
 }
 
 struct MdimBcastLayout {
@@ -712,7 +918,7 @@ static int mdim_op_div(double a, double b, double *out) {
     return 0;
 }
 
-static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
+static int mdim_binary_native(FlatNativeCtx *ctx, uint16_t native_id, MdimBinOpFn op) {
     char inner_buf[512];
     char left_buf[384];
     char right_buf[384];
@@ -724,6 +930,8 @@ static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
     FlatListShapeInfo ib;
     FlatListShapeInfo out_shape;
     uint32_t out_id;
+    uint32_t final_id;
+    MdimCallTags tags;
     int rc = -1;
 
     memset(&a_v, 0, sizeof a_v);
@@ -733,6 +941,9 @@ static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
     }
     ctx->panic_detail[0] = '\0';
     *ctx->io_status = FLAT_IO_OK;
+    if (mdim_resolve_call_tags(ctx, native_id, &tags) != 0) {
+        return -1;
+    }
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &left, &right) != 0) {
         mdim_panic(ctx, "type.mdim.dim_mismatch");
@@ -749,6 +960,10 @@ static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
     if (mdim_operand_info(ctx, &a_v, 1, &ia) != 0 || mdim_operand_info(ctx, &b_v, 1, &ib) != 0) {
         goto out;
     }
+    if (mdim_role_ok(&ia, &tags) != 0 || mdim_role_ok(&ib, &tags) != 0) {
+        mdim_panic(ctx, "type.mdim.tag_shape");
+        goto out;
+    }
     if (mdim_map_binary_bcast(ctx, a_v.u.coll_id, b_v.u.coll_id, &ia, &ib, op, &out_id,
                               &out_shape) != 0) {
         if (ctx->panic_detail[0] == '\0') {
@@ -757,7 +972,13 @@ static int mdim_binary_native(FlatNativeCtx *ctx, MdimBinOpFn op) {
         goto out;
     }
     mdim_stamp_shape(ctx->coll, out_id, &out_shape);
-    if (flat_value_set_list(ctx->out, out_id) != 0) {
+    if (mdim_apply_result_list(ctx, out_id, &tags, &final_id) != 0) {
+        goto out;
+    }
+    if (final_id != out_id) {
+        mdim_stamp_shape(ctx->coll, final_id, &out_shape);
+    }
+    if (flat_value_set_list(ctx->out, final_id) != 0) {
         goto out;
     }
     rc = 0;
@@ -838,10 +1059,11 @@ static int mdim_count_numeric_leaves(FlatCollectionPool *coll, uint32_t list_id,
     return 0;
 }
 
-static int mdim_reduce_native(FlatNativeCtx *ctx, int kind) {
+static int mdim_reduce_native(FlatNativeCtx *ctx, uint16_t native_id, int kind) {
     FlatValue list_v;
     FlatListShapeInfo info;
     MdimReduceAcc acc;
+    MdimCallTags tags;
     int count = 0;
     int rc = -1;
 
@@ -851,6 +1073,13 @@ static int mdim_reduce_native(FlatNativeCtx *ctx, int kind) {
     }
     ctx->panic_detail[0] = '\0';
     *ctx->io_status = FLAT_IO_OK;
+    if (mdim_resolve_call_tags(ctx, native_id, &tags) != 0) {
+        return -1;
+    }
+    if (tags.has_role) {
+        mdim_panic(ctx, "type.mdim.tag_shape");
+        return -1;
+    }
     if (mdim_parse_list(ctx, ctx->inner, &list_v) != 0) {
         goto out;
     }
@@ -876,7 +1105,7 @@ static int mdim_reduce_native(FlatNativeCtx *ctx, int kind) {
         goto out;
     }
     if (kind == 0 || kind == 2 || kind == 3) {
-        if (flat_value_set_number(ctx->out, acc.acc) != 0) {
+        if (mdim_stage_scalar(ctx, acc.acc, &tags) != 0) {
             goto out;
         }
         rc = 0;
@@ -886,7 +1115,7 @@ static int mdim_reduce_native(FlatNativeCtx *ctx, int kind) {
         mdim_panic(ctx, "type.mdim.dim_mismatch");
         goto out;
     }
-    if (flat_value_set_number(ctx->out, acc.acc / (double)count) != 0) {
+    if (mdim_stage_scalar(ctx, acc.acc / (double)count, &tags) != 0) {
         goto out;
     }
     rc = 0;
@@ -926,6 +1155,7 @@ static int mdim_dot_native(FlatNativeCtx *ctx) {
     FlatValue b_v;
     FlatListShapeInfo ia;
     FlatListShapeInfo ib;
+    MdimCallTags tags;
     int i;
     int n;
     int n_b;
@@ -939,6 +1169,9 @@ static int mdim_dot_native(FlatNativeCtx *ctx) {
     }
     ctx->panic_detail[0] = '\0';
     *ctx->io_status = FLAT_IO_OK;
+    if (mdim_resolve_call_tags(ctx, FLAT_NATIVE_MATH_MDIM_DOT, &tags) != 0) {
+        return -1;
+    }
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &left, &right) != 0) {
         mdim_panic(ctx, "type.mdim.dim_mismatch");
@@ -953,6 +1186,10 @@ static int mdim_dot_native(FlatNativeCtx *ctx) {
         goto out;
     }
     if (mdim_operand_info(ctx, &a_v, 1, &ia) != 0 || mdim_operand_info(ctx, &b_v, 1, &ib) != 0) {
+        goto out;
+    }
+    if (mdim_role_ok(&ia, &tags) != 0 || mdim_role_ok(&ib, &tags) != 0) {
+        mdim_panic(ctx, "type.mdim.tag_shape");
         goto out;
     }
     if (ia.rank != 1 || ib.rank != 1) {
@@ -981,7 +1218,7 @@ static int mdim_dot_native(FlatNativeCtx *ctx) {
         db = flat_number_as_f64(&eb);
         sum += da * db;
     }
-    if (flat_value_set_number(ctx->out, sum) != 0) {
+    if (mdim_stage_scalar(ctx, sum, &tags) != 0) {
         goto out;
     }
     rc = 0;
@@ -994,11 +1231,13 @@ out:
 static int mdim_transpose_native(FlatNativeCtx *ctx) {
     FlatValue m_v;
     FlatListShapeInfo info;
+    MdimCallTags tags;
     int rows;
     int cols;
     int r;
     int c;
     uint32_t out_id;
+    uint32_t final_id;
     int rc = -1;
 
     memset(&m_v, 0, sizeof m_v);
@@ -1007,10 +1246,17 @@ static int mdim_transpose_native(FlatNativeCtx *ctx) {
     }
     ctx->panic_detail[0] = '\0';
     *ctx->io_status = FLAT_IO_OK;
+    if (mdim_resolve_call_tags(ctx, FLAT_NATIVE_MATH_MDIM_TRANSPOSE, &tags) != 0) {
+        return -1;
+    }
     if (mdim_parse_list(ctx, ctx->inner, &m_v) != 0) {
         goto out;
     }
     if (mdim_operand_info(ctx, &m_v, 1, &info) != 0) {
+        goto out;
+    }
+    if (mdim_role_ok(&info, &tags) != 0) {
+        mdim_panic(ctx, "type.mdim.tag_shape");
         goto out;
     }
     if (info.rank != 2) {
@@ -1069,7 +1315,23 @@ static int mdim_transpose_native(FlatNativeCtx *ctx) {
         out_info.elem_kind = info.elem_kind;
         mdim_stamp_shape(ctx->coll, out_id, &out_info);
     }
-    if (flat_value_set_list(ctx->out, out_id) != 0) {
+    if (mdim_apply_result_list(ctx, out_id, &tags, &final_id) != 0) {
+        goto out;
+    }
+    if (final_id != out_id) {
+        FlatListShapeInfo out_info;
+        memset(&out_info, 0, sizeof out_info);
+        out_info.valid = 1;
+        out_info.rect = 1;
+        out_info.rank = 2;
+        out_info.dims_n = 2;
+        out_info.dims[0] = (uint16_t)cols;
+        out_info.dims[1] = (uint16_t)rows;
+        out_info.elem_known = info.elem_known;
+        out_info.elem_kind = info.elem_kind;
+        mdim_stamp_shape(ctx->coll, final_id, &out_info);
+    }
+    if (flat_value_set_list(ctx->out, final_id) != 0) {
         goto out;
     }
     rc = 0;
@@ -1088,12 +1350,14 @@ static int mdim_matmul_native(FlatNativeCtx *ctx) {
     FlatValue b_v;
     FlatListShapeInfo ia;
     FlatListShapeInfo ib;
+    MdimCallTags tags;
     int a_rows;
     int a_cols;
     int b_rows;
     int b_cols;
     int r;
     uint32_t out_id;
+    uint32_t final_id;
     int rc = -1;
 
     memset(&a_v, 0, sizeof a_v);
@@ -1103,6 +1367,9 @@ static int mdim_matmul_native(FlatNativeCtx *ctx) {
     }
     ctx->panic_detail[0] = '\0';
     *ctx->io_status = FLAT_IO_OK;
+    if (mdim_resolve_call_tags(ctx, FLAT_NATIVE_MATH_MDIM_MATMUL, &tags) != 0) {
+        return -1;
+    }
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &left, &right) != 0) {
         mdim_panic(ctx, "type.mdim.dim_mismatch");
@@ -1117,6 +1384,10 @@ static int mdim_matmul_native(FlatNativeCtx *ctx) {
         goto out;
     }
     if (mdim_operand_info(ctx, &a_v, 1, &ia) != 0 || mdim_operand_info(ctx, &b_v, 1, &ib) != 0) {
+        goto out;
+    }
+    if (mdim_role_ok(&ia, &tags) != 0 || mdim_role_ok(&ib, &tags) != 0) {
+        mdim_panic(ctx, "type.mdim.tag_shape");
         goto out;
     }
     if (ia.rank != 2 || ib.rank != 2) {
@@ -1188,7 +1459,23 @@ static int mdim_matmul_native(FlatNativeCtx *ctx) {
         out_info.elem_kind = ia.elem_kind;
         mdim_stamp_shape(ctx->coll, out_id, &out_info);
     }
-    if (flat_value_set_list(ctx->out, out_id) != 0) {
+    if (mdim_apply_result_list(ctx, out_id, &tags, &final_id) != 0) {
+        goto out;
+    }
+    if (final_id != out_id) {
+        FlatListShapeInfo out_info;
+        memset(&out_info, 0, sizeof out_info);
+        out_info.valid = 1;
+        out_info.rect = 1;
+        out_info.rank = 2;
+        out_info.dims_n = 2;
+        out_info.dims[0] = (uint16_t)a_rows;
+        out_info.dims[1] = (uint16_t)b_cols;
+        out_info.elem_known = ia.elem_known;
+        out_info.elem_kind = ia.elem_kind;
+        mdim_stamp_shape(ctx->coll, final_id, &out_info);
+    }
+    if (flat_value_set_list(ctx->out, final_id) != 0) {
         goto out;
     }
     rc = 0;
@@ -1198,36 +1485,157 @@ out:
     return rc;
 }
 
+static int mdim_reshape_native(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char left_buf[384];
+    char right_buf[384];
+    char *left;
+    char *right;
+    FlatValue src_v;
+    FlatValue shape_v;
+    FlatListShapeInfo src_info;
+    MdimCallTags tags;
+    double flat[FLAT_LIST_MAX_ELEMS * 4];
+    uint16_t dims[FLAT_LIST_TYPED_MAX_RANK];
+    int shape_rank;
+    int i;
+    int leaf_n = 0;
+    int pos = 0;
+    int prod = 1;
+    uint32_t out_id;
+    int rc = -1;
+
+    memset(&src_v, 0, sizeof src_v);
+    memset(&shape_v, 0, sizeof shape_v);
+    if (!ctx->out || !ctx->io_status || !ctx->inner) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    *ctx->io_status = FLAT_IO_OK;
+    if (mdim_resolve_call_tags(ctx, FLAT_NATIVE_MATH_MDIM_RESHAPE, &tags) != 0) {
+        return -1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        mdim_panic(ctx, "type.mdim.dim_mismatch");
+        return -1;
+    }
+    snprintf(left_buf, sizeof left_buf, "%s", left);
+    snprintf(right_buf, sizeof right_buf, "%s", right);
+    if (mdim_parse_list(ctx, left_buf, &src_v) != 0 ||
+        mdim_parse_list(ctx, right_buf, &shape_v) != 0) {
+        goto out;
+    }
+    if (mdim_operand_info(ctx, &src_v, 1, &src_info) != 0) {
+        goto out;
+    }
+    if (mdim_role_ok(&src_info, &tags) != 0) {
+        mdim_panic(ctx, "type.mdim.tag_shape");
+        goto out;
+    }
+    {
+        FlatListShapeInfo sh;
+        int sh_len;
+        FlatValue el;
+        if (mdim_operand_info(ctx, &shape_v, 1, &sh) != 0 || sh.rank != 1) {
+            mdim_panic(ctx, "type.mdim.dim_mismatch");
+            goto out;
+        }
+        if (flat_list_len(ctx->coll, shape_v.u.coll_id, &sh_len) != 0 || sh_len <= 0 ||
+            sh_len > FLAT_LIST_TYPED_MAX_RANK) {
+            mdim_panic(ctx, "type.mdim.dim_mismatch");
+            goto out;
+        }
+        shape_rank = sh_len;
+        for (i = 0; i < sh_len; i++) {
+            double d;
+            if (flat_list_get(ctx->coll, shape_v.u.coll_id, i, &el) != 0 ||
+                el.tag != VAL_NUMBER) {
+                mdim_panic(ctx, "type.mdim.not_numeric");
+                goto out;
+            }
+            d = flat_number_as_f64(&el);
+            if (d <= 0.0 || d != floor(d)) {
+                mdim_panic(ctx, "type.mdim.dim_mismatch");
+                goto out;
+            }
+            dims[i] = (uint16_t)d;
+            prod *= (int)d;
+        }
+    }
+  if (mdim_flatten(ctx->coll, src_v.u.coll_id, flat, (int)(sizeof flat / sizeof flat[0]),
+                   &leaf_n) != 0) {
+        mdim_panic(ctx, "type.mdim.not_numeric");
+        goto out;
+    }
+    {
+        int src_n = 1;
+        for (i = 0; i < (int)src_info.dims_n; i++) {
+            src_n *= (int)src_info.dims[i];
+        }
+        if (prod != src_n || prod != leaf_n) {
+            mdim_panic(ctx, "type.mdim.dim_mismatch");
+            goto out;
+        }
+    }
+    if (mdim_build_from_shape(ctx, flat, &pos, dims, 0, shape_rank, &out_id) != 0) {
+        mdim_panic(ctx, "type.mdim.dim_mismatch");
+        goto out;
+    }
+    {
+        FlatListShapeInfo out_info;
+        memset(&out_info, 0, sizeof out_info);
+        out_info.valid = 1;
+        out_info.rect = 1;
+        out_info.rank = (unsigned char)shape_rank;
+        out_info.dims_n = (unsigned char)shape_rank;
+        for (i = 0; i < shape_rank; i++) {
+            out_info.dims[i] = dims[i];
+        }
+        out_info.elem_known = src_info.elem_known;
+        out_info.elem_kind = src_info.elem_kind;
+        mdim_stamp_shape(ctx->coll, out_id, &out_info);
+    }
+    if (flat_value_set_list(ctx->out, out_id) != 0) {
+        goto out;
+    }
+    rc = 0;
+out:
+    flat_native_parse_rhs_release(ctx, &src_v);
+    flat_native_parse_rhs_release(ctx, &shape_v);
+    return rc;
+}
+
 int flat_native_math_mdim_add(FlatNativeCtx *ctx) {
-    return mdim_binary_native(ctx, mdim_op_add);
+    return mdim_binary_native(ctx, FLAT_NATIVE_MATH_MDIM_ADD, mdim_op_add);
 }
 
 int flat_native_math_mdim_subtract(FlatNativeCtx *ctx) {
-    return mdim_binary_native(ctx, mdim_op_sub);
+    return mdim_binary_native(ctx, FLAT_NATIVE_MATH_MDIM_SUBTRACT, mdim_op_sub);
 }
 
 int flat_native_math_mdim_multiply(FlatNativeCtx *ctx) {
-    return mdim_binary_native(ctx, mdim_op_mul);
+    return mdim_binary_native(ctx, FLAT_NATIVE_MATH_MDIM_MULTIPLY, mdim_op_mul);
 }
 
 int flat_native_math_mdim_divide(FlatNativeCtx *ctx) {
-    return mdim_binary_native(ctx, mdim_op_div);
+    return mdim_binary_native(ctx, FLAT_NATIVE_MATH_MDIM_DIVIDE, mdim_op_div);
 }
 
 int flat_native_math_mdim_sum(FlatNativeCtx *ctx) {
-    return mdim_reduce_native(ctx, 0);
+    return mdim_reduce_native(ctx, FLAT_NATIVE_MATH_MDIM_SUM, 0);
 }
 
 int flat_native_math_mdim_min(FlatNativeCtx *ctx) {
-    return mdim_reduce_native(ctx, 2);
+    return mdim_reduce_native(ctx, FLAT_NATIVE_MATH_MDIM_MIN, 2);
 }
 
 int flat_native_math_mdim_max(FlatNativeCtx *ctx) {
-    return mdim_reduce_native(ctx, 3);
+    return mdim_reduce_native(ctx, FLAT_NATIVE_MATH_MDIM_MAX, 3);
 }
 
 int flat_native_math_mdim_avg(FlatNativeCtx *ctx) {
-    return mdim_reduce_native(ctx, 1);
+    return mdim_reduce_native(ctx, FLAT_NATIVE_MATH_MDIM_AVG, 1);
 }
 
 int flat_native_math_mdim_dot(FlatNativeCtx *ctx) {
@@ -1240,4 +1648,8 @@ int flat_native_math_mdim_transpose(FlatNativeCtx *ctx) {
 
 int flat_native_math_mdim_matmul(FlatNativeCtx *ctx) {
     return mdim_matmul_native(ctx);
+}
+
+int flat_native_math_mdim_reshape(FlatNativeCtx *ctx) {
+    return mdim_reshape_native(ctx);
 }
