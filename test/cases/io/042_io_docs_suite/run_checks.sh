@@ -3,7 +3,7 @@ set -e
 ROOT=$1
 FB=$2
 OUT=$($ROOT/bin/flvm "$FB" 2>/dev/null || true)
-printf '%s' "$OUT" | grep -q '(16 functions)' || {
+printf '%s' "$OUT" | grep -q '(23 functions)' || {
   echo "missing mem footer"
   exit 1
 }
