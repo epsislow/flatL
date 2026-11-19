@@ -1,0 +1,10 @@
+suite = "panic"
+id = 3
+desc = "panicLoc records indexed site when routed to #panic.any"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "#main.2"

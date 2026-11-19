@@ -1,0 +1,12 @@
+#main
+  x = 'not-num'
+  for(x, i, '#step')
+  OK
+
+#panic.any
+  panicLoc() -> loc
+  io.outln(loc)
+  OK
+
+#step
+  next

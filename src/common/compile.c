@@ -158,6 +158,20 @@ static int validate_free_in_program(const FgirProgram *prog, char *err, size_t e
                     rc = varset_add(&vs, ins->foreach_item);
                 }
                 break;
+            case FGIR_PANIC_REASON: {
+                char var[64];
+                if (flat_parse_panic_reason_bind(ins->text, var, sizeof var) == 0) {
+                    rc = varset_add(&vs, var);
+                }
+                break;
+            }
+            case FGIR_PANIC_LOC: {
+                char var[64];
+                if (flat_parse_panic_loc_bind(ins->text, var, sizeof var) == 0) {
+                    rc = varset_add(&vs, var);
+                }
+                break;
+            }
             default:
                 break;
             }
@@ -247,6 +261,20 @@ static int count_var_slots(const FgirProgram *prog, uint32_t *out_slots, char *e
                     rc = varset_add(&vs, ins->foreach_item);
                 }
                 break;
+            case FGIR_PANIC_REASON: {
+                char var[64];
+                if (flat_parse_panic_reason_bind(ins->text, var, sizeof var) == 0) {
+                    rc = varset_add(&vs, var);
+                }
+                break;
+            }
+            case FGIR_PANIC_LOC: {
+                char var[64];
+                if (flat_parse_panic_loc_bind(ins->text, var, sizeof var) == 0) {
+                    rc = varset_add(&vs, var);
+                }
+                break;
+            }
             default:
                 break;
             }
@@ -302,6 +330,64 @@ static int emit_instr(EmitBuf *e, uint8_t op, const void *payload, uint8_t plen)
     }
     if (plen > 0 && payload && emit_bytes(e, payload, plen) != 0) {
         return -1;
+    }
+    return 0;
+}
+
+typedef struct {
+    FlatPanicSite *items;
+    size_t count;
+    size_t cap;
+} CompilePanicSites;
+
+static CompilePanicSites g_compile_panic_sites;
+static CompilePanicSites *g_emit_panic_sites;
+static uint32_t g_emit_insn_ip;
+static char g_emit_panic_loc[FLAT_PANIC_LOC_MAX];
+
+static int panic_site_push(CompilePanicSites *ps, uint32_t ip, const char *loc) {
+    FlatPanicSite *p;
+
+    if (!ps || !loc || loc[0] == '\0') {
+        return 0;
+    }
+    if (ps->count > 0 && ps->items[ps->count - 1].ip == ip &&
+        strcmp(ps->items[ps->count - 1].loc, loc) == 0) {
+        return 0;
+    }
+    if (ps->count + 1 > ps->cap) {
+        size_t ncap = ps->cap ? ps->cap * 2 : 256;
+        p = realloc(ps->items, ncap * sizeof(FlatPanicSite));
+        if (!p) {
+            return -1;
+        }
+        ps->items = p;
+        ps->cap = ncap;
+    }
+    ps->items[ps->count].ip = ip;
+    snprintf(ps->items[ps->count].loc, sizeof ps->items[ps->count].loc, "%s", loc);
+    ps->count++;
+    return 0;
+}
+
+static void flat_panic_loc_fmt(const FgirBlock *b, const FgirInstr *ins, char *out, size_t out_sz) {
+    if (!b || !ins || !out || out_sz == 0) {
+        return;
+    }
+    out[0] = '\0';
+    if (ins->line_label[0]) {
+        snprintf(out, out_sz, "%s.%s", b->label, ins->line_label);
+    } else if (ins->index > 0) {
+        snprintf(out, out_sz, "%s.%d", b->label, ins->index);
+    }
+}
+
+static int emit_instr_site(EmitBuf *e, uint8_t op, const void *payload, uint8_t plen) {
+    if (emit_instr(e, op, payload, plen) != 0) {
+        return -1;
+    }
+    if (g_emit_panic_sites && g_emit_panic_loc[0]) {
+        return panic_site_push(g_emit_panic_sites, g_emit_insn_ip, g_emit_panic_loc);
     }
     return 0;
 }
@@ -432,30 +518,34 @@ static int loop_block_compile_idx(const FgirProgram *prog, const char *tok) {
 }
 
 static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
-                           const BlockOff *offs, size_t stream_base, char *err, size_t err_size) {
+                           const BlockOff *offs, size_t stream_base, CompilePanicSites *panic_sites,
+                           char *err, size_t err_size) {
     const FgirBlock *b = &prog->blocks[bi];
     int j;
 
+    g_emit_panic_sites = panic_sites;
     for (j = 0; j < b->instr_count; j++) {
         const FgirInstr *ins = &b->instr[j];
+        g_emit_insn_ip = (uint32_t)(stream_base + code->len);
+        flat_panic_loc_fmt(b, ins, g_emit_panic_loc, sizeof g_emit_panic_loc);
         switch (ins->kind) {
         case FGIR_OK:
-            if (emit_instr(code, OP_OK, NULL, 0) != 0) {
+            if (emit_instr_site(code, OP_OK, NULL, 0) != 0) {
                 return -1;
             }
             break;
         case FGIR_FAIL:
-            if (emit_instr(code, OP_FAIL, NULL, 0) != 0) {
+            if (emit_instr_site(code, OP_FAIL, NULL, 0) != 0) {
                 return -1;
             }
             break;
         case FGIR_RETURN:
-            if (emit_instr(code, OP_RETURN, NULL, 0) != 0) {
+            if (emit_instr_site(code, OP_RETURN, NULL, 0) != 0) {
                 return -1;
             }
             break;
         case FGIR_NEXT:
-            if (emit_instr(code, OP_NEXT, NULL, 0) != 0) {
+            if (emit_instr_site(code, OP_NEXT, NULL, 0) != 0) {
                 return -1;
             }
             break;
@@ -510,7 +600,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 snprintf(err, err_size, "assign too long");
                 return -1;
             }
-            if (emit_instr(code, OP_ASSIGN, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_ASSIGN, payload, plen) != 0) {
                 snprintf(err, err_size, "out of memory");
                 return -1;
             }
@@ -524,7 +614,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 return -1;
             }
             plen = (uint8_t)(strlen(var) + 1);
-            if (emit_instr(code, OP_FREE, var, plen) != 0) {
+            if (emit_instr_site(code, OP_FREE, var, plen) != 0) {
                 return -1;
             }
             break;
@@ -537,13 +627,13 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 return -1;
             }
             plen = (uint8_t)(strlen(var) + 1);
-            if (emit_instr(code, OP_FREEZE, var, plen) != 0) {
+            if (emit_instr_site(code, OP_FREEZE, var, plen) != 0) {
                 return -1;
             }
             break;
         }
         case FGIR_PANIC_RESET:
-            if (emit_instr(code, OP_PANIC_RESET, NULL, 0) != 0) {
+            if (emit_instr_site(code, OP_PANIC_RESET, NULL, 0) != 0) {
                 return -1;
             }
             break;
@@ -555,7 +645,20 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 return -1;
             }
             plen = (uint8_t)(strlen(var) + 1);
-            if (emit_instr(code, OP_PANIC_REASON, var, plen) != 0) {
+            if (emit_instr_site(code, OP_PANIC_REASON, var, plen) != 0) {
+                return -1;
+            }
+            break;
+        }
+        case FGIR_PANIC_LOC: {
+            char var[64];
+            uint8_t plen;
+            if (flat_parse_panic_loc_bind(ins->text, var, sizeof var) != 0) {
+                snprintf(err, err_size, "invalid panicLoc bind: %s", ins->text);
+                return -1;
+            }
+            plen = (uint8_t)(strlen(var) + 1);
+            if (emit_instr_site(code, OP_PANIC_LOC, var, plen) != 0) {
                 return -1;
             }
             break;
@@ -572,7 +675,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             memcpy(payload, &off32, 4);
             plen = (uint8_t)(4 + strlen(ins->text) + 1);
             memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
-            if (emit_instr(code, OP_GUARD, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_GUARD, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -590,7 +693,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             memcpy(payload, &off32, 4);
             memcpy(payload + 4, ins->call_out, strlen(ins->call_out) + 1);
             plen = (uint8_t)(4 + strlen(ins->call_out) + 1);
-            if (emit_instr(code, OP_CALL, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_CALL, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -607,7 +710,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             memcpy(payload, ins->call_target, elen);
             memcpy(payload + elen, ins->call_out, blen);
             plen = (uint8_t)(elen + blen);
-            if (emit_instr(code, OP_CALL_BLOCK, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_CALL_BLOCK, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -626,7 +729,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             off32 = (uint32_t)offs[tgt].abs_offset;
             memcpy(payload, &off32, 4);
-            if (emit_instr(code, OP_JUMP, payload, 4) != 0) {
+            if (emit_instr_site(code, OP_JUMP, payload, 4) != 0) {
                 return -1;
             }
             break;
@@ -647,7 +750,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             memcpy(payload, &off32, 4);
             memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
-            if (emit_instr(code, OP_FOREACH, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_FOREACH, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -673,7 +776,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             memcpy(payload, &off32, 4);
             memcpy(payload + 4, ins->text, strlen(ins->text) + 1);
-            if (emit_instr(code, OP_FOR, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_FOR, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -722,7 +825,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             payload[2 + il + bl] = (uint8_t)ins->line_mod;
             memcpy(payload + 2 + il + bl + 1, &or_off, 4);
             plen = (uint8_t)total;
-            if (emit_instr(code, OP_NATIVE, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_NATIVE, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -739,7 +842,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 off32 = (uint32_t)offs[pidx].abs_offset;
             }
             memcpy(payload, &off32, 4);
-            if (emit_instr(code, OP_PANIC, payload, 4) != 0) {
+            if (emit_instr_site(code, OP_PANIC, payload, 4) != 0) {
                 return -1;
             }
             break;
@@ -846,7 +949,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
                 return -1;
             }
             plen = (uint8_t)pos;
-            if (emit_instr(code, OP_CALL_FUNCTION, payload, plen) != 0) {
+            if (emit_instr_site(code, OP_CALL_FUNCTION, payload, plen) != 0) {
                 return -1;
             }
             break;
@@ -856,7 +959,7 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             return -1;
         }
     }
-    (void)stream_base;
+    g_emit_panic_sites = NULL;
     return 0;
 }
 
@@ -870,7 +973,7 @@ static size_t measure_block(const FgirProgram *prog, int bi) {
     if (!dummy) {
         return 0;
     }
-    emit_block_code(&tmp, prog, bi, dummy, 0, err, sizeof err);
+    emit_block_code(&tmp, prog, bi, dummy, 0, NULL, err, sizeof err);
     n = tmp.len;
     free(dummy);
     free(tmp.buf);
@@ -930,7 +1033,8 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         return -1;
     }
 
-    stream_base = FLAT_FB_HEADER_SIZE_V11 + (size_t)prog->block_count * 8;
+    memset(&g_compile_panic_sites, 0, sizeof g_compile_panic_sites);
+    stream_base = FLAT_FB_HEADER_SIZE_V13 + (size_t)prog->block_count * 8;
     {
         size_t cursor = stream_base;
         for (i = 0; i < prog->block_count; i++) {
@@ -941,9 +1045,11 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     }
 
     for (i = 0; i < prog->block_count; i++) {
-        if (emit_block_code(&code, prog, i, offs, stream_base, err, err_size) != 0) {
+        if (emit_block_code(&code, prog, i, offs, stream_base, &g_compile_panic_sites, err,
+                            err_size) != 0) {
             free(offs);
             free(block_ids);
+            free(g_compile_panic_sites.items);
             free(code.buf);
             return -1;
         }
@@ -962,7 +1068,11 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         const uint8_t sentinel = FLAT_FB_SENTINEL;
         const uint8_t version = FLAT_FB_FORMAT_VERSION;
         uint16_t count = (uint16_t)prog->block_count;
-        uint32_t labels_off = (uint32_t)(stream_base + code.len);
+        uint32_t plin_off = (uint32_t)(stream_base + code.len);
+        size_t plin_sz =
+            flat_fb_plin_section_size((uint32_t)g_compile_panic_sites.count,
+                                       g_compile_panic_sites.items);
+        uint32_t labels_off = (uint32_t)(plin_off + plin_sz);
         uint32_t fnun_off = 0;
         uint32_t ffun_off = 0;
         uint32_t native_off = 0;
@@ -1073,8 +1183,18 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
         fwrite(&ffun_off, 1, 4, f);
         fwrite(&schm_off, 1, 4, f);
         {
-            const uint8_t jbmx_zero[4] = { 0, 0, 0, 0 };
-            fwrite(jbmx_zero, 1, 4, f);
+            uint8_t jbmx_le[4];
+            uint8_t plin_le[4];
+            jbmx_le[0] = (uint8_t)(jbmx_off & 0xffu);
+            jbmx_le[1] = (uint8_t)((jbmx_off >> 8) & 0xffu);
+            jbmx_le[2] = (uint8_t)((jbmx_off >> 16) & 0xffu);
+            jbmx_le[3] = (uint8_t)((jbmx_off >> 24) & 0xffu);
+            plin_le[0] = (uint8_t)(plin_off & 0xffu);
+            plin_le[1] = (uint8_t)((plin_off >> 8) & 0xffu);
+            plin_le[2] = (uint8_t)((plin_off >> 16) & 0xffu);
+            plin_le[3] = (uint8_t)((plin_off >> 24) & 0xffu);
+            fwrite(jbmx_le, 1, 4, f);
+            fwrite(plin_le, 1, 4, f);
         }
         jbmx_limits = calloc((size_t)prog->block_count, sizeof(uint32_t));
         if (!jbmx_limits && prog->block_count > 0) {
@@ -1099,6 +1219,17 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
             fwrite(&off, 1, 4, f);
         }
         fwrite(code.buf, 1, code.len, f);
+        if (flat_fb_write_plin_section(f, (uint32_t)g_compile_panic_sites.count,
+                                        g_compile_panic_sites.items) != 0) {
+            fclose(f);
+            snprintf(err, err_size, "failed to write PLIN section");
+            free(jbmx_limits);
+            free(offs);
+            free(block_ids);
+            free(code.buf);
+            free(g_compile_panic_sites.items);
+            return -1;
+        }
         {
             char (*labels)[FGIR_MAX_LABEL] = NULL;
             labels = calloc((size_t)prog->block_count, FGIR_MAX_LABEL);
@@ -1313,5 +1444,9 @@ int flat_compile_fgir(const FgirProgram *prog, const char *out_path, char *err, 
     free(offs);
     free(block_ids);
     free(code.buf);
+    free(g_compile_panic_sites.items);
+    g_compile_panic_sites.items = NULL;
+    g_compile_panic_sites.count = 0;
+    g_compile_panic_sites.cap = 0;
     return 0;
 }

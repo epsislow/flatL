@@ -1,0 +1,11 @@
+#main
+  x = 1
+  x == 2   #.hop
+  OK
+
+#or.#main.hop
+  y == 5
+  jump #or.tail
+
+#or.tail
+  OK

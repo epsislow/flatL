@@ -1,0 +1,5 @@
+use "lib/helper.fl" as #pkg_
+
+#main
+  call #pkg_run
+  OK

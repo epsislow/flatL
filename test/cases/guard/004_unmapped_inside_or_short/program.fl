@@ -1,0 +1,12 @@
+#main
+  x = 1
+  x == 2   #.hop
+  OK
+
+#or.#main.hop
+  y = 3
+  jump #or.chain
+
+#or.chain
+  y == 9
+  OK

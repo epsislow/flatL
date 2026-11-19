@@ -1,0 +1,9 @@
+#main
+  a = 1
+  a == 9   #.entry
+  OK
+
+#or.#main.entry
+  a == 0   #.noOrHere
+  FAIL
+  OK

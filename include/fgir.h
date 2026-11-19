@@ -54,6 +54,7 @@ typedef enum {
     FGIR_FREEZE,
     FGIR_PANIC_RESET,
     FGIR_PANIC_REASON,
+    FGIR_PANIC_LOC,
     FGIR_JUMP,
     FGIR_FUNC_CALL,
     FGIR_FUNC_CALL_VM
@@ -152,6 +153,7 @@ int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);
 int flat_parse_freeze_varname(const char *line, char *var_out, size_t var_sz);
 int flat_parse_panic_reset_line(const char *line);
 int flat_parse_panic_reason_bind(const char *line, char *var_out, size_t var_sz);
+int flat_parse_panic_loc_bind(const char *line, char *var_out, size_t var_sz);
 int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *err, size_t err_size);
 int flat_parse_file(const char *path, FgirProgram *out, char *err, size_t err_size);
 void flat_fgir_dump(const FgirProgram *prog, FILE *out);

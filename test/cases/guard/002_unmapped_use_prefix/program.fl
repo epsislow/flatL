@@ -1,0 +1,5 @@
+use "lib/stats.fl" as #math_
+
+#main
+  call #math_check
+  OK

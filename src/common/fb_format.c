@@ -576,6 +576,62 @@ static int parse_fnun_section(const uint8_t *sec, size_t sec_len, uint16_t expec
     return pos == sec_len ? 0 : -1;
 }
 
+static int parse_plin_section(const uint8_t *sec, size_t sec_len, FlatPanicSite **out_sites,
+                               uint32_t *out_count) {
+    uint32_t magic;
+    uint32_t count;
+    size_t pos = 0;
+    FlatPanicSite *sites = NULL;
+    uint32_t i;
+
+    if (!sec || !out_sites || !out_count) {
+        return -1;
+    }
+    *out_sites = NULL;
+    *out_count = 0;
+    if (sec_len < 8) {
+        return -1;
+    }
+    magic = read_u32_le(sec);
+    if (magic != FLAT_FB_PLIN_MAGIC) {
+        return -1;
+    }
+    count = read_u32_le(sec + 4);
+    pos = 8;
+    if (count == 0) {
+        return pos == sec_len ? 0 : -1;
+    }
+    sites = calloc((size_t)count, sizeof(FlatPanicSite));
+    if (!sites) {
+        return -1;
+    }
+    for (i = 0; i < count; i++) {
+        uint16_t ulen;
+        if (pos + 6 > sec_len) {
+            free(sites);
+            return -1;
+        }
+        sites[i].ip = read_u32_le(sec + pos);
+        pos += 4;
+        ulen = read_u16_le(sec + pos);
+        pos += 2;
+        if (ulen == 0 || ulen >= FLAT_PANIC_LOC_MAX || pos + ulen > sec_len) {
+            free(sites);
+            return -1;
+        }
+        memcpy(sites[i].loc, sec + pos, ulen);
+        sites[i].loc[ulen] = '\0';
+        pos += ulen;
+    }
+    if (pos != sec_len) {
+        free(sites);
+        return -1;
+    }
+    *out_sites = sites;
+    *out_count = count;
+    return 0;
+}
+
 static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
     size_t dir_bytes;
     size_t header_size;
@@ -615,6 +671,11 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         fprintf(stderr, "flvm: truncated .fb header\n");
         return -1;
     }
+    if (out->format_version >= 13 && fsize < FLAT_FB_HEADER_SIZE_V13) {
+        free(buf);
+        fprintf(stderr, "flvm: truncated .fb header\n");
+        return -1;
+    }
     if (out->format_version >= 6 && out->format_version < 11 && fsize < FLAT_FB_HEADER_SIZE) {
         free(buf);
         fprintf(stderr, "flvm: truncated .fb header\n");
@@ -639,6 +700,7 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         uint32_t ffun_off = 0;
         uint32_t schm_off = 0;
         uint32_t jbmx_off = 0;
+        uint32_t plin_off = 0;
 
         if (out->format_version >= 4) {
             fnun_off = read_u32_le(buf + 20);
@@ -652,8 +714,13 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         if (out->format_version >= 11) {
             jbmx_off = read_u32_le(buf + 32);
         }
+        if (out->format_version >= 13) {
+            plin_off = read_u32_le(buf + 36);
+        }
 
-        if (labels_off != 0 && labels_off <= fsize) {
+        if (plin_off != 0 && plin_off <= fsize) {
+            out->code_size = plin_off;
+        } else if (labels_off != 0 && labels_off <= fsize) {
             out->code_size = labels_off;
         } else if (fnun_off != 0 && fnun_off <= fsize) {
             out->code_size = fnun_off;
@@ -661,6 +728,16 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
             out->code_size = native_off;
         } else {
             out->code_size = fsize;
+        }
+        if (plin_off != 0 && plin_off < fsize && (labels_off == 0 || plin_off < labels_off)) {
+            size_t plin_len = labels_off > plin_off ? (size_t)(labels_off - plin_off)
+                                                      : (size_t)(fsize - plin_off);
+            if (parse_plin_section(buf + plin_off, plin_len, &out->panic_sites,
+                                    &out->panic_site_count) != 0) {
+                free(buf);
+                fprintf(stderr, "flvm: invalid PLIN section\n");
+                return -1;
+            }
         }
         if (labels_off != 0) {
             size_t label_len;
@@ -784,7 +861,9 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
                 (unsigned)out->var_slots, FLAT_MAX_VARS);
         return -1;
     }
-    if (out->format_version >= 11) {
+    if (out->format_version >= 13) {
+        header_size = FLAT_FB_HEADER_SIZE_V13;
+    } else if (out->format_version >= 11) {
         header_size = FLAT_FB_HEADER_SIZE_V11;
     } else if (out->format_version >= 6) {
         header_size = FLAT_FB_HEADER_SIZE;
@@ -984,6 +1063,71 @@ int flat_fb_parse_jbmx_section(const uint8_t *sec, size_t sec_len, uint16_t bloc
     return 0;
 }
 
+size_t flat_fb_plin_section_size(uint32_t site_count, const FlatPanicSite *sites) {
+    size_t n = 8; /* magic + count */
+    uint32_t i;
+
+    (void)sites;
+    for (i = 0; i < site_count; i++) {
+        size_t ll = strlen(sites[i].loc);
+        if (ll == 0 || ll >= FLAT_PANIC_LOC_MAX) {
+            return 0;
+        }
+        n += 4 + 2 + ll;
+    }
+    return n;
+}
+
+int flat_fb_write_plin_section(FILE *f, uint32_t site_count, const FlatPanicSite *sites) {
+    uint32_t magic = FLAT_FB_PLIN_MAGIC;
+    uint32_t i;
+
+    if (!f) {
+        return -1;
+    }
+    if (write_bytes(f, &magic, 4) != 0 || write_bytes(f, &site_count, 4) != 0) {
+        return -1;
+    }
+    for (i = 0; i < site_count; i++) {
+        size_t ll = strlen(sites[i].loc);
+        uint16_t ulen;
+
+        if (ll == 0 || ll >= FLAT_PANIC_LOC_MAX) {
+            return -1;
+        }
+        ulen = (uint16_t)ll;
+        if (write_bytes(f, &sites[i].ip, 4) != 0 || write_bytes(f, &ulen, 2) != 0 ||
+            write_bytes(f, sites[i].loc, ll) != 0) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
+int flat_fb_panic_loc_at_ip(const FlatBytecode *bc, uint32_t ip, char *out, size_t out_sz) {
+    const FlatPanicSite *best = NULL;
+    uint32_t i;
+
+    if (!out || out_sz == 0) {
+        return -1;
+    }
+    out[0] = '\0';
+    if (!bc || !bc->panic_sites || bc->panic_site_count == 0) {
+        return 0;
+    }
+    for (i = 0; i < bc->panic_site_count; i++) {
+        if (bc->panic_sites[i].ip <= ip) {
+            best = &bc->panic_sites[i];
+        } else {
+            break;
+        }
+    }
+    if (best && best->loc[0]) {
+        snprintf(out, out_sz, "%s", best->loc);
+    }
+    return 0;
+}
+
 void flat_fb_free(FlatBytecode *bc) {
     if (!bc) {
         return;
@@ -994,6 +1138,7 @@ void flat_fb_free(FlatBytecode *bc) {
     free(bc->native_units);
     free(bc->block_native_unit);
     free(bc->jump_block_entry_max);
+    free(bc->panic_sites);
     free(bc->functions);
     bc->functions = NULL;
     bc->function_count = 0;
@@ -1124,12 +1269,15 @@ int flat_fb_write_min_ok(const char *path) {
     const uint8_t count[2] = { 1, 0 };
     const uint8_t native_off[4] = { 0, 0, 0, 0 };
     const uint8_t var_slots[4] = { 0, 0, 0, 0 };
-    const uint8_t labels_off_bytes[4] = { 46, 0, 0, 0 };
-    const uint8_t fnun_off_bytes[4] = { 59, 0, 0, 0 };
-    const uint8_t ffun_off_bytes[4] = { 69, 0, 0, 0 };
-    const uint8_t schm_off_bytes[4] = { 75, 0, 0, 0 };
-    const uint8_t jbmx_off_bytes[4] = { 81, 0, 0, 0 };
-    const uint8_t dir[8] = { 0, 0, 0, 0, 44, 0, 0, 0 };
+    const uint8_t labels_off_bytes[4] = { 58, 0, 0, 0 };
+    const uint8_t fnun_off_bytes[4] = { 71, 0, 0, 0 };
+    const uint8_t ffun_off_bytes[4] = { 81, 0, 0, 0 };
+    const uint8_t schm_off_bytes[4] = { 87, 0, 0, 0 };
+    const uint8_t jbmx_off_bytes[4] = { 93, 0, 0, 0 };
+    const uint8_t plin_off_bytes[4] = { 50, 0, 0, 0 };
+    const uint8_t dir[8] = { 0, 0, 0, 0, 48, 0, 0, 0 };
+    const uint32_t plin_magic = FLAT_FB_PLIN_MAGIC;
+    const uint32_t plin_count = 0;
     const uint8_t code[2] = { OP_OK, 0 };
     const uint32_t blbl_magic = FLAT_FB_LABEL_MAGIC;
     const uint16_t blbl_count = 1;
@@ -1157,8 +1305,10 @@ int flat_fb_write_min_ok(const char *path) {
         write_bytes(f, native_off, 4) != 0 || write_bytes(f, var_slots, 4) != 0 ||
         write_bytes(f, labels_off_bytes, 4) != 0 || write_bytes(f, fnun_off_bytes, 4) != 0 ||
         write_bytes(f, ffun_off_bytes, 4) != 0 || write_bytes(f, schm_off_bytes, 4) != 0 ||
-        write_bytes(f, jbmx_off_bytes, 4) != 0 || write_bytes(f, dir, 8) != 0 ||
-        write_bytes(f, code, 2) != 0 || write_bytes(f, &blbl_magic, 4) != 0 ||
+        write_bytes(f, jbmx_off_bytes, 4) != 0 || write_bytes(f, plin_off_bytes, 4) != 0 ||
+        write_bytes(f, dir, 8) != 0 || write_bytes(f, code, 2) != 0 ||
+        write_bytes(f, &plin_magic, 4) != 0 || write_bytes(f, &plin_count, 4) != 0 ||
+        write_bytes(f, &blbl_magic, 4) != 0 ||
         write_bytes(f, &blbl_count, 2) != 0 || write_bytes(f, &main_len, 2) != 0 ||
         write_bytes(f, main_label, main_len) != 0 || write_bytes(f, &fnun_magic, 4) != 0 ||
         write_bytes(f, &unit_count, 2) != 0 || write_bytes(f, &zero_decl, 1) != 0 ||

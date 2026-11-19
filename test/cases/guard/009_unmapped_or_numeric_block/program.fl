@@ -1,0 +1,8 @@
+#main
+  n = 1
+  n == 2
+  OK
+
+#or.#main.2
+  n == 9
+  OK

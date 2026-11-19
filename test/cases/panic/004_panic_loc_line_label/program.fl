@@ -1,0 +1,11 @@
+#main
+  raw = 'x'
+  str.to_num(raw) -> n   #.badNum
+  OK
+
+#panic.#main.badNum
+  panicLoc() -> loc
+  panicReason() -> why
+  io.outln(loc)
+  io.outln(why)
+  OK

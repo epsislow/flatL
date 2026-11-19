@@ -1,0 +1,12 @@
+#main
+  A = 4
+  A == 2   #.A2
+  OK
+
+#or.#main.A2
+  A == 3   #.A3
+  OK
+
+#or.A3
+  A == 0
+  OK

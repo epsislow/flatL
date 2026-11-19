@@ -76,6 +76,7 @@ typedef struct {
     int loop_sp;
     char panic_reason[64];
     char caught_panic_reason[64];
+    char caught_panic_loc[FLAT_PANIC_LOC_MAX];
     int unhandled_panic;
     FlatFileTable files;
     FlatIOContext *io_ctx;
@@ -209,7 +210,7 @@ static uint32_t flat_label_hash(const char *label) {
     return h;
 }
 
-static void vm_note_caught_panic(VmState *st, const char *reason) {
+static void vm_note_caught_panic(VmState *st, const char *reason, const char *loc) {
     if (!st) {
         return;
     }
@@ -217,13 +218,20 @@ static void vm_note_caught_panic(VmState *st, const char *reason) {
         reason = "panic";
     }
     snprintf(st->caught_panic_reason, sizeof st->caught_panic_reason, "%s", reason);
+    st->caught_panic_loc[0] = '\0';
+    if (loc && loc[0] != '\0') {
+        snprintf(st->caught_panic_loc, sizeof st->caught_panic_loc, "%s", loc);
+    }
 }
 
 static void vm_clear_caught_panic(VmState *st) {
     if (st) {
         st->caught_panic_reason[0] = '\0';
+        st->caught_panic_loc[0] = '\0';
     }
 }
+
+static int vm_ip_for_block_label(const FlatBytecode *bc, const char *label, uint32_t *out_ip);
 
 static void vm_log_unhandled_panic_stderr(const char *reason) {
     char line[160];
@@ -234,6 +242,22 @@ static void vm_log_unhandled_panic_stderr(const char *reason) {
     vm_write_stderr(line);
 }
 
+static void vm_log_unmapped_guard_stderr(const FlatBytecode *bc, uint32_t fault_ip) {
+    char line[128];
+    char loc[FLAT_PANIC_LOC_MAX];
+
+    loc[0] = '\0';
+    if (bc) {
+        (void)flat_fb_panic_loc_at_ip(bc, fault_ip, loc, sizeof loc);
+    }
+    if (loc[0] != '\0') {
+        snprintf(line, sizeof line, "flvm: unmapped guard at %s\n", loc);
+    } else {
+        snprintf(line, sizeof line, "flvm: unmapped guard\n");
+    }
+    vm_write_stderr(line);
+}
+
 static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *reason,
                              int trace) {
     size_t i;
@@ -241,6 +265,15 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
     char exec_panic[64];
     uint32_t instr_stack[VM_MAX_CALL];
     int ci;
+    char loc[FLAT_PANIC_LOC_MAX];
+    char handler[FLAT_PANIC_LOC_MAX + 8];
+    uint32_t fault_ip;
+    uint32_t target = 0;
+
+    if (!ip) {
+        return 1;
+    }
+    fault_ip = *ip;
 
     if (st && st->vcx && bc) {
         flat_executor_bind_vm(&(FlatExecutorVmBind){
@@ -261,12 +294,31 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
         }
     }
 
-    vm_note_caught_panic(st, reason);
+    loc[0] = '\0';
+    if (bc) {
+        flat_fb_panic_loc_at_ip(bc, fault_ip, loc, sizeof loc);
+    }
+    vm_note_caught_panic(st, reason, loc);
+
+    if (loc[0] != '\0' && bc) {
+        snprintf(handler, sizeof handler, "#panic.%s", loc);
+        if (vm_ip_for_block_label(bc, handler, &target) == 0) {
+            if (trace) {
+                char tbuf[192];
+                snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=%s loc=%s\n", reason,
+                         handler, loc);
+                vm_write_stderr(tbuf);
+            }
+            *ip = target;
+            return 0;
+        }
+    }
 
     if (trace) {
         {
-            char tbuf[128];
-            snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=#panic.any\n", reason);
+            char tbuf[160];
+            snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=#panic.any loc=%s\n",
+                     reason, loc[0] ? loc : "");
             vm_write_stderr(tbuf);
         }
     }
@@ -657,30 +709,38 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
     return 0;
 }
 
-static int apply_panic_reason(VmState *st, const char *bind_name) {
+static int apply_panic_string_bind(VmState *st, const char *bind_name, const char *value) {
     FlatValue v;
 
     if (!st || !bind_name || !bind_name[0]) {
         return -1;
     }
     memset(&v, 0, sizeof v);
-    if (st->caught_panic_reason[0] == '\0') {
+    if (!value || value[0] == '\0') {
         if (flat_value_set_str_inline(&v, "", 0) != 0) {
             return -1;
         }
     } else {
-        size_t len = strlen(st->caught_panic_reason);
+        size_t len = strlen(value);
         if (len > FLAT_INLINE_STR_MAX) {
             uint32_t id = 0u;
-            if (flat_pool_alloc_copy(st->pool, st->caught_panic_reason, len, &id) != 0) {
+            if (flat_pool_alloc_copy(st->pool, value, len, &id) != 0) {
                 return -1;
             }
             flat_value_set_str_ref(&v, id);
-        } else if (flat_value_set_str_inline(&v, st->caught_panic_reason, len) != 0) {
+        } else if (flat_value_set_str_inline(&v, value, len) != 0) {
             return -1;
         }
     }
     return set_var_value(st, bind_name, &v, NULL, 0, 0, NULL, 0);
+}
+
+static int apply_panic_reason(VmState *st, const char *bind_name) {
+    return apply_panic_string_bind(st, bind_name, st->caught_panic_reason);
+}
+
+static int apply_panic_loc(VmState *st, const char *bind_name) {
+    return apply_panic_string_bind(st, bind_name, st->caught_panic_loc);
 }
 
 static int apply_free(VmState *st, const char *varname) {
@@ -1374,6 +1434,8 @@ static const char *opcode_name(uint8_t opcode) {
         return "PANIC_RESET";
     case OP_PANIC_REASON:
         return "PANIC_REASON";
+    case OP_PANIC_LOC:
+        return "PANIC_LOC";
     case OP_JUMP:
         return "JUMP";
     case OP_CALL_FUNCTION:
@@ -2297,6 +2359,16 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             ip += 2u + payload_size;
             continue;
         }
+        case OP_PANIC_LOC: {
+            if (apply_panic_loc(&st, (const char *)payload) != 0) {
+                if (vm_jump_panic_any(&st, bc, &ip, st.panic_reason, trace) != 0) {
+                    return vm_finish(&st, (char *)guard_names, guard_vals, 1, FLAT_TERM_PANIC, opts);
+                }
+                continue;
+            }
+            ip += 2u + payload_size;
+            continue;
+        }
         case OP_IO: {
             uint32_t ip_before = ip;
             if (apply_io_legacy(&st, bc, &ip, (const char *)payload, trace) != 0) {
@@ -2358,6 +2430,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 }
                 if (!grc) {
                     if (bt == 0) {
+                        vm_log_unmapped_guard_stderr(bc, ip);
                         return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL,
                                          opts);
                     }

@@ -212,9 +212,10 @@ If no handler exists for that index, control falls through to **`#panic.any`** (
 **Panic reason intrinsics** (language builtins, not optional natives):
 
 - **`panicReason() -> name`** — binds the **last infrastructure panic reason** (same string as VM / unhandled stderr: `io.parse`, `for.ntimes_type`, `jump.block.reached.max`, qualified native name, `type.assign.*`, …). Empty string when none was recorded.
-- **`panicReset()`** — clears the stored reason; the next **`panicReason()`** returns `""` until another panic is recorded.
+- **`panicLoc() -> site`** — binds the **panic site** of the last infrastructure PANIC: the suffix after `#panic.` in handler addressing (`#target.n` or `#target.<lineLabel>`), e.g. `#main.9`, `#main.badNum`. Empty string when none was recorded or when the `.fb` has no panic-site map (pre–format v13).
+- **`panicReset()`** — clears the stored reason **and** site; the next **`panicReason()`** / **`panicLoc()`** return `""` until another panic is recorded.
 
-The reason is updated on each PANIC routed to a handler (`#panic.*` / `#panic.any`). It is **not** cleared when the handler runs unless the program calls **`panicReset()`**.
+The reason and site are updated on each PANIC routed to a handler (`#panic.*` / `#panic.any`). They are **not** cleared when the handler runs unless the program calls **`panicReset()`**. Routing still prefers a dedicated handler `#panic.<site>` when present, then **`#panic.any`**.
 
 **Panic handler blocks** (`#panic.*`, `#panic.any`) must **not** use the **`return`** statement. Handlers end with **`OK`**, **`FAIL`**, or a **`jump`** to another block. **`return` in a panic handler is a compile error** (`flc`).
 
@@ -403,12 +404,15 @@ Payload interpretation is **opcode-specific** (see below). The compiler replaces
 | `OP_OK` | `0x06` | Empty — process exit **0** |
 | `OP_FAIL` | `0x07` | Empty — process exit **2** |
 | `OP_PANIC` | `0x08` | `uint32` handler IP (`#panic.<block>.<index>` or `#panic.any`) |
+| `OP_PANIC_RESET` | `0x11` | (none) |
+| `OP_PANIC_REASON` | `0x12` | bind var name NUL-terminated |
+| `OP_PANIC_LOC` | `0x14` | bind var name NUL-terminated |
 | `OP_NEXT` | `0x0F` | Empty — `for` / `foreach` continue |
 | `OP_CALL_FUNCTION` | `0x10` | **`func:callVM 1`:** `u16` FFUN index + `u8` argc + `u8` global + callee return name **NUL** + formal param names each **NUL-terminated** (see [USER_FUNCTIONS.md](./USER_FUNCTIONS.md)) |
 
 Block directory **block id**: `0` for `#main`; other blocks use a stable hash of the label string.
 
-If a guard fails and the `#or` handler offset is **0**, the VM exits with code **2** (unmapped logical failure).
+If a guard fails and the `#or` handler offset is **0**, the VM exits with code **2** (unmapped logical failure). It does **not** record `panicReason` / `panicLoc` or route to `#panic.*`; stderr may log `flvm: unmapped guard at <site>` when the bytecode includes a panic-site map (PLIN), e.g. `#main.3`.
 
 ### 3.4 Compilation sketch
 

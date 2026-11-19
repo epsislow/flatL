@@ -1,0 +1,14 @@
+#main
+  for('x', i, '#step')
+  OK
+
+#panic.any
+  panicLoc() -> loc
+  io.outln(loc)
+  panicReset()
+  panicLoc() -> loc2
+  io.outln(loc2)
+  OK
+
+#step
+  next

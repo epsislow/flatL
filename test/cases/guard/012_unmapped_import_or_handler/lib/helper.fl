@@ -1,0 +1,8 @@
+#run
+  t = 1
+  t == 2   #.fail
+  OK
+
+#or.#run.fail
+  t == 0   #.deep
+  OK

@@ -2,6 +2,7 @@
 #define FLAT_FB_FORMAT_H
 
 #include "fgir.h"
+#include "flat.h"
 #include "flat_schema.h"
 
 #include <stddef.h>
@@ -10,8 +11,10 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 12u
+#define FLAT_FB_FORMAT_VERSION 13u
 #define FLAT_FB_HEADER_SIZE_V11 36 /* v11: jbmx_off at bytes 32–35 */
+#define FLAT_FB_HEADER_SIZE_V13 40 /* v13: plin_off at bytes 36–39 */
+#define FLAT_FB_PLIN_MAGIC 0x4e494c50u /* 'PLIN' LE */
 #define FLAT_FB_HEADER_SIZE 32     /* v3–v10 header (load) */
 #define FLAT_FB_JBMX_MAGIC 0x584d424au /* 'JBMX' LE */
 #define FLAT_FB_HEADER_SIZE_V5 28
@@ -31,6 +34,11 @@ typedef struct {
     uint32_t block_id;
     uint32_t offset;
 } FlatBlockEntry;
+
+typedef struct {
+    uint32_t ip;
+    char loc[FLAT_PANIC_LOC_MAX];
+} FlatPanicSite;
 
 typedef struct {
     char name[FGIR_MAX_FUNC_NAME];
@@ -69,7 +77,13 @@ typedef struct {
     uint16_t function_count;
     FlatSchemaCatalog schemas;
     uint32_t *jump_block_entry_max; /* heap, length block_count; 0 = unlimited per target */
+    FlatPanicSite *panic_sites;     /* heap; from PLIN section (v13+) */
+    uint32_t panic_site_count;
 } FlatBytecode;
+
+size_t flat_fb_plin_section_size(uint32_t site_count, const FlatPanicSite *sites);
+int flat_fb_write_plin_section(FILE *f, uint32_t site_count, const FlatPanicSite *sites);
+int flat_fb_panic_loc_at_ip(const FlatBytecode *bc, uint32_t ip, char *out, size_t out_sz);
 
 size_t flat_fb_jbmx_section_size(uint16_t block_count);
 int flat_fb_write_jbmx_section(FILE *f, uint16_t block_count, const uint32_t *limits);

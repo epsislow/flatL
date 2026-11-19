@@ -258,6 +258,59 @@ int flat_parse_panic_reason_bind(const char *line, char *var_out, size_t var_sz)
     return 0;
 }
 
+int flat_parse_panic_loc_bind(const char *line, char *var_out, size_t var_sz) {
+    const char *p;
+    const char *arrow;
+    const char *start;
+    const char *end;
+
+    if (!line || !var_out || var_sz == 0) {
+        return -1;
+    }
+    if (strncmp(line, "panicLoc", 8) != 0) {
+        return -1;
+    }
+    p = line + 8;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '(') {
+        return -1;
+    }
+    p++;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != ')') {
+        return -1;
+    }
+    p++;
+    arrow = strstr(p, "->");
+    if (!arrow) {
+        return -1;
+    }
+    p = arrow + 2;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    start = p;
+    while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '.' || *p == '#')) {
+        p++;
+    }
+    end = p;
+    while (*p && isspace((unsigned char)*p)) {
+        p++;
+    }
+    if (*p != '\0' || end == start) {
+        return -1;
+    }
+    snprintf(var_out, var_sz, "%.*s", (int)(end - start), start);
+    if (strcmp(var_out, "null") == 0 || strcmp(var_out, "true") == 0 || strcmp(var_out, "false") == 0) {
+        return -1;
+    }
+    return 0;
+}
+
 static int is_free_line(const char *line) {
     char tmp[64];
     return flat_parse_free_varname(line, tmp, sizeof tmp) == 0;
@@ -275,6 +328,11 @@ static int is_panic_reset_line(const char *line) {
 static int is_panic_reason_line(const char *line) {
     char tmp[64];
     return flat_parse_panic_reason_bind(line, tmp, sizeof tmp) == 0;
+}
+
+static int is_panic_loc_line(const char *line) {
+    char tmp[64];
+    return flat_parse_panic_loc_bind(line, tmp, sizeof tmp) == 0;
 }
 
 static int assign_rhs_is_native_call(const char *line) {
@@ -417,6 +475,9 @@ static FgirInstrKind classify(const char *line) {
     }
     if (is_panic_reason_line(line)) {
         return FGIR_PANIC_REASON;
+    }
+    if (is_panic_loc_line(line)) {
+        return FGIR_PANIC_LOC;
     }
     if (is_panic_reset_line(line)) {
         return FGIR_PANIC_RESET;

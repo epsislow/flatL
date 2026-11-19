@@ -1,0 +1,10 @@
+suite = "guard"
+id = 5
+desc = "unmapped guard in imported module with line label (globalized block)"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 2
+stderr_contains = "unmapped guard at #H_work.failGuard"

@@ -23,8 +23,11 @@ typedef enum {
     OP_CALL_FUNCTION = 0x10, /* u16 func_index + u8 argc + u8 global + ret\\0 + formal names\\0… */
     OP_PANIC_RESET   = 0x11,
     OP_PANIC_REASON  = 0x12, /* bind var name NUL-terminated */
-    OP_FREEZE        = 0x13  /* var name\\0 — slot_frozen on VCX */
+    OP_FREEZE        = 0x13, /* var name\\0 — slot_frozen on VCX */
+    OP_PANIC_LOC     = 0x14  /* bind var name NUL-terminated */
 } OpCode;
+
+#define FLAT_PANIC_LOC_MAX 96
 
 /* Line modifiers on native / assign-native lines (see SPECIFICATION.md). */
 #define FLAT_LINE_MOD_NONE  0

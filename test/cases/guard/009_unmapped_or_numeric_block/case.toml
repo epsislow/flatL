@@ -1,0 +1,10 @@
+suite = "guard"
+id = 9
+desc = "unmapped guard inside #or.#main.<n> handler block (index-based handler name)"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 2
+stderr_contains = "unmapped guard at #or.#main.2.1"

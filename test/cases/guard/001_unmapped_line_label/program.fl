@@ -1,0 +1,4 @@
+#main
+  v = 1
+  v == 0   #.badCmp
+  OK
