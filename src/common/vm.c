@@ -141,6 +141,44 @@ static void vm_write_stderr(const char *s) {
 #endif
 }
 
+static void vm_panic_reason_store(VmState *st, const char *reason) {
+    char tmp[64];
+    const char *r;
+
+    if (!st) {
+        return;
+    }
+    r = reason && reason[0] != '\0' ? reason : "panic";
+    snprintf(tmp, sizeof tmp, "%s", r);
+    snprintf(st->panic_reason, sizeof st->panic_reason, "%s", tmp);
+}
+
+static const char *vm_effective_panic_reason(const VmState *st) {
+    if (!st) {
+        return "";
+    }
+    if (st->panic_reason[0] != '\0') {
+        return st->panic_reason;
+    }
+    if (st->caught_panic_reason[0] != '\0') {
+        return st->caught_panic_reason;
+    }
+    return "";
+}
+
+static void vm_format_unhandled_panic(char *out, size_t out_sz, const char *reason, const char *loc) {
+    const char *r = reason && reason[0] != '\0' ? reason : "panic";
+
+    if (!out || out_sz == 0) {
+        return;
+    }
+    if (loc && loc[0] != '\0') {
+        snprintf(out, out_sz, "unhandled PANIC: %s at %s", r, loc);
+    } else {
+        snprintf(out, out_sz, "unhandled PANIC: %s", r);
+    }
+}
+
 static void vm_record_run_message(const FlatVmOptions *opts, const VmState *st, FlatTermination term,
                                   int exit_code) {
     if (!opts || !opts->out_panic_msg || opts->out_panic_msg_sz == 0) {
@@ -150,12 +188,13 @@ static void vm_record_run_message(const FlatVmOptions *opts, const VmState *st, 
     if (exit_code == 0) {
         return;
     }
-    if (st && st->panic_reason[0] != '\0') {
+    if (st && (st->panic_reason[0] != '\0' || st->caught_panic_reason[0] != '\0')) {
+        const char *reason = vm_effective_panic_reason(st);
         if (st->unhandled_panic) {
-            snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "unhandled PANIC: %s",
-                     st->panic_reason);
+            vm_format_unhandled_panic(opts->out_panic_msg, opts->out_panic_msg_sz, reason,
+                                      st->caught_panic_loc);
         } else {
-            snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "%s", st->panic_reason);
+            snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "%s", reason);
         }
         return;
     }
@@ -236,12 +275,12 @@ static void vm_clear_caught_panic(VmState *st) {
 
 static int vm_ip_for_block_label(const FlatBytecode *bc, const char *label, uint32_t *out_ip);
 
-static void vm_log_unhandled_panic_stderr(const char *reason) {
-    char line[160];
-    const char *r;
+static void vm_log_unhandled_panic_stderr(const char *reason, const char *loc) {
+    char body[192];
+    char line[224];
 
-    r = reason && reason[0] != '\0' ? reason : "panic";
-    snprintf(line, sizeof line, "flvm: unhandled PANIC: %s\n", r);
+    vm_format_unhandled_panic(body, sizeof body, reason, loc);
+    snprintf(line, sizeof line, "flvm: %s\n", body);
     vm_write_stderr(line);
 }
 
@@ -331,10 +370,10 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
             return 0;
         }
     }
-    vm_log_unhandled_panic_stderr(reason);
+    vm_log_unhandled_panic_stderr(reason, loc);
     if (st) {
         st->unhandled_panic = 1;
-        snprintf(st->panic_reason, sizeof st->panic_reason, "%s", reason ? reason : "panic");
+        vm_panic_reason_store(st, reason);
     }
     return 1;
 }

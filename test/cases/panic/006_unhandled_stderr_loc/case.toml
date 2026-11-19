@@ -1,0 +1,9 @@
+suite = "panic"
+id = 6
+desc = "unhandled native panic: stderr + runner msg include PLIN site"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "unhandled PANIC: io.out at #main.1"
