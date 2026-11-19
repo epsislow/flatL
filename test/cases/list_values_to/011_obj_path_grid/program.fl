@@ -1,0 +1,8 @@
+use native list with L
+
+#main
+  o = { grid: [["1", "2"], ["3", "4"]] }
+  L.values_to(o.grid ; "f64 all") -> g
+  io.out(g)
+  io.out(o.grid)
+  OK
