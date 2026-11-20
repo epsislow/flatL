@@ -13,6 +13,16 @@
 #define FLAT_CSV_SAMPLE_SZ 65536
 #define FLAT_CSV_ARENA_SZ 262144
 #define FLAT_CSV_RECORD_SZ 65536
+#define FLAT_CSV_MAX_VIEWS 128
+
+typedef struct {
+    unsigned char in_use;
+    uint32_t id, parent_id, root_id;
+    int x, y, width, height, cursor_row;
+    int kind;
+} FlatCsvView;
+
+typedef struct { int x, y; char *value; } FlatCsvGridCell;
 
 typedef struct {
     unsigned char in_use;
@@ -37,10 +47,15 @@ typedef struct {
     char *text_buf;
     size_t text_len;
     int text_mode;
+    int writer_mode; /* 0 unset, 1 sequential, 2 grid */
+    FlatCsvGridCell *grid_cells;
+    int grid_count, grid_cap;
+    int grid_serialized;
 } FlatCsvSession;
 
 struct FlatCsvRuntime {
     FlatCsvSession sessions[FLAT_CSV_MAX_SESSIONS];
+    FlatCsvView views[FLAT_CSV_MAX_VIEWS];
     uint32_t next_id;
 };
 
@@ -73,6 +88,8 @@ static void sess_clear(FlatCsvSession *s) {
     free(s->line_offsets);
     free(s->write_buf);
     free(s->text_buf);
+    if (s->grid_cells) { int i; for (i = 0; i < s->grid_count; i++) free(s->grid_cells[i].value); }
+    free(s->grid_cells);
     memset(s, 0, sizeof *s);
 }
 
@@ -444,6 +461,14 @@ int flat_csv_close(FlatCsvRuntime *rt, uint32_t sess_id, FlatFileTable *files, c
     if (!s) {
         return panic_msg(panic, panic_sz, "csv.close");
     }
+    {
+        int i;
+        for (i = 0; i < FLAT_CSV_MAX_VIEWS; i++) {
+            if (rt->views[i].in_use && rt->views[i].root_id == sess_id) {
+                return panic_msg(panic, panic_sz, "csv.view.open");
+            }
+        }
+    }
     if (s->kind == FLAT_CSV_SESS_WRITER) {
         if (flat_csv_writer_flush(rt, sess_id, files, panic, panic_sz) != 0) {
             return -1;
@@ -453,6 +478,106 @@ int flat_csv_close(FlatCsvRuntime *rt, uint32_t sess_id, FlatFileTable *files, c
         flat_file_release(files, s->fp_id);
     }
     sess_clear(s);
+    return 0;
+}
+
+static FlatCsvView *view_by_id(FlatCsvRuntime *rt, uint32_t id) {
+    int i;
+    if (!rt || !id) return NULL;
+    for (i = 0; i < FLAT_CSV_MAX_VIEWS; i++)
+        if (rt->views[i].in_use && rt->views[i].id == id) return &rt->views[i];
+    return NULL;
+}
+
+int flat_csv_view_resolve(FlatCsvRuntime *rt, uint32_t id, uint32_t *out_root,
+                          int *out_x, int *out_y, int *out_width, int *out_height,
+                          int *out_kind, int *out_cursor_row) {
+    FlatCsvView *v = view_by_id(rt, id);
+    FlatCsvSession *root;
+    if (!v) {
+        root = sess_by_id(rt, id);
+        if (!root) return -1;
+        if (out_root) *out_root = id;
+        if (out_x) *out_x = 0;
+        if (out_y) *out_y = 0;
+        if (out_width) *out_width = -1;
+        if (out_height) *out_height = -1;
+        if (out_kind) *out_kind = (int)root->kind;
+        if (out_cursor_row) *out_cursor_row = root->cursor_row;
+        return 0;
+    }
+    root = sess_by_id(rt, v->root_id);
+    if (!root) return -1;
+    if (out_root) *out_root = v->root_id;
+    if (out_x) *out_x = v->x;
+    if (out_y) *out_y = v->y;
+    if (out_width) *out_width = v->width;
+    if (out_height) *out_height = v->height;
+    if (out_kind) *out_kind = (int)root->kind;
+    if (out_cursor_row) *out_cursor_row = v->cursor_row;
+    return 0;
+}
+
+int flat_csv_view_set_cursor(FlatCsvRuntime *rt, uint32_t id, int cursor_row) {
+    FlatCsvView *v = view_by_id(rt, id);
+    if (!v || cursor_row < 0 || cursor_row > v->height) return -1;
+    v->cursor_row = cursor_row;
+    return 0;
+}
+
+int flat_csv_view_create(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t parent_id,
+                         int x, int y, int width, int height, uint32_t *out_id,
+                         char *panic, size_t panic_sz) {
+    uint32_t root_id = parent_id;
+    int px = 0, py = 0, pw = -1, ph = -1, kind = 0, i, slot = -1;
+    FlatCsvSession *root;
+    if (!rt || !out_id || x < 0 || y < 0 || width <= 0 || height <= 0)
+        return panic_msg(panic, panic_sz, "csv.view.bounds");
+    if (flat_csv_view_resolve(rt, parent_id, &root_id, &px, &py, &pw, &ph, &kind, NULL) != 0)
+        return panic_msg(panic, panic_sz, "csv.id.invalid");
+    root = sess_by_id(rt, root_id);
+    if (!root) return panic_msg(panic, panic_sz, "csv.id.invalid");
+    if (pw < 0 && root->kind == FLAT_CSV_SESS_READER) {
+        int rows = 0, cols = 0, old_row = 0;
+        flat_csv_reader_get_row(rt, root_id, &old_row);
+        if (flat_csv_reader_rows(rt, files, root_id, &rows) != 0 ||
+            flat_csv_reader_set_row(rt, files, root_id, 0, panic, panic_sz) != 0 ||
+            flat_csv_reader_cols(rt, files, root_id, &cols) != 0) {
+            flat_csv_reader_set_row(rt, files, root_id, old_row, NULL, 0);
+            return panic_msg(panic, panic_sz, "csv.view.bounds");
+        }
+        flat_csv_reader_set_row(rt, files, root_id, old_row, NULL, 0);
+        pw = cols; ph = rows;
+    }
+    if (pw >= 0 && ((long long)x + width > pw || (long long)y + height > ph))
+        return panic_msg(panic, panic_sz, "csv.view.bounds");
+    for (i = 0; i < FLAT_CSV_MAX_VIEWS; i++) if (!rt->views[i].in_use) { slot = i; break; }
+    if (slot < 0) return panic_msg(panic, panic_sz, "csv.view.limit");
+    {
+        FlatCsvView *v = &rt->views[slot];
+        memset(v, 0, sizeof *v);
+        v->in_use = 1;
+        v->id = rt->next_id++;
+        v->parent_id = parent_id;
+        v->root_id = root_id;
+        v->x = px + x;
+        v->y = py + y;
+        v->width = width;
+        v->height = height;
+        v->kind = kind;
+        *out_id = v->id;
+    }
+    return 0;
+}
+
+int flat_csv_view_close(FlatCsvRuntime *rt, uint32_t view_id, char *panic, size_t panic_sz) {
+    FlatCsvView *v = view_by_id(rt, view_id);
+    int i;
+    if (!v) return panic_msg(panic, panic_sz, "csv.id.invalid");
+    for (i = 0; i < FLAT_CSV_MAX_VIEWS; i++)
+        if (rt->views[i].in_use && rt->views[i].parent_id == view_id)
+            return panic_msg(panic, panic_sz, "csv.view.children");
+    memset(v, 0, sizeof *v);
     return 0;
 }
 
@@ -1160,9 +1285,10 @@ int flat_csv_writer_write_rows(FlatCsvRuntime *rt, uint32_t wid, const FlatValue
     FlatCsvSession *s = sess_by_id(rt, wid);
     int nrows;
     int r;
-    if (!s || s->kind != FLAT_CSV_SESS_WRITER || rows_val->tag != VAL_LIST) {
-        return panic_msg(panic, panic_sz, "csv.writeRows");
+    if (!s || s->kind != FLAT_CSV_SESS_WRITER || rows_val->tag != VAL_LIST || s->writer_mode == 2) {
+        return panic_msg(panic, panic_sz, "csv.writer.mode");
     }
+    s->writer_mode = 1;
     if (flat_list_len(coll, rows_val->u.coll_id, &nrows) != 0) {
         return panic_msg(panic, panic_sz, "csv.writeRows");
     }
@@ -1214,9 +1340,10 @@ int flat_csv_writer_write_cols(FlatCsvRuntime *rt, uint32_t wid, const FlatValue
     int nkeys;
     int nrows = -1;
     int k;
-    if (!s || s->kind != FLAT_CSV_SESS_WRITER || cols_val->tag != VAL_OBJECT) {
-        return panic_msg(panic, panic_sz, "csv.writeCols");
+    if (!s || s->kind != FLAT_CSV_SESS_WRITER || cols_val->tag != VAL_OBJECT || s->writer_mode == 2) {
+        return panic_msg(panic, panic_sz, "csv.writer.mode");
     }
+    s->writer_mode = 1;
     if (flat_obj_len(coll, cols_val->u.coll_id, &nkeys) != 0 || nkeys < 1) {
         return panic_msg(panic, panic_sz, "csv.writeCols");
     }
@@ -1298,6 +1425,65 @@ int flat_csv_writer_write_cols(FlatCsvRuntime *rt, uint32_t wid, const FlatValue
     return 0;
 }
 
+int flat_csv_writer_set_cell(FlatCsvRuntime *rt, uint32_t view_id, int x, int y,
+                              const char *value, char *panic, size_t panic_sz) {
+    uint32_t root_id; int ox, oy, w, h, kind, cursor, i;
+    FlatCsvSession *s; char *copy;
+    if (flat_csv_view_resolve(rt, view_id, &root_id, &ox, &oy, &w, &h, &kind, &cursor) != 0)
+        return panic_msg(panic, panic_sz, "csv.id.invalid");
+    if (kind != FLAT_CSV_SESS_WRITER) return panic_msg(panic, panic_sz, "csv.id.type");
+    if (w < 0 || x < 0 || y < 0 || x >= w || y >= h)
+        return panic_msg(panic, panic_sz, "csv.view.bounds");
+    s = sess_by_id(rt, root_id);
+    if (!s || s->kind != FLAT_CSV_SESS_WRITER) return panic_msg(panic, panic_sz, "csv.id.type");
+    if (s->writer_mode == 1) return panic_msg(panic, panic_sz, "csv.writer.mode");
+    if (s->grid_serialized) return panic_msg(panic, panic_sz, "csv.writer.flush");
+    s->writer_mode = 2;
+    for (i = 0; i < s->grid_count; i++) {
+        if (s->grid_cells[i].x == ox + x && s->grid_cells[i].y == oy + y)
+            return panic_msg(panic, panic_sz, "csv.writer.conflict");
+    }
+    copy = strdup(value ? value : "");
+    if (!copy) return panic_msg(panic, panic_sz, "csv.writer.set");
+    if (s->grid_count == s->grid_cap) {
+        int cap = s->grid_cap ? s->grid_cap * 2 : 32;
+        FlatCsvGridCell *p = realloc(s->grid_cells, (size_t)cap * sizeof *p);
+        if (!p) { free(copy); return panic_msg(panic, panic_sz, "csv.writer.set"); }
+        s->grid_cells = p; s->grid_cap = cap;
+    }
+    s->grid_cells[s->grid_count].x = ox + x;
+    s->grid_cells[s->grid_count].y = oy + y;
+    s->grid_cells[s->grid_count].value = copy;
+    s->grid_count++;
+    return 0;
+}
+
+static int writer_grid_serialize(FlatCsvSession *s, char *panic, size_t panic_sz) {
+    int max_x = -1, max_y = -1, y, x, i;
+    if (!s || s->writer_mode != 2 || s->grid_serialized) return 0;
+    for (i = 0; i < s->grid_count; i++) {
+        if (s->grid_cells[i].x > max_x) max_x = s->grid_cells[i].x;
+        if (s->grid_cells[i].y > max_y) max_y = s->grid_cells[i].y;
+    }
+    for (y = 0; y <= max_y; y++) {
+        const char *fields[FLAT_CSV_MAX_FIELDS]; size_t lens[FLAT_CSV_MAX_FIELDS];
+        char line[131072]; size_t line_len;
+        if (max_x + 1 > FLAT_CSV_MAX_FIELDS) return panic_msg(panic, panic_sz, "csv.view.bounds");
+        for (x = 0; x <= max_x; x++) {
+            fields[x] = ""; lens[x] = 0;
+            for (i = 0; i < s->grid_count; i++) if (s->grid_cells[i].x == x && s->grid_cells[i].y == y) {
+                fields[x] = s->grid_cells[i].value; lens[x] = strlen(fields[x]); break;
+            }
+        }
+        if (flat_csv_serialize_row(fields, lens, max_x + 1, s->fmt.separator, s->fmt.quote,
+                                   s->fmt.line_ending, line, sizeof line, &line_len) != 0 ||
+            writer_append(s, line, line_len) != 0)
+            return panic_msg(panic, panic_sz, "csv.writer.set");
+    }
+    s->grid_serialized = 1;
+    return 0;
+}
+
 static FlatCsvEncoding writer_output_encoding(const FlatCsvSession *s) {
     if (!s) {
         return FLAT_CSV_ENC_UTF8;
@@ -1334,6 +1520,7 @@ int flat_csv_writer_flush(FlatCsvRuntime *rt, uint32_t wid, FlatFileTable *files
     if (!fp) {
         return panic_msg(panic, panic_sz, "csv.fp.closed");
     }
+    if (writer_grid_serialize(s, panic, panic_sz) != 0) return -1;
     if (fseek(fp, 0, SEEK_SET) != 0) {
         return panic_msg(panic, panic_sz, "csv.flush");
     }

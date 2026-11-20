@@ -195,13 +195,13 @@ int flat_native_csv_close(FlatNativeCtx *ctx) {
 }
 
 int flat_native_csv_reset(FlatNativeCtx *ctx) {
-    uint32_t rid;
-    if (require_sess_id(ctx, ctx->inner, &rid) != 0) {
-        return csv_fail(ctx, "csv.reset");
-    }
-    if (flat_csv_reader_reset(rt(ctx), ctx->file_tbl, rid) != 0) {
-        return csv_fail(ctx, "csv.reset");
-    }
+    uint32_t rid, root; int x, y, w, h, kind, cursor;
+    if (require_sess_id(ctx, ctx->inner, &rid) != 0 ||
+        flat_csv_view_resolve(rt(ctx), rid, &root, &x, &y, &w, &h, &kind, &cursor) != 0 ||
+        kind != FLAT_CSV_SESS_READER) return csv_fail(ctx, "csv.reset");
+    if (w >= 0) {
+        if (flat_csv_view_set_cursor(rt(ctx), rid, 0) != 0) return csv_fail(ctx, "csv.reset");
+    } else if (flat_csv_reader_reset(rt(ctx), ctx->file_tbl, root) != 0) return csv_fail(ctx, "csv.reset");
     *ctx->io_status = FLAT_IO_OK;
     return 0;
 }
@@ -219,26 +219,22 @@ int flat_native_csv_is_eof(FlatNativeCtx *ctx) {
 }
 
 int flat_native_csv_rows(FlatNativeCtx *ctx) {
-    uint32_t rid;
-    int n;
-    if (require_sess_id(ctx, ctx->inner, &rid) != 0) {
+    uint32_t rid, root; int n, x, y, w, h, kind, cursor;
+    if (require_sess_id(ctx, ctx->inner, &rid) != 0) return csv_fail(ctx, "csv.rows");
+    if (flat_csv_view_resolve(rt(ctx), rid, &root, &x, &y, &w, &h, &kind, &cursor) != 0)
         return csv_fail(ctx, "csv.rows");
-    }
-    if (flat_csv_reader_rows(rt(ctx), ctx->file_tbl, rid, &n) != 0) {
-        return csv_fail(ctx, "csv.rows");
-    }
+    if (w >= 0) return csv_out_num(ctx, (double)h);
+    if (flat_csv_reader_rows(rt(ctx), ctx->file_tbl, root, &n) != 0) return csv_fail(ctx, "csv.rows");
     return csv_out_num(ctx, (double)n);
 }
 
 int flat_native_csv_cols(FlatNativeCtx *ctx) {
-    uint32_t rid;
-    int n;
-    if (require_sess_id(ctx, ctx->inner, &rid) != 0) {
+    uint32_t rid, root; int n, x, y, w, h, kind, cursor;
+    if (require_sess_id(ctx, ctx->inner, &rid) != 0) return csv_fail(ctx, "csv.cols");
+    if (flat_csv_view_resolve(rt(ctx), rid, &root, &x, &y, &w, &h, &kind, &cursor) != 0)
         return csv_fail(ctx, "csv.cols");
-    }
-    if (flat_csv_reader_cols(rt(ctx), ctx->file_tbl, rid, &n) != 0) {
-        return csv_fail(ctx, "csv.cols");
-    }
+    if (w >= 0) return csv_out_num(ctx, (double)w);
+    if (flat_csv_reader_cols(rt(ctx), ctx->file_tbl, root, &n) != 0) return csv_fail(ctx, "csv.cols");
     return csv_out_num(ctx, (double)n);
 }
 
@@ -289,16 +285,25 @@ int flat_native_csv_set_row(FlatNativeCtx *ctx) {
 }
 
 int flat_native_csv_next(FlatNativeCtx *ctx) {
-    uint32_t rid;
-    uint32_t list_id;
-    if (require_sess_id(ctx, ctx->inner, &rid) != 0) {
-        return csv_fail(ctx, "csv.next");
+    uint32_t rid, root, list_id; int x, y, w, h, kind, cursor, is_obj;
+    if (require_sess_id(ctx, ctx->inner, &rid) != 0) return csv_fail(ctx, "csv.next");
+    if (flat_csv_view_resolve(rt(ctx), rid, &root, &x, &y, &w, &h, &kind, &cursor) != 0 ||
+        kind != FLAT_CSV_SESS_READER) return csv_fail(ctx, "csv.next");
+    if (w >= 0) {
+        if (cursor >= h) return csv_fail(ctx, "csv.next");
+        ctx->panic_detail[0] = '\0';
+        if (flat_csv_reader_get_cells(rt(ctx), ctx->file_tbl, root, x, y + cursor, w, 1, 0,
+                                      ctx->coll, ctx->pool, &list_id, &is_obj,
+                                      ctx->panic_detail, sizeof ctx->panic_detail) != 0 ||
+            flat_csv_view_set_cursor(rt(ctx), rid, cursor + 1) != 0)
+            return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.next");
+        *ctx->io_status = FLAT_IO_OK;
+        return flat_value_set_list(ctx->out, list_id);
     }
     ctx->panic_detail[0] = '\0';
-    if (flat_csv_reader_next(rt(ctx), ctx->file_tbl, rid, ctx->coll, ctx->pool, &list_id,
-                             ctx->panic_detail, sizeof ctx->panic_detail) != 0) {
+    if (flat_csv_reader_next(rt(ctx), ctx->file_tbl, root, ctx->coll, ctx->pool, &list_id,
+                             ctx->panic_detail, sizeof ctx->panic_detail) != 0)
         return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.next");
-    }
     *ctx->io_status = FLAT_IO_OK;
     return flat_value_set_list(ctx->out, list_id);
 }
@@ -458,10 +463,18 @@ int flat_native_csv_get_cells(FlatNativeCtx *ctx) {
     if (split_variadic_args(buf, parts, 8, &argc) != 0 || argc < 5 || argc > 6) {
         return csv_fail(ctx, "csv.getCells");
     }
-    if (require_sess_id(ctx, parts[0], &rid) != 0 || require_int(ctx, parts[1], &x0) != 0 ||
-        require_int(ctx, parts[2], &y0) != 0 || require_int(ctx, parts[3], &xLen) != 0 ||
-        require_int(ctx, parts[4], &yLen) != 0) {
-        return csv_fail(ctx, "csv.getCells");
+    {
+        uint32_t root; int vx, vy, vw, vh, kind, cursor;
+        if (require_sess_id(ctx, parts[0], &rid) != 0 || require_int(ctx, parts[1], &x0) != 0 ||
+            require_int(ctx, parts[2], &y0) != 0 || require_int(ctx, parts[3], &xLen) != 0 ||
+            require_int(ctx, parts[4], &yLen) != 0 ||
+            flat_csv_view_resolve(rt(ctx), rid, &root, &vx, &vy, &vw, &vh, &kind, &cursor) != 0)
+            return csv_fail(ctx, "csv.getCells");
+        if (kind != FLAT_CSV_SESS_READER) return csv_fail(ctx, "csv.id.type");
+        if (vw >= 0 && (x0 < 0 || y0 < 0 || xLen <= 0 || yLen <= 0 ||
+                        (long long)x0 + xLen > vw || (long long)y0 + yLen > vh))
+            return csv_fail(ctx, "csv.view.bounds");
+        x0 += vx; y0 += vy; rid = root;
     }
     if (argc == 6) {
         char mode_buf[32];
@@ -486,4 +499,91 @@ int flat_native_csv_get_cells(FlatNativeCtx *ctx) {
         return flat_value_set_object(ctx->out, coll_id);
     }
     return flat_value_set_list(ctx->out, coll_id);
+}
+int flat_native_csv_view(FlatNativeCtx *ctx) {
+    char buf[512];
+    char *parts[5];
+    int argc, x, y, width, height;
+    uint32_t parent, id;
+    if (!ctx) return csv_fail(ctx, "csv.view");
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_variadic_args(buf, parts, 5, &argc) != 0 || argc != 5 ||
+        require_sess_id(ctx, parts[0], &parent) != 0 ||
+        require_int(ctx, parts[1], &x) != 0 || require_int(ctx, parts[2], &y) != 0 ||
+        require_int(ctx, parts[3], &width) != 0 || require_int(ctx, parts[4], &height) != 0)
+        return csv_fail(ctx, "csv.view");
+    ctx->panic_detail[0] = '\0';
+    if (flat_csv_view_create(rt(ctx), ctx->file_tbl, parent, x, y, width, height, &id,
+                             ctx->panic_detail, sizeof ctx->panic_detail) != 0)
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.view");
+    return csv_out_num(ctx, (double)id);
+}
+
+int flat_native_csv_close_view(FlatNativeCtx *ctx) {
+    uint32_t id;
+    if (!ctx || require_sess_id(ctx, ctx->inner, &id) != 0)
+        return csv_fail(ctx, "csv.closeView");
+    ctx->panic_detail[0] = '\0';
+    if (flat_csv_view_close(rt(ctx), id, ctx->panic_detail, sizeof ctx->panic_detail) != 0)
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.closeView");
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_csv_set_cell(FlatNativeCtx *ctx) {
+    char buf[1024], value[512]; char *parts[4]; int argc, x, y; uint32_t id; FlatValue v;
+    if (!ctx) return csv_fail(ctx, "csv.set");
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_variadic_args(buf, parts, 4, &argc) != 0 || argc != 4 ||
+        require_sess_id(ctx, parts[0], &id) != 0 || require_int(ctx, parts[1], &x) != 0 ||
+        require_int(ctx, parts[2], &y) != 0 || flat_native_parse_expr(ctx, parts[3], &v) != 0 ||
+        flat_value_get_cstr(&v, ctx->pool, value, sizeof value) != 0)
+        return csv_fail(ctx, "csv.set");
+    ctx->panic_detail[0] = '\0';
+    if (flat_csv_writer_set_cell(rt(ctx), id, x, y, value, ctx->panic_detail,
+                                 sizeof ctx->panic_detail) != 0)
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.set");
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_csv_get_view_row(FlatNativeCtx *ctx) {
+    char buf[512], *a, *b; uint32_t id, root, list_id; int y, x, oy, w, h, kind, cursor, is_obj;
+    if (!ctx) return csv_fail(ctx, "csv.row");
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_two_args(buf, &a, &b) != 0 || require_sess_id(ctx, a, &id) != 0 ||
+        require_int(ctx, b, &y) != 0 ||
+        flat_csv_view_resolve(rt(ctx), id, &root, &x, &oy, &w, &h, &kind, &cursor) != 0 ||
+        kind != FLAT_CSV_SESS_READER || w < 0 || y < 0 || y >= h)
+        return csv_fail(ctx, "csv.row");
+    ctx->panic_detail[0] = '\0';
+    if (flat_csv_reader_get_cells(rt(ctx), ctx->file_tbl, root, x, oy + y, w, 1, 0,
+                                  ctx->coll, ctx->pool, &list_id, &is_obj, ctx->panic_detail,
+                                  sizeof ctx->panic_detail) != 0)
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.row");
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_list(ctx->out, list_id);
+}
+
+int flat_native_csv_get_cell(FlatNativeCtx *ctx) {
+    char buf[512], *parts[3]; int argc, x, y; uint32_t id, root, list_id;
+    int vx, vy, w, h, kind, cursor, is_obj; FlatValue cell;
+    if (!ctx) return csv_fail(ctx, "csv.get");
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_variadic_args(buf, parts, 3, &argc) != 0 || argc != 3 ||
+        require_sess_id(ctx, parts[0], &id) != 0 || require_int(ctx, parts[1], &x) != 0 ||
+        require_int(ctx, parts[2], &y) != 0 ||
+        flat_csv_view_resolve(rt(ctx), id, &root, &vx, &vy, &w, &h, &kind, &cursor) != 0 ||
+        kind != FLAT_CSV_SESS_READER || w < 0 || x < 0 || y < 0 || x >= w || y >= h)
+        return csv_fail(ctx, "csv.get");
+    ctx->panic_detail[0] = '\0';
+    if (flat_csv_reader_get_cells(rt(ctx), ctx->file_tbl, root, vx + x, vy + y, 1, 1, 0,
+                                  ctx->coll, ctx->pool, &list_id, &is_obj, ctx->panic_detail,
+                                  sizeof ctx->panic_detail) != 0 ||
+        flat_list_get(ctx->coll, list_id, 0, &cell) != 0)
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.get");
+    *ctx->io_status = FLAT_IO_OK;
+    *ctx->out = cell;
+    flat_value_retain(ctx->coll, ctx->pool, ctx->out);
+    return 0;
 }

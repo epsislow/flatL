@@ -335,6 +335,11 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_CSV_WRITE_COLS, flat_native_csv_write_cols);
         flat_native_plugin_register(FLAT_NATIVE_CSV_FLUSH, flat_native_csv_flush);
         flat_native_plugin_register(FLAT_NATIVE_CSV_GET_CELLS, flat_native_csv_get_cells);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_VIEW, flat_native_csv_view);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_CLOSE_VIEW, flat_native_csv_close_view);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_SET_CELL, flat_native_csv_set_cell);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_GET_CELL, flat_native_csv_get_cell);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_GET_VIEW_ROW, flat_native_csv_get_view_row);
         g_loaded_csv = 1;
         return 0;
     }

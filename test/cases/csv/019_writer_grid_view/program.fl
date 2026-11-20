@@ -1,0 +1,16 @@
+use native csv
+
+#main
+  fp = file.createCtx('grid.csv')
+  wid = csv.writer(fp)
+  grid = csv.view(wid, 0, 0, 3, 3)
+  csv.set(grid, 0, 0, 'Name')
+  csv.set(grid, 1, 0, 'Price')
+  csv.set(grid, 2, 0, '')
+  csv.set(grid, 0, 1, 'Keyboard')
+  csv.set(grid, 1, 1, '50')
+  csv.set(grid, 2, 1, 'EUR')
+  csv.closeView(grid)
+  csv.close(wid)
+  file.close(fp)
+  OK

@@ -29,6 +29,14 @@ uint32_t flat_csv_writer_open(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
                               char *panic, size_t panic_sz);
 int flat_csv_close(FlatCsvRuntime *rt, uint32_t sess_id, FlatFileTable *files, char *panic,
                    size_t panic_sz);
+int flat_csv_view_create(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t parent_id,
+                         int x, int y, int width, int height, uint32_t *out_id,
+                         char *panic, size_t panic_sz);
+int flat_csv_view_close(FlatCsvRuntime *rt, uint32_t view_id, char *panic, size_t panic_sz);
+int flat_csv_view_resolve(FlatCsvRuntime *rt, uint32_t id, uint32_t *out_root,
+                          int *out_x, int *out_y, int *out_width, int *out_height,
+                          int *out_kind, int *out_cursor_row);
+int flat_csv_view_set_cursor(FlatCsvRuntime *rt, uint32_t id, int cursor_row);
 
 int flat_csv_reader_reset(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid);
 int flat_csv_reader_is_eof(const FlatCsvRuntime *rt, uint32_t rid, int *out_eof);
@@ -59,6 +67,8 @@ int flat_csv_format_set_encoding(FlatCsvRuntime *rt, uint32_t sess_id, const cha
 int flat_csv_format_set_quote(FlatCsvRuntime *rt, uint32_t sess_id, const char *val, char *panic,
                               size_t panic_sz);
 
+int flat_csv_writer_set_cell(FlatCsvRuntime *rt, uint32_t view_id, int x, int y,
+                              const char *value, char *panic, size_t panic_sz);
 int flat_csv_writer_write_rows(FlatCsvRuntime *rt, uint32_t wid, const FlatValue *rows_val,
                                FlatCollectionPool *coll, FlatStringPool *pool, char *panic,
                                size_t panic_sz);

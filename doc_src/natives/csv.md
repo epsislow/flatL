@@ -88,3 +88,55 @@ use native list
   io.out(',')
   next
 ```
+## Views
+
+CSV readers and writers can expose bounded rectangular regions through numeric view IDs.
+Views can be nested; child coordinates are relative to their parent. Close views explicitly,
+from child to parent, before closing the root reader or writer.
+
+| Call | Description |
+|------|-------------|
+| `view(parentId, x, y, width, height)` | Creates a reader or writer view; returns a numeric `viewId` |
+| `closeView(viewId)` | Closes a view; panics with `csv.view.children` while child views remain |
+| `rows(viewId)` / `cols(viewId)` | Returns the fixed view height / width |
+| `get(viewId, x, y)` | Reads one cell from a reader view |
+| `row(viewId, y)` | Reads one row from a reader view as a LIST STRING |
+| `next(viewId)` | Reads the next row from a reader view; each view has its own cursor |
+| `reset(viewId)` | Resets that view's cursor |
+| `set(viewId, x, y, value)` | Sets one cell in a writer view (grid mode) |
+
+Example — nested reader views:
+
+```text
+rid = csv.reader(fp)
+region = csv.view(rid, 0, 10, 8, 100)
+prices = csv.view(region, 4, 0, 2, 100)
+price = csv.get(prices, 0, 0)
+row = csv.next(prices)
+csv.closeView(prices)
+csv.closeView(region)
+csv.close(rid)
+```
+
+Example — grid writer view:
+
+```text
+wid = csv.writer(fp)
+grid = csv.view(wid, 0, 0, 3, 20)
+csv.set(grid, 0, 0, "Name")
+csv.set(grid, 1, 0, "Price")
+csv.set(grid, 0, 1, "Keyboard")
+csv.set(grid, 1, 1, 50)
+csv.closeView(grid)
+csv.close(wid)  # serializes the grid and flushes the writer
+```
+
+Writer grid mode is mutually exclusive with `writeRows` / `writeCols` on the same writer.
+A grid cell can be assigned only once; a duplicate assignment panics with
+`csv.writer.conflict`. Unassigned cells between populated columns are serialized as empty
+fields. Grid output is buffered until `flush` or `close`.
+
+A view must fit within its parent. Invalid coordinates panic with `csv.view.bounds`.
+Closing a root reader or writer while any descendant view remains open panics with
+`csv.view.open`; closing a parent view while a child remains open panics with
+`csv.view.children`.
