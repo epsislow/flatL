@@ -19,9 +19,7 @@
 
   function truncDisplay(str) {
     const Jp = P();
-    const t = Jp.truncateUiString(str, Jp.UI_STRING_TRUNCATE);
-    if (!t.truncated) return JSON.stringify(str);
-    return JSON.stringify(t.text) + ' (' + t.length + ' chars)';
+    return JSON.stringify(str);
   }
 
   function renderScalarToken(value) {
@@ -47,12 +45,12 @@
       return !!expand[pathKey(path)];
     }
 
-    function row(indent, togglePath, bodyBuild) {
+    function row(indent, togglePath, bodyBuild, bare) {
       const r = el('div', 'fleditor-jsonl-tree-row');
-      r.appendChild(el('span', 'fleditor-jsonl-tree-indent', indent));
-      const tog = el('button', 'fleditor-jsonl-tree-tog');
-      tog.type = 'button';
-      if (togglePath) {
+      if (!bare) r.appendChild(el('span', 'fleditor-jsonl-tree-indent', indent));
+      const tog = bare ? null : el('button', 'fleditor-jsonl-tree-tog');
+      if (tog) tog.type = 'button';
+      if (tog && togglePath) {
         const open = isOpen(togglePath);
         tog.textContent = open ? '[-]' : '[+]';
         tog.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -61,13 +59,13 @@
           ev.preventDefault();
           onToggle(togglePath.slice());
         });
-      } else {
+      } else if (tog) {
         tog.className = 'fleditor-jsonl-tree-tog fleditor-jsonl-tree-tog--spacer';
         tog.tabIndex = -1;
         tog.setAttribute('aria-hidden', 'true');
         tog.textContent = '';
       }
-      r.appendChild(tog);
+      if (tog) r.appendChild(tog);
       const body = el('span', 'fleditor-jsonl-tree-body');
       bodyBuild(body);
       r.appendChild(body);
@@ -79,7 +77,7 @@
       if (val === null || t === 'boolean' || t === 'number' || t === 'string') {
         row(indent, null, function (body) {
           body.appendChild(renderScalarToken(val));
-        });
+        }, path.length === 1);
         return;
       }
       if (Array.isArray(val)) {
@@ -202,7 +200,8 @@
     }
 
     const rootPath = ['$'];
-    expand[pathKey(rootPath)] = true;
+    const rootKey = pathKey(rootPath);
+    if (!Object.prototype.hasOwnProperty.call(expand, rootKey)) expand[rootKey] = true;
     renderValue(value, rootPath, '');
   }
 

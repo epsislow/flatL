@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=15">
+  <link rel="stylesheet" href="css/fleditor.css?v=16">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -143,6 +143,7 @@
             <div class="fleditor-jsonl-detail">
               <div class="fleditor-jsonl-detail-head">
                 <span id="jsonlLineLabel" class="fleditor-jsonl-meta">No line</span>
+                <button type="button" id="jsonlWordWrapBtn" class="fleditor-jsonl-view-toggle" title="Toggle word wrap" aria-label="Toggle word wrap" aria-pressed="false">W</button>
                 <div class="fleditor-jsonl-seg" role="group" aria-label="Panel mode">
                   <button type="button" id="jsonlFreeBtn">Free</button>
                   <button type="button" id="jsonlLockBtn">Lock</button>
@@ -156,8 +157,8 @@
                 <textarea id="jsonlFreeTa" class="fleditor-jsonl-free-ta" spellcheck="false"></textarea>
               </div>
               <div class="fleditor-jsonl-detail-foot">
-                <button type="button" id="jsonlApplyBtn">Apply line</button>
-                <button type="button" id="jsonlRevertBtn">Revert line</button>
+                <button type="button" id="jsonlApplyBtn" class="fleditor-io-btn fleditor-io-btn--primary">Apply line</button>
+                <button type="button" id="jsonlRevertBtn" class="fleditor-io-btn">Revert line</button>
               </div>
             </div>
           </div>
@@ -481,7 +482,7 @@
   <script src="js/fleditor-csv-parse.js?v=6"></script>
   <script src="js/fleditor-csv-grid.js?v=11"></script>
   <script src="js/fleditor-jsonl-parse.js?v=3"></script>
-  <script src="js/fleditor-jsonl-ui.js?v=3"></script>
+  <script src="js/fleditor-jsonl-ui.js?v=4"></script>
   <script src="js/fleditor-project.js?v=7"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
@@ -489,6 +490,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=73"></script>
+  <script src="js/fleditor.js?v=74"></script>
 </body>
 </html>

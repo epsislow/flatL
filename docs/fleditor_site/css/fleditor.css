@@ -1783,3 +1783,21 @@ body.fleditor-resize-active * {
   .fleditor-jsonl-list-resize:active { background: var(--fl-surface-2, var(--fl-surface)); }
   .fleditor-jsonl-detail { grid-row: 3; }
 }
+
+/* JSONL Lock tree: compact root primitives and optional word wrapping. */
+.fleditor-jsonl-tree-body { min-width: 0; }
+.fleditor-jsonl-lock.is-word-wrap .fleditor-jsonl-tree-row {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.fleditor-jsonl-lock:not(.is-word-wrap) .fleditor-jsonl-tree-row {
+  white-space: pre;
+}
+.fleditor-jsonl-lock:not(.is-word-wrap) { overflow-x: auto; }
+.fleditor-jsonl-lock.is-word-wrap { overflow-x: hidden; }
+#jsonlWordWrapBtn.is-on {
+  border-color: var(--fl-accent, var(--fl-text-muted));
+  background: rgba(90, 122, 74, 0.32);
+  color: var(--fl-text);
+}

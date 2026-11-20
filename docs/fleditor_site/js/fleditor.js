@@ -45,6 +45,7 @@
   const jsonlLockBtn = document.getElementById('jsonlLockBtn');
   const jsonlApplyBtn = document.getElementById('jsonlApplyBtn');
   const jsonlRevertBtn = document.getElementById('jsonlRevertBtn');
+  const jsonlWordWrapBtn = document.getElementById('jsonlWordWrapBtn');
   const jsonlPageLabel = document.getElementById('jsonlPageLabel');
   const jsonlPageInput = document.getElementById('jsonlPageInput');
   const jsonlPageTotal = document.getElementById('jsonlPageTotal');
@@ -165,6 +166,7 @@
   /** @type {number[]} */
   let jsonlSearchMatches = [];
   let jsonlSearchMatchIndex = -1;
+  let jsonlWordWrapEnabled = false;
   /** @type {null | { path: string, lineEnding: string, encoding: string, savedProjectValue: string }} */
   let textSession = null;
   /** @type {{r:number,c:number}[]} */
@@ -1242,6 +1244,7 @@
       return;
     }
     jsonlSession.lockValue = parsed.value;
+    jsonlLockPanel.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
     Ju.renderLockTree(jsonlLockPanel, parsed.value, {
       expand: jsonlSession.expand,
       onToggle: function (path) {
@@ -1373,39 +1376,69 @@
     }
   }
 
+  function updateJsonlSearchCount() {
+    if (!jsonlSearchCount) return;
+    const n = jsonlSearchMatches.length;
+    jsonlSearchCount.textContent = n
+      ? (jsonlSearchMatchIndex >= 0 ? jsonlSearchMatchIndex + 1 : '\u2014') + ' / ' + n
+      : '0';
+  }
+
   function recomputeJsonlSearchMatches() {
+    const previousLine = jsonlSession && jsonlSession.selected != null
+      ? jsonlSession.selected : -1;
     jsonlSearchMatches = [];
     jsonlSearchMatchIndex = -1;
     if (!jsonlSession || !jsonlSearchInput) {
-      if (jsonlSearchCount) jsonlSearchCount.textContent = '0';
+      updateJsonlSearchCount();
       return;
     }
     const q = jsonlSearchInput.value;
     if (!q) {
-      if (jsonlSearchCount) jsonlSearchCount.textContent = '0';
+      updateJsonlSearchCount();
       return;
     }
     for (let i = 0; i < jsonlSession.lines.length; i++) {
       if (String(jsonlSession.lines[i]).indexOf(q) >= 0) jsonlSearchMatches.push(i);
     }
-    if (jsonlSearchCount) {
-      jsonlSearchCount.textContent = String(jsonlSearchMatches.length);
-    }
+    if (previousLine >= 0) jsonlSearchMatchIndex = jsonlSearchMatches.indexOf(previousLine);
+    updateJsonlSearchCount();
   }
 
   function gotoJsonlSearchMatch(dir) {
-    if (!jsonlSession || !jsonlSearchMatches.length) return;
-    if (dir > 0) {
-      jsonlSearchMatchIndex = (jsonlSearchMatchIndex + 1) % jsonlSearchMatches.length;
-    } else {
-      jsonlSearchMatchIndex =
-        jsonlSearchMatchIndex <= 0 ? jsonlSearchMatches.length - 1 : jsonlSearchMatchIndex - 1;
+    if (!jsonlSession || !jsonlSearchInput) return;
+    const q = jsonlSearchInput.value;
+    if (!q) return;
+    // Rebuild matches in case the selected line was edited since the last search.
+    const selected = jsonlSession.selected == null ? -1 : jsonlSession.selected;
+    jsonlSearchMatches = [];
+    for (let i = 0; i < jsonlSession.lines.length; i++) {
+      if (String(jsonlSession.lines[i]).indexOf(q) >= 0) jsonlSearchMatches.push(i);
     }
-    const idx = jsonlSearchMatches[jsonlSearchMatchIndex];
-    jsonlSession.pageIndex = Math.floor(idx / Jp.LINES_PER_PAGE);
-    jsonlSession.selected = idx;
+    if (!jsonlSearchMatches.length) {
+      jsonlSearchMatchIndex = -1;
+      updateJsonlSearchCount();
+      return;
+    }
+    let idx = -1;
+    if (dir > 0) {
+      for (let i = 0; i < jsonlSearchMatches.length; i++) {
+        if (jsonlSearchMatches[i] > selected) { idx = i; break; }
+      }
+      if (idx < 0) idx = 0;
+    } else {
+      for (let i = jsonlSearchMatches.length - 1; i >= 0; i--) {
+        if (jsonlSearchMatches[i] < selected) { idx = i; break; }
+      }
+      if (idx < 0) idx = jsonlSearchMatches.length - 1;
+    }
+    jsonlSearchMatchIndex = idx;
+    const lineIndex = jsonlSearchMatches[idx];
+    jsonlSession.pageIndex = Math.floor(lineIndex / Jp.LINES_PER_PAGE);
+    jsonlSession.selected = lineIndex;
     loadJsonlSelectedIntoPanel();
     renderJsonlRecords();
+    updateJsonlSearchCount();
   }
 
   function enterJsonlRecordsMode() {
@@ -4312,6 +4345,14 @@
     if (jsonlLockBtn) {
       jsonlLockBtn.addEventListener('click', function () {
         setJsonlPanelMode('lock');
+      });
+    }
+    if (jsonlWordWrapBtn) {
+      jsonlWordWrapBtn.addEventListener('click', function () {
+        jsonlWordWrapEnabled = !jsonlWordWrapEnabled;
+        jsonlWordWrapBtn.classList.toggle('is-on', jsonlWordWrapEnabled);
+        jsonlWordWrapBtn.setAttribute('aria-pressed', jsonlWordWrapEnabled ? 'true' : 'false');
+        if (jsonlLockPanel) jsonlLockPanel.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
       });
     }
     if (jsonlApplyBtn) {
