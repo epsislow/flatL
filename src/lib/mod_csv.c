@@ -530,6 +530,27 @@ int flat_native_csv_close_view(FlatNativeCtx *ctx) {
     return 0;
 }
 
+
+int flat_native_csv_write_view_row(FlatNativeCtx *ctx) {
+    char buf[1024];
+    char *parts[3];
+    int argc, y;
+    uint32_t id;
+    FlatValue row;
+    if (!ctx) return csv_fail(ctx, "csv.writeRow");
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_variadic_args(buf, parts, 3, &argc) != 0 || argc != 3 ||
+        require_sess_id(ctx, parts[0], &id) != 0 || require_int(ctx, parts[1], &y) != 0 ||
+        flat_native_parse_expr(ctx, parts[2], &row) != 0)
+        return csv_fail(ctx, "csv.writeRow");
+    ctx->panic_detail[0] = '\0';
+    if (flat_csv_writer_write_view_row(rt(ctx), id, y, &row, ctx->coll, ctx->pool,
+                                       ctx->panic_detail, sizeof ctx->panic_detail) != 0)
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.writeRow");
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
 int flat_native_csv_set_cell(FlatNativeCtx *ctx) {
     char buf[1024], value[512]; char *parts[4]; int argc, x, y; uint32_t id; FlatValue v;
     if (!ctx) return csv_fail(ctx, "csv.set");

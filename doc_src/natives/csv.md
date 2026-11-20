@@ -104,6 +104,7 @@ from child to parent, before closing the root reader or writer.
 | `next(viewId)` | Reads the next row from a reader view; each view has its own cursor |
 | `reset(viewId)` | Resets that view's cursor |
 | `set(viewId, x, y, value)` | Sets one cell in a writer view (grid mode) |
+| `writeRow(viewId, y, values)` | Writes a complete row into a writer view; pads remaining columns with empty fields |
 
 Example — nested reader views:
 
@@ -134,9 +135,36 @@ csv.close(wid)  # serializes the grid and flushes the writer
 Writer grid mode is mutually exclusive with `writeRows` / `writeCols` on the same writer.
 A grid cell can be assigned only once; a duplicate assignment panics with
 `csv.writer.conflict`. Unassigned cells between populated columns are serialized as empty
-fields. Grid output is buffered until `flush` or `close`.
+fields. Grid output is buffered until `flush` or `close`. `writeRow(viewId, y, values)`
+populates a complete view row atomically, starting at local column zero; values wider than
+the view are rejected, and shorter values are padded with empty fields. It also rejects
+overlapping cells with `csv.writer.conflict` and cannot be mixed with `writeRows` or
+`writeCols` on the same writer.
 
 A view must fit within its parent. Invalid coordinates panic with `csv.view.bounds`.
 Closing a root reader or writer while any descendant view remains open panics with
 `csv.view.open`; closing a parent view while a child remains open panics with
 `csv.view.children`.
+
+
+Example — writing complete rows through nested writer views:
+
+```text
+wid = csv.writer(fp)
+region = csv.view(wid, 0, 0, 8, 20)
+body = csv.view(region, 1, 2, 4, 10)
+
+csv.writeRow(body, 0, ["Keyboard", 50])
+csv.writeRow(body, 1, ["Mouse", 25, "EUR", "In stock"])
+
+csv.closeView(body)
+csv.closeView(region)
+csv.close(wid)
+```
+
+`writeRow(viewId, y, values)` writes at the view's local row `y`, starting at its
+local column zero. The values must fit within the view width. Remaining columns are
+written as empty fields. The operation is atomic: if the row is out of bounds, too
+wide, or overlaps cells already assigned through `set` or another `writeRow`, no
+part of the row is added. It uses grid mode and cannot be mixed with `writeRows` or
+`writeCols` on the same writer.

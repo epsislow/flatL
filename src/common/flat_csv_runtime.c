@@ -1,6 +1,7 @@
 #include "flat_csv_runtime.h"
 
 #include <stdio.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #ifdef _WIN32
@@ -1423,6 +1424,88 @@ int flat_csv_writer_write_cols(FlatCsvRuntime *rt, uint32_t wid, const FlatValue
         }
     }
     return 0;
+}
+
+
+int flat_csv_writer_write_view_row(FlatCsvRuntime *rt, uint32_t view_id, int y,
+                                   const FlatValue *row_val, FlatCollectionPool *coll,
+                                   FlatStringPool *pool, char *panic, size_t panic_sz) {
+    uint32_t root_id;
+    int ox, oy, width, height, kind, cursor;
+    FlatCsvSession *s;
+    int ncols = 0, i, j;
+    char field_bufs[FLAT_CSV_MAX_FIELDS][512];
+    char *copies[FLAT_CSV_MAX_FIELDS];
+    int needed;
+
+    memset(copies, 0, sizeof copies);
+    if (!row_val || !coll || !pool || row_val->tag != VAL_LIST)
+        return panic_msg(panic, panic_sz, "csv.writeRow");
+    if (flat_csv_view_resolve(rt, view_id, &root_id, &ox, &oy, &width, &height,
+                              &kind, &cursor) != 0)
+        return panic_msg(panic, panic_sz, "csv.id.invalid");
+    if (kind != FLAT_CSV_SESS_WRITER)
+        return panic_msg(panic, panic_sz, "csv.id.type");
+    if (width <= 0 || y < 0 || y >= height)
+        return panic_msg(panic, panic_sz, "csv.view.bounds");
+    s = sess_by_id(rt, root_id);
+    if (!s || s->kind != FLAT_CSV_SESS_WRITER)
+        return panic_msg(panic, panic_sz, "csv.id.type");
+    if (s->writer_mode == 1)
+        return panic_msg(panic, panic_sz, "csv.writer.mode");
+    if (s->grid_serialized)
+        return panic_msg(panic, panic_sz, "csv.writer.flush");
+    if (width > FLAT_CSV_MAX_FIELDS ||
+        flat_list_len(coll, row_val->u.coll_id, &ncols) != 0 || ncols > width)
+        return panic_msg(panic, panic_sz, "csv.view.bounds");
+
+    /* Validate the entire row before mutating the shared grid. */
+    for (i = 0; i < width; i++) {
+        if (i < ncols) {
+            FlatValue cell;
+            if (flat_list_get(coll, row_val->u.coll_id, i, &cell) != 0 ||
+                value_to_cstr(&cell, pool, field_bufs[i], sizeof field_bufs[i]) != 0)
+                goto fail;
+        } else {
+            field_bufs[i][0] = '\0';
+        }
+        for (j = 0; j < s->grid_count; j++) {
+            if (s->grid_cells[j].x == ox + i && s->grid_cells[j].y == oy + y) {
+                for (j = 0; j < width; j++) free(copies[j]);
+                return panic_msg(panic, panic_sz, "csv.writer.conflict");
+            }
+        }
+        copies[i] = strdup(field_bufs[i]);
+        if (!copies[i]) goto fail;
+    }
+
+    needed = s->grid_count + width;
+    if (needed > s->grid_cap) {
+        int cap = s->grid_cap ? s->grid_cap : 32;
+        FlatCsvGridCell *p;
+        while (cap < needed) {
+            if (cap > INT_MAX / 2) goto fail;
+            cap *= 2;
+        }
+        p = realloc(s->grid_cells, (size_t)cap * sizeof *p);
+        if (!p) goto fail;
+        s->grid_cells = p;
+        s->grid_cap = cap;
+    }
+
+    s->writer_mode = 2;
+    for (i = 0; i < width; i++) {
+        s->grid_cells[s->grid_count].x = ox + i;
+        s->grid_cells[s->grid_count].y = oy + y;
+        s->grid_cells[s->grid_count].value = copies[i];
+        copies[i] = NULL;
+        s->grid_count++;
+    }
+    return 0;
+
+fail:
+    for (i = 0; i < width && i < FLAT_CSV_MAX_FIELDS; i++) free(copies[i]);
+    return panic_msg(panic, panic_sz, "csv.writeRow");
 }
 
 int flat_csv_writer_set_cell(FlatCsvRuntime *rt, uint32_t view_id, int x, int y,

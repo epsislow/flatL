@@ -243,6 +243,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("math.mdim", "reshape", "math.mdim.reshape(x, shape)"),
     META_SIG("math.mdim", "determinant", "math.mdim.determinant(m)"),
     META_SIG("math.mdim", "inverse", "math.mdim.inverse(m)"),
+    META_SIG("csv", "writeRow", "csv.writeRow(viewId, y, values)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

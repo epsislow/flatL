@@ -67,6 +67,9 @@ int flat_csv_format_set_encoding(FlatCsvRuntime *rt, uint32_t sess_id, const cha
 int flat_csv_format_set_quote(FlatCsvRuntime *rt, uint32_t sess_id, const char *val, char *panic,
                               size_t panic_sz);
 
+int flat_csv_writer_write_view_row(FlatCsvRuntime *rt, uint32_t view_id, int y,
+                                   const FlatValue *row_val, FlatCollectionPool *coll,
+                                   FlatStringPool *pool, char *panic, size_t panic_sz);
 int flat_csv_writer_set_cell(FlatCsvRuntime *rt, uint32_t view_id, int x, int y,
                               const char *value, char *panic, size_t panic_sz);
 int flat_csv_writer_write_rows(FlatCsvRuntime *rt, uint32_t wid, const FlatValue *rows_val,

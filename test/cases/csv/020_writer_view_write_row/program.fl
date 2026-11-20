@@ -1,0 +1,22 @@
+use native csv
+use native list
+
+#main
+  fp = file.createCtx('view-row.csv')
+  wid = csv.writer(fp)
+  parent = csv.view(wid, 0, 0, 4, 4)
+  child = csv.view(parent, 1, 1, 2, 2)
+  csv.set(parent, 0, 0, 'Header')
+
+  list.pack('A') -> rowA
+  list.pack('B', 'C') -> rowB
+  csv.writeRow(child, 0, rowA)
+  csv.writeRow(child, 1, rowB)
+
+  csv.closeView(child)
+  csv.closeView(parent)
+  csv.close(wid)
+  file.close(fp)
+  io.outln('B,C')
+
+  OK
