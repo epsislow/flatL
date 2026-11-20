@@ -38,10 +38,16 @@ int flat_csv_view_resolve(FlatCsvRuntime *rt, uint32_t id, uint32_t *out_root,
                           int *out_kind, int *out_cursor_row);
 int flat_csv_view_set_cursor(FlatCsvRuntime *rt, uint32_t id, int cursor_row);
 
+int flat_csv_obj_headers_set(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t id,
+                             const char *const *headers, int count, char *panic, size_t panic_sz);
+int flat_csv_obj_headers_get(FlatCsvRuntime *rt, uint32_t id, int index, char *out, size_t out_sz);
+int flat_csv_obj_headers_count(FlatCsvRuntime *rt, uint32_t id);
+
 int flat_csv_reader_reset(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid);
 int flat_csv_reader_is_eof(const FlatCsvRuntime *rt, uint32_t rid, int *out_eof);
 int flat_csv_reader_rows(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int *out_rows);
 int flat_csv_reader_cols(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int *out_cols);
+int flat_csv_reader_cols_at(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int row, int *out_cols);
 int flat_csv_reader_get_row(const FlatCsvRuntime *rt, uint32_t rid, int *out_row);
 int flat_csv_reader_get_col(const FlatCsvRuntime *rt, uint32_t rid, int *out_col);
 int flat_csv_reader_set_row(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int row,

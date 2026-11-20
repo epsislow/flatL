@@ -1,0 +1,36 @@
+use native csv
+use native obj
+use native list
+
+#main
+  fp = file.createCtx('collection.csv')
+  file.writeln(fp, 'name,age,city')
+  file.writeln(fp, 'Alice,30,Paris')
+  file.writeln(fp, 'Bob,25,Rome')
+  file.writeln(fp, 'Cara,28,Oslo')
+  file.writeln(fp, 'Dana,31')
+  file.close(fp)
+  fp = file.readCtx('collection.csv')
+  rid = csv.reader(fp)
+  csv.setSeparator(rid, ',')
+  csv.setObjHeaders(rid, ['name', 'age', 'city'])
+  data = csv.getCollection(rid, 1, 4)
+  obj.get(data, '"name"') -> names
+  obj.get(data, '"age"') -> ages
+  list.get(names, 0) -> first
+  list.get(names, 1) -> second
+  list.get(ages, 0) -> age
+  first == 'Alice'
+  second == 'Bob'
+  age == '30'
+  obj.get(data, '"city"') -> cities
+  list.get(cities, 3) -> missing_city
+  missing_city == ''
+  # Cursor is still at row zero; nextRecord returns header row as an object.
+  record = csv.nextRecord(rid)
+  obj.get(record, '"name"') -> header
+  header == 'name'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('collection-ok')
+  OK

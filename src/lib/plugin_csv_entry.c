@@ -32,5 +32,8 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_CSV_GET_CELL, flat_native_csv_get_cell);
     reg(FLAT_NATIVE_CSV_GET_VIEW_ROW, flat_native_csv_get_view_row);
     reg(FLAT_NATIVE_CSV_WRITE_ROW, flat_native_csv_write_view_row);
+    reg(FLAT_NATIVE_CSV_SET_OBJ_HEADERS, flat_native_csv_set_obj_headers);
+    reg(FLAT_NATIVE_CSV_NEXT_RECORD, flat_native_csv_next_record);
+    reg(FLAT_NATIVE_CSV_GET_COLLECTION, flat_native_csv_get_collection);
     return 0;
 }

@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static int csv_fail(FlatNativeCtx *ctx, const char *reason) {
@@ -607,4 +608,147 @@ int flat_native_csv_get_cell(FlatNativeCtx *ctx) {
     *ctx->out = cell;
     flat_value_retain(ctx->coll, ctx->pool, ctx->out);
     return 0;
+}
+
+static int csv_make_record_object(FlatNativeCtx *ctx, uint32_t id, uint32_t list_id,
+                                  uint32_t *out_obj) {
+    int count = 0, configured, total, i;
+    char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1];
+    FlatValue values[FLAT_OBJ_MAX_KEYS];
+    if (flat_list_len(ctx->coll, list_id, &count) != 0 || count < 1 || count > FLAT_OBJ_MAX_KEYS)
+        return -1;
+    configured = flat_csv_obj_headers_count(rt(ctx), id);
+    if (configured && count > configured) return -1;
+    total = configured ? configured : count;
+    for (i = 0; i < total; i++) {
+        if (configured) {
+            if (flat_csv_obj_headers_get(rt(ctx), id, i, keys[i], sizeof keys[i]) != 0) return -1;
+        } else {
+            snprintf(keys[i], sizeof keys[i], "col%d", i);
+        }
+        if (i < count) {
+            if (flat_list_get(ctx->coll, list_id, i, &values[i]) != 0) return -1;
+        } else if (flat_value_set_str_inline(&values[i], "", 0) != 0) return -1;
+    }
+    return flat_obj_build(ctx->coll, ctx->pool, keys, values, total, out_obj);
+}
+
+int flat_native_csv_set_obj_headers(FlatNativeCtx *ctx) {
+    char buf[2048], *left, *right;
+    uint32_t id;
+    FlatValue list;
+    const char *unused = NULL;
+    char **headers = NULL;
+    const char **header_ptrs = NULL;
+    int count = 0, i, rc = -1;
+    (void)unused;
+    if (!ctx) return csv_fail(ctx, "csv.setObjHeaders");
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_two_args(buf, &left, &right) != 0 || require_sess_id(ctx, left, &id) != 0 ||
+        flat_native_parse_expr(ctx, right, &list) != 0 || list.tag != VAL_LIST ||
+        flat_list_len(ctx->coll, list.u.coll_id, &count) != 0 || count < 1 || count > FLAT_OBJ_MAX_KEYS)
+        return csv_fail(ctx, "csv.setObjHeaders");
+    headers = (char **)calloc((size_t)count, sizeof(char *));
+    header_ptrs = (const char **)calloc((size_t)count, sizeof(char *));
+    if (!headers || !header_ptrs) goto done;
+    for (i = 0; i < count; i++) {
+        FlatValue item;
+        char key[FLAT_OBJ_KEY_MAX + 1];
+        size_t len;
+        if (flat_list_get(ctx->coll, list.u.coll_id, i, &item) != 0 || item.tag == VAL_NULL ||
+            flat_value_get_cstr(&item, ctx->pool, key, sizeof key) != 0) goto done;
+        len = strlen(key);
+        if (len == 0) { snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "csv.objHeaders.empty"); goto done; }
+        if (len > FLAT_OBJ_KEY_MAX) { snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "csv.objHeaders.length"); goto done; }
+        headers[i] = (char *)malloc(len + 1);
+        if (!headers[i]) goto done;
+        memcpy(headers[i], key, len + 1);
+        header_ptrs[i] = headers[i];
+    }
+    if (flat_csv_obj_headers_set(rt(ctx), ctx->file_tbl, id, header_ptrs, count,
+                                 ctx->panic_detail, sizeof ctx->panic_detail) == 0) rc = 0;
+done:
+    for (i = 0; i < count; i++) free(headers ? headers[i] : NULL);
+    free(headers); free(header_ptrs);
+    if (rc != 0) return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.setObjHeaders");
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_csv_next_record(FlatNativeCtx *ctx) {
+    uint32_t id, root, list_id, obj_id;
+    int x, y, w, h, kind, cursor, is_obj;
+    if (!ctx || require_sess_id(ctx, ctx->inner, &id) != 0 ||
+        flat_csv_view_resolve(rt(ctx), id, &root, &x, &y, &w, &h, &kind, &cursor) != 0 ||
+        kind != FLAT_CSV_SESS_READER) return csv_fail(ctx, "csv.nextRecord");
+    ctx->panic_detail[0] = '\0';
+    if (w >= 0) {
+        if (cursor >= h) return csv_fail(ctx, "csv.nextRecord");
+        if (flat_csv_reader_get_cells(rt(ctx), ctx->file_tbl, root, x, y + cursor,
+                w, 1, 0, ctx->coll, ctx->pool, &list_id, &is_obj,
+                ctx->panic_detail, sizeof ctx->panic_detail) != 0)
+            return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.nextRecord.cells");
+        if (flat_csv_view_set_cursor(rt(ctx), id, cursor + 1) != 0)
+            return csv_fail(ctx, "csv.nextRecord.cursor");
+    } else if (flat_csv_reader_next(rt(ctx), ctx->file_tbl, root, ctx->coll, ctx->pool,
+                                    &list_id, ctx->panic_detail, sizeof ctx->panic_detail) != 0) {
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.nextRecord");
+    }
+    if (csv_make_record_object(ctx, id, list_id, &obj_id) != 0)
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.nextRecord.object");
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_object(ctx->out, obj_id);
+}
+
+int flat_native_csv_get_collection(FlatNativeCtx *ctx) {
+    char buf[512], *parts[3];
+    int argc, offset, limit, x = 0, y = 0, width = 0, height = 0, kind, cursor;
+    uint32_t id, root, raw_id, out_id;
+    int is_obj, rows, actual, configured, i;
+    FlatValue vals[FLAT_OBJ_MAX_KEYS];
+    char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1];
+    if (!ctx) return csv_fail(ctx, "csv.getCollection");
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_variadic_args(buf, parts, 3, &argc) != 0 || argc != 3 ||
+        require_sess_id(ctx, parts[0], &id) != 0 || require_int(ctx, parts[1], &offset) != 0 ||
+        require_int(ctx, parts[2], &limit) != 0 || offset < 0 || limit < 1 ||
+        flat_csv_view_resolve(rt(ctx), id, &root, &x, &y, &width, &height, &kind, &cursor) != 0 ||
+        kind != FLAT_CSV_SESS_READER) return csv_fail(ctx, "csv.getCollection");
+    if (width >= 0) { rows = height; }
+    else if (flat_csv_reader_rows(rt(ctx), ctx->file_tbl, root, &rows) != 0 ||
+             flat_csv_reader_cols_at(rt(ctx), ctx->file_tbl, root, 0, &width) != 0)
+        return csv_fail(ctx, "csv.getCollection");
+    if (width < 1 || width > FLAT_OBJ_MAX_KEYS || offset > rows)
+        return csv_fail(ctx, "csv.getCollection");
+    actual = rows - offset;
+    if (actual > limit) actual = limit;
+    if (width > FLAT_LIST_MAX_ELEMS / (actual > 0 ? actual : 1)) return csv_fail(ctx, "csv.getCollection");
+    configured = flat_csv_obj_headers_count(rt(ctx), id);
+    if (configured && configured != width) return csv_fail(ctx, "csv.objHeaders.length");
+    ctx->panic_detail[0] = '\0';
+    if (actual > 0) {
+        if (flat_csv_reader_get_cells(rt(ctx), ctx->file_tbl, root, x, y + offset, width, actual, 1,
+                ctx->coll, ctx->pool, &raw_id, &is_obj, ctx->panic_detail, sizeof ctx->panic_detail) != 0)
+            return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "csv.getCollection");
+    }
+    for (i = 0; i < width; i++) {
+        char old_key[32];
+        snprintf(old_key, sizeof old_key, "%d", i);
+        if (configured) {
+            if (flat_csv_obj_headers_get(rt(ctx), id, i, keys[i], sizeof keys[i]) != 0)
+                return csv_fail(ctx, "csv.getCollection");
+        } else snprintf(keys[i], sizeof keys[i], "col%d", i);
+        if (actual > 0) {
+            if (flat_obj_get(ctx->coll, raw_id, old_key, &vals[i]) != 0) return csv_fail(ctx, "csv.getCollection");
+        } else {
+            uint32_t empty_list;
+            if (flat_list_empty(ctx->coll, ctx->pool, &empty_list) != 0 ||
+                flat_value_set_list(&vals[i], empty_list) != 0)
+                return csv_fail(ctx, "csv.getCollection");
+        }
+    }
+    if (flat_obj_build(ctx->coll, ctx->pool, keys, vals, width, &out_id) != 0)
+        return csv_fail(ctx, "csv.getCollection");
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_object(ctx->out, out_id);
 }

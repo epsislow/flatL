@@ -341,6 +341,9 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
         flat_native_plugin_register(FLAT_NATIVE_CSV_GET_CELL, flat_native_csv_get_cell);
         flat_native_plugin_register(FLAT_NATIVE_CSV_GET_VIEW_ROW, flat_native_csv_get_view_row);
         flat_native_plugin_register(FLAT_NATIVE_CSV_WRITE_ROW, flat_native_csv_write_view_row);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_SET_OBJ_HEADERS, flat_native_csv_set_obj_headers);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_NEXT_RECORD, flat_native_csv_next_record);
+        flat_native_plugin_register(FLAT_NATIVE_CSV_GET_COLLECTION, flat_native_csv_get_collection);
         g_loaded_csv = 1;
         return 0;
     }

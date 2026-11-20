@@ -1,0 +1,29 @@
+use native csv
+use native obj
+use native list
+
+#main
+  fp = file.createCtx('views.csv')
+  file.writeln(fp, 'id,name,price,qty')
+  file.writeln(fp, '1,Keyboard,50,2')
+  file.writeln(fp, '2,Mouse,25,4')
+  file.close(fp)
+  fp = file.readCtx('views.csv')
+  rid = csv.reader(fp)
+  csv.setObjHeaders(rid, ['id', 'name', 'price', 'qty'])
+  view = csv.view(rid, 2, 1, 2, 2)
+  csv.setObjHeaders(view, ['cost', 'stock'])
+  record = csv.nextRecord(view)
+  obj.get(record, '"cost"') -> cost
+  obj.get(record, '"stock"') -> stock
+  cost == '50'
+  stock == '2'
+  collection = csv.getCollection(view, 1, 1)
+  obj.get(collection, '"cost"') -> costs
+  list.get(costs, 0) -> second_cost
+  second_cost == '25'
+  csv.closeView(view)
+  csv.close(rid)
+  file.close(fp)
+  io.outln('view-record-ok')
+  OK

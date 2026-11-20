@@ -1,0 +1,9 @@
+use native csv
+#main
+  fp = file.createCtx('count.csv')
+  file.writeln(fp, 'a,b,c')
+  file.close(fp)
+  fp = file.readCtx('count.csv')
+  rid = csv.reader(fp)
+  csv.setObjHeaders(rid, ['a', 'b'])
+  OK

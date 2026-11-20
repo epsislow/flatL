@@ -1,0 +1,9 @@
+use native csv
+#main
+  fp = file.createCtx('dup.csv')
+  file.writeln(fp, 'a,b')
+  file.close(fp)
+  fp = file.readCtx('dup.csv')
+  rid = csv.reader(fp)
+  csv.setObjHeaders(rid, ['a', 'a'])
+  OK

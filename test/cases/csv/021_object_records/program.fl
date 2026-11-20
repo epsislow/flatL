@@ -1,0 +1,28 @@
+use native csv
+use native list
+use native obj
+
+#main
+  fp = file.createCtx('records.csv')
+  file.writeln(fp, 'name,age,city')
+  file.writeln(fp, 'Alice,30,Paris')
+  file.writeln(fp, 'Bob,25,Rome')
+  file.writeln(fp, 'Eve,42')
+  file.close(fp)
+  fp = file.readCtx('records.csv')
+  rid = csv.reader(fp)
+  csv.setSeparator(rid, ',')
+  headers = csv.next(rid)
+  csv.setObjHeaders(rid, headers)
+  record = csv.nextRecord(rid)
+  obj.get(record, '"name"') -> name
+  obj.get(record, '"age"') -> age
+  name == 'Alice'
+  age == '30'
+  ignored = csv.nextRecord(rid)
+  short_record = csv.nextRecord(rid)
+  io.outln(short_record)
+  csv.close(rid)
+  file.close(fp)
+  io.outln('record-ok')
+  OK

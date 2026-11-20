@@ -21,6 +21,8 @@ typedef struct {
     uint32_t id, parent_id, root_id;
     int x, y, width, height, cursor_row;
     int kind;
+    char **obj_headers;
+    int obj_header_count;
 } FlatCsvView;
 
 typedef struct { int x, y; char *value; } FlatCsvGridCell;
@@ -52,13 +54,19 @@ typedef struct {
     FlatCsvGridCell *grid_cells;
     int grid_count, grid_cap;
     int grid_serialized;
+    char **obj_headers;
+    int obj_header_count;
 } FlatCsvSession;
+
+static void csv_headers_free(char **headers, int count);
 
 struct FlatCsvRuntime {
     FlatCsvSession sessions[FLAT_CSV_MAX_SESSIONS];
     FlatCsvView views[FLAT_CSV_MAX_VIEWS];
     uint32_t next_id;
 };
+
+static int csv_reader_cols_at_internal(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int row, int *out_cols);
 
 static int read_allowed_mode(FlatFileMode mode) {
     return mode == FLAT_FILE_MODE_READ || mode == FLAT_FILE_MODE_RDWR;
@@ -86,6 +94,9 @@ static void sess_clear(FlatCsvSession *s) {
     if (!s) {
         return;
     }
+    int i;
+    for (i = 0; i < s->obj_header_count; i++) free(s->obj_headers[i]);
+    free(s->obj_headers);
     free(s->line_offsets);
     free(s->write_buf);
     free(s->text_buf);
@@ -107,8 +118,9 @@ void flat_csv_runtime_destroy(FlatCsvRuntime *rt) {
     if (!rt) {
         return;
     }
-    for (i = 0; i < FLAT_CSV_MAX_SESSIONS; i++) {
-        sess_clear(&rt->sessions[i]);
+    for (i = 0; i < FLAT_CSV_MAX_SESSIONS; i++) sess_clear(&rt->sessions[i]);
+    for (i = 0; i < FLAT_CSV_MAX_VIEWS; i++) {
+        csv_headers_free(rt->views[i].obj_headers, rt->views[i].obj_header_count);
     }
     free(rt);
 }
@@ -578,6 +590,7 @@ int flat_csv_view_close(FlatCsvRuntime *rt, uint32_t view_id, char *panic, size_
     for (i = 0; i < FLAT_CSV_MAX_VIEWS; i++)
         if (rt->views[i].in_use && rt->views[i].parent_id == view_id)
             return panic_msg(panic, panic_sz, "csv.view.children");
+    csv_headers_free(v->obj_headers, v->obj_header_count);
     memset(v, 0, sizeof *v);
     return 0;
 }
@@ -658,6 +671,69 @@ static int ensure_line_index(FlatCsvSession *s, FILE *fp) {
     s->row_count_cached = 1;
     sess_seek_set(s, fp, mark);
     return 0;
+}
+
+static void csv_headers_free(char **headers, int count) {
+    int i;
+    for (i = 0; i < count; i++) free(headers[i]);
+    free(headers);
+}
+
+int flat_csv_obj_headers_set(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t id,
+                             const char *const *headers, int count, char *panic, size_t panic_sz) {
+    uint32_t root; int x, y, width, height, kind, cursor, cols = 0, i, j;
+    char **copy;
+    FlatCsvSession *session;
+    FlatCsvView *view;
+    if (!rt || !headers || count < 1 || count > FLAT_OBJ_MAX_KEYS ||
+        flat_csv_view_resolve(rt, id, &root, &x, &y, &width, &height, &kind, &cursor) != 0 ||
+        kind != FLAT_CSV_SESS_READER)
+        return panic_msg(panic, panic_sz, "csv.setObjHeaders");
+    if (width >= 0) cols = width;
+    else if (csv_reader_cols_at_internal(rt, files, root, 0, &cols) != 0)
+        return panic_msg(panic, panic_sz, "csv.setObjHeaders");
+    if (count != cols) return panic_msg(panic, panic_sz, "csv.objHeaders.length");
+    copy = (char **)calloc((size_t)count, sizeof(char *));
+    if (!copy) return panic_msg(panic, panic_sz, "csv.setObjHeaders");
+    for (i = 0; i < count; i++) {
+        size_t len;
+        if (!headers[i] || !headers[i][0]) { csv_headers_free(copy, i); return panic_msg(panic, panic_sz, "csv.objHeaders.empty"); }
+        len = strlen(headers[i]);
+        if (len > FLAT_OBJ_KEY_MAX) { csv_headers_free(copy, i); return panic_msg(panic, panic_sz, "csv.objHeaders.length"); }
+        for (j = 0; j < i; j++) if (strcmp(headers[i], headers[j]) == 0) {
+            csv_headers_free(copy, i); return panic_msg(panic, panic_sz, "csv.objHeaders.duplicate");
+        }
+        copy[i] = (char *)malloc(len + 1);
+        if (!copy[i]) { csv_headers_free(copy, i); return panic_msg(panic, panic_sz, "csv.setObjHeaders"); }
+        memcpy(copy[i], headers[i], len + 1);
+    }
+    view = view_by_id(rt, id);
+    if (view) {
+        csv_headers_free(view->obj_headers, view->obj_header_count);
+        view->obj_headers = copy; view->obj_header_count = count;
+    } else {
+        session = sess_by_id(rt, id);
+        if (!session) { csv_headers_free(copy, count); return panic_msg(panic, panic_sz, "csv.id.invalid"); }
+        csv_headers_free(session->obj_headers, session->obj_header_count);
+        session->obj_headers = copy; session->obj_header_count = count;
+    }
+    return 0;
+}
+
+int flat_csv_obj_headers_get(FlatCsvRuntime *rt, uint32_t id, int index, char *out, size_t out_sz) {
+    FlatCsvView *view = view_by_id(rt, id);
+    FlatCsvSession *session = view ? NULL : sess_by_id(rt, id);
+    char **headers = view ? view->obj_headers : (session ? session->obj_headers : NULL);
+    int count = view ? view->obj_header_count : (session ? session->obj_header_count : 0);
+    if (!out || out_sz == 0 || index < 0 || index >= count || !headers || !headers[index]) return -1;
+    snprintf(out, out_sz, "%s", headers[index]);
+    return 0;
+}
+
+int flat_csv_obj_headers_count(FlatCsvRuntime *rt, uint32_t id) {
+    FlatCsvView *view = view_by_id(rt, id);
+    FlatCsvSession *session = view ? NULL : sess_by_id(rt, id);
+    return view ? view->obj_header_count : (session ? session->obj_header_count : 0);
 }
 
 int flat_csv_reader_reset(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid) {
@@ -1056,6 +1132,27 @@ static int parse_row_at(FlatCsvSession *s, FILE *fp, int row, FlatCsvArena *aren
     return 0;
 }
 
+static int csv_reader_cols_at_internal(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid,
+                                       int row, int *out_cols) {
+    FlatCsvSession *session = sess_by_id(rt, rid);
+    FILE *fp;
+    char arena_buf[FLAT_CSV_RECORD_SZ];
+    FlatCsvArena arena = {arena_buf, sizeof arena_buf, 0};
+    char *fields[FLAT_CSV_MAX_FIELDS];
+    size_t lens[FLAT_CSV_MAX_FIELDS];
+    if (!session || session->kind != FLAT_CSV_SESS_READER || !out_cols || row < 0) return -1;
+    fp = sess_fp(session, files);
+    if (!fp || sess_with_detect_and_lines(session, files) != 0 ||
+        parse_row_at(session, fp, row, &arena, fields, lens, FLAT_CSV_MAX_FIELDS, out_cols) != 0)
+        return -1;
+    return 0;
+}
+
+int flat_csv_reader_cols_at(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int row,
+                            int *out_cols) {
+    return csv_reader_cols_at_internal(rt, files, rid, row, out_cols);
+}
+
 int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t rid, int x0,
                                int y0, int xLen, int yLen, int as_object,
                                FlatCollectionPool *coll, FlatStringPool *pool, uint32_t *out_coll_id,
@@ -1072,7 +1169,7 @@ int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
         return panic_msg(panic, panic_sz, "bounds");
     }
     if (xLen > FLAT_LIST_MAX_ELEMS || yLen > FLAT_LIST_MAX_ELEMS ||
-        xLen > FLAT_LIST_MAX_ELEMS / yLen) {
+        xLen > FLAT_LIST_MAX_ELEMS / yLen || x0 + xLen > FLAT_CSV_MAX_FIELDS) {
         return panic_msg(panic, panic_sz, "csv.getCells");
     }
     fp = sess_fp(s, files);
@@ -1097,11 +1194,19 @@ int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
                              &nfields) != 0) {
                 return panic_msg(panic, panic_sz, "csv.getCells");
             }
-            if (x0 + xLen > nfields) {
-                return panic_msg(panic, panic_sz, "bounds");
-            }
-            if (list_from_fields(coll, pool, fields, lens, x0, xLen, &row_ids[y]) != 0) {
-                return panic_msg(panic, panic_sz, "csv.getCells");
+            {
+                static char empty_field[] = "";
+                char *selected[FLAT_CSV_MAX_FIELDS];
+                size_t selected_lens[FLAT_CSV_MAX_FIELDS];
+                int c;
+                for (c = 0; c < xLen; c++) {
+                    int source = x0 + c;
+                    if (source < nfields) { selected[c] = fields[source]; selected_lens[c] = lens[source]; }
+                    else { selected[c] = empty_field; selected_lens[c] = 0; }
+                }
+                if (list_from_fields(coll, pool, selected, selected_lens, 0, xLen, &row_ids[y]) != 0) {
+                    return panic_msg(panic, panic_sz, "csv.getCells");
+                }
             }
             if (flat_value_set_list(&row_vals[y], row_ids[y]) != 0) {
                 return panic_msg(panic, panic_sz, "csv.getCells");
@@ -1114,8 +1219,10 @@ int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
         } else if (flat_list_build(coll, pool, row_vals, yLen, out_coll_id) != 0) {
             return panic_msg(panic, panic_sz, "csv.getCells");
         }
-        for (y = 0; y < yLen; y++) {
-            flat_value_release(coll, pool, &row_vals[y]);
+        /* For a single row, row_ids[0] is returned directly, so keep its retained
+         * reference alive. For multiple rows, the outer list owns the child rows. */
+        if (yLen > 1) {
+            for (y = 0; y < yLen; y++) flat_value_release(coll, pool, &row_vals[y]);
         }
         *out_is_object = 0;
         return 0;
@@ -1142,8 +1249,10 @@ int flat_csv_reader_get_cells(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t
                                  &nfields) != 0) {
                     return panic_msg(panic, panic_sz, "csv.getCells");
                 }
-                if (x0 + xLen > nfields) {
-                    return panic_msg(panic, panic_sz, "bounds");
+                if (x0 + r >= nfields) {
+                    if (flat_value_set_str_inline(&cells[y], "", 0) != 0)
+                        return panic_msg(panic, panic_sz, "csv.getCells");
+                    continue;
                 }
                 if (flat_pool_alloc_copy(pool, fields[x0 + r], lens[x0 + r], &ref) != 0) {
                     return panic_msg(panic, panic_sz, "csv.getCells");

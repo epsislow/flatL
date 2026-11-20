@@ -1,0 +1,24 @@
+use native csv
+use native obj
+use native list
+
+#main
+  fp = file.createCtx('default.csv')
+  file.writeln(fp, 'Apple,10,5')
+  file.writeln(fp, 'Orange,20,3')
+  file.close(fp)
+  fp = file.readCtx('default.csv')
+  rid = csv.reader(fp)
+  record = csv.nextRecord(rid)
+  obj.get(record, '"col0"') -> name
+  obj.get(record, '"col1"') -> price
+  name == 'Apple'
+  price == '10'
+  collection = csv.getCollection(rid, 0, 2)
+  obj.get(collection, '"col2"') -> quantities
+  list.get(quantities, 1) -> quantity
+  quantity == '3'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('default-keys-ok')
+  OK

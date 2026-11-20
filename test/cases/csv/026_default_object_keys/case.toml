@@ -1,0 +1,9 @@
+suite = "csv"
+id = 26
+desc = "object APIs use default colX keys"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "default-keys-ok"

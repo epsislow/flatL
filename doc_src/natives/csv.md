@@ -27,6 +27,9 @@ Writer **`writeCols`** needs **`obj`**. Format is auto-detected on first read; o
 | `next(rid)` | LIST STRING | `csv.next` (>1024 fields) |
 | `nextCells(rid, len)` | LIST STRING | `csv.nextCells` |
 | `getCells(rid, x0, y0, xLen, yLen, mode?)` | LIST (rows) or OBJECT | `csv.getCells`, `bounds` (region / field range); product **`xLen*yLen > 1024`** |
+| `setObjHeaders(id, keys)` | — | `csv.setObjHeaders`, `csv.objHeaders.empty`, `csv.objHeaders.duplicate`, `csv.objHeaders.length` |
+| `nextRecord(id)` | OBJECT | `csv.nextRecord` |
+| `getCollection(id, offset, limit)` | OBJECT (column-oriented) | `csv.getCollection`, `csv.objHeaders.length` |
 
 **`getCells`** — rectangle from top-left **`(x0, y0)`** with size **`xLen × yLen`**. Default **`mode`** **`"list"`** → LIST of LIST (row-major). **`"obj"`** → OBJECT with keys **`"0"`…`"xLen-1"`** and LIST values (column-major); requires **`use native obj`** at compile time. Numeric object keys: **`obj.get(grid, '"0"')`** (path DSL, see **`obj.get`**).
 
@@ -38,6 +41,49 @@ G:t255[][] = raw          # any tN: t8, t16, t1024, …
 ```
 
 Mismatch shape or `type.assign.string.len` → panic at **`=`**; use **`L.is_rect` / `L.dims`** after assign (see **`list.md`**). Example: `docs/fleditor_site/examples/csv_reader/grid_typed.fl`; tests **`types/218`**, **`265`**, **`266`**.
+
+
+### Object records and collections
+
+`setObjHeaders(id, keys)` configures the property names used by `nextRecord()` and
+`getCollection()`. `keys` is a list of strings; it can be taken from a CSV header row
+using the existing `next()` operation, or supplied manually:
+
+```text
+headers = csv.next(rid)
+csv.setObjHeaders(rid, headers)
+# or: csv.setObjHeaders(rid, ["product", "price", "quantity"])
+```
+
+The operation does not consume a row or change the reader cursor. The number of keys
+must match the number of columns accessible through the reader or view. Empty keys,
+duplicate keys, and a mismatched key count panic. Each key must fit the FlatL object-key
+length limit.
+
+When no custom keys are configured, generated names `col0`, `col1`, `col2`, etc. are
+used. Object headers are configured independently for each reader and each view; views
+do not inherit their parent's custom headers. All CSV values remain strings. Rows with fewer fields than the accessible column count are padded with empty strings.
+
+- `nextRecord(id)` reads one row at the current reader/view cursor and returns an object
+  whose properties map to that row's values.
+- `getCollection(id, offset, limit)` returns a column-oriented object: each property
+  contains a list of values for that column. Both arguments are mandatory; `offset` is
+  zero-based and `limit` is the maximum number of rows to read. The requested range is
+  relative to the reader or view, and this operation does not change the `nextRecord()`
+  cursor.
+
+`getCollection()` materializes its requested range in memory. The requested rectangle is subject to the existing 1024-cell collection cap. Keep `limit` bounded,
+especially for large files. An offset equal to the row count returns an object with empty lists. The existing `next()`, `row()`, and `getCells()` operations
+retain their existing return formats.
+
+Example:
+
+```text
+headers = csv.next(rid)
+csv.setObjHeaders(rid, headers)
+record = csv.nextRecord(rid)
+collection = csv.getCollection(rid, 0, 100)
+```
 
 ## Writer
 
@@ -102,6 +148,9 @@ from child to parent, before closing the root reader or writer.
 | `get(viewId, x, y)` | Reads one cell from a reader view |
 | `row(viewId, y)` | Reads one row from a reader view as a LIST STRING |
 | `next(viewId)` | Reads the next row from a reader view; each view has its own cursor |
+| `setObjHeaders(viewId, keys)` | Configures object property names independently for this view |
+| `nextRecord(viewId)` | Reads the next row as an object |
+| `getCollection(viewId, offset, limit)` | Reads a bounded range as a column-oriented object |
 | `reset(viewId)` | Resets that view's cursor |
 | `set(viewId, x, y, value)` | Sets one cell in a writer view (grid mode) |
 | `writeRow(viewId, y, values)` | Writes a complete row into a writer view; pads remaining columns with empty fields |

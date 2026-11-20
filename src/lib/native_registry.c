@@ -244,6 +244,9 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("math.mdim", "determinant", "math.mdim.determinant(m)"),
     META_SIG("math.mdim", "inverse", "math.mdim.inverse(m)"),
     META_SIG("csv", "writeRow", "csv.writeRow(viewId, y, values)"),
+    META_SIG("csv", "setObjHeaders", "csv.setObjHeaders(id, keys)"),
+    META_SIG("csv", "nextRecord", "csv.nextRecord(id)"),
+    META_SIG("csv", "getCollection", "csv.getCollection(id, offset, limit)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

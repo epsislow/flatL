@@ -240,5 +240,8 @@ int flat_native_csv_set_cell(FlatNativeCtx *ctx);
 int flat_native_csv_write_view_row(FlatNativeCtx *ctx);
 int flat_native_csv_get_cell(FlatNativeCtx *ctx);
 int flat_native_csv_get_view_row(FlatNativeCtx *ctx);
+int flat_native_csv_set_obj_headers(FlatNativeCtx *ctx);
+int flat_native_csv_next_record(FlatNativeCtx *ctx);
+int flat_native_csv_get_collection(FlatNativeCtx *ctx);
 
 #endif
