@@ -1,0 +1,19 @@
+use native list with L
+
+#main
+  A:u16[] = [10, 20, 30, 40]
+  Alias = A
+  L.set(A, 1, 99) -> B
+  L.remove_at(B, 0) -> C
+  L.splice(C, 1, 1) -> D
+  L.len(A) == 4
+  L.get(A, 1) == 20
+  L.len(Alias) == 4
+  L.len(B) == 4
+  L.get(B, 1) == 99
+  L.len(C) == 3
+  L.get(C, 0) == 99
+  L.len(D) == 2
+  L.get(D, 0) == 99
+  L.get(D, 1) == 40
+  OK

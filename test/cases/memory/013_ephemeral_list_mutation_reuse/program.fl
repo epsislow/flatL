@@ -1,0 +1,20 @@
+use native list with L
+
+#main
+  L.slice([10, 20, 30, 40], 1, 4) -> S
+  L.len(S) == 3
+  L.get(S, 0) == 20
+  L.get(S, 2) == 40
+  L.set([1, 2, 3], 1, 99) -> T
+  L.get(T, 0) == 1
+  L.get(T, 1) == 99
+  L.get(T, 2) == 3
+  L.splice([5, 6, 7, 8], 1, 2) -> U
+  L.len(U) == 2
+  L.get(U, 0) == 5
+  L.get(U, 1) == 8
+  free(S)
+  free(T)
+  free(U)
+  mem.list_used() == 0
+  OK

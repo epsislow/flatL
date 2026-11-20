@@ -1,0 +1,13 @@
+use native list with L
+
+#main
+  Source = ["1", "2", "3"]
+  L.values_to(Source ; "u8 all") -> Converted
+  Alias = Converted
+  L.set(Converted, 1, 9) -> Changed
+  L.get(Source, 1) == "2"
+  L.get(Alias, 1) == 2
+  L.get(Changed, 0) == 1
+  L.get(Changed, 1) == 9
+  L.get(Changed, 2) == 3
+  OK

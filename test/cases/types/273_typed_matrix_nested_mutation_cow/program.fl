@@ -1,0 +1,16 @@
+use native list with L
+
+#main
+  A:f64[][] = [[1, 2], [3, 4]]
+  Alias = A
+  L.set(A, 0, [9, 8]) -> B
+  L.get(A, 0) -> original_row
+  L.get(B, 0) -> changed_row
+  L.get(Alias, 0) -> alias_row
+  L.get(original_row, 0) == 1
+  L.get(alias_row, 1) == 2
+  L.get(changed_row, 0) == 9
+  L.get(changed_row, 1) == 8
+  L.get(B, 1) -> second_row
+  L.get(second_row, 1) == 4
+  OK

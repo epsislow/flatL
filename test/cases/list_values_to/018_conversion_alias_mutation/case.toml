@@ -1,0 +1,8 @@
+suite = "list_values_to"
+id = 18
+desc = "converted list mutation does not alter source or conversion alias"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

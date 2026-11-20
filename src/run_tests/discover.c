@@ -79,7 +79,11 @@ static int on_case_dir(const char *case_dir_name, void *ctx) {
                      case_dir_name) >= (int)sizeof nested.suite_path) {
             return 0;
         }
-        return flat_port_scan_dir(nested.suite_path, on_case_dir, &nested);
+        /* A suite may contain non-case files (for example README.md). A failed
+           attempt to scan such a path must not abort the parent directory scan,
+           otherwise later test-case directories can be silently skipped. */
+        (void)flat_port_scan_dir(nested.suite_path, on_case_dir, &nested);
+        return 0;
     }
     if (c.suite[0] == '\0') {
         copy_suite_dir_name(c.suite, sizeof c.suite, sctx->suite_name);

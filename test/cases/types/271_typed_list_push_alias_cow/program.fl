@@ -1,0 +1,12 @@
+use native list with L
+
+#main
+  A:u8[] = [1, 2]
+  Alias = A
+  L.push(A, 3) -> B
+  L.len(A) == 2
+  L.get(A, 0) == 1
+  L.len(Alias) == 2
+  L.len(B) == 3
+  L.get(B, 2) == 3
+  OK
