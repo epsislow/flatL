@@ -1485,6 +1485,56 @@ body.fleditor-resize-active * {
   gap: 0.35rem 0.5rem;
 }
 .fleditor-jsonl-meta { color: var(--fl-text-muted); font-size: 0.85rem; }
+.fleditor-jsonl-nav {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+.fleditor-jsonl-page-input {
+  box-sizing: border-box;
+  width: 3.2rem;
+  min-width: 3.2rem;
+  height: 1.8rem;
+  padding: 0.15rem 0.2rem;
+  text-align: center;
+  font: inherit;
+  font-size: 0.8rem;
+  color: var(--fl-text);
+  background: var(--fl-bg);
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.fleditor-jsonl-page-input::-webkit-inner-spin-button,
+.fleditor-jsonl-page-input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.fleditor-jsonl-page-total { color: var(--fl-text-muted); font-size: 0.8rem; white-space: nowrap; }
+.fleditor-jsonl-nav button,
+.fleditor-jsonl-row > button {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 2rem;
+  min-height: 1.8rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  background: var(--fl-surface-2, var(--fl-surface));
+  color: var(--fl-text);
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+.fleditor-jsonl-nav button:hover:not(:disabled),
+.fleditor-jsonl-row > button:hover:not(:disabled) {
+  border-color: var(--fl-accent, var(--fl-text-muted));
+  background: var(--fl-surface);
+}
+.fleditor-jsonl-nav button:disabled,
+.fleditor-jsonl-row > button:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
 .fleditor-jsonl-field {
   display: inline-flex;
   align-items: center;
@@ -1515,8 +1565,10 @@ body.fleditor-resize-active * {
   border-right: 1px solid var(--fl-border);
   overflow: auto;
   min-width: 0;
+  min-height: 0;
   background: var(--fl-surface);
 }
+.fleditor-jsonl-list-resize { display: none; }
 .fleditor-jsonl-list-add { padding: 0.35rem 0.45rem; border-bottom: 1px solid var(--fl-border); }
 .fleditor-jsonl-add-btn {
   width: 1.75rem;
@@ -1694,6 +1746,40 @@ body.fleditor-resize-active * {
 .fleditor-jsonl-help-banner[hidden] { display: none !important; }
 .fleditor-jsonl-help { margin: 0; flex: 1; font-size: 0.85rem; color: var(--fl-text-muted); }
 @media (max-width: 720px) {
-  .fleditor-jsonl-host { grid-template-columns: 1fr; }
-  .fleditor-jsonl-list-host { max-height: 40%; border-right: none; border-bottom: 1px solid var(--fl-border); }
+  .fleditor-jsonl-host {
+    --fl-jsonl-list-height: 30%;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(5rem, var(--fl-jsonl-list-height)) 0.65rem minmax(0, 1fr);
+  }
+  .fleditor-jsonl-list-host {
+    max-height: none;
+    border-right: none;
+    border-bottom: none;
+    grid-row: 1;
+  }
+  .fleditor-jsonl-list-resize {
+    display: block;
+    grid-row: 2;
+    min-height: 0.65rem;
+    background: var(--fl-surface);
+    border-top: 1px solid var(--fl-border);
+    border-bottom: 1px solid var(--fl-border);
+    cursor: ns-resize;
+    touch-action: none;
+    position: relative;
+  }
+  .fleditor-jsonl-list-resize::after {
+    content: "";
+    position: absolute;
+    width: 2.5rem;
+    height: 3px;
+    border-radius: 3px;
+    background: var(--fl-text-muted);
+    opacity: 0.65;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+  .fleditor-jsonl-list-resize:active { background: var(--fl-surface-2, var(--fl-surface)); }
+  .fleditor-jsonl-detail { grid-row: 3; }
 }

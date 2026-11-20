@@ -49,9 +49,11 @@ assert(J.joinLines(['a', 'b'], '\n') === 'a\nb', 'join');
 assert(J.previewLine('', 10) === '(empty)', 'preview empty');
 assert(J.defaultPanelModeForLine('{}') === 'lock', 'default lock');
 assert(J.defaultPanelModeForLine('') === 'free', 'default free');
-assert(J.pageCount(0) === 1 && J.pageCount(201) === 2, 'page count');
-const range = J.pageRange(1, 250);
-assert(range.start === 200 && range.end === 250, 'page range');
+assert(J.LINES_PER_PAGE === 40, '40 lines per page');
+assert(J.pageCount(0) === 1 && J.pageCount(40) === 1 && J.pageCount(41) === 2, 'page count');
+assert(J.pageCount(200) === 5, 'page count for 200 lines');
+const range = J.pageRange(1, 95);
+assert(range.start === 40 && range.end === 80, 'page range');
 
 assert(J.isTooLarge(J.MAX_LINES_FOR_RECORDS + 1), 'too large');
 assert(!J.isTooLarge(10), 'not too large');

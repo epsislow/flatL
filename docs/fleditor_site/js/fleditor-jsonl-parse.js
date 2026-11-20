@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
 
-  const LINES_PER_PAGE = 200;
+  const LINES_PER_PAGE = 40;
   const MAX_LINES_FOR_RECORDS = 100000;
   const PREVIEW_CHARS = 80;
   const UI_STRING_TRUNCATE = 300;

@@ -46,6 +46,8 @@
   const jsonlApplyBtn = document.getElementById('jsonlApplyBtn');
   const jsonlRevertBtn = document.getElementById('jsonlRevertBtn');
   const jsonlPageLabel = document.getElementById('jsonlPageLabel');
+  const jsonlPageInput = document.getElementById('jsonlPageInput');
+  const jsonlPageTotal = document.getElementById('jsonlPageTotal');
   const jsonlSearchInput = document.getElementById('jsonlSearchInput');
   const jsonlSearchCount = document.getElementById('jsonlSearchCount');
   const jsonlHelpBanner = document.getElementById('jsonlHelpBanner');
@@ -1106,11 +1108,28 @@
     const n = jsonlSession.lines.length;
     if (n <= 0) {
       jsonlPageLabel.textContent = 'Lines 0 of 0';
+      if (jsonlPageInput) jsonlPageInput.value = '1';
+      if (jsonlPageTotal) jsonlPageTotal.textContent = '/ 1';
+      ['jsonlPagePrev', 'jsonlPageNext'].forEach(function (id) {
+        const button = document.getElementById(id);
+        if (button) button.disabled = true;
+      });
       return;
     }
     const range = Jp.pageRange(jsonlSession.pageIndex, n);
     jsonlPageLabel.textContent =
       'Lines ' + (range.start + 1) + '\u2013' + range.end + ' of ' + n;
+    const pageCount = Jp.pageCount(n);
+    const pageIndex = Math.max(0, Math.min(jsonlSession.pageIndex, pageCount - 1));
+    if (jsonlPageInput) jsonlPageInput.value = String(pageIndex + 1);
+    if (jsonlPageTotal) jsonlPageTotal.textContent = '/ ' + pageCount;
+    [
+      ['jsonlPagePrev', pageIndex <= 0],
+      ['jsonlPageNext', pageIndex >= pageCount - 1],
+    ].forEach(function (entry) {
+      const button = document.getElementById(entry[0]);
+      if (button) button.disabled = entry[1];
+    });
   }
 
   function syncJsonlModeButtons() {
@@ -4353,11 +4372,8 @@
         renderJsonlRecords();
       });
     }
-    const pageStart = document.getElementById('jsonlPageStart');
     const pagePrev = document.getElementById('jsonlPagePrev');
     const pageNext = document.getElementById('jsonlPageNext');
-    const pageEnd = document.getElementById('jsonlPageEnd');
-    if (pageStart) pageStart.addEventListener('click', function () { jsonlSetPage(0); });
     if (pagePrev) {
       pagePrev.addEventListener('click', function () {
         if (!jsonlSession) return;
@@ -4370,10 +4386,79 @@
         jsonlSetPage(jsonlSession.pageIndex + 1);
       });
     }
-    if (pageEnd) {
-      pageEnd.addEventListener('click', function () {
+    if (jsonlPageInput) {
+      function commitPageInput() {
         if (!jsonlSession) return;
-        jsonlSetPage(Jp.pageCount(jsonlSession.lines.length) - 1);
+        const raw = String(jsonlPageInput.value || '').trim();
+        const page = Number(raw);
+        const pageCount = Jp.pageCount(jsonlSession.lines.length);
+        if (!/^\d+$/.test(raw) || !Number.isSafeInteger(page) || page < 1 || page > pageCount) {
+          updateJsonlBarMeta();
+          return;
+        }
+        jsonlSetPage(page - 1);
+      }
+      jsonlPageInput.addEventListener('keydown', function (ev) {
+        if (ev.key === 'Enter') {
+          ev.preventDefault();
+          commitPageInput();
+          jsonlPageInput.blur();
+        } else if (ev.key === 'Escape') {
+          updateJsonlBarMeta();
+          jsonlPageInput.blur();
+        }
+      });
+      jsonlPageInput.addEventListener('change', commitPageInput);
+      jsonlPageInput.addEventListener('blur', updateJsonlBarMeta);
+    }
+
+    // Mobile-only splitter between the JSONL line list and its detail panel.
+    const jsonlListResize = document.getElementById('jsonlListResize');
+    if (jsonlListResize && jsonlRecordsHost) {
+      let pointerId = null;
+      let hostTop = 0;
+      let hostHeight = 0;
+      function resizeListTo(clientY) {
+        const minPx = 80;
+        const maxPx = Math.max(minPx, hostHeight - 150);
+        const px = Math.max(minPx, Math.min(maxPx, clientY - hostTop));
+        const pct = Math.max(15, Math.min(65, px / hostHeight * 100));
+        jsonlRecordsHost.style.setProperty('--fl-jsonl-list-height', pct.toFixed(2) + '%');
+      }
+      jsonlListResize.addEventListener('pointerdown', function (ev) {
+        if (window.matchMedia && !window.matchMedia('(max-width: 720px)').matches) return;
+        if (ev.button !== 0) return;
+        const rect = jsonlRecordsHost.getBoundingClientRect();
+        hostTop = rect.top;
+        hostHeight = rect.height;
+        if (!hostHeight) return;
+        pointerId = ev.pointerId;
+        ev.preventDefault();
+        try { jsonlListResize.setPointerCapture(pointerId); } catch (_e) { /* ignore */ }
+        document.body.classList.add('fleditor-resize-active');
+      });
+      jsonlListResize.addEventListener('pointermove', function (ev) {
+        if (pointerId === null || ev.pointerId !== pointerId) return;
+        resizeListTo(ev.clientY);
+      });
+      function stopJsonlResize(ev) {
+        if (pointerId === null || (ev && ev.pointerId !== pointerId)) return;
+        try { jsonlListResize.releasePointerCapture(pointerId); } catch (_e) { /* ignore */ }
+        pointerId = null;
+        document.body.classList.remove('fleditor-resize-active');
+      }
+      jsonlListResize.addEventListener('pointerup', stopJsonlResize);
+      jsonlListResize.addEventListener('pointercancel', stopJsonlResize);
+      jsonlListResize.addEventListener('keydown', function (ev) {
+        if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
+        if (window.matchMedia && !window.matchMedia('(max-width: 720px)').matches) return;
+        ev.preventDefault();
+        const rect = jsonlRecordsHost.getBoundingClientRect();
+        const current = jsonlListResize.previousElementSibling.getBoundingClientRect().height;
+        const minPx = 80;
+        const maxPx = Math.max(minPx, rect.height - 150);
+        const px = Math.max(minPx, Math.min(maxPx, current + (ev.key === 'ArrowUp' ? -24 : 24)));
+        jsonlRecordsHost.style.setProperty('--fl-jsonl-list-height', Math.max(15, Math.min(65, px / rect.height * 100)) + '%');
       });
     }
     if (jsonlSearchInput) {

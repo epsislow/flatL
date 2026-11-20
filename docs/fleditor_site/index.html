@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=14">
+  <link rel="stylesheet" href="css/fleditor.css?v=15">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -122,11 +122,11 @@
           <div id="jsonlBar" class="fleditor-jsonl-bar" hidden>
             <div class="fleditor-jsonl-row">
               <span id="jsonlPageLabel" class="fleditor-jsonl-meta"></span>
-              <span class="fleditor-jsonl-nav" role="group" aria-label="Page">
-                <button type="button" id="jsonlPageStart" title="First page">|&lt;</button>
-                <button type="button" id="jsonlPagePrev" title="Previous page">&lt;</button>
-                <button type="button" id="jsonlPageNext" title="Next page">&gt;</button>
-                <button type="button" id="jsonlPageEnd" title="Last page">&gt;|</button>
+              <span class="fleditor-jsonl-nav" role="group" aria-label="Page navigation">
+                <button type="button" id="jsonlPagePrev" title="Previous page" aria-label="Previous page">&lt;</button>
+                <input type="number" id="jsonlPageInput" class="fleditor-jsonl-page-input" min="1" step="1" value="1" inputmode="numeric" aria-label="Current page" />
+                <span id="jsonlPageTotal" class="fleditor-jsonl-page-total">/ 1</span>
+                <button type="button" id="jsonlPageNext" title="Next page" aria-label="Next page">&gt;</button>
               </span>
               <label class="fleditor-jsonl-field">Search
                 <input type="text" id="jsonlSearchInput" size="14" spellcheck="false" autocomplete="off" aria-label="Search lines" />
@@ -138,6 +138,8 @@
           </div>
           <div id="jsonlRecordsHost" class="fleditor-jsonl-host" hidden aria-label="JSONL records editor">
             <div id="jsonlListHost" class="fleditor-jsonl-list-host"></div>
+            <div id="jsonlListResize" class="fleditor-jsonl-list-resize" role="separator"
+              aria-orientation="horizontal" aria-label="Resize JSONL line list" tabindex="0"></div>
             <div class="fleditor-jsonl-detail">
               <div class="fleditor-jsonl-detail-head">
                 <span id="jsonlLineLabel" class="fleditor-jsonl-meta">No line</span>
@@ -478,8 +480,8 @@
   <script src="js/fleditor-text-format.js?v=1"></script>
   <script src="js/fleditor-csv-parse.js?v=6"></script>
   <script src="js/fleditor-csv-grid.js?v=11"></script>
-  <script src="js/fleditor-jsonl-parse.js?v=2"></script>
-  <script src="js/fleditor-jsonl-ui.js?v=2"></script>
+  <script src="js/fleditor-jsonl-parse.js?v=3"></script>
+  <script src="js/fleditor-jsonl-ui.js?v=3"></script>
   <script src="js/fleditor-project.js?v=7"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
@@ -487,6 +489,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=71"></script>
+  <script src="js/fleditor.js?v=73"></script>
 </body>
 </html>
