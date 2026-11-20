@@ -1438,6 +1438,12 @@
     jsonlSession.selected = lineIndex;
     loadJsonlSelectedIntoPanel();
     renderJsonlRecords();
+    // Keep the active search result visible inside the JSONL line-list scroller.
+    const selectedRow = jsonlListHost &&
+      jsonlListHost.querySelector('.fleditor-jsonl-list-item--sel');
+    if (selectedRow && typeof selectedRow.scrollIntoView === 'function') {
+      selectedRow.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+    }
     updateJsonlSearchCount();
   }
 
@@ -4350,7 +4356,7 @@
     if (jsonlWordWrapBtn) {
       jsonlWordWrapBtn.addEventListener('click', function () {
         jsonlWordWrapEnabled = !jsonlWordWrapEnabled;
-        jsonlWordWrapBtn.classList.toggle('is-on', jsonlWordWrapEnabled);
+        jsonlWordWrapBtn.classList.toggle('fleditor-csv-header-btn--active', jsonlWordWrapEnabled);
         jsonlWordWrapBtn.setAttribute('aria-pressed', jsonlWordWrapEnabled ? 'true' : 'false');
         if (jsonlLockPanel) jsonlLockPanel.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
       });
