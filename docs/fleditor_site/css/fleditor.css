@@ -1570,6 +1570,28 @@ body.fleditor-resize-active * {
 }
 .fleditor-jsonl-list-resize { display: none; }
 .fleditor-jsonl-list-add { padding: 0.35rem 0.45rem; border-bottom: 1px solid var(--fl-border); }
+.fleditor-jsonl-tool-btn {
+  min-width: 1.75rem;
+  height: 1.75rem;
+  margin-left: 0.3rem;
+  padding: 0 0.35rem;
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  background: var(--fl-surface-2, #25252c);
+  color: var(--fl-text);
+  font: 0.85rem/1 ui-monospace, Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+.fleditor-jsonl-tool-btn:hover:not(:disabled) { border-color: var(--fl-accent, #6d945f); }
+.fleditor-jsonl-tool-btn:disabled { opacity: 0.35; cursor: default; }
+.fleditor-jsonl-search-highlight {
+  padding: 0;
+  border-radius: 2px;
+  background: rgba(235, 190, 65, 0.48);
+  color: inherit;
+  outline: 1px solid rgba(235, 190, 65, 0.55);
+}
+
 .fleditor-jsonl-add-btn {
   width: 1.75rem;
   height: 1.75rem;

@@ -228,6 +228,31 @@
       opts.onAdd();
     });
     addRow.appendChild(addBtn);
+    if (opts.selected != null) {
+      const duplicateBtn = el('button', 'fleditor-jsonl-tool-btn', '×2');
+      duplicateBtn.type = 'button';
+      duplicateBtn.title = 'Duplicate selected line';
+      duplicateBtn.setAttribute('aria-label', 'Duplicate selected line');
+      duplicateBtn.addEventListener('click', function () { opts.onDuplicate(opts.selected); });
+      addRow.appendChild(duplicateBtn);
+      if (opts.lines.length > 1) {
+        const upBtn = el('button', 'fleditor-jsonl-tool-btn', '↑');
+        upBtn.type = 'button';
+        upBtn.title = 'Move line up';
+        upBtn.setAttribute('aria-label', 'Move line up');
+        upBtn.disabled = opts.selected <= 0;
+        upBtn.addEventListener('click', function () { opts.onMove(opts.selected, -1); });
+        addRow.appendChild(upBtn);
+
+        const downBtn = el('button', 'fleditor-jsonl-tool-btn', '↓');
+        downBtn.type = 'button';
+        downBtn.title = 'Move line down';
+        downBtn.setAttribute('aria-label', 'Move line down');
+        downBtn.disabled = opts.selected >= opts.lines.length - 1;
+        downBtn.addEventListener('click', function () { opts.onMove(opts.selected, 1); });
+        addRow.appendChild(downBtn);
+      }
+    }
     container.appendChild(addRow);
 
     const list = el('ul', 'fleditor-jsonl-list');
@@ -281,8 +306,38 @@
     }
   }
 
+  function highlightText(container, query) {
+    if (!container || !query) return;
+    const doc = container.ownerDocument || document;
+    function visit(node) {
+      if (node.nodeType === 3) {
+        const value = node.nodeValue || '';
+        const at = value.indexOf(query);
+        if (at < 0) return;
+        const frag = doc.createDocumentFragment();
+        let from = 0;
+        let found = at;
+        while (found >= 0) {
+          if (found > from) frag.appendChild(doc.createTextNode(value.slice(from, found)));
+          const mark = el('mark', 'fleditor-jsonl-search-highlight', value.slice(found, found + query.length));
+          frag.appendChild(mark);
+          from = found + query.length;
+          found = value.indexOf(query, from);
+        }
+        if (from < value.length) frag.appendChild(doc.createTextNode(value.slice(from)));
+        node.parentNode.replaceChild(frag, node);
+        return;
+      }
+      if (node.nodeType !== 1 || node.tagName === 'MARK') return;
+      const children = Array.prototype.slice.call(node.childNodes || []);
+      children.forEach(visit);
+    }
+    visit(container);
+  }
+
   root.FleditorJsonlUi = {
     renderLockTree: renderLockTree,
+    highlightText: highlightText,
     renderLineList: renderLineList,
     applyFreeErrorHighlight: applyFreeErrorHighlight,
     pathKey: pathKey,

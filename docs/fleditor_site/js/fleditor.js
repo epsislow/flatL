@@ -167,6 +167,8 @@
   let jsonlSearchMatches = [];
   let jsonlSearchMatchIndex = -1;
   let jsonlWordWrapEnabled = false;
+  let jsonlPendingDialog = null;
+  let jsonlPendingAction = null;
   /** @type {null | { path: string, lineEnding: string, encoding: string, savedProjectValue: string }} */
   let textSession = null;
   /** @type {{r:number,c:number}[]} */
@@ -1225,6 +1227,81 @@
     }
   }
 
+  function runAfterJsonlDraftDecision(onContinue) {
+    if (!jsonlSession || !jsonlSession.draftDirty) {
+      onContinue();
+      return;
+    }
+    if (!jsonlPendingDialog) {
+      const dialog = document.createElement('dialog');
+      dialog.className = 'fleditor-io-modal';
+      dialog.setAttribute('aria-labelledby', 'jsonlPendingTitle');
+      const form = document.createElement('div');
+      form.className = 'fleditor-io-form';
+      const title = document.createElement('h2');
+      title.className = 'fleditor-io-title';
+      title.id = 'jsonlPendingTitle';
+      title.textContent = 'Pending line changes';
+      const message = document.createElement('p');
+      message.className = 'fleditor-io-hint';
+      message.textContent = 'The selected line has unapplied changes. Apply them or revert them before continuing.';
+      const actions = document.createElement('div');
+      actions.className = 'fleditor-io-actions';
+      const apply = document.createElement('button');
+      apply.type = 'button';
+      apply.className = 'fleditor-io-btn fleditor-io-btn--primary';
+      apply.textContent = 'Apply';
+      const revert = document.createElement('button');
+      revert.type = 'button';
+      revert.className = 'fleditor-io-btn';
+      revert.textContent = 'Revert';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'fleditor-io-btn';
+      cancel.textContent = 'Cancel';
+      actions.appendChild(apply);
+      actions.appendChild(revert);
+      actions.appendChild(cancel);
+      form.appendChild(title);
+      form.appendChild(message);
+      form.appendChild(actions);
+      dialog.appendChild(form);
+      document.body.appendChild(dialog);
+      apply.addEventListener('click', function () {
+        dialog.close();
+        if (!jsonlSession) return;
+        commitJsonlFreeDraftToLines(true);
+        renderJsonlRecords();
+        recomputeJsonlDirty();
+        const action = jsonlPendingAction;
+        jsonlPendingAction = null;
+        if (action) action();
+      });
+      revert.addEventListener('click', function () {
+        dialog.close();
+        if (!jsonlSession) return;
+        loadJsonlSelectedIntoPanel();
+        renderJsonlRecords();
+        recomputeJsonlDirty();
+        const action = jsonlPendingAction;
+        jsonlPendingAction = null;
+        if (action) action();
+      });
+      cancel.addEventListener('click', function () {
+        dialog.close();
+        jsonlPendingAction = null;
+      });
+      dialog.addEventListener('cancel', function (event) {
+        event.preventDefault();
+        dialog.close();
+        jsonlPendingAction = null;
+      });
+      jsonlPendingDialog = dialog;
+    }
+    jsonlPendingAction = onContinue;
+    jsonlPendingDialog.showModal();
+  }
+
   function renderJsonlLockPanel() {
     if (!jsonlSession || !jsonlLockPanel) return;
     jsonlLockPanel.textContent = '';
@@ -1245,6 +1322,26 @@
     }
     jsonlSession.lockValue = parsed.value;
     jsonlLockPanel.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
+    const searchQuery = jsonlSearchInput ? jsonlSearchInput.value : '';
+    if (searchQuery) {
+      function expandMatchingBranches(value, path) {
+        if (!value || typeof value !== 'object') return;
+        let contains = false;
+        try { contains = JSON.stringify(value).indexOf(searchQuery) >= 0; } catch (_e) {}
+        if (!contains) return;
+        jsonlSession.expand[Ju.pathKey(path)] = true;
+        if (Array.isArray(value)) {
+          value.forEach(function (child, index) {
+            expandMatchingBranches(child, path.concat([String(index)]));
+          });
+        } else {
+          Object.keys(value).forEach(function (key) {
+            expandMatchingBranches(value[key], path.concat([key]));
+          });
+        }
+      }
+      expandMatchingBranches(parsed.value, ['$']);
+    }
     Ju.renderLockTree(jsonlLockPanel, parsed.value, {
       expand: jsonlSession.expand,
       onToggle: function (path) {
@@ -1253,6 +1350,7 @@
         renderJsonlLockPanel();
       },
     });
+    if (searchQuery) Ju.highlightText(jsonlLockPanel, searchQuery);
   }
 
   function renderJsonlDetail() {
@@ -1323,6 +1421,35 @@
           jsonlSession.lines.splice(at, 0, '');
           jsonlSession.selected = at;
           jsonlSession.pageIndex = Math.floor(at / Jp.LINES_PER_PAGE);
+          loadJsonlSelectedIntoPanel();
+          renderJsonlRecords();
+          recomputeJsonlDirty();
+        });
+      },
+      onDuplicate: function (index) {
+        runAfterJsonlDraftDecision(function () {
+          if (!jsonlSession || index < 0 || index >= jsonlSession.lines.length) return;
+          const copy = jsonlSession.lines[index];
+          const at = index + 1;
+          jsonlSession.lines.splice(at, 0, copy);
+          jsonlSession.selected = at;
+          jsonlSession.pageIndex = Math.floor(at / Jp.LINES_PER_PAGE);
+          loadJsonlSelectedIntoPanel();
+          renderJsonlRecords();
+          recomputeJsonlDirty();
+        });
+      },
+      onMove: function (index, direction) {
+        runAfterJsonlDraftDecision(function () {
+          if (!jsonlSession) return;
+          const target = index + direction;
+          if (index < 0 || index >= jsonlSession.lines.length ||
+              target < 0 || target >= jsonlSession.lines.length) return;
+          const tmp = jsonlSession.lines[index];
+          jsonlSession.lines[index] = jsonlSession.lines[target];
+          jsonlSession.lines[target] = tmp;
+          jsonlSession.selected = target;
+          jsonlSession.pageIndex = Math.floor(target / Jp.LINES_PER_PAGE);
           loadJsonlSelectedIntoPanel();
           renderJsonlRecords();
           recomputeJsonlDirty();
@@ -4511,6 +4638,7 @@
     if (jsonlSearchInput) {
       jsonlSearchInput.addEventListener('input', function () {
         recomputeJsonlSearchMatches();
+        if (jsonlSession && jsonlSession.panelMode === 'lock') renderJsonlLockPanel();
       });
     }
     const searchPrev = document.getElementById('jsonlSearchPrev');
