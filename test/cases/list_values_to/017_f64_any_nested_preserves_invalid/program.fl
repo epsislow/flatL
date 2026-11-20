@@ -1,0 +1,11 @@
+use native list with L
+
+#main
+  A = [["1", "x"], ["3", "4"]]
+  L.values_to(A ; "f64 any") -> B
+  L.get(B, 0) -> row
+  L.get(row, 0) == 1
+  L.get(row, 1) == "x"
+  L.get(B, 1) -> row2
+  L.get(row2, 1) == 4
+  OK

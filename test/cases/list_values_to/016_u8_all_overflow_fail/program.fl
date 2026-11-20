@@ -1,0 +1,7 @@
+use native list with L
+
+#main
+  A = ["255", "256"]
+  L.values_to(A ; "u8 all") -> B
+  io.out(B)
+  OK

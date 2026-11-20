@@ -1,0 +1,10 @@
+use native list with L
+
+#main
+  A = [[['1', '2'], ['3', '4']], [['5', '6'], ['7', '8']]]
+  L.values_to(A ; "f64 all") -> B
+  L.rank(B) == 3
+  L.get(B, 1) -> plane
+  L.get(plane, 1) -> row
+  L.get(row, 1) == 8
+  OK

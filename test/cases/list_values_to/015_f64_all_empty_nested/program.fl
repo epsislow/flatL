@@ -1,0 +1,11 @@
+use native list with L
+
+#main
+  A = [[], []]
+  L.values_to(A ; "f64 all") -> B
+  L.rank(B) == 2
+  L.is_rect(B) == true
+  L.len(B) == 2
+  L.get(B, 0) -> first
+  L.len(first) == 0
+  OK

@@ -1,0 +1,8 @@
+use native math.mdim with D
+
+#main
+  A:f64[][][] = [[[1, 2]], [[3, 4]]]
+  B:f64[] = [10, 20]
+  D.add(A, B) -> C
+  D.sum(C) == 70
+  OK

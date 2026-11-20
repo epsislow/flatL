@@ -1,0 +1,9 @@
+use native math.mdim with D
+
+#main
+  A:f64[][] = [[1, 2, 3], [4, 5, 6]]
+  D.transpose(A ; "matrix") -> T
+  D.transpose(T ; "matrix") -> R
+  D.sum(R) == 21
+  R[1][2] == 6
+  OK

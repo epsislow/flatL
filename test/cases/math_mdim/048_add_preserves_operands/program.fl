@@ -1,0 +1,10 @@
+use native math.mdim with D
+
+#main
+  A:f64[][] = [[1, 2], [3, 4]]
+  B:f64[][] = [[5, 6], [7, 8]]
+  D.add(A, B) -> C
+  D.sum(A) == 10
+  D.sum(B) == 26
+  D.sum(C) == 36
+  OK

@@ -1,0 +1,8 @@
+suite = "list_values_to"
+id = 14
+desc = "recursive f64 all conversion at rank 3"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0

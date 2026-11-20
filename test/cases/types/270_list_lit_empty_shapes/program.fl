@@ -1,0 +1,15 @@
+use native list with L
+
+#main
+  V:f64[] = []
+  L.len(V) == 0
+  A:f64[][] = [[1, 2], [3, 4]]
+  B:f64[][] = A
+  L.get(B, 0) -> row
+  L.set(row, 0, 99) -> changed_row
+  L.set(B, 0, changed_row) -> B2
+  L.get(A, 0) -> original_row
+  L.get(original_row, 0) == 1
+  L.get(B2, 0) -> result_row
+  L.get(result_row, 0) == 99
+  OK
