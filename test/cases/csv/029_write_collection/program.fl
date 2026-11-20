@@ -1,0 +1,43 @@
+use native csv
+use native obj
+use native list
+
+#main
+  src = file.createCtx('source.csv')
+  file.writeln(src, 'Keyboard,2')
+  file.writeln(src, 'Mouse,5')
+  file.writeln(src, 'Monitor,1')
+  file.close(src)
+  src = file.readCtx('source.csv')
+  rid = csv.reader(src)
+  csv.setSeparator(rid, ',')
+  csv.setObjHeaders(rid, ['name', 'qty'])
+  data = csv.getCollection(rid, 0, 3)
+  csv.close(rid)
+  file.close(src)
+  data = obj.set(data, 'ignored', ['x', 'y', 'z'])
+
+  fp = file.createCtx('write-collection.csv')
+  wid = csv.writer(fp)
+  csv.setSeparator(wid, ',')
+  csv.setObjHeaders(wid, ['name', 'qty'])
+  csv.writeCollection(wid, data)
+  csv.close(wid)
+  file.close(fp)
+
+  fp = file.readCtx('write-collection.csv')
+  rid = csv.reader(fp)
+  csv.setSeparator(rid, ',')
+  csv.setObjHeaders(rid, ['name', 'qty'])
+  first = csv.nextRecord(rid)
+  second = csv.nextRecord(rid)
+  obj.get(first, '"name"') -> first_name
+  obj.get(first, '"qty"') -> first_qty
+  obj.get(second, '"name"') -> second_name
+  first_name == 'Keyboard'
+  first_qty == '2'
+  second_name == 'Mouse'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('write-collection-ok')
+  OK

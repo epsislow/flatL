@@ -1,0 +1,9 @@
+suite = "csv"
+id = 29
+desc = "writeCollection writes selected columns without a header row"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 0
+stdout_contains = "write-collection-ok"

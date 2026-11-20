@@ -1,0 +1,39 @@
+use native csv
+use native obj
+use native list
+
+#main
+  src = file.createCtx('view-source.csv')
+  file.writeln(src, 'A,1')
+  file.writeln(src, 'B,2')
+  file.close(src)
+  src = file.readCtx('view-source.csv')
+  rid = csv.reader(src)
+  csv.setSeparator(rid, ',')
+  csv.setObjHeaders(rid, ['name', 'qty'])
+  data = csv.getCollection(rid, 0, 2)
+  csv.close(rid)
+  file.close(src)
+
+  fp = file.createCtx('view-collection.csv')
+  wid = csv.writer(fp)
+  view = csv.view(wid, 0, 0, 2, 2)
+  csv.setObjHeaders(view, ['name', 'qty'])
+  csv.writeCollection(view, data)
+  csv.closeView(view)
+  csv.close(wid)
+  file.close(fp)
+
+  fp = file.readCtx('view-collection.csv')
+  rid = csv.reader(fp)
+  csv.setSeparator(rid, ',')
+  first = csv.next(rid)
+  second = csv.next(rid)
+  list.get(first, 0) -> a
+  list.get(second, 1) -> b
+  a == 'A'
+  b == '2'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('writer-view-collection-ok')
+  OK

@@ -1,0 +1,32 @@
+use native csv
+use native obj
+use native list
+
+#main
+  fp = file.createCtx('writer-view-records.csv')
+  wid = csv.writer(fp)
+  view = csv.view(wid, 0, 0, 2, 2)
+  csv.setObjHeaders(view, ['name', 'qty'])
+  records = [{ name: 'A', qty: '1' }, { name: 'B', qty: '2' }]
+  csv.writeRecords(view, records)
+  csv.closeView(view)
+  csv.close(wid)
+  file.close(fp)
+
+  fp = file.readCtx('writer-view-records.csv')
+  rid = csv.reader(fp)
+  csv.setSeparator(rid, ',')
+  row1 = csv.next(rid)
+  row2 = csv.next(rid)
+  list.get(row1, 0) -> name_a
+  list.get(row1, 1) -> qty_a
+  list.get(row2, 0) -> name_b
+  list.get(row2, 1) -> qty_b
+  name_a == 'A'
+  qty_a == '1'
+  name_b == 'B'
+  qty_b == '2'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('writer-view-records-ok')
+  OK

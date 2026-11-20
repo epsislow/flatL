@@ -1,0 +1,9 @@
+use native csv
+use native obj
+#main
+  fp = file.createCtx('bad-collection.csv')
+  wid = csv.writer(fp)
+  csv.setObjHeaders(wid, ['a', 'b'])
+  data = obj.set({ a: ['1', '2'] }, 'b', ['x'])
+  csv.writeCollection(wid, data)
+  OK

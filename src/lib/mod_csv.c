@@ -40,9 +40,9 @@ static int split_variadic_args(char *inner, char *parts[], int max_parts, int *o
             quote = *p;
         } else if (quote && *p == quote) {
             quote = 0;
-        } else if (!quote && (*p == '[' || *p == '(')) {
+        } else if (!quote && (*p == '[' || *p == '(' || *p == '{')) {
             depth++;
-        } else if (!quote && (*p == ']' || *p == ')')) {
+        } else if (!quote && (*p == ']' || *p == ')' || *p == '}')) {
             if (depth > 0) {
                 depth--;
             }
@@ -67,9 +67,9 @@ static int split_two_args(char *inner, char **left, char **right) {
             quote = *p;
         } else if (quote && *p == quote) {
             quote = 0;
-        } else if (!quote && (*p == '[' || *p == '(')) {
+        } else if (!quote && (*p == '[' || *p == '(' || *p == '{')) {
             depth++;
-        } else if (!quote && (*p == ']' || *p == ')')) {
+        } else if (!quote && (*p == ']' || *p == ')' || *p == '}')) {
             if (depth > 0) {
                 depth--;
             }
@@ -408,6 +408,39 @@ int flat_native_csv_write_rows(FlatNativeCtx *ctx) {
     }
     *ctx->io_status = FLAT_IO_OK;
     return 0;
+}
+
+static int csv_native_write_object_arg(FlatNativeCtx *ctx, const char *panic_name, int is_collection) {
+    char buf[512];
+    char *left, *right;
+    uint32_t wid;
+    FlatValue value;
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    if (split_two_args(buf, &left, &right) != 0 ||
+        require_sess_id(ctx, left, &wid) != 0 ||
+        flat_native_parse_expr(ctx, right, &value) != 0) {
+        return csv_fail(ctx, panic_name);
+    }
+    ctx->panic_detail[0] = '\0';
+    if ((is_collection
+            ? flat_csv_writer_write_collection(rt(ctx), wid, &value, ctx->coll, ctx->pool,
+                                               ctx->panic_detail, sizeof ctx->panic_detail)
+            : flat_csv_writer_write_records(rt(ctx), wid, &value, ctx->coll, ctx->pool,
+                                            ctx->panic_detail, sizeof ctx->panic_detail)) != 0) {
+        return csv_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : panic_name);
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
+int flat_native_csv_write_records(FlatNativeCtx *ctx) {
+    if (!ctx) return csv_fail(ctx, "csv.writeRecords");
+    return csv_native_write_object_arg(ctx, "csv.writeRecords", 0);
+}
+
+int flat_native_csv_write_collection(FlatNativeCtx *ctx) {
+    if (!ctx) return csv_fail(ctx, "csv.writeCollection");
+    return csv_native_write_object_arg(ctx, "csv.writeCollection", 1);
 }
 
 int flat_native_csv_write_cols(FlatNativeCtx *ctx) {

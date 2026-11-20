@@ -1,0 +1,8 @@
+use native csv
+#main
+  fp = file.createCtx('empty-records.csv')
+  wid = csv.writer(fp)
+  csv.setObjHeaders(wid, ['a'])
+  records = []
+  csv.writeRecords(wid, records)
+  OK

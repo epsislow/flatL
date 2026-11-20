@@ -84,6 +84,12 @@ int flat_csv_writer_write_rows(FlatCsvRuntime *rt, uint32_t wid, const FlatValue
 int flat_csv_writer_write_cols(FlatCsvRuntime *rt, uint32_t wid, const FlatValue *cols_val,
                                FlatCollectionPool *coll, FlatStringPool *pool, char *panic,
                                size_t panic_sz);
+int flat_csv_writer_write_records(FlatCsvRuntime *rt, uint32_t wid, const FlatValue *records_val,
+                                  FlatCollectionPool *coll, FlatStringPool *pool, char *panic,
+                                  size_t panic_sz);
+int flat_csv_writer_write_collection(FlatCsvRuntime *rt, uint32_t wid,
+                                     const FlatValue *collection_val, FlatCollectionPool *coll,
+                                     FlatStringPool *pool, char *panic, size_t panic_sz);
 int flat_csv_writer_flush(FlatCsvRuntime *rt, uint32_t wid, FlatFileTable *files, char *panic,
                           size_t panic_sz);
 

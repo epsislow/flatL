@@ -1,0 +1,8 @@
+use native csv
+#main
+  fp = file.createCtx('empty-collection.csv')
+  wid = csv.writer(fp)
+  csv.setObjHeaders(wid, ['a', 'b'])
+  data = { a: [], b: [] }
+  csv.writeCollection(wid, data)
+  OK

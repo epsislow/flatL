@@ -232,6 +232,8 @@ int flat_native_csv_set_encoding(FlatNativeCtx *ctx);
 int flat_native_csv_set_quote(FlatNativeCtx *ctx);
 int flat_native_csv_write_rows(FlatNativeCtx *ctx);
 int flat_native_csv_write_cols(FlatNativeCtx *ctx);
+int flat_native_csv_write_records(FlatNativeCtx *ctx);
+int flat_native_csv_write_collection(FlatNativeCtx *ctx);
 int flat_native_csv_flush(FlatNativeCtx *ctx);
 int flat_native_csv_get_cells(FlatNativeCtx *ctx);
 int flat_native_csv_view(FlatNativeCtx *ctx);

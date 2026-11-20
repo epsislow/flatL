@@ -94,10 +94,75 @@ Starts at byte **0** and truncates the file. Not for `file.appendCtx` or read-on
 | `writer(fpId)` | `csv.writer.mode`, `csv.fp.busy` |
 | `writeRows(wid, listOfLists)` | `csv.writeRows` |
 | `writeCols(wid, obj)` | `csv.writeCols`, `csv.writeCols.length` |
+| `setObjHeaders(wid, keys)` | `csv.setObjHeaders`, `csv.objHeaders.empty`, `csv.objHeaders.duplicate`, `csv.objHeaders.length` |
+| `writeRecords(wid, records)` | `csv.writeRecords`, `csv.writer.no_records` |
+| `writeCollection(wid, collection)` | `csv.writeCollection`, `csv.writeCollection.length`, `csv.writer.no_records` |
 | `flush(wid)` | `csv.flush` |
 | `close(wid)` | flush + release (same as reader close) |
 
 Format setters work on **`rid`** or **`wid`**.
+
+
+### Object-based writing
+
+`setObjHeaders(wid, keys)` also configures the output columns of a writer. The supplied
+list defines both the CSV column order and the properties selected from each input
+object or collection. On a root writer, the configured list defines the output width;
+on a writer view, its length must match the view width. Writer views keep their own
+configuration and do not inherit headers from their parent.
+
+When no custom headers are configured, object writing uses generated keys `col0`,
+`col1`, `col2`, etc. The input must contain the corresponding default keys.
+
+- `writeRecords(wid, records)` writes a list of objects as consecutive CSV rows. The
+  number of rows equals the number of objects in the list.
+- `writeCollection(wid, collection)` writes a column-oriented object as consecutive
+  CSV rows. The number of rows is the number of values in each selected column list.
+  It writes data only; it does not emit a header row.
+
+Both operations start at the writer's current position. For a writer view, they start
+at that view's current row cursor, advance it by the number of rows written, and must
+fit entirely inside the view's height. Root writers append the serialized rows to the
+writer buffer.
+
+Only properties named in `ObjHeaders` are written, in exactly that order. Additional
+properties in records or collections are ignored. Every configured property must be
+present in each record or in the collection. Missing properties panic. For
+`writeCollection()`, all selected column lists must have equal lengths. An empty records
+list or empty selected collection lists panic with `csv.writer.no_records` (`No records
+to write.`). Values are serialized as strings using the writer's current CSV format.
+
+The operations validate and prepare their input before committing rows, so invalid
+records, mismatched collection lengths, and writer-view conflicts do not produce a
+partially written batch.
+
+Example — writing objects:
+
+```text
+wid = csv.writer(fp)
+csv.setObjHeaders(wid, ["product", "price"])
+records = [
+  { product: "Apple", price: "10", extra: "ignored" },
+  { product: "Orange", price: "20", extra: "ignored" }
+]
+csv.writeRecords(wid, records)
+csv.close(wid)
+```
+
+Example — writing a column-oriented collection (for example, directly from
+`getCollection()`):
+
+```text
+rid = csv.reader(inputFp)
+csv.setObjHeaders(rid, ["product", "price"])
+collection = csv.getCollection(rid, 0, 100)
+csv.close(rid)
+
+wid = csv.writer(outputFp)
+csv.setObjHeaders(wid, ["product", "price"])
+csv.writeCollection(wid, collection)
+csv.close(wid)
+```
 
 ## `file` interaction
 
@@ -154,6 +219,8 @@ from child to parent, before closing the root reader or writer.
 | `reset(viewId)` | Resets that view's cursor |
 | `set(viewId, x, y, value)` | Sets one cell in a writer view (grid mode) |
 | `writeRow(viewId, y, values)` | Writes a complete row into a writer view; pads remaining columns with empty fields |
+| `writeRecords(viewId, records)` | Writes objects from the view cursor, advancing it by the number of records |
+| `writeCollection(viewId, collection)` | Writes selected column lists from the view cursor, without a header row |
 
 Example — nested reader views:
 
@@ -181,7 +248,7 @@ csv.closeView(grid)
 csv.close(wid)  # serializes the grid and flushes the writer
 ```
 
-Writer grid mode is mutually exclusive with `writeRows` / `writeCols` on the same writer.
+Writer grid mode (used by writer views, `set`, `writeRow`, `writeRecords`, and `writeCollection` on a view) is mutually exclusive with sequential writer mode (`writeRows`, `writeCols`, `writeRecords`, and `writeCollection` on the root writer) on the same writer.
 A grid cell can be assigned only once; a duplicate assignment panics with
 `csv.writer.conflict`. Unassigned cells between populated columns are serialized as empty
 fields. Grid output is buffered until `flush` or `close`. `writeRow(viewId, y, values)`
@@ -215,5 +282,4 @@ csv.close(wid)
 local column zero. The values must fit within the view width. Remaining columns are
 written as empty fields. The operation is atomic: if the row is out of bounds, too
 wide, or overlaps cells already assigned through `set` or another `writeRow`, no
-part of the row is added. It uses grid mode and cannot be mixed with `writeRows` or
-`writeCols` on the same writer.
+part of the row is added. It uses grid mode and cannot be mixed with sequential writer operations on the same writer.

@@ -1,0 +1,22 @@
+use native csv
+use native obj
+
+#main
+  fp = file.createCtx('default-write.csv')
+  wid = csv.writer(fp)
+  records = [{ col0: 'A', col1: '1' }, { col0: 'B', col1: '2' }]
+  csv.writeRecords(wid, records)
+  csv.close(wid)
+  file.close(fp)
+
+  fp = file.readCtx('default-write.csv')
+  rid = csv.reader(fp)
+  record = csv.nextRecord(rid)
+  obj.get(record, '"col0"') -> first
+  obj.get(record, '"col1"') -> second
+  first == 'A'
+  second == '1'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('default-write-keys-ok')
+  OK

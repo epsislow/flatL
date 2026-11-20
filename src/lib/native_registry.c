@@ -247,6 +247,8 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("csv", "setObjHeaders", "csv.setObjHeaders(id, keys)"),
     META_SIG("csv", "nextRecord", "csv.nextRecord(id)"),
     META_SIG("csv", "getCollection", "csv.getCollection(id, offset, limit)"),
+    META_SIG("csv", "writeRecords", "csv.writeRecords(wid, records)"),
+    META_SIG("csv", "writeCollection", "csv.writeCollection(wid, collection)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

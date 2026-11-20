@@ -686,11 +686,18 @@ int flat_csv_obj_headers_set(FlatCsvRuntime *rt, FlatFileTable *files, uint32_t 
     FlatCsvSession *session;
     FlatCsvView *view;
     if (!rt || !headers || count < 1 || count > FLAT_OBJ_MAX_KEYS ||
-        flat_csv_view_resolve(rt, id, &root, &x, &y, &width, &height, &kind, &cursor) != 0 ||
-        kind != FLAT_CSV_SESS_READER)
+        flat_csv_view_resolve(rt, id, &root, &x, &y, &width, &height, &kind, &cursor) != 0)
         return panic_msg(panic, panic_sz, "csv.setObjHeaders");
-    if (width >= 0) cols = width;
-    else if (csv_reader_cols_at_internal(rt, files, root, 0, &cols) != 0)
+    if (width >= 0) {
+        cols = width;
+    } else if (kind == FLAT_CSV_SESS_READER) {
+        if (csv_reader_cols_at_internal(rt, files, root, 0, &cols) != 0)
+            return panic_msg(panic, panic_sz, "csv.setObjHeaders");
+    } else {
+        /* A root writer has no fixed width; its object headers define it. */
+        cols = count;
+    }
+    if (kind != FLAT_CSV_SESS_READER && kind != FLAT_CSV_SESS_WRITER)
         return panic_msg(panic, panic_sz, "csv.setObjHeaders");
     if (count != cols) return panic_msg(panic, panic_sz, "csv.objHeaders.length");
     copy = (char **)calloc((size_t)count, sizeof(char *));
@@ -1533,6 +1540,273 @@ int flat_csv_writer_write_cols(FlatCsvRuntime *rt, uint32_t wid, const FlatValue
         }
     }
     return 0;
+}
+
+
+static int csv_writer_get_headers(FlatCsvRuntime *rt, uint32_t id, int width,
+                                  char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1],
+                                  int *out_count, int fallback_count, char *panic,
+                                  size_t panic_sz, const char *op) {
+    int configured = flat_csv_obj_headers_count(rt, id);
+    int count = configured ? configured : fallback_count;
+    int i;
+    if (count < 1 || count > FLAT_OBJ_MAX_KEYS || (width >= 0 && count != width))
+        return panic_msg(panic, panic_sz, "csv.objHeaders.length");
+    for (i = 0; i < count; i++) {
+        if (configured) {
+            if (flat_csv_obj_headers_get(rt, id, i, keys[i], FLAT_OBJ_KEY_MAX + 1) != 0)
+                return panic_msg(panic, panic_sz, op);
+        } else {
+            snprintf(keys[i], FLAT_OBJ_KEY_MAX + 1, "col%d", i);
+        }
+    }
+    *out_count = count;
+    return 0;
+}
+
+static int csv_temp_append(char **buf, size_t *len, size_t *cap, const char *data, size_t n) {
+    size_t needed;
+    char *p;
+    if (n > SIZE_MAX - *len) return -1;
+    needed = *len + n;
+    if (needed > *cap) {
+        size_t next = *cap ? *cap : 4096;
+        while (next < needed) {
+            if (next > SIZE_MAX / 2) { next = needed; break; }
+            next *= 2;
+        }
+        p = realloc(*buf, next);
+        if (!p) return -1;
+        *buf = p;
+        *cap = next;
+    }
+    memcpy(*buf + *len, data, n);
+    *len = needed;
+    return 0;
+}
+
+static int csv_writer_commit_rows(FlatCsvRuntime *rt, uint32_t id, FlatCsvSession *s,
+                                 int is_view, int ox, int oy, int view_width, int height,
+                                 int cursor, int nrows, int ncols, char **row_values,
+                                 char *panic, size_t panic_sz, const char *op) {
+    int r, c;
+    if (!s || s->kind != FLAT_CSV_SESS_WRITER)
+        return panic_msg(panic, panic_sz, "csv.id.type");
+    if (s->writer_mode == 1 && is_view)
+        return panic_msg(panic, panic_sz, "csv.writer.mode");
+    if (s->writer_mode == 2 && !is_view)
+        return panic_msg(panic, panic_sz, "csv.writer.mode");
+    if (s->grid_serialized) return panic_msg(panic, panic_sz, "csv.writer.flush");
+
+    if (!is_view) {
+        size_t total = 0, cap = 0;
+        char *staged = NULL;
+        /* row_values is a row-major array of NUL-terminated fields. */
+        for (r = 0; r < nrows; r++) {
+            const char *fields[FLAT_CSV_MAX_FIELDS];
+            size_t lens[FLAT_CSV_MAX_FIELDS];
+            char line[131072];
+            size_t line_len;
+            for (c = 0; c < ncols; c++) {
+                fields[c] = row_values[(size_t)r * (size_t)ncols + (size_t)c];
+                lens[c] = strlen(fields[c]);
+            }
+            if (flat_csv_serialize_row(fields, lens, ncols, s->fmt.separator, s->fmt.quote,
+                                       s->fmt.line_ending, line, sizeof line, &line_len) != 0 ||
+                csv_temp_append(&staged, &total, &cap, line, line_len) != 0) {
+                free(staged);
+                return panic_msg(panic, panic_sz, op);
+            }
+        }
+        if (writer_append(s, staged, total) != 0) {
+            free(staged);
+            return panic_msg(panic, panic_sz, op);
+        }
+        free(staged);
+        s->writer_mode = 1;
+        return 0;
+    }
+
+    if (cursor < 0 || nrows > height - cursor || ncols != view_width || ncols > FLAT_CSV_MAX_FIELDS)
+        return panic_msg(panic, panic_sz, "csv.view.bounds");
+    if (nrows > 0 && ncols > INT_MAX / nrows)
+        return panic_msg(panic, panic_sz, op);
+    {
+        int add_count = nrows * ncols;
+        FlatCsvGridCell *pending = NULL;
+        FlatCsvGridCell *grown;
+        int k = 0;
+        if (add_count > 0) {
+            pending = calloc((size_t)add_count, sizeof *pending);
+            if (!pending) return panic_msg(panic, panic_sz, op);
+        }
+        for (r = 0; r < nrows; r++) {
+            for (c = 0; c < ncols; c++) {
+                int j;
+                int gx = ox + c, gy = oy + cursor + r;
+                for (j = 0; j < s->grid_count; j++) {
+                    if (s->grid_cells[j].x == gx && s->grid_cells[j].y == gy) {
+                        for (j = 0; j < k; j++) free(pending[j].value);
+                        free(pending);
+                        return panic_msg(panic, panic_sz, "csv.writer.conflict");
+                    }
+                }
+                pending[k].x = gx;
+                pending[k].y = gy;
+                pending[k].value = strdup(row_values[(size_t)r * (size_t)ncols + (size_t)c]);
+                if (!pending[k].value) {
+                    for (j = 0; j < k; j++) free(pending[j].value);
+                    free(pending);
+                    return panic_msg(panic, panic_sz, op);
+                }
+                k++;
+            }
+        }
+        if (s->grid_count > INT_MAX - add_count) {
+            for (k = 0; k < add_count; k++) free(pending[k].value);
+            free(pending);
+            return panic_msg(panic, panic_sz, op);
+        }
+        if (s->grid_count + add_count > s->grid_cap) {
+            int new_cap = s->grid_cap ? s->grid_cap : 32;
+            while (new_cap < s->grid_count + add_count) {
+                if (new_cap > INT_MAX / 2) { new_cap = s->grid_count + add_count; break; }
+                new_cap *= 2;
+            }
+            grown = realloc(s->grid_cells, (size_t)new_cap * sizeof *grown);
+            if (!grown) {
+                for (k = 0; k < add_count; k++) free(pending[k].value);
+                free(pending);
+                return panic_msg(panic, panic_sz, op);
+            }
+            s->grid_cells = grown;
+            s->grid_cap = new_cap;
+        }
+        if (add_count) memcpy(s->grid_cells + s->grid_count, pending,
+                              (size_t)add_count * sizeof *pending);
+        s->grid_count += add_count;
+        free(pending);
+        s->writer_mode = 2;
+        {
+            FlatCsvView *view = view_by_id(rt, id);
+            if (view) view->cursor_row += nrows;
+        }
+    }
+    return 0;
+}
+
+int flat_csv_writer_write_records(FlatCsvRuntime *rt, uint32_t id, const FlatValue *records_val,
+                                  FlatCollectionPool *coll, FlatStringPool *pool, char *panic,
+                                  size_t panic_sz) {
+    uint32_t root;
+    int ox, oy, width, height, kind, cursor, nrecords, nkeys, r, c;
+    FlatCsvSession *s;
+    char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1];
+    char **values = NULL;
+    size_t total_items;
+    if (!records_val || records_val->tag != VAL_LIST ||
+        flat_csv_view_resolve(rt, id, &root, &ox, &oy, &width, &height, &kind, &cursor) != 0)
+        return panic_msg(panic, panic_sz, "csv.writeRecords");
+    if (kind != FLAT_CSV_SESS_WRITER)
+        return panic_msg(panic, panic_sz, "csv.id.type");
+    s = sess_by_id(rt, root);
+    if (!s || s->kind != FLAT_CSV_SESS_WRITER)
+        return panic_msg(panic, panic_sz, "csv.id.type");
+    if (flat_list_len(coll, records_val->u.coll_id, &nrecords) != 0 || nrecords < 1)
+        return panic_msg(panic, panic_sz, "csv.writer.no_records");
+    {
+        FlatValue first;
+        if (flat_list_get(coll, records_val->u.coll_id, 0, &first) != 0 || first.tag != VAL_OBJECT ||
+            flat_obj_len(coll, first.u.coll_id, &nkeys) != 0)
+            return panic_msg(panic, panic_sz, "csv.writeRecords");
+    }
+    if (csv_writer_get_headers(rt, id, width, keys, &nkeys, nkeys, panic, panic_sz,
+                               "csv.writeRecords") != 0) return -1;
+    if ((size_t)nrecords > SIZE_MAX / (size_t)nkeys ||
+        (size_t)nrecords * (size_t)nkeys > SIZE_MAX / sizeof(char *))
+        return panic_msg(panic, panic_sz, "csv.writeRecords");
+    total_items = (size_t)nrecords * (size_t)nkeys;
+    values = calloc(total_items, sizeof *values);
+    if (!values) return panic_msg(panic, panic_sz, "csv.writeRecords");
+    for (r = 0; r < nrecords; r++) {
+        FlatValue obj;
+        if (flat_list_get(coll, records_val->u.coll_id, r, &obj) != 0 || obj.tag != VAL_OBJECT) goto records_fail;
+        for (c = 0; c < nkeys; c++) {
+            FlatValue value;
+            char temp[512];
+            if (flat_obj_get(coll, obj.u.coll_id, keys[c], &value) != 0 ||
+                value_to_cstr(&value, pool, temp, sizeof temp) != 0) goto records_fail;
+            values[(size_t)r * (size_t)nkeys + (size_t)c] = strdup(temp);
+            if (!values[(size_t)r * (size_t)nkeys + (size_t)c]) goto records_fail;
+        }
+    }
+    if (csv_writer_commit_rows(rt, id, s, width >= 0, ox, oy, width, height, cursor, nrecords, nkeys, values,
+                                panic, panic_sz, "csv.writeRecords") != 0) goto records_fail;
+    { size_t i; for (i = 0; i < total_items; i++) free(values[i]); }
+    free(values);
+    return 0;
+records_fail:
+    { size_t i; for (i = 0; i < total_items; i++) free(values[i]); }
+    free(values);
+    return panic_msg(panic, panic_sz, "csv.writeRecords");
+}
+
+int flat_csv_writer_write_collection(FlatCsvRuntime *rt, uint32_t id,
+                                     const FlatValue *collection_val, FlatCollectionPool *coll,
+                                     FlatStringPool *pool, char *panic, size_t panic_sz) {
+    uint32_t root;
+    int ox, oy, width, height, kind, cursor, nkeys, nrows = -1, k, r, c;
+    FlatCsvSession *s;
+    char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1];
+    uint32_t list_ids[FLAT_OBJ_MAX_KEYS];
+    char **values = NULL;
+    if (!collection_val || collection_val->tag != VAL_OBJECT ||
+        flat_csv_view_resolve(rt, id, &root, &ox, &oy, &width, &height, &kind, &cursor) != 0)
+        return panic_msg(panic, panic_sz, "csv.writeCollection");
+    if (kind != FLAT_CSV_SESS_WRITER)
+        return panic_msg(panic, panic_sz, "csv.id.type");
+    s = sess_by_id(rt, root);
+    if (!s || s->kind != FLAT_CSV_SESS_WRITER)
+        return panic_msg(panic, panic_sz, "csv.id.type");
+    if (flat_obj_len(coll, collection_val->u.coll_id, &nkeys) != 0 || nkeys < 1)
+        return panic_msg(panic, panic_sz, "csv.writeCollection");
+    if (csv_writer_get_headers(rt, id, width, keys, &nkeys, nkeys, panic, panic_sz,
+                               "csv.writeCollection") != 0) return -1;
+    for (k = 0; k < nkeys; k++) {
+        FlatValue col;
+        int len;
+        if (flat_obj_get(coll, collection_val->u.coll_id, keys[k], &col) != 0 ||
+            col.tag != VAL_LIST || flat_list_len(coll, col.u.coll_id, &len) != 0)
+            return panic_msg(panic, panic_sz, "csv.writeCollection");
+        if (nrows < 0) nrows = len;
+        else if (len != nrows) return panic_msg(panic, panic_sz, "csv.writeCollection.length");
+        list_ids[k] = col.u.coll_id;
+    }
+    if (nrows < 1) return panic_msg(panic, panic_sz, "csv.writer.no_records");
+    if ((size_t)nrows > SIZE_MAX / (size_t)nkeys ||
+        (size_t)nrows * (size_t)nkeys > SIZE_MAX / sizeof(char *))
+        return panic_msg(panic, panic_sz, "csv.writeCollection");
+    values = calloc((size_t)nrows * (size_t)nkeys, sizeof *values);
+    if (!values) return panic_msg(panic, panic_sz, "csv.writeCollection");
+    for (r = 0; r < nrows; r++) {
+        for (c = 0; c < nkeys; c++) {
+            FlatValue value;
+            char temp[512];
+            if (flat_list_get(coll, list_ids[c], r, &value) != 0 ||
+                value_to_cstr(&value, pool, temp, sizeof temp) != 0) goto collection_fail;
+            values[(size_t)r * (size_t)nkeys + (size_t)c] = strdup(temp);
+            if (!values[(size_t)r * (size_t)nkeys + (size_t)c]) goto collection_fail;
+        }
+    }
+    if (csv_writer_commit_rows(rt, id, s, width >= 0, ox, oy, width, height, cursor, nrows, nkeys, values,
+                                panic, panic_sz, "csv.writeCollection") != 0) goto collection_fail;
+    for (r = 0; r < nrows * nkeys; r++) free(values[r]);
+    free(values);
+    return 0;
+collection_fail:
+    for (r = 0; r < nrows * nkeys; r++) free(values[r]);
+    free(values);
+    return panic_msg(panic, panic_sz, "csv.writeCollection");
 }
 
 

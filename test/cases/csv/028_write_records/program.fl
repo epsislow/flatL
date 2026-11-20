@@ -1,0 +1,32 @@
+use native csv
+use native obj
+
+#main
+  fp = file.createCtx('write-records.csv')
+  wid = csv.writer(fp)
+  csv.setSeparator(wid, ',')
+  csv.setObjHeaders(wid, ['product', 'price'])
+  records = [{ product: 'Apple', price: '10', extra: 'ignored' }, { product: 'Orange', price: '20', extra: 'ignored-too' }, { product: 'Banana', price: '15' }]
+  csv.writeRecords(wid, records)
+  csv.close(wid)
+  file.close(fp)
+
+  fp = file.readCtx('write-records.csv')
+  rid = csv.reader(fp)
+  csv.setSeparator(rid, ',')
+  csv.setObjHeaders(rid, ['product', 'price'])
+  a = csv.nextRecord(rid)
+  b = csv.nextRecord(rid)
+  c = csv.nextRecord(rid)
+  obj.get(a, '"product"') -> ap
+  obj.get(a, '"price"') -> av
+  obj.get(b, '"product"') -> bp
+  obj.get(c, '"price"') -> cv
+  ap == 'Apple'
+  av == '10'
+  bp == 'Orange'
+  cv == '15'
+  csv.close(rid)
+  file.close(fp)
+  io.outln('write-records-ok')
+  OK
