@@ -19,6 +19,7 @@
     "test1_csv_mac.csv",
     "test1_csv_utf8_commadel.csv",
     "test1_csv_utf16le.csv",
-    "test1_csv_utf16be.csv"
+    "test1_csv_utf16be.csv",
+    "jsonl_sample.jsonl"
   ]
 }

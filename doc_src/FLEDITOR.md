@@ -211,6 +211,27 @@ make fleditor-wasm-csv-smoke   # needs make fleditor-wasm
 
 `fleditor-csv-smoke` runs parse, text format, round-trip (Excel exports under `examples/`), and **`csv_vm_parity`** (FlatL `csv.*` vs JS on `test1_csv_*` UTF-8 fixtures). `fleditor-wasm-csv-smoke` reads CSV via WASM `file.read` and runs **`examples/csv_reader/csv_reader.fl`** with **`use native csv`** on MEMFS.
 
+## JSONL records editor (`.jsonl`, `.ndjson`, `.json`, `.jsl`)
+
+Project files with these extensions open in the **Jsonl editor** (Records view) when the file has at most **100000** lines. Larger files open as **text** with a banner and **Open as records**.
+
+### View layout
+
+- **Records:** left list of lines (paginated, **200** lines/page) with **`+`** (add empty line) and **`×`** (delete line, like Project file remove). Right panel shows the **selected line only**.
+- **Free | Lock** toggle on the right:
+  - **Lock** — pretty view of a parsed JSON value (object, array, or scalar). Nested objects/arrays start collapsed as `{…}` / `[…]` with **`[+]`**; click to expand **`[-]`**. Lock is **read-only** (no inline edit).
+  - **Free** — text editor for that one line. Empty/whitespace shows **`no json detected`**. Invalid JSON shows an error (and a caret highlight when the engine reports a position).
+- **Free → Lock** runs `JSON.parse` on the Free text; on error you **stay in Free**; on success you enter Lock (line stored compact via `JSON.stringify`).
+- **Lock → Free** always allowed (pretty text as a starting point for edits).
+- Toolbar **Text** / **Records** toggles the whole-file CodeMirror view vs Records (same pattern as CSV **Text** / **▦**).
+- On disk, each record stays **one compact line**; pretty formatting is only in the Lock/Free panels.
+
+### Tests (Node)
+
+```bash
+make fleditor-jsonl-smoke
+```
+
 ## Hex editor (binary files)
 
 When a binary file is open, the panel title shows **Hex editor** and the path. **`.fl`** sources use **Fl editor**.

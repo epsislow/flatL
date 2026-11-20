@@ -1,4 +1,4 @@
-/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTextFormat, FleditorCsvParse, FleditorCsvGrid, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTextFormat, FleditorCsvParse, FleditorCsvGrid, FleditorJsonlParse, FleditorJsonlUi, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
 (function () {
   'use strict';
 
@@ -8,6 +8,8 @@
   const G = FleditorHexGrid;
   const CsvP = FleditorCsvParse;
   const CsvG = FleditorCsvGrid;
+  const Jp = FleditorJsonlParse;
+  const Ju = FleditorJsonlUi;
   const Txt = FleditorTextFormat;
 
   const IO_OK = 0;
@@ -29,6 +31,26 @@
   const runBtn = document.getElementById('runBtn');
   const codeMapBtn = document.getElementById('codeMapBtn');
   const csvViewToggleBtn = document.getElementById('csvViewToggleBtn');
+  const jsonlViewToggleBtn = document.getElementById('jsonlViewToggleBtn');
+  const jsonlBar = document.getElementById('jsonlBar');
+  const jsonlRecordsHost = document.getElementById('jsonlRecordsHost');
+  const jsonlListHost = document.getElementById('jsonlListHost');
+  const jsonlLockPanel = document.getElementById('jsonlLockPanel');
+  const jsonlFreePanel = document.getElementById('jsonlFreePanel');
+  const jsonlFreeTa = document.getElementById('jsonlFreeTa');
+  const jsonlFreeHint = document.getElementById('jsonlFreeHint');
+  const jsonlFreeErr = document.getElementById('jsonlFreeErr');
+  const jsonlLineLabel = document.getElementById('jsonlLineLabel');
+  const jsonlFreeBtn = document.getElementById('jsonlFreeBtn');
+  const jsonlLockBtn = document.getElementById('jsonlLockBtn');
+  const jsonlApplyBtn = document.getElementById('jsonlApplyBtn');
+  const jsonlRevertBtn = document.getElementById('jsonlRevertBtn');
+  const jsonlPageLabel = document.getElementById('jsonlPageLabel');
+  const jsonlSearchInput = document.getElementById('jsonlSearchInput');
+  const jsonlSearchCount = document.getElementById('jsonlSearchCount');
+  const jsonlHelpBanner = document.getElementById('jsonlHelpBanner');
+  const jsonlHelpLabel = document.getElementById('jsonlHelpLabel');
+  const jsonlTooLargeOpenRecords = document.getElementById('jsonlTooLargeOpenRecords');
   const csvTableBar = document.getElementById('csvTableBar');
   const csvGridHost = document.getElementById('csvGridHost');
   const csvTableSizeLabel = document.getElementById('csvTableSizeLabel');
@@ -132,10 +154,15 @@
   let ioCharMode = false;
   let ioLineBuffer = '';
 
-  /** 'flatl' | 'plaintext' | 'binary' | 'csv' */
+  /** 'flatl' | 'plaintext' | 'binary' | 'csv' | 'jsonl' */
   let editorViewMode = 'flatl';
   /** @type {null | { path: string, rows: string[][], savedRows: string[][], delimiter: string, lineEnding: string, preferTab: boolean, savedSerialized: string, headerRow: boolean, gridForced: boolean }} */
   let csvSession = null;
+  /** @type {null | { path: string, lines: string[], lineEnding: string, savedSerialized: string, pageIndex: number, selected: number|null, panelMode: 'free'|'lock'|'none', lockValue: *, draftText: string, draftDirty: boolean, expand: Record<string, boolean>, recordsForced: boolean }} */
+  let jsonlSession = null;
+  /** @type {number[]} */
+  let jsonlSearchMatches = [];
+  let jsonlSearchMatchIndex = -1;
   /** @type {null | { path: string, lineEnding: string, encoding: string, savedProjectValue: string }} */
   let textSession = null;
   /** @type {{r:number,c:number}[]} */
@@ -532,7 +559,7 @@
     if (cm) {
       const wrap = cm.getWrapperElement();
       if (wrap) {
-        wrap.style.display = mode === 'binary' || mode === 'csv' ? 'none' : '';
+        wrap.style.display = mode === 'binary' || mode === 'csv' || mode === 'jsonl' ? 'none' : '';
       }
     }
     if (grid) {
@@ -540,6 +567,12 @@
     }
     if (csvGridHost) {
       csvGridHost.hidden = mode !== 'csv';
+    }
+    if (jsonlRecordsHost) {
+      jsonlRecordsHost.hidden = mode !== 'jsonl';
+    }
+    if (jsonlBar) {
+      jsonlBar.hidden = mode !== 'jsonl';
     }
     syncEditorWrapKind();
   }
@@ -553,6 +586,7 @@
       'fleditor-editor-wrap--text',
       'fleditor-editor-wrap--binary',
       'fleditor-editor-wrap--csv',
+      'fleditor-editor-wrap--jsonl',
       'fleditor-editor-wrap--idle'
     );
     if (!hasOpenFile()) {
@@ -561,6 +595,8 @@
       editorWrap.classList.add('fleditor-editor-wrap--binary');
     } else if (editorViewMode === 'csv') {
       editorWrap.classList.add('fleditor-editor-wrap--csv');
+    } else if (editorViewMode === 'jsonl') {
+      editorWrap.classList.add('fleditor-editor-wrap--jsonl');
     } else if (editorViewMode === 'flatl') {
       editorWrap.classList.add('fleditor-editor-wrap--flatl');
     } else {
@@ -844,6 +880,7 @@
 
   function enterBinaryEditorFromBytes(bytes) {
     leaveCsvEditor();
+    leaveJsonlEditor();
     binaryBuffer = H.copyBytes(bytes);
     binarySavedSnapshot = H.copyBytes(bytes);
     binaryPage = 0;
@@ -891,6 +928,14 @@
     return csvSession != null && isCsvPath(csvSession.path);
   }
 
+  function isJsonlPath(path) {
+    return Jp.isJsonlPath(path);
+  }
+
+  function isJsonlSessionActive() {
+    return jsonlSession != null && isJsonlPath(jsonlSession.path);
+  }
+
   function leaveTextSession() {
     textSession = null;
   }
@@ -900,6 +945,7 @@
     const path = currentOpenPath();
     if (P.isFlatlProjectFile(path)) return false;
     if (isCsvSessionActive()) return false;
+    if (isJsonlSessionActive()) return false;
     return textSession != null && textSession.path === path;
   }
 
@@ -962,6 +1008,512 @@
     if (csvHelpBanner) csvHelpBanner.hidden = true;
     if (csvViewToggleBtn) csvViewToggleBtn.hidden = true;
     syncEditorWrapKind();
+  }
+
+  function leaveJsonlEditor() {
+    jsonlSession = null;
+    jsonlSearchMatches = [];
+    jsonlSearchMatchIndex = -1;
+    if (jsonlSearchInput) jsonlSearchInput.value = '';
+    if (jsonlSearchCount) jsonlSearchCount.textContent = '0';
+    if (jsonlBar) jsonlBar.hidden = true;
+    if (jsonlRecordsHost) {
+      jsonlRecordsHost.hidden = true;
+    }
+    if (jsonlListHost) jsonlListHost.innerHTML = '';
+    if (jsonlLockPanel) jsonlLockPanel.innerHTML = '';
+    if (jsonlFreeTa) jsonlFreeTa.value = '';
+    if (jsonlHelpBanner) jsonlHelpBanner.hidden = true;
+    if (jsonlTooLargeOpenRecords) jsonlTooLargeOpenRecords.hidden = true;
+    if (jsonlViewToggleBtn) jsonlViewToggleBtn.hidden = true;
+    syncEditorWrapKind();
+  }
+
+  function showJsonlHelpBanner(kind, lineCount) {
+    if (!jsonlHelpBanner || !jsonlHelpLabel) return;
+    if (kind === 'none') {
+      jsonlHelpBanner.hidden = true;
+      if (jsonlTooLargeOpenRecords) jsonlTooLargeOpenRecords.hidden = true;
+      return;
+    }
+    if (kind === 'too-large') {
+      jsonlHelpLabel.textContent = Jp.tooLargeMessage(lineCount);
+      if (jsonlTooLargeOpenRecords) jsonlTooLargeOpenRecords.hidden = false;
+      jsonlHelpBanner.hidden = false;
+      return;
+    }
+    jsonlHelpLabel.textContent = '';
+    if (jsonlTooLargeOpenRecords) jsonlTooLargeOpenRecords.hidden = true;
+    jsonlHelpBanner.hidden = true;
+  }
+
+  function updateJsonlToggleButton() {
+    if (!jsonlViewToggleBtn) return;
+    if (!isJsonlSessionActive()) {
+      jsonlViewToggleBtn.hidden = true;
+      return;
+    }
+    jsonlViewToggleBtn.hidden = false;
+    if (editorViewMode === 'jsonl') {
+      jsonlViewToggleBtn.textContent = 'Text';
+      jsonlViewToggleBtn.title = 'Open text editor';
+      jsonlViewToggleBtn.setAttribute('aria-label', 'Open text editor');
+      jsonlViewToggleBtn.setAttribute('aria-pressed', 'true');
+    } else {
+      jsonlViewToggleBtn.textContent = 'Records';
+      jsonlViewToggleBtn.title = 'Open records editor';
+      jsonlViewToggleBtn.setAttribute('aria-label', 'Open records editor');
+      jsonlViewToggleBtn.setAttribute('aria-pressed', 'false');
+    }
+  }
+
+  function jsonlFreeDraftRaw() {
+    if (!jsonlSession || jsonlSession.selected == null) return '';
+    if (jsonlFreeTa && jsonlSession.panelMode === 'free') return jsonlFreeTa.value;
+    return jsonlSession.draftText || '';
+  }
+
+  function jsonlLinesForSerialize() {
+    if (!jsonlSession) return [];
+    const lines = jsonlSession.lines.slice();
+    if (
+      editorViewMode === 'jsonl' &&
+      jsonlSession.panelMode === 'free' &&
+      jsonlSession.selected != null &&
+      jsonlSession.draftDirty
+    ) {
+      lines[jsonlSession.selected] = Jp.storeLineFromFreeText(jsonlFreeDraftRaw());
+    }
+    return lines;
+  }
+
+  function jsonlSerializedNow() {
+    if (!jsonlSession) return '';
+    if (editorViewMode === 'jsonl') {
+      return Jp.joinLines(jsonlLinesForSerialize(), jsonlSession.lineEnding);
+    }
+    return cm ? cm.getValue() : '';
+  }
+
+  function recomputeJsonlDirty() {
+    if (!jsonlSession) return;
+    const text = jsonlSerializedNow();
+    setDirty(text !== jsonlSession.savedSerialized);
+  }
+
+  function updateJsonlBarMeta() {
+    if (!jsonlSession || !jsonlPageLabel) return;
+    const n = jsonlSession.lines.length;
+    if (n <= 0) {
+      jsonlPageLabel.textContent = 'Lines 0 of 0';
+      return;
+    }
+    const range = Jp.pageRange(jsonlSession.pageIndex, n);
+    jsonlPageLabel.textContent =
+      'Lines ' + (range.start + 1) + '\u2013' + range.end + ' of ' + n;
+  }
+
+  function syncJsonlModeButtons() {
+    if (!jsonlSession) return;
+    const mode = jsonlSession.panelMode;
+    if (jsonlFreeBtn) jsonlFreeBtn.classList.toggle('is-on', mode === 'free');
+    if (jsonlLockBtn) jsonlLockBtn.classList.toggle('is-on', mode === 'lock');
+  }
+
+  function ensureJsonlSelectionOnPage() {
+    if (!jsonlSession) return;
+    const n = jsonlSession.lines.length;
+    if (n <= 0) {
+      jsonlSession.selected = null;
+      jsonlSession.panelMode = 'none';
+      return;
+    }
+    const range = Jp.pageRange(jsonlSession.pageIndex, n);
+    if (jsonlSession.selected == null || jsonlSession.selected < range.start || jsonlSession.selected >= range.end) {
+      jsonlSession.selected = range.start;
+    }
+  }
+
+  function loadJsonlSelectedIntoPanel() {
+    if (!jsonlSession) return;
+    jsonlSession.expand = {};
+    jsonlSession.draftDirty = false;
+    if (jsonlSession.selected == null) {
+      jsonlSession.panelMode = 'none';
+      jsonlSession.lockValue = undefined;
+      jsonlSession.draftText = '';
+      return;
+    }
+    const line = jsonlSession.lines[jsonlSession.selected];
+    const parsed = Jp.parseLine(line);
+    if (parsed.ok) {
+      jsonlSession.panelMode = 'lock';
+      jsonlSession.lockValue = parsed.value;
+      jsonlSession.draftText = Jp.prettyLine(parsed.value);
+    } else {
+      jsonlSession.panelMode = 'free';
+      jsonlSession.lockValue = undefined;
+      jsonlSession.draftText = line;
+    }
+  }
+
+  function commitJsonlFreeDraftToLines(force) {
+    if (!jsonlSession || jsonlSession.selected == null) return;
+    if (jsonlSession.panelMode !== 'free') return;
+    if (!force && !jsonlSession.draftDirty) return;
+    const stored = Jp.storeLineFromFreeText(jsonlFreeDraftRaw());
+    jsonlSession.lines[jsonlSession.selected] = stored;
+    /* Keep Free textarea pretty if still valid; lines[] stays compact. */
+    const parsed = Jp.parseLine(stored);
+    jsonlSession.draftText = parsed.ok ? Jp.prettyLine(parsed.value) : stored;
+    if (jsonlFreeTa && document.activeElement !== jsonlFreeTa) {
+      jsonlFreeTa.value = jsonlSession.draftText;
+    }
+    jsonlSession.draftDirty = false;
+  }
+
+  function renderJsonlFreePanel() {
+    if (!jsonlSession || !jsonlFreePanel || !jsonlFreeTa) return;
+    if (jsonlSession.selected == null) {
+      jsonlFreeHint.hidden = false;
+      jsonlFreeHint.textContent = 'No line selected. Use + to add a line.';
+      jsonlFreeErr.hidden = true;
+      jsonlFreeTa.value = '';
+      jsonlFreeTa.classList.remove('is-bad');
+      return;
+    }
+    const text = jsonlSession.draftText;
+    jsonlFreeTa.value = text;
+    const parsed = Jp.parseLine(text);
+    if (parsed.empty) {
+      jsonlFreeHint.hidden = false;
+      jsonlFreeHint.textContent = 'no json detected';
+      jsonlFreeErr.hidden = true;
+      jsonlFreeTa.classList.remove('is-bad');
+    } else if (!parsed.ok) {
+      jsonlFreeHint.hidden = true;
+      jsonlFreeErr.hidden = false;
+      jsonlFreeErr.textContent =
+        parsed.error + (parsed.errorPos != null ? ' (position ' + parsed.errorPos + ')' : '');
+      jsonlFreeTa.classList.add('is-bad');
+      Ju.applyFreeErrorHighlight(jsonlFreeTa, parsed.errorPos);
+    } else {
+      jsonlFreeHint.hidden = true;
+      jsonlFreeErr.hidden = true;
+      jsonlFreeTa.classList.remove('is-bad');
+    }
+  }
+
+  function renderJsonlLockPanel() {
+    if (!jsonlSession || !jsonlLockPanel) return;
+    jsonlLockPanel.textContent = '';
+    if (jsonlSession.selected == null) {
+      const p = document.createElement('p');
+      p.className = 'fleditor-jsonl-hint';
+      p.textContent = 'No line selected. Use + to add a line.';
+      jsonlLockPanel.appendChild(p);
+      return;
+    }
+    const parsed = Jp.parseLine(jsonlSession.lines[jsonlSession.selected]);
+    if (!parsed.ok) {
+      const p = document.createElement('p');
+      p.className = 'fleditor-jsonl-err';
+      p.textContent = 'Cannot lock this line. Switch to Free to edit.';
+      jsonlLockPanel.appendChild(p);
+      return;
+    }
+    jsonlSession.lockValue = parsed.value;
+    Ju.renderLockTree(jsonlLockPanel, parsed.value, {
+      expand: jsonlSession.expand,
+      onToggle: function (path) {
+        const k = Ju.pathKey(path);
+        jsonlSession.expand[k] = !jsonlSession.expand[k];
+        renderJsonlLockPanel();
+      },
+    });
+  }
+
+  function renderJsonlDetail() {
+    if (!jsonlSession) return;
+    if (jsonlLineLabel) {
+      jsonlLineLabel.textContent =
+        jsonlSession.selected == null ? 'No line' : 'Line ' + (jsonlSession.selected + 1);
+    }
+    syncJsonlModeButtons();
+    const mode = jsonlSession.panelMode;
+    if (jsonlLockPanel) jsonlLockPanel.hidden = mode !== 'lock';
+    if (jsonlFreePanel) jsonlFreePanel.hidden = mode !== 'free';
+    if (mode === 'lock') renderJsonlLockPanel();
+    else if (mode === 'free') renderJsonlFreePanel();
+    else {
+      if (jsonlLockPanel) {
+        jsonlLockPanel.hidden = false;
+        renderJsonlLockPanel();
+      }
+      if (jsonlFreePanel) jsonlFreePanel.hidden = true;
+    }
+  }
+
+  function renderJsonlRecords() {
+    if (!jsonlSession || !jsonlListHost) return;
+    ensureJsonlSelectionOnPage();
+    const n = jsonlSession.lines.length;
+    const range = Jp.pageRange(jsonlSession.pageIndex, n);
+    Ju.renderLineList(jsonlListHost, {
+      lines: jsonlSession.lines,
+      pageStart: range.start,
+      pageEnd: range.end,
+      selected: jsonlSession.selected,
+      onSelect: function (index) {
+        if (jsonlSession.selected === index) return;
+        confirmDiscardIfDirty(function () {
+          commitJsonlFreeDraftToLines(false);
+          jsonlSession.selected = index;
+          loadJsonlSelectedIntoPanel();
+          renderJsonlRecords();
+          recomputeJsonlDirty();
+        });
+      },
+      onDelete: function (index) {
+        confirmDiscardIfDirty(function () {
+          const wasSel = jsonlSession.selected;
+          jsonlSession.lines.splice(index, 1);
+          if (!jsonlSession.lines.length) {
+            jsonlSession.selected = null;
+            jsonlSession.panelMode = 'none';
+          } else if (wasSel === index) {
+            jsonlSession.selected = Math.max(0, index - 1);
+            loadJsonlSelectedIntoPanel();
+          } else if (wasSel != null && wasSel > index) {
+            jsonlSession.selected = wasSel - 1;
+          }
+          const pc = Jp.pageCount(jsonlSession.lines.length);
+          if (jsonlSession.pageIndex >= pc) jsonlSession.pageIndex = Math.max(0, pc - 1);
+          renderJsonlRecords();
+          recomputeJsonlDirty();
+        });
+      },
+      onAdd: function () {
+        confirmDiscardIfDirty(function () {
+          commitJsonlFreeDraftToLines(false);
+          const at =
+            jsonlSession.selected == null ? jsonlSession.lines.length : jsonlSession.selected + 1;
+          jsonlSession.lines.splice(at, 0, '');
+          jsonlSession.selected = at;
+          jsonlSession.pageIndex = Math.floor(at / Jp.LINES_PER_PAGE);
+          loadJsonlSelectedIntoPanel();
+          renderJsonlRecords();
+          recomputeJsonlDirty();
+        });
+      },
+    });
+    updateJsonlBarMeta();
+    renderJsonlDetail();
+    recomputeJsonlSearchMatches();
+  }
+
+  function setJsonlPanelMode(next) {
+    if (!jsonlSession || jsonlSession.selected == null) return;
+    if (next === 'free') {
+      if (jsonlSession.panelMode === 'lock') {
+        const parsed = Jp.parseLine(jsonlSession.lines[jsonlSession.selected]);
+        jsonlSession.draftText = parsed.ok ? Jp.prettyLine(parsed.value) : jsonlSession.lines[jsonlSession.selected];
+        jsonlSession.draftDirty = false;
+      }
+      jsonlSession.panelMode = 'free';
+      renderJsonlDetail();
+      return;
+    }
+    if (next === 'lock') {
+      if (jsonlSession.panelMode === 'free' && jsonlFreeTa) {
+        jsonlSession.draftText = jsonlFreeTa.value;
+      }
+      const text = jsonlSession.draftText;
+      const parsed = Jp.parseLine(text);
+      if (!parsed.ok) {
+        jsonlSession.panelMode = 'free';
+        jsonlSession.draftDirty = true;
+        renderJsonlDetail();
+        if (jsonlFreeErr) {
+          jsonlFreeErr.hidden = false;
+          jsonlFreeErr.textContent =
+            (parsed.empty ? 'no json detected' : parsed.error || 'Invalid JSON') +
+            ' — stay in Free until fixed.';
+        }
+        if (!parsed.empty) Ju.applyFreeErrorHighlight(jsonlFreeTa, parsed.errorPos);
+        return;
+      }
+      jsonlSession.lines[jsonlSession.selected] = Jp.serializeLine(parsed.value);
+      jsonlSession.lockValue = parsed.value;
+      jsonlSession.draftText = Jp.prettyLine(parsed.value);
+      jsonlSession.draftDirty = false;
+      jsonlSession.expand = {};
+      jsonlSession.panelMode = 'lock';
+      renderJsonlRecords();
+      recomputeJsonlDirty();
+    }
+  }
+
+  function recomputeJsonlSearchMatches() {
+    jsonlSearchMatches = [];
+    jsonlSearchMatchIndex = -1;
+    if (!jsonlSession || !jsonlSearchInput) {
+      if (jsonlSearchCount) jsonlSearchCount.textContent = '0';
+      return;
+    }
+    const q = jsonlSearchInput.value;
+    if (!q) {
+      if (jsonlSearchCount) jsonlSearchCount.textContent = '0';
+      return;
+    }
+    for (let i = 0; i < jsonlSession.lines.length; i++) {
+      if (String(jsonlSession.lines[i]).indexOf(q) >= 0) jsonlSearchMatches.push(i);
+    }
+    if (jsonlSearchCount) {
+      jsonlSearchCount.textContent = String(jsonlSearchMatches.length);
+    }
+  }
+
+  function gotoJsonlSearchMatch(dir) {
+    if (!jsonlSession || !jsonlSearchMatches.length) return;
+    if (dir > 0) {
+      jsonlSearchMatchIndex = (jsonlSearchMatchIndex + 1) % jsonlSearchMatches.length;
+    } else {
+      jsonlSearchMatchIndex =
+        jsonlSearchMatchIndex <= 0 ? jsonlSearchMatches.length - 1 : jsonlSearchMatchIndex - 1;
+    }
+    const idx = jsonlSearchMatches[jsonlSearchMatchIndex];
+    jsonlSession.pageIndex = Math.floor(idx / Jp.LINES_PER_PAGE);
+    jsonlSession.selected = idx;
+    loadJsonlSelectedIntoPanel();
+    renderJsonlRecords();
+  }
+
+  function enterJsonlRecordsMode() {
+    if (!jsonlSession) return;
+    editorViewMode = 'jsonl';
+    setEditorSurfaceMode('jsonl');
+    ensureJsonlSelectionOnPage();
+    if (jsonlSession.selected != null && jsonlSession.panelMode === 'none') {
+      loadJsonlSelectedIntoPanel();
+    } else if (jsonlSession.selected != null && jsonlSession.lockValue === undefined && jsonlSession.panelMode !== 'free') {
+      loadJsonlSelectedIntoPanel();
+    }
+    renderJsonlRecords();
+    showJsonlHelpBanner('none');
+    updateJsonlToggleButton();
+    updateEditorHeader();
+    updateEditorEmptyState();
+    updateUndoRedoButtons();
+  }
+
+  function enterJsonlFromProject(path, content) {
+    leaveJsonlEditor();
+    leaveCsvEditor();
+    const raw = typeof content === 'string' ? content : '';
+    const lineEnding = Jp.detectLineEnding(raw);
+    const lines = Jp.splitLines(raw);
+    jsonlSession = {
+      path: path,
+      lines: lines,
+      lineEnding: lineEnding,
+      savedSerialized: raw,
+      pageIndex: 0,
+      selected: lines.length ? 0 : null,
+      panelMode: 'none',
+      lockValue: undefined,
+      draftText: '',
+      draftDirty: false,
+      expand: {},
+      recordsForced: false,
+    };
+    updateJsonlToggleButton();
+    if (Jp.isTooLarge(lines.length)) {
+      suppressChange = true;
+      loadTextEditorForPath(path, raw);
+      suppressChange = false;
+      showJsonlHelpBanner('too-large', lines.length);
+      updateEditorHeader();
+      updateEditorEmptyState();
+      updateUndoRedoButtons();
+      return;
+    }
+    if (lines.length) loadJsonlSelectedIntoPanel();
+    enterJsonlRecordsMode();
+  }
+
+  function saveJsonlEditorToProject() {
+    if (!jsonlSession || !hasOpenFile()) return;
+    const path = currentOpenPath();
+    let text = '';
+    if (editorViewMode === 'jsonl') {
+      if (jsonlSession.panelMode === 'free' && jsonlSession.selected != null) {
+        commitJsonlFreeDraftToLines(true);
+      }
+      text = Jp.joinLines(jsonlSession.lines, jsonlSession.lineEnding);
+    } else if (cm) {
+      text = cm.getValue();
+      jsonlSession.lines = Jp.splitLines(text);
+      jsonlSession.lineEnding = Jp.detectLineEnding(text);
+    }
+    project.files[path] = text;
+    jsonlSession.savedSerialized = text;
+  }
+
+  function doToggleJsonlView() {
+    if (!jsonlSession) return;
+    if (editorViewMode === 'jsonl') {
+      commitJsonlFreeDraftToLines(true);
+      const text = Jp.joinLines(jsonlSession.lines, jsonlSession.lineEnding);
+      suppressChange = true;
+      loadTextEditorForPath(jsonlSession.path, text);
+      suppressChange = false;
+      if (jsonlBar) jsonlBar.hidden = true;
+      showJsonlHelpBanner('none');
+      recomputeJsonlDirty();
+    } else {
+      const raw = cm ? cm.getValue() : '';
+      const lines = Jp.splitLines(raw);
+      if (Jp.isTooLarge(lines.length) && !jsonlSession.recordsForced) {
+        showAlert(Jp.tooLargeMessage(lines.length), 'Jsonl editor');
+        return;
+      }
+      jsonlSession.lines = lines;
+      jsonlSession.lineEnding = Jp.detectLineEnding(raw);
+      jsonlSession.pageIndex = 0;
+      jsonlSession.selected = lines.length ? 0 : null;
+      jsonlSession.expand = {};
+      if (lines.length) loadJsonlSelectedIntoPanel();
+      else {
+        jsonlSession.panelMode = 'none';
+      }
+      enterJsonlRecordsMode();
+      recomputeJsonlDirty();
+    }
+    updateJsonlToggleButton();
+    updateEditorHeader();
+  }
+
+  function toggleJsonlView() {
+    if (!jsonlSession) return;
+    confirmDiscardIfDirty(doToggleJsonlView);
+  }
+
+  function openJsonlRecordsDespiteSize() {
+    if (!jsonlSession) return;
+    confirmDiscardIfDirty(function () {
+      if (editorViewMode === 'plaintext' && cm) {
+        jsonlSession.lines = Jp.splitLines(cm.getValue());
+        jsonlSession.lineEnding = Jp.detectLineEnding(cm.getValue());
+      }
+      jsonlSession.recordsForced = true;
+      jsonlSession.pageIndex = 0;
+      jsonlSession.selected = jsonlSession.lines.length ? 0 : null;
+      if (jsonlSession.selected != null) loadJsonlSelectedIntoPanel();
+      enterJsonlRecordsMode();
+      recomputeJsonlDirty();
+      updateJsonlToggleButton();
+    });
   }
 
   function csvParseOptsFromSession() {
@@ -1525,6 +2077,7 @@
 
   function enterCsvFromProject(path, content) {
     leaveCsvEditor();
+    leaveJsonlEditor();
     const preferTab = path.toLowerCase().endsWith('.tsv');
     const raw = typeof content === 'string' ? content : '';
     const savedProjectValue = raw;
@@ -1844,6 +2397,10 @@
       leaveTextSession();
       cm.setValue(typeof content === 'string' ? content : '');
       cm.clearHistory();
+    } else if (isJsonlSessionActive() && isJsonlPath(norm)) {
+      leaveTextSession();
+      cm.setValue(typeof content === 'string' ? content : '');
+      cm.clearHistory();
     } else {
       enterTextFromProject(norm, typeof content === 'string' ? content : '');
     }
@@ -1862,10 +2419,14 @@
         editorKindLabel.textContent = 'Hex editor';
       } else if (editorViewMode === 'csv') {
         editorKindLabel.textContent = 'CSV editor';
+      } else if (editorViewMode === 'jsonl') {
+        editorKindLabel.textContent = 'Jsonl editor';
       } else if (editorViewMode === 'flatl') {
         editorKindLabel.textContent = 'Fl editor';
       } else if (isCsvSessionActive()) {
         editorKindLabel.textContent = 'CSV editor (text)';
+      } else if (isJsonlSessionActive()) {
+        editorKindLabel.textContent = 'Jsonl editor (text)';
       } else {
         editorKindLabel.textContent = 'Text editor';
       }
@@ -1912,7 +2473,11 @@
     if (csvGridHost && editorViewMode === 'csv') {
       csvGridHost.hidden = noFiles || !hasOpenFile();
     }
+    if (jsonlRecordsHost && editorViewMode === 'jsonl') {
+      jsonlRecordsHost.hidden = noFiles || !hasOpenFile();
+    }
     updateCsvToggleButton();
+    updateJsonlToggleButton();
     updateRunSaveButtons();
   }
 
@@ -1943,6 +2508,8 @@
       saveBinaryEditorToProject();
     } else if (isCsvSessionActive()) {
       saveCsvEditorToProject();
+    } else if (isJsonlSessionActive()) {
+      saveJsonlEditorToProject();
     } else if (textSession && textSession.path === path) {
       const stored = textStoredProjectValue(textLogicalBodyFromCm());
       project.files[path] = stored;
@@ -1965,6 +2532,8 @@
       saveBinaryEditorToProject();
     } else if (isCsvSessionActive()) {
       saveCsvEditorToProject();
+    } else if (isJsonlSessionActive()) {
+      saveJsonlEditorToProject();
     } else {
       flushEditorToProject();
     }
@@ -1976,6 +2545,8 @@
     } else if (editorViewMode === 'csv' && csvSession) {
       snapshotCsvSavedRows();
       renderCsvGrid();
+    } else if (editorViewMode === 'jsonl' && jsonlSession) {
+      renderJsonlRecords();
     }
     setStatus('saved');
     window.setTimeout(function () {
@@ -1990,6 +2561,8 @@
       saveBinaryEditorToProject();
     } else if (isCsvSessionActive()) {
       saveCsvEditorToProject();
+    } else if (isJsonlSessionActive()) {
+      saveJsonlEditorToProject();
     } else {
       flushEditorToProject();
     }
@@ -2001,6 +2574,7 @@
     if (codeMapVisible) setCodeMapVisible(false);
     leaveBinaryEditor();
     leaveCsvEditor();
+    leaveJsonlEditor();
     leaveTextSession();
     editorViewMode = 'flatl';
     project.openPath = null;
@@ -2022,6 +2596,7 @@
     }
     leaveBinaryEditor();
     leaveCsvEditor();
+    leaveJsonlEditor();
     leaveTextSession();
     suppressChange = true;
     if (P.isBinaryProjectFile(norm, project.files[norm])) {
@@ -2031,6 +2606,9 @@
     } else if (isCsvPath(norm)) {
       suppressChange = false;
       enterCsvFromProject(norm, project.files[norm]);
+    } else if (isJsonlPath(norm)) {
+      suppressChange = false;
+      enterJsonlFromProject(norm, project.files[norm]);
     } else {
       loadTextEditorForPath(norm, project.files[norm]);
       suppressChange = false;
@@ -2108,6 +2686,30 @@
       csvSession.quoteChar = parsed.quoteChar || csvSession.quoteChar;
       if (editorViewMode === 'csv') {
         renderCsvGrid();
+      } else if (cm) {
+        suppressChange = true;
+        cm.setValue(text);
+        cm.clearHistory();
+        suppressChange = false;
+      }
+      setDirty(false);
+      updateEditorHeader();
+      updateUndoRedoButtons();
+      return;
+    }
+    if (isJsonlSessionActive() && jsonlSession && jsonlSession.path === path) {
+      const text = jsonlSession.savedSerialized;
+      jsonlSession.lines = Jp.splitLines(text);
+      jsonlSession.lineEnding = Jp.detectLineEnding(text);
+      jsonlSession.draftDirty = false;
+      jsonlSession.expand = {};
+      if (jsonlSession.selected != null && jsonlSession.selected >= jsonlSession.lines.length) {
+        jsonlSession.selected = jsonlSession.lines.length ? jsonlSession.lines.length - 1 : null;
+      }
+      if (editorViewMode === 'jsonl') {
+        if (jsonlSession.selected != null) loadJsonlSelectedIntoPanel();
+        else jsonlSession.panelMode = 'none';
+        renderJsonlRecords();
       } else if (cm) {
         suppressChange = true;
         cm.setValue(text);
@@ -2680,7 +3282,7 @@
     if (!cm || !undoBtn || !redoBtn) {
       return;
     }
-    if (editorViewMode === 'binary' || editorViewMode === 'csv') {
+    if (editorViewMode === 'binary' || editorViewMode === 'csv' || editorViewMode === 'jsonl') {
       undoBtn.disabled = true;
       redoBtn.disabled = true;
       return;
@@ -3076,6 +3678,11 @@
       }
       if (isCsvSessionActive()) {
         recomputeCsvDirty();
+        updateUndoRedoButtons();
+        return;
+      }
+      if (isJsonlSessionActive()) {
+        recomputeJsonlDirty();
         updateUndoRedoButtons();
         return;
       }
@@ -3672,6 +4279,125 @@
     updateBinarySearchCountLabel();
   }
 
+  function initJsonlBar() {
+    if (jsonlViewToggleBtn) {
+      jsonlViewToggleBtn.addEventListener('click', function () {
+        toggleJsonlView();
+      });
+    }
+    if (jsonlFreeBtn) {
+      jsonlFreeBtn.addEventListener('click', function () {
+        setJsonlPanelMode('free');
+      });
+    }
+    if (jsonlLockBtn) {
+      jsonlLockBtn.addEventListener('click', function () {
+        setJsonlPanelMode('lock');
+      });
+    }
+    if (jsonlApplyBtn) {
+      jsonlApplyBtn.addEventListener('click', function () {
+        if (!jsonlSession || jsonlSession.selected == null) return;
+        if (jsonlSession.panelMode === 'free') {
+          commitJsonlFreeDraftToLines(true);
+        }
+        renderJsonlRecords();
+        recomputeJsonlDirty();
+      });
+    }
+    if (jsonlRevertBtn) {
+      jsonlRevertBtn.addEventListener('click', function () {
+        if (!jsonlSession || jsonlSession.selected == null) return;
+        loadJsonlSelectedIntoPanel();
+        renderJsonlRecords();
+        recomputeJsonlDirty();
+      });
+    }
+    if (jsonlFreeTa) {
+      jsonlFreeTa.addEventListener('input', function () {
+        if (!jsonlSession || jsonlSession.panelMode !== 'free') return;
+        jsonlSession.draftText = jsonlFreeTa.value;
+        jsonlSession.draftDirty = true;
+        const parsed = Jp.parseLine(jsonlFreeTa.value);
+        if (parsed.empty) {
+          if (jsonlFreeHint) {
+            jsonlFreeHint.hidden = false;
+            jsonlFreeHint.textContent = 'no json detected';
+          }
+          if (jsonlFreeErr) jsonlFreeErr.hidden = true;
+          jsonlFreeTa.classList.remove('is-bad');
+        } else if (!parsed.ok) {
+          if (jsonlFreeHint) jsonlFreeHint.hidden = true;
+          if (jsonlFreeErr) {
+            jsonlFreeErr.hidden = false;
+            jsonlFreeErr.textContent =
+              parsed.error + (parsed.errorPos != null ? ' (position ' + parsed.errorPos + ')' : '');
+          }
+          jsonlFreeTa.classList.add('is-bad');
+        } else {
+          if (jsonlFreeHint) jsonlFreeHint.hidden = true;
+          if (jsonlFreeErr) jsonlFreeErr.hidden = true;
+          jsonlFreeTa.classList.remove('is-bad');
+        }
+        recomputeJsonlDirty();
+      });
+    }
+    function jsonlSetPage(page) {
+      if (!jsonlSession) return;
+      confirmDiscardIfDirty(function () {
+        commitJsonlFreeDraftToLines(false);
+        const pc = Jp.pageCount(jsonlSession.lines.length);
+        jsonlSession.pageIndex = Math.max(0, Math.min(page, pc - 1));
+        ensureJsonlSelectionOnPage();
+        loadJsonlSelectedIntoPanel();
+        renderJsonlRecords();
+      });
+    }
+    const pageStart = document.getElementById('jsonlPageStart');
+    const pagePrev = document.getElementById('jsonlPagePrev');
+    const pageNext = document.getElementById('jsonlPageNext');
+    const pageEnd = document.getElementById('jsonlPageEnd');
+    if (pageStart) pageStart.addEventListener('click', function () { jsonlSetPage(0); });
+    if (pagePrev) {
+      pagePrev.addEventListener('click', function () {
+        if (!jsonlSession) return;
+        jsonlSetPage(jsonlSession.pageIndex - 1);
+      });
+    }
+    if (pageNext) {
+      pageNext.addEventListener('click', function () {
+        if (!jsonlSession) return;
+        jsonlSetPage(jsonlSession.pageIndex + 1);
+      });
+    }
+    if (pageEnd) {
+      pageEnd.addEventListener('click', function () {
+        if (!jsonlSession) return;
+        jsonlSetPage(Jp.pageCount(jsonlSession.lines.length) - 1);
+      });
+    }
+    if (jsonlSearchInput) {
+      jsonlSearchInput.addEventListener('input', function () {
+        recomputeJsonlSearchMatches();
+      });
+    }
+    const searchPrev = document.getElementById('jsonlSearchPrev');
+    const searchNext = document.getElementById('jsonlSearchNext');
+    if (searchPrev) searchPrev.addEventListener('click', function () { gotoJsonlSearchMatch(-1); });
+    if (searchNext) searchNext.addEventListener('click', function () { gotoJsonlSearchMatch(1); });
+    const helpDismiss = document.getElementById('jsonlHelpDismiss');
+    if (helpDismiss) {
+      helpDismiss.addEventListener('click', function () {
+        if (jsonlHelpBanner) jsonlHelpBanner.hidden = true;
+      });
+    }
+    if (jsonlTooLargeOpenRecords) {
+      jsonlTooLargeOpenRecords.addEventListener('click', function () {
+        openJsonlRecordsDespiteSize();
+      });
+    }
+  }
+
   function initCsvBar() {
     if (csvViewToggleBtn) {
       csvViewToggleBtn.addEventListener('click', function () {
@@ -4099,6 +4825,7 @@
     initNewFileModal();
     initBinaryBar();
     initCsvBar();
+    initJsonlBar();
     FleditorSettings.init({
       appEl: document.querySelector('.fleditor-app'),
       getCm: function () {
