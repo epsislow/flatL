@@ -1414,17 +1414,17 @@
         });
       },
       onAdd: function () {
-        confirmDiscardIfDirty(function () {
-          commitJsonlFreeDraftToLines(false);
-          const at =
-            jsonlSession.selected == null ? jsonlSession.lines.length : jsonlSession.selected + 1;
-          jsonlSession.lines.splice(at, 0, '');
-          jsonlSession.selected = at;
-          jsonlSession.pageIndex = Math.floor(at / Jp.LINES_PER_PAGE);
-          loadJsonlSelectedIntoPanel();
-          renderJsonlRecords();
-          recomputeJsonlDirty();
-        });
+        // Adding a line is a repeatable list operation: keep the current draft,
+        // insert the new empty line, and do not prompt about unsaved changes.
+        commitJsonlFreeDraftToLines(false);
+        const at =
+          jsonlSession.selected == null ? jsonlSession.lines.length : jsonlSession.selected + 1;
+        jsonlSession.lines.splice(at, 0, '');
+        jsonlSession.selected = at;
+        jsonlSession.pageIndex = Math.floor(at / Jp.LINES_PER_PAGE);
+        loadJsonlSelectedIntoPanel();
+        renderJsonlRecords();
+        recomputeJsonlDirty();
       },
       onDuplicate: function (index) {
         runAfterJsonlDraftDecision(function () {
