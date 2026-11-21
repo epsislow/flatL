@@ -1711,6 +1711,28 @@ body.fleditor-resize-active * {
   border-bottom: 1px solid var(--fl-border);
   background: var(--fl-surface);
 }
+/* Match CSV bar Header / Select toggle buttons */
+.fleditor-jsonl-detail-head > .fleditor-csv-header-btn {
+  appearance: none;
+  font: inherit;
+  font-size: 0.82rem;
+  padding: 0.15rem 0.55rem;
+  min-width: 4.2rem;
+  background: var(--fl-surface-2, #25252c);
+  border: 1px solid var(--fl-border);
+  color: var(--fl-text);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.fleditor-jsonl-detail-head > .fleditor-csv-header-btn:hover {
+  border-color: var(--fl-text-muted);
+}
+.fleditor-jsonl-detail-head > .fleditor-csv-header-btn.fleditor-csv-header-btn--active,
+.fleditor-jsonl-detail-head > .fleditor-csv-header-btn[aria-pressed="true"] {
+  border-color: #ca8a04;
+  color: #facc15;
+  background: rgba(250, 204, 21, 0.1);
+}
 .fleditor-jsonl-seg {
   display: inline-flex;
   margin-left: auto;
@@ -1852,8 +1874,3 @@ body.fleditor-resize-active * {
 }
 .fleditor-jsonl-lock:not(.is-word-wrap) { overflow-x: auto; }
 .fleditor-jsonl-lock.is-word-wrap { overflow-x: hidden; }
-#jsonlWordWrapBtn.is-on {
-  border-color: var(--fl-accent, var(--fl-text-muted));
-  background: rgba(90, 122, 74, 0.32);
-  color: var(--fl-text);
-}
