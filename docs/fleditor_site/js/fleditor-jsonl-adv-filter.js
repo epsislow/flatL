@@ -366,6 +366,16 @@
         }
       }
 
+      if (tryKw('between')) {
+        if (negated) throw { message: 'unexpected "not" before between', pos: cur().pos };
+        if (!at('number')) throw { message: 'expected lower numeric bound after "between"', pos: cur().pos };
+        const lower = eat('number').value;
+        eatKw('to');
+        if (!at('number')) throw { message: 'expected upper numeric bound after "to"', pos: cur().pos };
+        const upper = eat('number').value;
+        return { type: 'between', path: path, lower: lower, upper: upper };
+      }
+
       if (at('op')) {
         if (negated) throw { message: 'unexpected "not" before comparison', pos: cur().pos };
         return { type: 'cmp', path: path, op: parseCmpOp(), value: parseValue() };
@@ -567,6 +577,13 @@
         if (r.missing) return false;
         return evalAny(r.values, function (v) {
           return cmpValues(ast.op, v, ast.value);
+        });
+      }
+      case 'between': {
+        const r = resolvePath(rootValue, ast.path);
+        if (r.missing) return false;
+        return evalAny(r.values, function (v) {
+          return typeof v === 'number' && v >= ast.lower && v <= ast.upper;
         });
       }
       case 'is': {
