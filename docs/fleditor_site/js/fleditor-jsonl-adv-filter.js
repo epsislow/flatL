@@ -131,6 +131,11 @@
         tokens.push({ kind: 'op', value: '!=', pos: start });
         continue;
       }
+      if ((c === '<' || c === '>') && s.charAt(i + 1) === '=') {
+        i += 2;
+        tokens.push({ kind: 'op', value: c + '=', pos: start });
+        continue;
+      }
       if (c === '=' || c === '<' || c === '>') {
         i++;
         tokens.push({ kind: 'op', value: c, pos: start });
@@ -318,7 +323,14 @@
     function parseCmpOp() {
       if (!at('op')) throw { message: 'expected comparison operator', pos: cur().pos };
       const t = eat('op');
-      if (t.value !== '=' && t.value !== '!=' && t.value !== '<' && t.value !== '>') {
+      if (
+        t.value !== '=' &&
+        t.value !== '!=' &&
+        t.value !== '<' &&
+        t.value !== '>' &&
+        t.value !== '<=' &&
+        t.value !== '>='
+      ) {
         throw { message: 'unsupported operator ' + t.value, pos: t.pos };
       }
       return t.value;
@@ -498,6 +510,8 @@
     if (typeof left !== 'number' || typeof right !== 'number') return false;
     if (op === '<') return left < right;
     if (op === '>') return left > right;
+    if (op === '<=') return left <= right;
+    if (op === '>=') return left >= right;
     return false;
   }
 
@@ -506,6 +520,8 @@
     if (op === '!=') return len !== n;
     if (op === '<') return len < n;
     if (op === '>') return len > n;
+    if (op === '<=') return len <= n;
+    if (op === '>=') return len >= n;
     return false;
   }
 

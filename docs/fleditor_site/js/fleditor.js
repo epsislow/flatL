@@ -1178,7 +1178,7 @@
       } else if (jsonlFindMode === 'advfilter') {
         label = 'Adv.Filter';
         title =
-          'Adv.Filter: $.field = "x" | $.id < 3 | $.a is null | PATH[] len = N | has / IN / contains / type | and or not. Click to cycle.';
+          'Adv.Filter: $.field = "x" | $.id <= 3 | $.a is null | PATH[] len = N | has / IN / contains / type | and or not. Click to cycle.';
       }
       jsonlFindModeBtn.textContent = label;
       jsonlFindModeBtn.classList.toggle('fleditor-csv-header-btn--active', jsonlFindMode === 'advfilter');

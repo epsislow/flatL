@@ -52,6 +52,12 @@ assertMatch('$ = "a"', 'b', false);
 // --- 3. Comparisons ---
 assertMatch('$.id < 3', { id: 2 }, true);
 assertMatch('$.id < 3', { id: 3 }, false);
+assertMatch('$.id <= 3', { id: 3 }, true);
+assertMatch('$.id <= 3', { id: 4 }, false);
+assertMatch('$.id >= 5', { id: 5 }, true);
+assertMatch('$.id >= 5', { id: 4 }, false);
+assertMatch('$.name len >= 3', { name: 'Bob' }, true);
+assertMatch('$.items[] len <= 1', { items: [1] }, true);
 assertMatch('$.id != 2', { id: 5 }, true);
 assertMatch('$.id != 2', { id: 2 }, false);
 assertMatch('$.type = "string"', { type: 'string' }, true);
@@ -122,7 +128,6 @@ assertMatch('$.type = "admin" and not ( $.name = "Bob" )', { type: 'admin', name
 // --- 10. Parse errors ---
 assertBad('$$$', 'bad path');
 assertBad('$.', 'trailing dot');
-assertBad('$.id <= 3', 'no <=');
 assertBad('name = 1', 'missing $');
 assertBad('$.x type widget', 'bad type');
 assertBad('($.a = 1', 'unbalanced');

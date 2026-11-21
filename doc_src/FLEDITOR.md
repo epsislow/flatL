@@ -242,7 +242,7 @@ Invalid Adv.Filter syntax → Found empty + short error next to the input (until
 
 - **Path:** `$`, `$.key`, `$."weird key"`, `$[2]`, `$[*]`, chains such as `$.items[2].location`
 - **Existence:** bare path → true if navigable (`$.items`, `$.items[*].location`)
-- **Compare:** `=`, `!=`, `<`, `>` on strings / numbers; `is true` / `is false` / `is null` / `is not null`  
+- **Compare:** `=`, `!=`, `<`, `>`, `<=`, `>=` (numbers / `len`); `is true` / `is false` / `is null` / `is not null`  
   (missing path → false for both `is null` and `is not null`; only JSON `null` makes `is null` true)
 - **`len`:** `PATH len OP N` = **string** length; `PATH[] len OP N` / `$[] len OP N` = **list** length
 - **Lists:** `$[*] = "A2"` ≡ `$.locations has "A2"`; also `not has`, `has […]` (OR), `has all […]`, `IN […]` / `not IN […]`
