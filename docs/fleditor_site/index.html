@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=22">
+  <link rel="stylesheet" href="css/fleditor.css?v=23">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -152,10 +152,10 @@
               </div>
               <div id="jsonlLockPanel" class="fleditor-jsonl-panel fleditor-jsonl-lock" aria-label="Lock view"></div>
               <div id="jsonlFreePanel" class="fleditor-jsonl-panel fleditor-jsonl-free" hidden>
-                <p id="jsonlFreeHint" class="fleditor-jsonl-hint" hidden></p>
-                <p id="jsonlFreeErr" class="fleditor-jsonl-err" hidden></p>
                 <label class="vis-sr-only fleditor-jsonl-sr" for="jsonlFreeTa">Line text</label>
                 <textarea id="jsonlFreeTa" class="fleditor-jsonl-free-ta" spellcheck="false"></textarea>
+                <p id="jsonlFreeHint" class="fleditor-jsonl-hint" hidden></p>
+                <p id="jsonlFreeErr" class="fleditor-jsonl-err" hidden></p>
               </div>
               <div class="fleditor-jsonl-detail-foot">
                 <button type="button" id="jsonlApplyBtn" class="fleditor-io-btn fleditor-io-btn--primary">Apply line</button>
