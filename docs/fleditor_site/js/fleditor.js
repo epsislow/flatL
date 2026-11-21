@@ -1376,6 +1376,9 @@
 
   function renderJsonlRecords() {
     if (!jsonlSession || !jsonlListHost) return;
+    // Keep the list viewport stable when an operation rebuilds the rows.
+    const previousListScroll = jsonlListHost.querySelector('.fleditor-jsonl-list-scroll');
+    const previousScrollTop = previousListScroll ? previousListScroll.scrollTop : 0;
     ensureJsonlSelectionOnPage();
     const n = jsonlSession.lines.length;
     const range = Jp.pageRange(jsonlSession.pageIndex, n);
@@ -1386,8 +1389,10 @@
       selected: jsonlSession.selected,
       onSelect: function (index) {
         if (jsonlSession.selected === index) return;
-        confirmDiscardIfDirty(function () {
-          commitJsonlFreeDraftToLines(false);
+        // Only an unapplied edit in the current Free draft needs a decision.
+        // Structural list changes (add, duplicate, move, delete) are already
+        // part of the JSONL document and must not trigger a discard warning.
+        runAfterJsonlDraftDecision(function () {
           jsonlSession.selected = index;
           loadJsonlSelectedIntoPanel();
           renderJsonlRecords();
@@ -1456,6 +1461,21 @@
         });
       },
     });
+    const listScroll = jsonlListHost.querySelector('.fleditor-jsonl-list-scroll');
+    if (listScroll) {
+      listScroll.scrollTop = previousScrollTop;
+      const selectedRow = listScroll.querySelector('.fleditor-jsonl-list-item--sel');
+      if (selectedRow) {
+        const listRect = listScroll.getBoundingClientRect();
+        const rowRect = selectedRow.getBoundingClientRect();
+        const rowTop = rowRect.top - listRect.top + listScroll.scrollTop;
+        const rowBottom = rowRect.bottom - listRect.top + listScroll.scrollTop;
+        const viewTop = listScroll.scrollTop;
+        const viewBottom = viewTop + listScroll.clientHeight;
+        if (rowTop < viewTop) listScroll.scrollTop = rowTop;
+        else if (rowBottom > viewBottom) listScroll.scrollTop = rowBottom - listScroll.clientHeight;
+      }
+    }
     updateJsonlBarMeta();
     renderJsonlDetail();
     recomputeJsonlSearchMatches();
