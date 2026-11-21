@@ -440,11 +440,10 @@ static int parse_json_array_at(JsonCtx *ctx, FlatValue *out, int depth) {
     FlatValue *items = NULL;
     int cap = 0;
     int count = 0;
+    int i;
+    int rc = -1;
 
-    if (depth > FLAT_JSON_MAX_DEPTH) {
-        return -1;
-    }
-    if (*ctx->p != '[') {
+    if (depth > FLAT_JSON_MAX_DEPTH || *ctx->p != '[') {
         return -1;
     }
     ctx->p++;
@@ -452,9 +451,7 @@ static int parse_json_array_at(JsonCtx *ctx, FlatValue *out, int depth) {
     if (*ctx->p == ']') {
         uint32_t id;
         ctx->p++;
-        if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) {
-            return -1;
-        }
+        if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) return -1;
         return flat_value_set_list(out, id);
     }
     for (;;) {
@@ -463,124 +460,98 @@ static int parse_json_array_at(JsonCtx *ctx, FlatValue *out, int depth) {
             int ncap = cap ? cap * 2 : 4;
             FlatValue *g = items ? realloc(items, (size_t)ncap * sizeof(FlatValue))
                                  : malloc((size_t)ncap * sizeof(FlatValue));
-            if (!g) {
-                free(items);
-                return -1;
-            }
+            if (!g) goto done;
             items = g;
             cap = ncap;
         }
         ctx->p = skip_ws(ctx->p);
-        if (parse_value_at(ctx, &el, depth + 1) != 0) {
-            free(items);
-            return -1;
-        }
+        if (parse_value_at(ctx, &el, depth + 1) != 0) goto done;
+        /* Keep nested collections/string refs alive while later siblings are parsed. */
+        flat_value_retain(ctx->coll, ctx->pool, &el);
         items[count++] = el;
         ctx->p = skip_ws(ctx->p);
         if (*ctx->p == ',') {
             ctx->p++;
             ctx->p = skip_ws(ctx->p);
-            if (*ctx->p == ']') {
-                free(items);
-                return -1;
-            }
+            if (*ctx->p == ']') goto done;
             continue;
         }
         if (*ctx->p == ']') {
             ctx->p++;
             break;
         }
-        free(items);
-        return -1;
+        goto done;
     }
     {
         uint32_t id;
-        if (flat_list_build(ctx->coll, ctx->pool, items, count, &id) != 0) {
-            free(items);
-            return -1;
-        }
-        free(items);
-        return flat_value_set_list(out, id);
+        if (flat_list_build(ctx->coll, ctx->pool, items, count, &id) != 0) goto done;
+        if (flat_value_set_list(out, id) != 0) goto done;
+        rc = 0;
     }
+done:
+    for (i = 0; i < count; i++) flat_value_release(ctx->coll, ctx->pool, &items[i]);
+    free(items);
+    return rc;
 }
 
 static int parse_json_object_at(JsonCtx *ctx, FlatValue *out, int depth) {
     char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1];
     FlatValue vals[FLAT_OBJ_MAX_KEYS];
     int count = 0;
+    int i;
 
-    if (depth > FLAT_JSON_MAX_DEPTH) {
-        return -1;
-    }
-    if (*ctx->p != '{') {
-        return -1;
-    }
+    if (depth > FLAT_JSON_MAX_DEPTH || *ctx->p != '{') return -1;
     ctx->p++;
     ctx->p = skip_ws(ctx->p);
     if (*ctx->p == '}') {
+        uint32_t id;
         ctx->p++;
-        {
-            uint32_t id;
-            return flat_obj_empty(ctx->coll, ctx->pool, &id) == 0 ? flat_value_set_object(out, id) : -1;
-        }
+        return flat_obj_empty(ctx->coll, ctx->pool, &id) == 0 ? flat_value_set_object(out, id) : -1;
     }
     for (;;) {
         FlatValue keyval;
-        const char *keyptr;
         char keybuf[FLAT_OBJ_KEY_MAX + 1];
         size_t klen;
 
         ctx->p = skip_ws(ctx->p);
-        if (parse_json_string_at(ctx, &keyval) != 0) {
-            return -1;
-        }
-        if (keyval.tag != VAL_STR_INLINE && keyval.tag != VAL_STR_REF) {
-            return -1;
-        }
-        if (flat_value_get_cstr(&keyval, ctx->pool, keybuf, sizeof keybuf) != 0) {
-            return -1;
-        }
-        keyptr = keybuf;
-        klen = strlen(keyptr);
-        if (klen > FLAT_OBJ_KEY_MAX) {
-            return -1;
-        }
+        if (parse_json_string_at(ctx, &keyval) != 0) goto fail;
+        if (keyval.tag != VAL_STR_INLINE && keyval.tag != VAL_STR_REF) goto fail;
+        if (flat_value_get_cstr(&keyval, ctx->pool, keybuf, sizeof keybuf) != 0) goto fail;
+        klen = strlen(keybuf);
+        if (klen > FLAT_OBJ_KEY_MAX) goto fail;
         ctx->p = skip_ws(ctx->p);
-        if (*ctx->p != ':') {
-            return -1;
-        }
+        if (*ctx->p != ':') goto fail;
         ctx->p++;
         ctx->p = skip_ws(ctx->p);
-        if (count >= FLAT_OBJ_MAX_KEYS) {
-            return -1;
-        }
-        if (parse_value_at(ctx, &vals[count], depth + 1) != 0) {
-            return -1;
-        }
-        memcpy(keys[count], keyptr, klen + 1);
+        if (count >= FLAT_OBJ_MAX_KEYS) goto fail;
+        if (parse_value_at(ctx, &vals[count], depth + 1) != 0) goto fail;
+        /* Keep each child alive until the complete object has been assembled. */
+        flat_value_retain(ctx->coll, ctx->pool, &vals[count]);
+        memcpy(keys[count], keybuf, klen + 1);
         count++;
         ctx->p = skip_ws(ctx->p);
         if (*ctx->p == ',') {
             ctx->p++;
             ctx->p = skip_ws(ctx->p);
-            if (*ctx->p == '}') {
-                return -1;
-            }
+            if (*ctx->p == '}') goto fail;
             continue;
         }
         if (*ctx->p == '}') {
             ctx->p++;
             break;
         }
-        return -1;
+        goto fail;
     }
     {
         uint32_t id;
-        if (flat_obj_build(ctx->coll, ctx->pool, keys, vals, count, &id) != 0) {
-            return -1;
-        }
-        return flat_value_set_object(out, id);
+        int rc = flat_obj_build(ctx->coll, ctx->pool, keys, vals, count, &id);
+        if (rc == 0) rc = flat_value_set_object(out, id);
+        for (i = 0; i < count; i++) flat_value_release(ctx->coll, ctx->pool, &vals[i]);
+        return rc;
     }
+fail:
+    for (i = 0; i < count; i++) flat_value_release(ctx->coll, ctx->pool, &vals[i]);
+    return -1;
 }
 
 static int parse_value_at(JsonCtx *ctx, FlatValue *out, int depth) {

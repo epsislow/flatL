@@ -1,0 +1,7 @@
+#main
+  data = json.parse_object('{"products":[{"id":1,"price":20},{"id":2,"price":50},{"id":3,"price":80}]}')
+  found = json.find(data, '$.products[*].price between 40 to 60', '$.products[@]')
+  total = json.count(data, '$.products[*].price between 40 to 60')
+  io.outln(found)
+  io.outln(total)
+  OK

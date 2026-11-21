@@ -1,0 +1,9 @@
+use native list
+
+#main
+  inner1 = list.pack(20, 50)
+  inner2 = list.pack(80)
+  data = list.pack(inner1, inner2)
+  found = json.find(data, '$[*][*] between 40 to 60', '$[@][@]')
+  io.outln(found)
+  OK

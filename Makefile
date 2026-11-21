@@ -58,7 +58,7 @@ PLUGIN_CSV_SRCS = src/lib/plugin_csv_entry.c src/lib/mod_csv.c src/common/flat_c
 endif
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_parse_rhs.c \
                 src/lib/native_dispatch.c \
-                src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c \
+                src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
                 src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c src/common/flat_native_tag_common.c

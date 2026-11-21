@@ -1,36 +1,165 @@
 {
   "title": "flatL documentation",
   "sections": [
-    { "id": "specification", "label": "Specification", "file": "SPECIFICATION.md" },
-    { "id": "jump-block-max", "label": "Jump entry limits", "file": "JUMP_BLOCK_MAX.md" },
-    { "id": "language-types", "label": "Language types", "file": "LANGUAGE_TYPES.md" },
-    { "id": "strict-types", "label": "Strict types & schemas", "file": "STRICT_TYPES.md" },
-    { "id": "typed-bind", "label": "Typed bind (normative draft)", "file": "TYPED_BIND.md" },
-    { "id": "type-tags", "label": "Call tags (;)", "file": "TYPE_TAGS.md" },
-    { "id": "toolchain", "label": "Toolchain", "file": "TOOLCHAIN.md" },
-    { "id": "user-functions", "label": "User functions", "file": "USER_FUNCTIONS.md" },
-    { "id": "fmod-modules", "label": "Modules (.fmod)", "file": "FMOD_MODULES.md" },
-    { "id": "fleditor", "label": "Browser editor (fleditor)", "file": "FLEDITOR.md" },
-    { "id": "portability", "label": "Portability", "file": "PORTABILITY.md" },
-    { "id": "io", "label": "I/O", "file": "IO.md" },
-    { "id": "io-contexts", "label": "I/O contexts", "file": "IO_CONTEXTS.md" },
-    { "id": "io-collections", "label": "I/O collections", "file": "IO_COLLECTIONS.md" },
-    { "id": "list-object", "label": "LIST / OBJECT guide", "file": "LIST_OBJECT.md" },
-    { "id": "natives", "label": "Optional natives", "file": "natives/README.md" },
-    { "id": "io-native", "label": "Native io", "file": "natives/io.md" },
-    { "id": "json-native", "label": "Native json", "file": "natives/json.md" },
-    { "id": "math", "label": "Native math", "file": "natives/math.md" },
-    { "id": "math-trig", "label": "Native math.trig", "file": "natives/math.trig.md" },
-    { "id": "math-stats", "label": "Native math.stats", "file": "natives/math.stats.md" },
-    { "id": "math-mdim", "label": "Native math.mdim", "file": "natives/math_mdim.md" },
-    { "id": "list-native", "label": "Native list", "file": "natives/list.md" },
-    { "id": "str-native", "label": "Native str", "file": "natives/str.md" },
-    { "id": "date-native", "label": "Native date", "file": "natives/date.md" },
-    { "id": "obj-native", "label": "Native obj", "file": "natives/obj.md" },
-    { "id": "vcx-native", "label": "Native vcx", "file": "natives/vcx.md" },
-    { "id": "executor-native", "label": "Native executor", "file": "natives/executor.md" },
-    { "id": "mem-native", "label": "Native mem", "file": "natives/mem.md" },
-    { "id": "file-native", "label": "Native file", "file": "natives/file.md" },
-    { "id": "csv-native", "label": "Native csv", "file": "natives/csv.md" }
+    {
+      "id": "specification",
+      "label": "Specification",
+      "file": "SPECIFICATION.md"
+    },
+    {
+      "id": "jump-block-max",
+      "label": "Jump entry limits",
+      "file": "JUMP_BLOCK_MAX.md"
+    },
+    {
+      "id": "language-types",
+      "label": "Language types",
+      "file": "LANGUAGE_TYPES.md"
+    },
+    {
+      "id": "strict-types",
+      "label": "Strict types & schemas",
+      "file": "STRICT_TYPES.md"
+    },
+    {
+      "id": "typed-bind",
+      "label": "Typed bind (normative draft)",
+      "file": "TYPED_BIND.md"
+    },
+    {
+      "id": "type-tags",
+      "label": "Call tags (;)",
+      "file": "TYPE_TAGS.md"
+    },
+    {
+      "id": "toolchain",
+      "label": "Toolchain",
+      "file": "TOOLCHAIN.md"
+    },
+    {
+      "id": "user-functions",
+      "label": "User functions",
+      "file": "USER_FUNCTIONS.md"
+    },
+    {
+      "id": "fmod-modules",
+      "label": "Modules (.fmod)",
+      "file": "FMOD_MODULES.md"
+    },
+    {
+      "id": "fleditor",
+      "label": "Browser editor (fleditor)",
+      "file": "FLEDITOR.md"
+    },
+    {
+      "id": "portability",
+      "label": "Portability",
+      "file": "PORTABILITY.md"
+    },
+    {
+      "id": "io",
+      "label": "I/O",
+      "file": "IO.md"
+    },
+    {
+      "id": "io-contexts",
+      "label": "I/O contexts",
+      "file": "IO_CONTEXTS.md"
+    },
+    {
+      "id": "io-collections",
+      "label": "I/O collections",
+      "file": "IO_COLLECTIONS.md"
+    },
+    {
+      "id": "list-object",
+      "label": "LIST / OBJECT guide",
+      "file": "LIST_OBJECT.md"
+    },
+    {
+      "id": "natives",
+      "label": "Optional natives",
+      "file": "natives/README.md"
+    },
+    {
+      "id": "io-native",
+      "label": "Native io",
+      "file": "natives/io.md"
+    },
+    {
+      "id": "json-native",
+      "label": "Native json",
+      "file": "natives/json.md"
+    },
+    {
+      "id": "json-query",
+      "label": "JSON Query / Find / Check / Count",
+      "file": "JSON_QUERY.md"
+    },
+    {
+      "id": "math",
+      "label": "Native math",
+      "file": "natives/math.md"
+    },
+    {
+      "id": "math-trig",
+      "label": "Native math.trig",
+      "file": "natives/math.trig.md"
+    },
+    {
+      "id": "math-stats",
+      "label": "Native math.stats",
+      "file": "natives/math.stats.md"
+    },
+    {
+      "id": "math-mdim",
+      "label": "Native math.mdim",
+      "file": "natives/math_mdim.md"
+    },
+    {
+      "id": "list-native",
+      "label": "Native list",
+      "file": "natives/list.md"
+    },
+    {
+      "id": "str-native",
+      "label": "Native str",
+      "file": "natives/str.md"
+    },
+    {
+      "id": "date-native",
+      "label": "Native date",
+      "file": "natives/date.md"
+    },
+    {
+      "id": "obj-native",
+      "label": "Native obj",
+      "file": "natives/obj.md"
+    },
+    {
+      "id": "vcx-native",
+      "label": "Native vcx",
+      "file": "natives/vcx.md"
+    },
+    {
+      "id": "executor-native",
+      "label": "Native executor",
+      "file": "natives/executor.md"
+    },
+    {
+      "id": "mem-native",
+      "label": "Native mem",
+      "file": "natives/mem.md"
+    },
+    {
+      "id": "file-native",
+      "label": "Native file",
+      "file": "natives/file.md"
+    },
+    {
+      "id": "csv-native",
+      "label": "Native csv",
+      "file": "natives/csv.md"
+    }
   ]
 }

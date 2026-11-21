@@ -43,6 +43,9 @@ int flat_native_json_parse_list(FlatNativeCtx *ctx);
 int flat_native_json_parse_object(FlatNativeCtx *ctx);
 int flat_native_json_parse_bools(FlatNativeCtx *ctx);
 int flat_native_json_stringify(FlatNativeCtx *ctx);
+int flat_native_json_check(FlatNativeCtx *ctx);
+int flat_native_json_find(FlatNativeCtx *ctx);
+int flat_native_json_count(FlatNativeCtx *ctx);
 
 int flat_native_math_trig_sin(FlatNativeCtx *ctx);
 int flat_native_math_trig_cos(FlatNativeCtx *ctx);

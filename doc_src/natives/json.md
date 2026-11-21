@@ -17,6 +17,9 @@ Implementation: `src/lib/mod_json.c`, `src/common/value_json.c`.
 | `json.parse_object(s)` | JSON object `{…}` | OBJECT; `""` → `{}` | **`json.parse_object`** — invalid or wrong shape |
 | `json.parse_bools(s)` | JSON bool array or tokens | LIST of BOOL; `""` → `[]` | **`json.parse_bools`** — invalid tokens |
 | `json.stringify(v)` | Any value | JSON STRING (OBJECT keys sorted) | **`json.stringify`** — value not serializable or buffer limit |
+| `json.check(obj, expression)` | OBJECT or LIST, query STRING | BOOL; true when any resolved value matches | **`json.check`** — invalid arguments or query |
+| `json.find(obj, expression, returnPath)` | OBJECT or LIST, query STRING, return-path STRING | LIST of extracted matching values | **`json.find`** — invalid arguments or query |
+| `json.count(obj, expression)` | OBJECT or LIST, query STRING | NUMBER of matching contexts | **`json.count`** — invalid arguments or query |
 
 Use **`?`** on a line to keep the previous binding when parse fails (former silent behavior).
 
@@ -25,6 +28,20 @@ Use **`?`** on a line to keep the previous binding when parse fails (former sile
 **`json.parse("")`** → **NULL** (`null` keyword in programs). This differs from **`json.parse_object("")`** → `{}` and **`json.parse_list("")`** → `[]`.
 
 **`io.in_list` / `io.in_object` / `io.in_bools`** read one stdin line then apply the matching parser; invalid input → **PANIC** `io.parse` (or **`io.in_list`**, etc. as native reason). Use **`?`** / **`~`** on those lines if needed. See [IO.md](../IO.md) and [io.md](./io.md).
+
+## JSON Query
+
+`json.check`, `json.find` and `json.count` use the FlatL JSON Query expression language. It supports JSON paths, `[*]`, comparisons, inclusive `between ... to ...`, logical operators, string/list predicates, type checks and `len`.
+
+```flatL
+valid = json.check(data, "$.domainId is between 2 to 10 and $.name len > 4")
+matches = json.find(data, "$.products[*].price between 40 to 60", "$.products[@]")
+total = json.count(data, "$.products[*].price between 40 to 60")
+```
+
+Wildcard predicates use ANY semantics. In `json.find`'s third argument, `$` returns the complete source value when it matches, while `@` selects the element associated with a wildcard level (including nested levels).
+
+Full syntax, examples and semantics: [JSON Query — Find, Check and Count](../JSON_QUERY.md).
 
 ## Examples
 

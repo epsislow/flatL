@@ -1,0 +1,7 @@
+#main
+  data = json.parse_list('[20,50,80]')
+  found = json.find(data, '$[*] between 40 to 60', '$[@]')
+  total = json.count(data, '$[*] between 40 to 60')
+  io.outln(found)
+  io.outln(total)
+  OK

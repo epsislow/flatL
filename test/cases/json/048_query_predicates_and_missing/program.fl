@@ -1,0 +1,15 @@
+use native list
+
+#main
+  data = json.parse_object('{"status":"active","tags":["red","blue"],"value":null}')
+  ok = json.check(data, '$.status not in ["deleted","archived"] and $.tags has all ["red","blue"] and $.value is null')
+  missing = json.check(data, '$.missing is not null')
+  io.outln(ok)
+  io.outln(missing)
+  none = json.find(data, '$.missing = 1', '$')
+  noneLen = list.len(none)
+  whole = json.find(data, '$.status = "active"', '$')
+  wholeLen = list.len(whole)
+  io.outln(noneLen)
+  io.outln(wholeLen)
+  OK

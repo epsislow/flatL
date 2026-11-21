@@ -1,0 +1,10 @@
+use native list
+
+#main
+  p1 = json.parse_object('{"id":1,"price":20}')
+  p2 = json.parse_object('{"id":2,"price":50}')
+  p3 = json.parse_object('{"id":3,"price":80}')
+  data = list.pack(p1, p2, p3)
+  found = json.find(data, '$[*].price between 40 to 60', '$[@].id')
+  io.outln(found)
+  OK

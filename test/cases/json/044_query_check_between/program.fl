@@ -1,0 +1,5 @@
+#main
+  data = json.parse_object('{"domainId":5,"name":"Example"}')
+  ok = json.check(data, '$.domainId between 2 to 10 and $.name len > 4')
+  io.outln(ok)
+  OK

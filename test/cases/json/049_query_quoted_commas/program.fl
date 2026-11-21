@@ -1,0 +1,5 @@
+#main
+  data = json.parse_object('{"name":"Doe, Jane","note":"x,y"}')
+  ok = json.check(data, '$.name = "Doe, Jane"')
+  io.outln(ok)
+  OK

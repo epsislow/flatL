@@ -1,0 +1,18 @@
+suite = "json"
+id = 46
+desc = "json query find preserves nested wildcard context"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "50"
+stdout_contains_2 = "50"
+
+[flatl]
+compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
+run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "50"
+stdout_contains_2 = "50"

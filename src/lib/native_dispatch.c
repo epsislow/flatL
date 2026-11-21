@@ -88,6 +88,12 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
         return flat_native_json_parse_bools(ctx);
     case FLAT_NATIVE_JSON_STRINGIFY:
         return flat_native_json_stringify(ctx);
+    case FLAT_NATIVE_JSON_CHECK:
+        return flat_native_json_check(ctx);
+    case FLAT_NATIVE_JSON_FIND:
+        return flat_native_json_find(ctx);
+    case FLAT_NATIVE_JSON_COUNT:
+        return flat_native_json_count(ctx);
     default:
         return -1;
     }
