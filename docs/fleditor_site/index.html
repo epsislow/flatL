@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=26">
+  <link rel="stylesheet" href="css/fleditor.css?v=27">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -133,11 +133,13 @@
               <button type="button" id="jsonlSearchPrev" title="Previous match">Prev</button>
               <span id="jsonlSearchCount" class="fleditor-jsonl-search-count" aria-live="polite">0</span>
               <button type="button" id="jsonlSearchNext" title="Next match">Next</button>
-              <span id="jsonlAdvFilterErr" class="fleditor-jsonl-adv-err" hidden aria-live="polite"></span>
             </div>
           </div>
           <div id="jsonlRecordsHost" class="fleditor-jsonl-host" hidden aria-label="JSONL records editor">
-            <div id="jsonlListHost" class="fleditor-jsonl-list-host"></div>
+            <div class="fleditor-jsonl-list-pane">
+              <div id="jsonlListHost" class="fleditor-jsonl-list-host"></div>
+              <p id="jsonlAdvFilterErr" class="fleditor-jsonl-err fleditor-jsonl-adv-err" hidden aria-live="polite"></p>
+            </div>
             <div id="jsonlListResize" class="fleditor-jsonl-list-resize" role="separator"
               aria-orientation="vertical" aria-label="Resize JSONL line list" tabindex="0"
               title="Drag to resize line list"></div>
@@ -492,6 +494,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=82"></script>
+  <script src="js/fleditor.js?v=83"></script>
 </body>
 </html>

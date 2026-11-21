@@ -1127,10 +1127,11 @@
   }
 
   function setJsonlAdvFilterError(msg) {
+    const text = msg || 'invalid query';
     if (jsonlAdvFilterErr) {
       jsonlAdvFilterErr.hidden = false;
-      jsonlAdvFilterErr.textContent = msg || 'invalid query';
-      jsonlAdvFilterErr.title = msg || 'invalid query';
+      jsonlAdvFilterErr.textContent = text;
+      jsonlAdvFilterErr.title = text;
     }
     if (jsonlSearchInput) jsonlSearchInput.setAttribute('aria-invalid', 'true');
   }

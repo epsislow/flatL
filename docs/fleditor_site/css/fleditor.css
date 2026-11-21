@@ -1554,14 +1554,6 @@ body.fleditor-resize-active * {
   padding: 0.1rem 0.35rem;
 }
 .fleditor-jsonl-search-count { min-width: 2rem; text-align: center; color: var(--fl-text-muted); font-size: 0.85rem; }
-.fleditor-jsonl-adv-err {
-  max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.78rem;
-  color: #f87171;
-}
 .fleditor-jsonl-search-input[aria-invalid="true"] {
   border-color: #f87171;
 }
@@ -1605,13 +1597,36 @@ body.fleditor-resize-active * {
   overflow: hidden;
 }
 .fleditor-jsonl-host[hidden] { display: none !important; }
-.fleditor-jsonl-list-host {
+.fleditor-jsonl-list-pane {
+  position: relative;
   display: flex;
   flex-direction: column;
   overflow: hidden;
   min-width: 0;
   min-height: 0;
   background: var(--fl-surface);
+}
+.fleditor-jsonl-list-host {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+/* Adv.Filter parse error — same overlay style as Free JSON parse error */
+.fleditor-jsonl-list-pane > .fleditor-jsonl-adv-err {
+  position: absolute;
+  left: 0.45rem;
+  right: 0.45rem;
+  bottom: 0.45rem;
+  z-index: 3;
+  margin: 0;
+  max-height: 40%;
+  overflow: auto;
+  pointer-events: none;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .fleditor-jsonl-list-resize {
   display: block;
@@ -1929,7 +1944,7 @@ body.fleditor-resize-active * {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(5rem, var(--fl-jsonl-list-height)) 0.65rem minmax(0, 1fr);
   }
-  .fleditor-jsonl-list-host {
+  .fleditor-jsonl-list-pane {
     max-height: none;
     grid-row: 1;
   }
