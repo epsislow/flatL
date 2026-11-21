@@ -1302,6 +1302,15 @@
     jsonlPendingDialog.showModal();
   }
 
+  function syncJsonlWordWrapUi() {
+    if (jsonlWordWrapBtn) {
+      jsonlWordWrapBtn.classList.toggle('fleditor-csv-header-btn--active', jsonlWordWrapEnabled);
+      jsonlWordWrapBtn.setAttribute('aria-pressed', jsonlWordWrapEnabled ? 'true' : 'false');
+    }
+    if (jsonlLockPanel) jsonlLockPanel.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
+    if (jsonlFreeTa) jsonlFreeTa.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
+  }
+
   function renderJsonlLockPanel() {
     if (!jsonlSession || !jsonlLockPanel) return;
     jsonlLockPanel.textContent = '';
@@ -1321,7 +1330,7 @@
       return;
     }
     jsonlSession.lockValue = parsed.value;
-    jsonlLockPanel.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
+    syncJsonlWordWrapUi();
     const searchQuery = jsonlSearchInput ? jsonlSearchInput.value : '';
     if (searchQuery) {
       function expandMatchingBranches(value, path) {
@@ -4503,10 +4512,9 @@
     if (jsonlWordWrapBtn) {
       jsonlWordWrapBtn.addEventListener('click', function () {
         jsonlWordWrapEnabled = !jsonlWordWrapEnabled;
-        jsonlWordWrapBtn.classList.toggle('fleditor-csv-header-btn--active', jsonlWordWrapEnabled);
-        jsonlWordWrapBtn.setAttribute('aria-pressed', jsonlWordWrapEnabled ? 'true' : 'false');
-        if (jsonlLockPanel) jsonlLockPanel.classList.toggle('is-word-wrap', jsonlWordWrapEnabled);
+        syncJsonlWordWrapUi();
       });
+      syncJsonlWordWrapUi();
     }
     if (jsonlApplyBtn) {
       jsonlApplyBtn.addEventListener('click', function () {
