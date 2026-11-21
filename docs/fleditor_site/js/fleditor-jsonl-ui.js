@@ -255,6 +255,7 @@
     }
     container.appendChild(addRow);
 
+    const listScroll = el('div', 'fleditor-jsonl-list-scroll');
     const list = el('ul', 'fleditor-jsonl-list');
     list.setAttribute('aria-label', 'JSONL lines');
     const Jp = P();
@@ -289,7 +290,8 @@
       li.appendChild(x);
       list.appendChild(li);
     }
-    container.appendChild(list);
+    listScroll.appendChild(list);
+    container.appendChild(listScroll);
   }
 
   /**

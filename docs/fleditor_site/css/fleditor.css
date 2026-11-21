@@ -1565,14 +1565,31 @@ body.fleditor-resize-active * {
 }
 .fleditor-jsonl-host[hidden] { display: none !important; }
 .fleditor-jsonl-list-host {
+  display: flex;
+  flex-direction: column;
   border-right: 1px solid var(--fl-border);
-  overflow: auto;
+  overflow: hidden;
   min-width: 0;
   min-height: 0;
   background: var(--fl-surface);
 }
 .fleditor-jsonl-list-resize { display: none; }
-.fleditor-jsonl-list-add { padding: 0.2rem 0.4rem; border-bottom: 1px solid var(--fl-border); }
+.fleditor-jsonl-list-add {
+  flex: 0 0 auto;
+  padding: 0.2rem 0.4rem;
+  border-bottom: 1px solid var(--fl-border);
+  background: var(--fl-surface);
+  position: relative;
+  z-index: 1;
+}
+.fleditor-jsonl-list-scroll {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
 .fleditor-jsonl-tool-btn {
   min-width: 1.6rem;
   height: 1.6rem;

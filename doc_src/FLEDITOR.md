@@ -217,7 +217,7 @@ Project files with these extensions open in the **Jsonl editor** (Records view) 
 
 ### View layout
 
-- **Records:** left list of lines (paginated, **40** lines/page) with **`+`** (add empty line), **`×2`** (duplicate the selected line), **`↑` / `↓`** (move the selected line), and **`×`** (delete a line). Duplicate preserves the exact stored source line and selects the copy. Move swaps the selected line with its adjacent line; boundary buttons are disabled. If the selected Free line has unapplied edits, Duplicate/Move first asks whether to Apply, Revert, or Cancel. Right panel shows the **selected line only**.
+- **Records:** left list of lines (paginated, **40** lines/page) with **`+`** (add empty line), **`×2`** (duplicate the selected line), **`↑` / `↓`** (move the selected line), and **`×`** (delete a line). Duplicate preserves the exact stored source line and selects the copy. Move swaps the selected line with its adjacent line; boundary buttons are disabled. If the selected Free line has unapplied edits, Duplicate/Move first asks whether to Apply, Revert, or Cancel. Right panel shows the **selected line only**. The action row (`+`, `×2`, `↑`, `↓`) stays fixed while the line list scrolls independently, so actions remain accessible even at the bottom of a long page.
 - **Free | Lock** toggle on the right:
   - **Lock** — pretty view of a parsed JSON value (object, array, or scalar). Nested objects/arrays start collapsed as `{…}` / `[…]` with **`[+]`**; click to expand **`[-]`**. Lock is **read-only** (no inline edit).
   - **Free** — text editor for that one line. Empty/whitespace shows **`no json detected`**. Invalid JSON shows an error (and a caret highlight when the engine reports a position).
