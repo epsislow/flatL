@@ -1555,11 +1555,12 @@ body.fleditor-resize-active * {
 }
 .fleditor-jsonl-search-count { min-width: 2rem; text-align: center; color: var(--fl-text-muted); font-size: 0.85rem; }
 .fleditor-jsonl-host {
+  --fl-jsonl-list-width: 38%;
   flex: 1 1 0;
   min-height: 0;
   min-width: 0;
   display: grid;
-  grid-template-columns: minmax(10rem, 0.9fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(8rem, var(--fl-jsonl-list-width)) 0.55rem minmax(0, 1fr);
   background: var(--fl-editor-pane-bg, var(--fl-panel-bg));
   overflow: hidden;
 }
@@ -1567,13 +1568,38 @@ body.fleditor-resize-active * {
 .fleditor-jsonl-list-host {
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--fl-border);
   overflow: hidden;
   min-width: 0;
   min-height: 0;
   background: var(--fl-surface);
 }
-.fleditor-jsonl-list-resize { display: none; }
+.fleditor-jsonl-list-resize {
+  display: block;
+  min-width: 0.55rem;
+  background: var(--fl-surface);
+  border-left: 1px solid var(--fl-border);
+  border-right: 1px solid var(--fl-border);
+  cursor: col-resize;
+  touch-action: none;
+  position: relative;
+  z-index: 2;
+}
+.fleditor-jsonl-list-resize::after {
+  content: "";
+  position: absolute;
+  width: 3px;
+  height: 2.5rem;
+  border-radius: 3px;
+  background: var(--fl-text-muted);
+  opacity: 0.65;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.fleditor-jsonl-list-resize:hover,
+.fleditor-jsonl-list-resize:active {
+  background: var(--fl-surface-2, var(--fl-surface));
+}
 .fleditor-jsonl-list-add {
   flex: 0 0 auto;
   padding: 0.2rem 0.4rem;
@@ -1795,34 +1821,22 @@ body.fleditor-resize-active * {
   }
   .fleditor-jsonl-list-host {
     max-height: none;
-    border-right: none;
-    border-bottom: none;
     grid-row: 1;
   }
   .fleditor-jsonl-list-resize {
-    display: block;
     grid-row: 2;
+    min-width: 0;
     min-height: 0.65rem;
-    background: var(--fl-surface);
+    border-left: none;
+    border-right: none;
     border-top: 1px solid var(--fl-border);
     border-bottom: 1px solid var(--fl-border);
     cursor: ns-resize;
-    touch-action: none;
-    position: relative;
   }
   .fleditor-jsonl-list-resize::after {
-    content: "";
-    position: absolute;
     width: 2.5rem;
     height: 3px;
-    border-radius: 3px;
-    background: var(--fl-text-muted);
-    opacity: 0.65;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
   }
-  .fleditor-jsonl-list-resize:active { background: var(--fl-surface-2, var(--fl-surface)); }
   .fleditor-jsonl-detail { grid-row: 3; }
 }
 

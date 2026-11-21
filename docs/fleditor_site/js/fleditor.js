@@ -4606,54 +4606,98 @@
       jsonlPageInput.addEventListener('blur', updateJsonlBarMeta);
     }
 
-    // Mobile-only splitter between the JSONL line list and its detail panel.
+    // Splitter between JSONL line list and detail (col on desktop, row on mobile).
     const jsonlListResize = document.getElementById('jsonlListResize');
     if (jsonlListResize && jsonlRecordsHost) {
       let pointerId = null;
-      let hostTop = 0;
-      let hostHeight = 0;
-      function resizeListTo(clientY) {
-        const minPx = 80;
-        const maxPx = Math.max(minPx, hostHeight - 150);
-        const px = Math.max(minPx, Math.min(maxPx, clientY - hostTop));
-        const pct = Math.max(15, Math.min(65, px / hostHeight * 100));
-        jsonlRecordsHost.style.setProperty('--fl-jsonl-list-height', pct.toFixed(2) + '%');
+      let hostRect = { left: 0, top: 0, width: 0, height: 0 };
+      let stackMode = false;
+      function jsonlStackMode() {
+        return !!(window.matchMedia && window.matchMedia('(max-width: 720px)').matches);
+      }
+      function syncJsonlResizeAria() {
+        const stack = jsonlStackMode();
+        jsonlListResize.setAttribute('aria-orientation', stack ? 'horizontal' : 'vertical');
+        document.body.style.cursor = '';
+      }
+      function resizeJsonlListTo(clientX, clientY) {
+        if (stackMode) {
+          const minPx = 80;
+          const maxPx = Math.max(minPx, hostRect.height - 150);
+          const px = Math.max(minPx, Math.min(maxPx, clientY - hostRect.top));
+          const pct = Math.max(15, Math.min(65, (px / hostRect.height) * 100));
+          jsonlRecordsHost.style.setProperty('--fl-jsonl-list-height', pct.toFixed(2) + '%');
+          return;
+        }
+        const minPx = 120;
+        const maxPx = Math.max(minPx, hostRect.width - 220);
+        const px = Math.max(minPx, Math.min(maxPx, clientX - hostRect.left));
+        const pct = Math.max(18, Math.min(70, (px / hostRect.width) * 100));
+        jsonlRecordsHost.style.setProperty('--fl-jsonl-list-width', pct.toFixed(2) + '%');
       }
       jsonlListResize.addEventListener('pointerdown', function (ev) {
-        if (window.matchMedia && !window.matchMedia('(max-width: 720px)').matches) return;
         if (ev.button !== 0) return;
         const rect = jsonlRecordsHost.getBoundingClientRect();
-        hostTop = rect.top;
-        hostHeight = rect.height;
-        if (!hostHeight) return;
+        hostRect = { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+        if (!hostRect.width || !hostRect.height) return;
+        stackMode = jsonlStackMode();
         pointerId = ev.pointerId;
         ev.preventDefault();
         try { jsonlListResize.setPointerCapture(pointerId); } catch (_e) { /* ignore */ }
         document.body.classList.add('fleditor-resize-active');
+        document.body.style.cursor = stackMode ? 'ns-resize' : 'col-resize';
       });
       jsonlListResize.addEventListener('pointermove', function (ev) {
         if (pointerId === null || ev.pointerId !== pointerId) return;
-        resizeListTo(ev.clientY);
+        resizeJsonlListTo(ev.clientX, ev.clientY);
       });
       function stopJsonlResize(ev) {
         if (pointerId === null || (ev && ev.pointerId !== pointerId)) return;
         try { jsonlListResize.releasePointerCapture(pointerId); } catch (_e) { /* ignore */ }
         pointerId = null;
         document.body.classList.remove('fleditor-resize-active');
+        document.body.style.cursor = '';
       }
       jsonlListResize.addEventListener('pointerup', stopJsonlResize);
       jsonlListResize.addEventListener('pointercancel', stopJsonlResize);
       jsonlListResize.addEventListener('keydown', function (ev) {
-        if (ev.key !== 'ArrowUp' && ev.key !== 'ArrowDown') return;
-        if (window.matchMedia && !window.matchMedia('(max-width: 720px)').matches) return;
+        const stack = jsonlStackMode();
+        const vertKeys = ev.key === 'ArrowUp' || ev.key === 'ArrowDown';
+        const horizKeys = ev.key === 'ArrowLeft' || ev.key === 'ArrowRight';
+        if (stack ? !vertKeys : !horizKeys) return;
         ev.preventDefault();
         const rect = jsonlRecordsHost.getBoundingClientRect();
-        const current = jsonlListResize.previousElementSibling.getBoundingClientRect().height;
-        const minPx = 80;
-        const maxPx = Math.max(minPx, rect.height - 150);
-        const px = Math.max(minPx, Math.min(maxPx, current + (ev.key === 'ArrowUp' ? -24 : 24)));
-        jsonlRecordsHost.style.setProperty('--fl-jsonl-list-height', Math.max(15, Math.min(65, px / rect.height * 100)) + '%');
+        const listEl = jsonlListResize.previousElementSibling;
+        if (!listEl) return;
+        if (stack) {
+          const current = listEl.getBoundingClientRect().height;
+          const minPx = 80;
+          const maxPx = Math.max(minPx, rect.height - 150);
+          const delta = ev.key === 'ArrowUp' ? -24 : 24;
+          const px = Math.max(minPx, Math.min(maxPx, current + delta));
+          jsonlRecordsHost.style.setProperty(
+            '--fl-jsonl-list-height',
+            Math.max(15, Math.min(65, (px / rect.height) * 100)).toFixed(2) + '%'
+          );
+        } else {
+          const current = listEl.getBoundingClientRect().width;
+          const minPx = 120;
+          const maxPx = Math.max(minPx, rect.width - 220);
+          const delta = ev.key === 'ArrowLeft' ? -24 : 24;
+          const px = Math.max(minPx, Math.min(maxPx, current + delta));
+          jsonlRecordsHost.style.setProperty(
+            '--fl-jsonl-list-width',
+            Math.max(18, Math.min(70, (px / rect.width) * 100)).toFixed(2) + '%'
+          );
+        }
       });
+      syncJsonlResizeAria();
+      if (window.matchMedia) {
+        const mql = window.matchMedia('(max-width: 720px)');
+        const onChange = function () { syncJsonlResizeAria(); };
+        if (mql.addEventListener) mql.addEventListener('change', onChange);
+        else if (mql.addListener) mql.addListener(onChange);
+      }
     }
     if (jsonlSearchInput) {
       jsonlSearchInput.addEventListener('input', function () {
