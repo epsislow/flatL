@@ -1559,7 +1559,7 @@ body.fleditor-resize-active * {
   font: inherit;
   font-size: 0.82rem;
   padding: 0.15rem 0.55rem;
-  min-width: 4.2rem;
+  min-width: 5.6rem;
   background: var(--fl-surface);
   border: 1px solid var(--fl-border);
   color: var(--fl-text);
