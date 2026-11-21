@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=25">
+  <link rel="stylesheet" href="css/fleditor.css?v=26">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -133,6 +133,7 @@
               <button type="button" id="jsonlSearchPrev" title="Previous match">Prev</button>
               <span id="jsonlSearchCount" class="fleditor-jsonl-search-count" aria-live="polite">0</span>
               <button type="button" id="jsonlSearchNext" title="Next match">Next</button>
+              <span id="jsonlAdvFilterErr" class="fleditor-jsonl-adv-err" hidden aria-live="polite"></span>
             </div>
           </div>
           <div id="jsonlRecordsHost" class="fleditor-jsonl-host" hidden aria-label="JSONL records editor">
@@ -491,6 +492,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=80"></script>
+  <script src="js/fleditor.js?v=81"></script>
 </body>
 </html>

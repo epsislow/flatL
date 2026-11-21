@@ -1554,6 +1554,17 @@ body.fleditor-resize-active * {
   padding: 0.1rem 0.35rem;
 }
 .fleditor-jsonl-search-count { min-width: 2rem; text-align: center; color: var(--fl-text-muted); font-size: 0.85rem; }
+.fleditor-jsonl-adv-err {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: #f87171;
+}
+.fleditor-jsonl-search-input[aria-invalid="true"] {
+  border-color: #f87171;
+}
 .fleditor-jsonl-bar .fleditor-csv-header-btn {
   appearance: none;
   font: inherit;

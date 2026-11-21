@@ -222,15 +222,52 @@ Project files with these extensions open in the **Jsonl editor** (Records view) 
   - **Lock** — pretty view of a parsed JSON value (object, array, or scalar). Nested objects/arrays start collapsed as `{…}` / `[…]` with **`[+]`**; click to expand **`[-]`**. Lock is **read-only** (no inline edit).
   - **Free** — text editor for that one line. Empty/whitespace shows **`no json detected`**. Invalid JSON shows an error (and a caret highlight when the engine reports a position).
 - **Free → Lock** runs `JSON.parse` on the Free text; on error you **stay in Free**; on success you enter Lock (line stored compact via `JSON.stringify`).
-- The Records search scans all lines; Prev/Next selects matching lines. When a matching line is selected, the Lock tree expands matching branches and highlights occurrences of the search text.
 - **Lock → Free** always allowed (pretty text as a starting point for edits).
 - Toolbar **Text** / **Records** toggles the whole-file CodeMirror view vs Records (same pattern as CSV **Text** / **▦**).
 - On disk, each record stays **one compact line**; pretty formatting is only in the Lock/Free panels.
+
+### Select / Filter / Adv.Filter
+
+The bar button cycles **Select → Filter → Adv.Filter → Select**. Empty Filter / Adv.Filter input shows **all** lines (`Lines …`). With a non-empty query, Filter / Adv.Filter narrow the list and the page label becomes **`Found a–b of N`**. Line numbers in the list stay **1-based file indices**.
+
+| Mode | Input | List | Prev / Next |
+|------|-------|------|-------------|
+| **Select** | substring | all lines | jump between matches (Lock expands/highlights matches) |
+| **Filter** | substring | matching lines only | within Found |
+| **Adv.Filter** | path query on `$` | lines where the expression is true on parsed JSON | within Found |
+
+Invalid Adv.Filter syntax → Found empty + short error next to the input (until the query parses). Empty / invalid JSON lines never match Adv.Filter (they are skipped, not a query error). Comparisons are **case-sensitive**. List indexes in paths are **0-based** (`[0]` = first).
+
+#### Adv.Filter syntax (MVP)
+
+- **Path:** `$`, `$.key`, `$."weird key"`, `$[2]`, `$[*]`, chains such as `$.items[2].location`
+- **Existence:** bare path → true if navigable (`$.items`, `$.items[*].location`)
+- **Compare:** `=`, `!=`, `<`, `>` on strings / numbers; `is true` / `is false` / `is null` / `is not null`  
+  (missing path → false for both `is null` and `is not null`; only JSON `null` makes `is null` true)
+- **`len`:** `PATH len OP N` = **string** length; `PATH[] len OP N` / `$[] len OP N` = **list** length
+- **Lists:** `$[*] = "A2"` ≡ `$.locations has "A2"`; also `not has`, `has […]` (OR), `has all […]`, `IN […]` / `not IN […]`
+- **Strings:** `contains` / `starts with` / `ends with` (+ `not …`)
+- **Type:** `PATH type object|number|bool|list|array|string|null` (`array` ≡ `list`); `not type` / `not ( … )`
+- **Logic:** `and` / `or` / `not` / `( … )` — precedence `not` > `and` > `or`
+
+Examples:
+
+```text
+$.name = "Bob" and $.admin is true
+$.id > 4
+$ is true
+$[] len = 3
+$.items[] len > 0
+$.locations has "A2"
+$.mesaj contains "test"
+$.val type list
+```
 
 ### Tests (Node)
 
 ```bash
 make fleditor-jsonl-smoke
+make fleditor-jsonl-adv-filter-smoke
 ```
 
 ## Hex editor (binary files)

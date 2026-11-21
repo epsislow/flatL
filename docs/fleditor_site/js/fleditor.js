@@ -1,4 +1,4 @@
-/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTextFormat, FleditorCsvParse, FleditorCsvGrid, FleditorJsonlParse, FleditorJsonlUi, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTextFormat, FleditorCsvParse, FleditorCsvGrid, FleditorJsonlParse, FleditorJsonlAdvFilter, FleditorJsonlUi, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
 (function () {
   'use strict';
 
@@ -9,6 +9,7 @@
   const CsvP = FleditorCsvParse;
   const CsvG = FleditorCsvGrid;
   const Jp = FleditorJsonlParse;
+  const Af = typeof FleditorJsonlAdvFilter !== 'undefined' ? FleditorJsonlAdvFilter : null;
   const Ju = FleditorJsonlUi;
   const Txt = FleditorTextFormat;
 
@@ -52,6 +53,7 @@
   const jsonlFindModeBtn = document.getElementById('jsonlFindModeBtn');
   const jsonlSearchInput = document.getElementById('jsonlSearchInput');
   const jsonlSearchCount = document.getElementById('jsonlSearchCount');
+  const jsonlAdvFilterErr = document.getElementById('jsonlAdvFilterErr');
   const jsonlHelpBanner = document.getElementById('jsonlHelpBanner');
   const jsonlHelpLabel = document.getElementById('jsonlHelpLabel');
   const jsonlTooLargeOpenRecords = document.getElementById('jsonlTooLargeOpenRecords');
@@ -1024,8 +1026,12 @@
     jsonlSearchMatches = [];
     jsonlSearchMatchIndex = -1;
     jsonlFindMode = 'select';
-    if (jsonlSearchInput) jsonlSearchInput.value = '';
+    if (jsonlSearchInput) {
+      jsonlSearchInput.value = '';
+      jsonlSearchInput.removeAttribute('aria-invalid');
+    }
     if (jsonlSearchCount) jsonlSearchCount.textContent = '0';
+    clearJsonlAdvFilterError();
     syncJsonlFindModeUi();
     if (jsonlBar) jsonlBar.hidden = true;
     if (jsonlRecordsHost) {
@@ -1112,6 +1118,23 @@
     setDirty(text !== jsonlSession.savedSerialized);
   }
 
+  function clearJsonlAdvFilterError() {
+    if (jsonlAdvFilterErr) {
+      jsonlAdvFilterErr.hidden = true;
+      jsonlAdvFilterErr.textContent = '';
+    }
+    if (jsonlSearchInput) jsonlSearchInput.removeAttribute('aria-invalid');
+  }
+
+  function setJsonlAdvFilterError(msg) {
+    if (jsonlAdvFilterErr) {
+      jsonlAdvFilterErr.hidden = false;
+      jsonlAdvFilterErr.textContent = msg || 'invalid query';
+      jsonlAdvFilterErr.title = msg || 'invalid query';
+    }
+    if (jsonlSearchInput) jsonlSearchInput.setAttribute('aria-invalid', 'true');
+  }
+
   /** True when list is narrowed to match set (Filter or Adv.Filter with non-empty input). */
   function jsonlListIsNarrowed() {
     if (jsonlFindMode !== 'filter' && jsonlFindMode !== 'advfilter') return false;
@@ -1154,7 +1177,8 @@
         title = 'Filter mode: list shows matching lines only. Click to cycle.';
       } else if (jsonlFindMode === 'advfilter') {
         label = 'Adv.Filter';
-        title = 'Adv.Filter mode: path query (substring until Adv.Filter engine lands). Click to cycle.';
+        title =
+          'Adv.Filter: $.field = "x" | $.id < 3 | $.a is null | PATH[] len = N | has / IN / contains / type | and or not. Click to cycle.';
       }
       jsonlFindModeBtn.textContent = label;
       jsonlFindModeBtn.classList.toggle('fleditor-csv-header-btn--active', jsonlFindMode === 'advfilter');
@@ -1440,7 +1464,8 @@
     }
     jsonlSession.lockValue = parsed.value;
     syncJsonlWordWrapUi();
-    const searchQuery = jsonlSearchInput ? jsonlSearchInput.value : '';
+    const searchQuery =
+      jsonlFindMode !== 'advfilter' && jsonlSearchInput ? jsonlSearchInput.value : '';
     if (searchQuery) {
       function expandMatchingBranches(value, path) {
         if (!value || typeof value !== 'object') return;
@@ -1650,22 +1675,59 @@
       : '0';
   }
 
+  function collectJsonlSubstringMatches(q) {
+    const out = [];
+    if (!jsonlSession || !q) return out;
+    for (let i = 0; i < jsonlSession.lines.length; i++) {
+      if (String(jsonlSession.lines[i]).indexOf(q) >= 0) out.push(i);
+    }
+    return out;
+  }
+
+  function collectJsonlAdvFilterMatches(q) {
+    const out = [];
+    if (!jsonlSession || !q) return { ok: true, indices: out };
+    if (!Af || typeof Af.parse !== 'function' || typeof Af.eval !== 'function') {
+      return { ok: false, error: 'Adv.Filter engine not loaded' };
+    }
+    const parsed = Af.parse(q);
+    if (!parsed.ok) return { ok: false, error: parsed.error || 'invalid query', pos: parsed.pos };
+    for (let i = 0; i < jsonlSession.lines.length; i++) {
+      const pl = Jp.parseLine(jsonlSession.lines[i]);
+      if (!pl.ok) continue;
+      if (Af.eval(parsed.ast, pl.value)) out.push(i);
+    }
+    return { ok: true, indices: out };
+  }
+
   function recomputeJsonlSearchMatches() {
     const previousLine = jsonlSession && jsonlSession.selected != null
       ? jsonlSession.selected : -1;
     jsonlSearchMatches = [];
     jsonlSearchMatchIndex = -1;
     if (!jsonlSession || !jsonlSearchInput) {
+      clearJsonlAdvFilterError();
       updateJsonlSearchCount();
       return;
     }
     const q = jsonlSearchInput.value;
     if (!q) {
+      clearJsonlAdvFilterError();
       updateJsonlSearchCount();
       return;
     }
-    for (let i = 0; i < jsonlSession.lines.length; i++) {
-      if (String(jsonlSession.lines[i]).indexOf(q) >= 0) jsonlSearchMatches.push(i);
+    if (jsonlFindMode === 'advfilter') {
+      const res = collectJsonlAdvFilterMatches(q);
+      if (!res.ok) {
+        setJsonlAdvFilterError(res.error);
+        updateJsonlSearchCount();
+        return;
+      }
+      clearJsonlAdvFilterError();
+      jsonlSearchMatches = res.indices;
+    } else {
+      clearJsonlAdvFilterError();
+      jsonlSearchMatches = collectJsonlSubstringMatches(q);
     }
     if (previousLine >= 0) jsonlSearchMatchIndex = jsonlSearchMatches.indexOf(previousLine);
     updateJsonlSearchCount();
@@ -1677,10 +1739,7 @@
     if (!q) return;
     // Rebuild matches in case the selected line was edited since the last search.
     const selected = jsonlSession.selected == null ? -1 : jsonlSession.selected;
-    jsonlSearchMatches = [];
-    for (let i = 0; i < jsonlSession.lines.length; i++) {
-      if (String(jsonlSession.lines[i]).indexOf(q) >= 0) jsonlSearchMatches.push(i);
-    }
+    recomputeJsonlSearchMatches();
     if (!jsonlSearchMatches.length) {
       jsonlSearchMatchIndex = -1;
       updateJsonlSearchCount();
