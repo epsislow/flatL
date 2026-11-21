@@ -49,6 +49,7 @@
   const jsonlPageLabel = document.getElementById('jsonlPageLabel');
   const jsonlPageInput = document.getElementById('jsonlPageInput');
   const jsonlPageTotal = document.getElementById('jsonlPageTotal');
+  const jsonlFindModeBtn = document.getElementById('jsonlFindModeBtn');
   const jsonlSearchInput = document.getElementById('jsonlSearchInput');
   const jsonlSearchCount = document.getElementById('jsonlSearchCount');
   const jsonlHelpBanner = document.getElementById('jsonlHelpBanner');
@@ -166,6 +167,8 @@
   /** @type {number[]} */
   let jsonlSearchMatches = [];
   let jsonlSearchMatchIndex = -1;
+  /** 'search' | 'filter' — Filter shows only matching lines in the list */
+  let jsonlFindMode = 'search';
   let jsonlWordWrapEnabled = false;
   let jsonlPendingDialog = null;
   let jsonlPendingAction = null;
@@ -1020,8 +1023,10 @@
     jsonlSession = null;
     jsonlSearchMatches = [];
     jsonlSearchMatchIndex = -1;
+    jsonlFindMode = 'search';
     if (jsonlSearchInput) jsonlSearchInput.value = '';
     if (jsonlSearchCount) jsonlSearchCount.textContent = '0';
+    syncJsonlFindModeBtn();
     if (jsonlBar) jsonlBar.hidden = true;
     if (jsonlRecordsHost) {
       jsonlRecordsHost.hidden = true;
@@ -1107,11 +1112,54 @@
     setDirty(text !== jsonlSession.savedSerialized);
   }
 
+  function jsonlIsFilterActive() {
+    return jsonlFindMode === 'filter' && !!(jsonlSearchInput && jsonlSearchInput.value);
+  }
+
+  function jsonlListItemCount() {
+    if (!jsonlSession) return 0;
+    return jsonlIsFilterActive() ? jsonlSearchMatches.length : jsonlSession.lines.length;
+  }
+
+  function jsonlPageIndexForLine(lineIndex) {
+    if (jsonlIsFilterActive()) {
+      const mi = jsonlSearchMatches.indexOf(lineIndex);
+      if (mi < 0) return 0;
+      return Math.floor(mi / Jp.LINES_PER_PAGE);
+    }
+    return Math.floor(Math.max(0, lineIndex) / Jp.LINES_PER_PAGE);
+  }
+
+  function jsonlIndicesForCurrentPage() {
+    if (!jsonlSession) return [];
+    if (jsonlIsFilterActive()) {
+      const range = Jp.pageRange(jsonlSession.pageIndex, jsonlSearchMatches.length);
+      return jsonlSearchMatches.slice(range.start, range.end);
+    }
+    const n = jsonlSession.lines.length;
+    const range = Jp.pageRange(jsonlSession.pageIndex, n);
+    const out = [];
+    for (let i = range.start; i < range.end; i++) out.push(i);
+    return out;
+  }
+
+  function syncJsonlFindModeBtn() {
+    if (!jsonlFindModeBtn) return;
+    const filter = jsonlFindMode === 'filter';
+    jsonlFindModeBtn.textContent = filter ? 'Filter' : 'Search';
+    jsonlFindModeBtn.classList.toggle('fleditor-csv-header-btn--active', filter);
+    jsonlFindModeBtn.setAttribute('aria-pressed', filter ? 'true' : 'false');
+    jsonlFindModeBtn.title = filter
+      ? 'Filter mode: list shows matching lines only. Click for Search.'
+      : 'Search mode: Prev/Next through matches. Click for Filter.';
+  }
+
   function updateJsonlBarMeta() {
     if (!jsonlSession || !jsonlPageLabel) return;
-    const n = jsonlSession.lines.length;
+    const n = jsonlListItemCount();
+    const filter = jsonlIsFilterActive();
     if (n <= 0) {
-      jsonlPageLabel.textContent = 'Lines 0 of 0';
+      jsonlPageLabel.textContent = filter ? 'Found 0 of 0' : 'Lines 0 of 0';
       if (jsonlPageInput) jsonlPageInput.value = '1';
       if (jsonlPageTotal) jsonlPageTotal.textContent = '/ 1';
       ['jsonlPagePrev', 'jsonlPageNext'].forEach(function (id) {
@@ -1121,10 +1169,16 @@
       return;
     }
     const range = Jp.pageRange(jsonlSession.pageIndex, n);
-    jsonlPageLabel.textContent =
-      'Lines ' + (range.start + 1) + '\u2013' + range.end + ' of ' + n;
+    if (filter) {
+      jsonlPageLabel.textContent =
+        'Found ' + (range.start + 1) + '\u2013' + range.end + ' of ' + n;
+    } else {
+      jsonlPageLabel.textContent =
+        'Lines ' + (range.start + 1) + '\u2013' + range.end + ' of ' + n;
+    }
     const pageCount = Jp.pageCount(n);
     const pageIndex = Math.max(0, Math.min(jsonlSession.pageIndex, pageCount - 1));
+    jsonlSession.pageIndex = pageIndex;
     if (jsonlPageInput) jsonlPageInput.value = String(pageIndex + 1);
     if (jsonlPageTotal) jsonlPageTotal.textContent = '/ ' + pageCount;
     [
@@ -1145,12 +1199,22 @@
 
   function ensureJsonlSelectionOnPage() {
     if (!jsonlSession) return;
-    const n = jsonlSession.lines.length;
-    if (n <= 0) {
+    if (jsonlSession.lines.length <= 0) {
       jsonlSession.selected = null;
       jsonlSession.panelMode = 'none';
       return;
     }
+    if (jsonlIsFilterActive()) {
+      if (!jsonlSearchMatches.length) return;
+      const range = Jp.pageRange(jsonlSession.pageIndex, jsonlSearchMatches.length);
+      const pageMatches = jsonlSearchMatches.slice(range.start, range.end);
+      if (!pageMatches.length) return;
+      if (jsonlSession.selected == null || pageMatches.indexOf(jsonlSession.selected) < 0) {
+        jsonlSession.selected = pageMatches[0];
+      }
+      return;
+    }
+    const n = jsonlSession.lines.length;
     const range = Jp.pageRange(jsonlSession.pageIndex, n);
     if (jsonlSession.selected == null || jsonlSession.selected < range.start || jsonlSession.selected >= range.end) {
       jsonlSession.selected = range.start;
@@ -1388,13 +1452,13 @@
     // Keep the list viewport stable when an operation rebuilds the rows.
     const previousListScroll = jsonlListHost.querySelector('.fleditor-jsonl-list-scroll');
     const previousScrollTop = previousListScroll ? previousListScroll.scrollTop : 0;
+    recomputeJsonlSearchMatches();
+    const pc = Jp.pageCount(Math.max(1, jsonlListItemCount()));
+    if (jsonlSession.pageIndex >= pc) jsonlSession.pageIndex = Math.max(0, pc - 1);
     ensureJsonlSelectionOnPage();
-    const n = jsonlSession.lines.length;
-    const range = Jp.pageRange(jsonlSession.pageIndex, n);
     Ju.renderLineList(jsonlListHost, {
       lines: jsonlSession.lines,
-      pageStart: range.start,
-      pageEnd: range.end,
+      lineIndices: jsonlIndicesForCurrentPage(),
       selected: jsonlSession.selected,
       onSelect: function (index) {
         if (jsonlSession.selected === index) return;
@@ -1421,8 +1485,6 @@
           } else if (wasSel != null && wasSel > index) {
             jsonlSession.selected = wasSel - 1;
           }
-          const pc = Jp.pageCount(jsonlSession.lines.length);
-          if (jsonlSession.pageIndex >= pc) jsonlSession.pageIndex = Math.max(0, pc - 1);
           renderJsonlRecords();
           recomputeJsonlDirty();
         });
@@ -1435,7 +1497,8 @@
           jsonlSession.selected == null ? jsonlSession.lines.length : jsonlSession.selected + 1;
         jsonlSession.lines.splice(at, 0, '');
         jsonlSession.selected = at;
-        jsonlSession.pageIndex = Math.floor(at / Jp.LINES_PER_PAGE);
+        recomputeJsonlSearchMatches();
+        jsonlSession.pageIndex = jsonlPageIndexForLine(at);
         loadJsonlSelectedIntoPanel();
         renderJsonlRecords();
         recomputeJsonlDirty();
@@ -1447,7 +1510,8 @@
           const at = index + 1;
           jsonlSession.lines.splice(at, 0, copy);
           jsonlSession.selected = at;
-          jsonlSession.pageIndex = Math.floor(at / Jp.LINES_PER_PAGE);
+          recomputeJsonlSearchMatches();
+          jsonlSession.pageIndex = jsonlPageIndexForLine(at);
           loadJsonlSelectedIntoPanel();
           renderJsonlRecords();
           recomputeJsonlDirty();
@@ -1463,7 +1527,8 @@
           jsonlSession.lines[index] = jsonlSession.lines[target];
           jsonlSession.lines[target] = tmp;
           jsonlSession.selected = target;
-          jsonlSession.pageIndex = Math.floor(target / Jp.LINES_PER_PAGE);
+          recomputeJsonlSearchMatches();
+          jsonlSession.pageIndex = jsonlPageIndexForLine(target);
           loadJsonlSelectedIntoPanel();
           renderJsonlRecords();
           recomputeJsonlDirty();
@@ -1486,8 +1551,8 @@
       }
     }
     updateJsonlBarMeta();
+    syncJsonlFindModeBtn();
     renderJsonlDetail();
-    recomputeJsonlSearchMatches();
   }
 
   function setJsonlPanelMode(next) {
@@ -1590,8 +1655,8 @@
     }
     jsonlSearchMatchIndex = idx;
     const lineIndex = jsonlSearchMatches[idx];
-    jsonlSession.pageIndex = Math.floor(lineIndex / Jp.LINES_PER_PAGE);
     jsonlSession.selected = lineIndex;
+    jsonlSession.pageIndex = jsonlPageIndexForLine(lineIndex);
     loadJsonlSelectedIntoPanel();
     renderJsonlRecords();
     // Keep the active search result visible inside the JSONL line-list scroller.
@@ -4567,7 +4632,8 @@
       if (!jsonlSession) return;
       confirmDiscardIfDirty(function () {
         commitJsonlFreeDraftToLines(false);
-        const pc = Jp.pageCount(jsonlSession.lines.length);
+        recomputeJsonlSearchMatches();
+        const pc = Jp.pageCount(Math.max(1, jsonlListItemCount()));
         jsonlSession.pageIndex = Math.max(0, Math.min(page, pc - 1));
         ensureJsonlSelectionOnPage();
         loadJsonlSelectedIntoPanel();
@@ -4593,7 +4659,8 @@
         if (!jsonlSession) return;
         const raw = String(jsonlPageInput.value || '').trim();
         const page = Number(raw);
-        const pageCount = Jp.pageCount(jsonlSession.lines.length);
+        recomputeJsonlSearchMatches();
+        const pageCount = Jp.pageCount(Math.max(1, jsonlListItemCount()));
         if (!/^\d+$/.test(raw) || !Number.isSafeInteger(page) || page < 1 || page > pageCount) {
           updateJsonlBarMeta();
           return;
@@ -4707,9 +4774,43 @@
         else if (mql.addListener) mql.addListener(onChange);
       }
     }
+    if (jsonlFindModeBtn) {
+      jsonlFindModeBtn.addEventListener('click', function () {
+        if (!jsonlSession) return;
+        jsonlFindMode = jsonlFindMode === 'filter' ? 'search' : 'filter';
+        recomputeJsonlSearchMatches();
+        if (jsonlFindMode === 'filter' && jsonlIsFilterActive()) {
+          if (jsonlSession.selected != null && jsonlSearchMatches.indexOf(jsonlSession.selected) >= 0) {
+            jsonlSession.pageIndex = jsonlPageIndexForLine(jsonlSession.selected);
+          } else if (jsonlSearchMatches.length) {
+            jsonlSession.selected = jsonlSearchMatches[0];
+            jsonlSession.pageIndex = 0;
+            loadJsonlSelectedIntoPanel();
+          } else {
+            jsonlSession.pageIndex = 0;
+          }
+        } else if (jsonlSession.selected != null) {
+          jsonlSession.pageIndex = jsonlPageIndexForLine(jsonlSession.selected);
+        }
+        syncJsonlFindModeBtn();
+        renderJsonlRecords();
+      });
+      syncJsonlFindModeBtn();
+    }
     if (jsonlSearchInput) {
       jsonlSearchInput.addEventListener('input', function () {
         recomputeJsonlSearchMatches();
+        if (jsonlFindMode === 'filter' && jsonlSession) {
+          jsonlSession.pageIndex = 0;
+          if (jsonlIsFilterActive() && jsonlSearchMatches.length) {
+            if (jsonlSession.selected == null || jsonlSearchMatches.indexOf(jsonlSession.selected) < 0) {
+              jsonlSession.selected = jsonlSearchMatches[0];
+              loadJsonlSelectedIntoPanel();
+            }
+          }
+          renderJsonlRecords();
+          return;
+        }
         if (jsonlSession && jsonlSession.panelMode === 'lock') renderJsonlLockPanel();
       });
     }

@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=23">
+  <link rel="stylesheet" href="css/fleditor.css?v=24">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -128,9 +128,8 @@
                 <span id="jsonlPageTotal" class="fleditor-jsonl-page-total">/ 1</span>
                 <button type="button" id="jsonlPageNext" title="Next page" aria-label="Next page">&gt;</button>
               </span>
-              <label class="fleditor-jsonl-field">Search
-                <input type="text" id="jsonlSearchInput" size="14" spellcheck="false" autocomplete="off" aria-label="Search lines" />
-              </label>
+              <button type="button" id="jsonlFindModeBtn" class="fleditor-csv-header-btn" title="Toggle Search / Filter" aria-pressed="false">Search</button>
+              <input type="text" id="jsonlSearchInput" class="fleditor-jsonl-search-input" size="14" spellcheck="false" autocomplete="off" aria-label="Search lines" />
               <button type="button" id="jsonlSearchPrev" title="Previous match">Prev</button>
               <span id="jsonlSearchCount" class="fleditor-jsonl-search-count" aria-live="polite">0</span>
               <button type="button" id="jsonlSearchNext" title="Next match">Next</button>
@@ -483,7 +482,7 @@
   <script src="js/fleditor-csv-parse.js?v=6"></script>
   <script src="js/fleditor-csv-grid.js?v=11"></script>
   <script src="js/fleditor-jsonl-parse.js?v=3"></script>
-  <script src="js/fleditor-jsonl-ui.js?v=4"></script>
+  <script src="js/fleditor-jsonl-ui.js?v=5"></script>
   <script src="js/fleditor-project.js?v=7"></script>
   <script src="js/fleditor-layout.js"></script>
   <script src="js/fleditor-version.js"></script>
@@ -491,6 +490,6 @@
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=3"></script>
   <script src="js/fleditor-code-map.js?v=13"></script>
-  <script src="js/fleditor.js?v=77"></script>
+  <script src="js/fleditor.js?v=79"></script>
 </body>
 </html>

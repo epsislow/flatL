@@ -209,8 +209,9 @@
    * @param {HTMLElement} container
    * @param {{
    *   lines: string[],
-   *   pageStart: number,
-   *   pageEnd: number,
+   *   pageStart?: number,
+   *   pageEnd?: number,
+   *   lineIndices?: number[],
    *   selected: number|null,
    *   onSelect: (index: number) => void,
    *   onDelete: (index: number) => void,
@@ -259,7 +260,13 @@
     const list = el('ul', 'fleditor-jsonl-list');
     list.setAttribute('aria-label', 'JSONL lines');
     const Jp = P();
-    for (let i = opts.pageStart; i < opts.pageEnd; i++) {
+    let indices = opts.lineIndices;
+    if (!indices) {
+      indices = [];
+      for (let i = opts.pageStart; i < opts.pageEnd; i++) indices.push(i);
+    }
+    for (let k = 0; k < indices.length; k++) {
+      const i = indices[k];
       const li = el('li', 'fleditor-jsonl-list-item');
       if (opts.selected === i) li.classList.add('fleditor-jsonl-list-item--sel');
       li.setAttribute('role', 'button');
