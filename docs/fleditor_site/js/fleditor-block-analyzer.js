@@ -309,11 +309,13 @@
           ownerType = 'jump'; required = true; target = '#:';
         } else if (!ownerType && (hasGuardOperator(trimmed) || /^~\s*/.test(trimmed)) && !/^\s*(?:jump|call)\b/.test(trimmed)) {
           ownerType = 'guard'; required = false;
+        } else if (!ownerType) {
+          ownerType = 'panic'; required = false;
         }
         if (ownerType) {
-          localSerial += 1;
-          const lineLabelMatch = ownerType === 'guard'
-            ? trimmed.match(/#\\.([A-Za-z][A-Za-z0-9_]*)\\s*$/)
+          if (ownerType !== 'panic') localSerial += 1;
+          const lineLabelMatch = (ownerType === 'guard' || ownerType === 'panic')
+            ? trimmed.match(/#\.([A-Za-z][A-Za-z0-9_]*)\s*$/)
             : null;
           const generated = ownerType === 'guard'
             ? (lineLabelMatch
@@ -321,11 +323,17 @@
                     ? '#or.' + lineLabelMatch[1]
                     : '#or.' + current.name + '.' + lineLabelMatch[1])
                 : '#or.' + current.name + '.' + instructionIndex)
-            : '#local_' + localSerial + '_' + ownerType;
+            : ownerType === 'panic'
+              ? (lineLabelMatch
+                  ? (current.name.startsWith('#panic.')
+                      ? '#panic.' + lineLabelMatch[1]
+                      : '#panic.' + current.name + '.' + lineLabelMatch[1])
+                  : '#panic.' + current.name + '.' + instructionIndex)
+              : '#local_' + localSerial + '_' + ownerType;
           if (target) instruction.text = instruction.text.replace('#:', generated);
           pendingLocal = {
             label: generated,
-            displayName: '#local_' + localSerial + '_' + ownerType,
+            displayName: ownerType === 'panic' ? '#local_' + instructionIndex + '_panic' : '#local_' + localSerial + '_' + ownerType,
             ownerType: ownerType,
             ownerIndent: indent,
             parent: current,
@@ -395,6 +403,7 @@
       } else {
         candidates.push(prefix + block.name + '.' + instruction.index);
         if (lineLabelMatch) candidates.push(prefix + block.name + '.' + lineLabelMatch[1]);
+        if (block.name.startsWith('#panic.') && lineLabelMatch) candidates.push('#panic.' + lineLabelMatch[1]);
         candidates.push('#panic.any');
       }
       for (const candidate of candidates) {
@@ -500,7 +509,7 @@
         const hasModifier = /^[?~]/.test(text);
         const mayPanic = (!hasModifier && (nativeCall || assignment)) || loopCall || jumpCall || callBlock || isGuard;
         if (mayPanic) {
-          const target = findBlock('#panic.any', record);
+          const target = handlerFor(record, block, instruction, 'panic') || findBlock('#panic.any', record);
           if (target) addEdge(edges, edgeMap, { from: block.id, to: target.id, type: 'panic', line: instruction.line });
         }
       });

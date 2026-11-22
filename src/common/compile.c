@@ -455,7 +455,12 @@ static int find_panic_handler(const FgirProgram *prog, const FgirBlock *b, const
     }
     if (ins->line_label[0]) {
         snprintf(lab, sizeof lab, "#panic.%s.%s", b->label, ins->line_label);
-        return find_block_idx(prog, lab);
+        idx = find_block_idx(prog, lab);
+        if (idx >= 0) return idx;
+        if (strncmp(b->label, "#panic.", 7) == 0) {
+            snprintf(lab, sizeof lab, "#panic.%s", ins->line_label);
+            return find_block_idx(prog, lab);
+        }
     }
     return -1;
 }

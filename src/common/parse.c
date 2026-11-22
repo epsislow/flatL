@@ -48,6 +48,7 @@ typedef struct {
     int body_indent;
     int block_index;
     int terminate_on_end;
+    int require_panic_terminal;
 } LocalBlockFrame;
 
 static int append_local_block_terminator(FgirProgram *out, int block_index,
@@ -75,6 +76,20 @@ static int append_local_block_terminator(FgirProgram *out, int block_index,
     snprintf(ins->text, sizeof ins->text, "OK");
     b->instr_count++;
     return 0;
+}
+
+static int validate_local_panic_terminal(const FgirProgram *out, int block_index,
+                                         const char *path, int line_no,
+                                         char *err, size_t err_size) {
+    const FgirBlock *b;
+    FgirInstrKind last;
+    if (block_index < 0 || block_index >= out->block_count) return -1;
+    b = &out->blocks[block_index];
+    last = b->instr_count ? b->instr[b->instr_count - 1].kind : FGIR_RETURN;
+    if (last == FGIR_OK || last == FGIR_FAIL || last == FGIR_JUMP) return 0;
+    snprintf(err, err_size, "%s:%d: local panic handler \"%s\" must end with OK, FAIL, or jump",
+             path, line_no, b->label);
+    return -1;
 }
 
 static void replace_local_token(char *text, const char *label) {
@@ -897,6 +912,8 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 local_frames[local_depth].body_indent = indent;
                 local_frames[local_depth].block_index = local_idx;
                 local_frames[local_depth].terminate_on_end = pending_terminate_on_end;
+                local_frames[local_depth].require_panic_terminal =
+                    strncmp(pending_label, "#panic.", 7) == 0;
                 local_depth++;
                 cur = local_idx;
             } else if (pending_required) {
@@ -914,6 +931,12 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             LocalBlockFrame *frame = &local_frames[local_depth - 1];
             if (frame->terminate_on_end &&
                 append_local_block_terminator(out, frame->block_index, path, line_no,
+                                              err, err_size) != 0) {
+                fclose(f);
+                return -1;
+            }
+            if (frame->require_panic_terminal &&
+                validate_local_panic_terminal(out, frame->block_index, path, line_no,
                                               err, err_size) != 0) {
                 fclose(f);
                 return -1;
@@ -1222,9 +1245,12 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                     wants_local = required = 1;
                 } else if (ins->kind == FGIR_GUARD || ins->line_mod == FGIR_LINE_MOD_TILDE) {
                     kind = "guard"; wants_local = 1;
+                } else {
+                    /* Any ordinary instruction may own an indented infrastructure-panic handler. */
+                    kind = "panic"; wants_local = 1;
                 }
                 if (wants_local) {
-                    local_serial++;
+                    if (!kind || strcmp(kind, "panic") != 0) local_serial++;
                     if (kind && strcmp(kind, "guard") == 0) {
                         char suffix[72];
                         const char *owner = b->label;
@@ -1249,6 +1275,28 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                             memcpy(target, "#or.", 4);
                             memcpy(target + 4, owner, owner_len);
                             memcpy(target + 4 + owner_len, suffix, suffix_len + 1);
+                        }
+                    } else if (kind && strcmp(kind, "panic") == 0) {
+                        char suffix[72];
+                        const char *owner = b->label;
+                        size_t owner_len;
+                        size_t suffix_len;
+                        if (ins->line_label[0] && strncmp(owner, "#panic.", 7) == 0) {
+                            snprintf(target, sizeof target, "#panic.%s", ins->line_label);
+                        } else {
+                            snprintf(suffix, sizeof suffix, ".%s",
+                                     ins->line_label[0] ? ins->line_label : "");
+                            if (!ins->line_label[0]) snprintf(suffix, sizeof suffix, ".%d", ins->index);
+                            owner_len = strlen(owner);
+                            suffix_len = strlen(suffix);
+                            if (owner_len + 8u + suffix_len >= sizeof target) {
+                                snprintf(err, err_size, "%s:%d: owner block label is too long for a local panic handler", path, line_no);
+                                fclose(f);
+                                return -1;
+                            }
+                            memcpy(target, "#panic.", 7);
+                            memcpy(target + 7, owner, owner_len);
+                            memcpy(target + 7 + owner_len, suffix, suffix_len + 1);
                         }
                     } else {
                         int attempts = 0;
@@ -1291,6 +1339,12 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
         LocalBlockFrame *frame = &local_frames[local_depth - 1];
         if (frame->terminate_on_end &&
             append_local_block_terminator(out, frame->block_index, path, line_no,
+                                          err, err_size) != 0) {
+            fclose(f);
+            return -1;
+        }
+        if (frame->require_panic_terminal &&
+            validate_local_panic_terminal(out, frame->block_index, path, line_no,
                                           err, err_size) != 0) {
             fclose(f);
             return -1;

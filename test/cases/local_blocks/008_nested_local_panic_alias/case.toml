@@ -1,0 +1,17 @@
+suite = "local_blocks"
+id = 8
+desc = "nested local panic handlers use short line-label aliases"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 2
+stdout_contains = "outer handler"
+stdout_contains_2 = "nested panic alias handled"
+stdout_not_contains = "unhandled PANIC"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 2
+stdout_contains = "nested panic alias handled"
+stdout_not_contains = "unhandled PANIC"

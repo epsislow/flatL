@@ -1,0 +1,10 @@
+#main
+  raw = 'outer-invalid'
+  str.to_num(raw) -> value  #.outer
+    io.outln('outer handler')
+    bad = 'inner-invalid'
+    str.to_num(bad) -> inner  #.inner
+      io.outln('nested panic alias handled')
+      FAIL
+    FAIL
+  OK

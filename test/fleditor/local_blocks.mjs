@@ -29,6 +29,9 @@ const source = [
   '    false == true',
   "      io.outln('nested guard')",
   '      FAIL',
+  "  str.to_num('bad') -> value  #.badNum",
+  "    io.outln('panic')",
+  '    FAIL',
   '  OK'
 ].join('\n');
 
@@ -43,8 +46,9 @@ const foreachBlock = model.blocks.find((item) => item.displayName === '#local_3_
 const jumpBlock = model.blocks.find((item) => item.displayName === '#local_4_jump');
 const guardBlock = model.blocks.find((item) => item.displayName === '#local_5_guard');
 const nestedGuardBlock = model.blocks.find((item) => item.displayName === '#local_6_guard');
+const panicBlock = block('#panic.#main.badNum');
 
-if (!main || !forBlock || !callBlock || !foreachBlock || !jumpBlock || !guardBlock || !nestedGuardBlock) {
+if (!main || !forBlock || !callBlock || !foreachBlock || !jumpBlock || !guardBlock || !nestedGuardBlock || !panicBlock) {
   throw new Error('local blocks were not represented in Code Map');
 }
 if (!edge(main, forBlock, 'for')) throw new Error('local for edge missing');
@@ -53,6 +57,7 @@ if (!edge(main, foreachBlock, 'foreach')) throw new Error('local foreach edge mi
 if (!edge(main, jumpBlock, 'jump')) throw new Error('local jump edge missing');
 if (!edge(main, guardBlock, 'or')) throw new Error('local guard #or edge missing');
 if (!edge(guardBlock, nestedGuardBlock, 'or')) throw new Error('nested local guard #or edge missing');
+if (!edge(main, panicBlock, 'panic')) throw new Error('local panic edge missing');
 if (forBlock.startLine !== 3 || callBlock.startLine !== 4) throw new Error('local source line mapping is incorrect');
 if (forBlock.kind !== 'local' || callBlock.kind !== 'local') throw new Error('local blocks are not marked synthetic');
 

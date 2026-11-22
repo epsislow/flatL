@@ -1,0 +1,16 @@
+suite = "local_blocks"
+id = 7
+desc = "local panic handler routes by instruction site and terminates without returning"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 2
+stdout_contains = "local panic handled"
+stdout_not_contains = "must not continue"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 2
+stdout_contains = "local panic handled"
+stdout_not_contains = "must not continue"

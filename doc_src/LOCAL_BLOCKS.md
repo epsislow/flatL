@@ -87,7 +87,42 @@ A tilde (`~`) instruction can also use an indented local handler for its logical
 
 The handler is an ordinary `#or` block internally; no new VM failure semantics are introduced.
 
-## 3. Indentation defines the block
+## 3. Local infrastructure-panic handlers (`#panic.<location>`)
+
+An ordinary instruction can own an indented local panic handler. The handler is addressed using the instruction's panic site: its instruction index by default, or its existing `#.lineLabel` when supplied.
+
+```flatL
+#main
+  raw = 'not-a-number'
+  str.to_num(raw) -> value  #.badNum
+    io.outln('Conversion failed at ' + panicLoc())
+    FAIL
+  io.outln('This runs only if conversion succeeds')
+  OK
+```
+
+This is equivalent to a dedicated `#panic.#main.badNum` block. If the instruction has no line label, its generated handler is `#panic.#main.<instruction-index>`.
+
+A local panic handler is terminal: when PANIC routes to it, execution does not return to the faulting instruction or continue in its parent block. It must end explicitly with `OK`, `FAIL`, or `jump`. `return` is forbidden in every panic handler. Unlike local `#or` handlers, local panic handlers do not receive an implicit `OK` at the indentation boundary.
+
+Nested panic handlers can use the existing line-label alias form to keep names short:
+
+```flatL
+#main
+  call #:
+    data = json.parse(raw)  #.parse
+      io.outln('Invalid JSON')
+      FAIL
+    value = str.to_num(data.value)  #.convert
+      io.outln('Invalid number')
+      FAIL
+    return
+  OK
+```
+
+The nested handlers use `#panic.parse` and `#panic.convert`, scoped to the containing panic handler. This reuses the existing `#.` line-label syntax; no new syntax or VM behavior is introduced.
+
+## 4. Indentation defines the block
 
 The first non-blank, non-comment line indented farther than the owner instruction starts the local block. The local block ends when indentation returns to the owner's level or a shallower level.
 
@@ -117,7 +152,7 @@ Blank lines and comments do not end a local block. Local blocks can be nested:
 
 Each `#:` belongs to its own owner instruction and receives a separate generated label.
 
-## 4. Generated labels
+## 5. Generated labels
 
 Ordinary local blocks receive unique internal labels such as:
 
@@ -143,13 +178,13 @@ A local guard handler without a line label uses the existing indexed handler lab
 
 The nested local handlers are named `#or.local_2` and `#or.local_3`, using the same `#.` line-label mechanism as other instructions. No additional syntax is introduced. A guard in an ordinary block with a line label uses `#or.<owner-block>.<line-label>`.
 
-## 5. Code Map
+## 6. Code Map
 
-FLEditor Code Map displays local blocks as separate synthetic nodes. Their displayed names use the `#local_N_<kind>` form. Edges from `call`, `jump`, `for`, `foreach` and guard instructions point to the corresponding local node.
+FLEditor Code Map displays local blocks as separate synthetic nodes. Their displayed names use the `#local_N_<kind>` form. Edges from `call`, `jump`, `for`, `foreach`, guard instructions and statically identifiable panic sites point to the corresponding local node.
 
 Selecting a local node navigates to the original indented source block, not to generated code. Nested local blocks are represented as separate nodes and retain their source locations.
 
-## 6. Compilation and runtime
+## 7. Compilation and runtime
 
 Local blocks are expanded by the compiler into ordinary FlatL block labels before normal block resolution and bytecode generation. The generated blocks use the existing block directory, call stack, loop stack, jump handling and `#or` handler lookup.
 

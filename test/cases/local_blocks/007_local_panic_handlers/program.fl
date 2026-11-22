@@ -1,0 +1,7 @@
+#main
+  raw = 'not-a-number'
+  str.to_num(raw) -> value  #.badNum
+    io.outln('local panic handled')
+    FAIL
+  io.outln('must not continue')
+  OK

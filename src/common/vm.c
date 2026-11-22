@@ -354,6 +354,24 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
             *ip = target;
             return 0;
         }
+        /* A line-label inside a panic handler may use the same short alias
+         * convention as nested #or handlers: #panic.<alias>. */
+        if (strncmp(loc, "#panic.", 7) == 0) {
+            const char *last = strrchr(loc, '.');
+            if (last && last[1]) {
+                snprintf(handler, sizeof handler, "#panic.%s", last + 1);
+                if (vm_ip_for_block_label(bc, handler, &target) == 0) {
+                    if (trace) {
+                        char tbuf[VM_PANIC_TRACE_BUFLEN];
+                        snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=%s loc=%s\n",
+                                 reason, handler, loc);
+                        vm_write_stderr(tbuf);
+                    }
+                    *ip = target;
+                    return 0;
+                }
+            }
+        }
     }
 
     if (trace) {
