@@ -213,12 +213,63 @@
       const lines = collectLines(files[path]);
       let current = null;
       let instructionIndex = 0;
+      let localSerial = 0;
+      const localFrames = [];
+      let pendingLocal = null;
+      function indentOf(value) {
+        let width = 0;
+        for (let i = 0; i < value.length; i += 1) {
+          if (value[i] === ' ') width += 1;
+          else if (value[i] === '\t') width += 4;
+          else break;
+        }
+        return width;
+      }
+      function makeLocalBlock(label, displayName, ownerType, line) {
+        const block = {
+          name: label,
+          displayName: displayName,
+          qualifiedName: label,
+          file: path,
+          startLine: line,
+          endLine: line,
+          instructions: [],
+          kind: 'local',
+          ownerType: ownerType
+        };
+        fileRecords[path].blocks.push(block);
+        return block;
+      }
       lines.forEach(function (item) {
         if (item.ignored) return;
         const text = item.text;
-        if (text === text.trim()) {
-          const declared = parseBlockDeclaration(text.trim());
+        const trimmed = text.trim();
+        const indent = indentOf(text);
+        if (!trimmed) return;
+
+        if (pendingLocal) {
+          if (indent > pendingLocal.ownerIndent) {
+            const parent = pendingLocal.parent;
+            const local = makeLocalBlock(pendingLocal.label, pendingLocal.displayName, pendingLocal.ownerType, item.line);
+            local.parentName = parent.name;
+            local.parentLine = pendingLocal.instruction.line;
+            localFrames.push({ parent: parent, parentIndex: pendingLocal.parentIndex, bodyIndent: indent });
+            current = local;
+            instructionIndex = 0;
+          }
+          pendingLocal = null;
+        }
+        while (localFrames.length && indent < localFrames[localFrames.length - 1].bodyIndent) {
+          const frame = localFrames.pop();
+          current = frame.parent;
+          instructionIndex = frame.parentIndex;
+        }
+
+        if (text === trimmed) {
+          const declared = parseBlockDeclaration(trimmed);
           if (declared) {
+            localFrames.length = 0;
+            pendingLocal = null;
             current = { name: declared, file: path, startLine: item.line, endLine: item.line, instructions: [] };
             fileRecords[path].blocks.push(current);
             instructionIndex = 0;
@@ -234,9 +285,48 @@
           return;
         }
         current.endLine = item.line;
-        if (!text.trim()) return;
         instructionIndex += 1;
-        current.instructions.push({ line: item.line, index: instructionIndex, text: text.trim(), mapTargets: item.mapTargets || null });
+        const instruction = { line: item.line, index: instructionIndex, text: trimmed, mapTargets: item.mapTargets || null };
+        current.instructions.push(instruction);
+
+        let ownerType = null;
+        let required = false;
+        let target = null;
+        ['for', 'foreach'].some(function (keyword) {
+          const args = callArguments(trimmed, keyword);
+          if (!args || args.length < 3) return false;
+          if (args[2].replace(/^(['"])(.*)\1$/, '$2').trim() === '#:') {
+            ownerType = keyword;
+            required = true;
+            target = '#:';
+            return true;
+          }
+          return false;
+        });
+        if (!ownerType && /^call\s+#:\s*$/.test(trimmed)) {
+          ownerType = 'call'; required = true; target = '#:';
+        } else if (!ownerType && /^jump\s+#:\s*$/.test(trimmed)) {
+          ownerType = 'jump'; required = true; target = '#:';
+        } else if (!ownerType && (hasGuardOperator(trimmed) || /^~\s*/.test(trimmed)) && !/^\s*(?:jump|call)\b/.test(trimmed)) {
+          ownerType = 'guard'; required = false;
+        }
+        if (ownerType) {
+          localSerial += 1;
+          const generated = ownerType === 'guard'
+            ? '#or.' + current.name + '.' + instructionIndex
+            : '#local_' + localSerial + '_' + ownerType;
+          if (target) instruction.text = instruction.text.replace('#:', generated);
+          pendingLocal = {
+            label: generated,
+            displayName: '#local_' + localSerial + '_' + ownerType,
+            ownerType: ownerType,
+            ownerIndent: indent,
+            parent: current,
+            parentIndex: instructionIndex,
+            instruction: instruction,
+            required: required
+          };
+        }
       });
     });
 

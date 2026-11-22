@@ -24,7 +24,7 @@
   function center(p){return {x:p.x,y:p.y};}
   function measure(ctx, node){
     ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';
-    return Math.max(34,Math.ceil(ctx.measureText(node.kind==='dynamic'?'Dynamic target':node.name).width+4));
+    return Math.max(34,Math.ceil(ctx.measureText(node.kind==='dynamic'?'Dynamic target':(node.displayName||node.name)).width+4));
   }
   // Find the longest forward execution path from the entry block.
   // This becomes the visual spine; other nodes are placed as branches around it.
@@ -166,7 +166,7 @@
     // Branches and the auto-arrange pass can place nodes above or left of the
     // origin. The canvas cannot scroll below zero, so pull the whole graph in.
     containPositions(pos,function(_id,p){return {left:p.x-NODE_R,top:p.y-NODE_R};});
-    const widths=new Map();nodes.forEach(n=>widths.set(n.id,Math.max(30,Math.min(220,n.name.length*7.2))));
+    const widths=new Map();nodes.forEach(n=>widths.set(n.id,Math.max(30,Math.min(220,(n.displayName||n.name).length*7.2))));
     const maxX=Math.max(500,...Array.from(pos.values(),p=>p.x+300)),maxY=Math.max(400,...Array.from(pos.values(),p=>p.y+100));
     return {positions:pos,widths,width:maxX,height:maxY,files:Array.from(new Set(nodes.map(n=>n.file)))};
   }
@@ -496,7 +496,7 @@
     const edgePaths=model.edges.map((e,i)=>({edge:e,index:i,pts:null}));
     function nodeBox(id,p){
       const ring=(nodeRadius.get(id)||{node:NODE_R}).node,node=nodeById.get(id);
-      const label=!node?'':(node.kind==='dynamic'?'Dynamic target':(node.name||''));
+      const label=!node?'':(node.kind==='dynamic'?'Dynamic target':(node.displayName||node.name||''));
       const text=Math.max(28,label.length*7.4),labelAt=ring+8;
       if(activeOrientation==='vertical')return {left:p.x-ring,right:p.x+ring,top:p.y-ring,bottom:p.y+text};
       return {left:p.x-ring,right:p.x+labelAt+text,top:p.y-ring,bottom:p.y+ring};
@@ -554,7 +554,7 @@
       });
       nodes.forEach(n=>{
         const p=positions.get(n.id);if(!p)return;const dynamic=n.kind==='dynamic',selected=selectedNodeId===n.id,connected=!selectedNodeId||selected||model.edges.some(e=>(e.from===selectedNodeId&&e.to===n.id)||(e.to===selectedNodeId&&e.from===n.id));
-        const label=dynamic?'Dynamic target':n.name,ring=nodeRadius.get(n.id)||{node:NODE_R},labelAt=ring.node+8;ctx.save();ctx.globalAlpha=connected?1:.62;
+        const label=dynamic?'Dynamic target':(n.displayName||n.name),ring=nodeRadius.get(n.id)||{node:NODE_R},labelAt=ring.node+8;ctx.save();ctx.globalAlpha=connected?1:.62;
         ctx.beginPath();ctx.arc(p.x,p.y,ring.node,0,Math.PI*2);ctx.fillStyle='#202631';ctx.fill();ctx.lineWidth=selected?3:1.8;ctx.strokeStyle=selected?'#facc15':dynamic?'#d97706':'#8b8b9c';ctx.setLineDash(dynamic?[3,2]:[]);ctx.stroke();ctx.setLineDash([]);
         ctx.font='600 12px ui-monospace, Menlo, Consolas, monospace';ctx.fillStyle='#e4e4e7';ctx.textBaseline='middle';if(activeOrientation==='vertical'){ctx.save();ctx.translate(p.x+labelAt,p.y+2);ctx.rotate(Math.PI/2);ctx.fillText(label,0,0);ctx.restore();}else ctx.fillText(label,p.x+labelAt,p.y+2);
         ctx.restore();
@@ -564,7 +564,7 @@
     function resizeCanvas(){resize();}
     function findNode(pt){
       let best=null,dist=Infinity;
-      nodes.forEach(n=>{const p=positions.get(n.id),d=Math.hypot(pt.x-p.x,pt.y-p.y),label=(n.kind==='dynamic'?'Dynamic target':n.name)||'',ring=nodeRadius.get(n.id)||{node:NODE_R},labelAt=ring.node+8;
+      nodes.forEach(n=>{const p=positions.get(n.id),d=Math.hypot(pt.x-p.x,pt.y-p.y),label=(n.kind==='dynamic'?'Dynamic target':(n.displayName||n.name))||'',ring=nodeRadius.get(n.id)||{node:NODE_R},labelAt=ring.node+8;
         const inLabel=activeOrientation==='vertical'?(Math.abs(pt.x-(p.x+labelAt))<=13&&pt.y>=p.y-8&&pt.y<=p.y+8+label.length*7.5):(pt.x>=p.x+ring.node+2&&pt.x<=p.x+labelAt+6+label.length*7.5&&Math.abs(pt.y-p.y)<=13);
         if((d<ring.node+9||inLabel)&&d<dist){best=n;dist=d;}
       });return best;

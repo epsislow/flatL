@@ -34,6 +34,9 @@ Programs are **not** abstract syntax trees. They are a **flat graph** of **basic
 | `for(ntimes, i, '#loop')` | Fixed-count loop: `i` = `0 … floor(ntimes)-1` (see §1.4) |
 | `-- …` | Full-line comment (from `--` to end of line) |
 | `--<` … `-->` | Block comment (multiple lines; see below) |
+| `call #:` / `jump #:` | Use the immediately following indented local block as the target |
+| `for(..., '#:')` / `foreach(..., '#:')` | Use the immediately following indented local block as the loop body |
+| Guard followed by an indented block | Use that block as the guard's local `#or` handler |
 
 **Comments (v0.2):**
 
@@ -43,6 +46,8 @@ Programs are **not** abstract syntax trees. They are a **flat graph** of **basic
 - Block comments and line comments may appear before blocks, between blocks, or between instructions.
 
 Explicit **`jump #block`** transfers control at compile-time-resolved block entry. Guard failure still uses **`#or.*`** handler blocks (not `jump`).
+
+Local block syntax, indentation boundaries, generated labels and Code Map behavior are described in [Local blocks](./LOCAL_BLOCKS.md).
 
 ### 1.1.1 Language keywords vs native libraries
 

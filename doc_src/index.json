@@ -7,6 +7,11 @@
       "file": "SPECIFICATION.md"
     },
     {
+      "id": "local-blocks",
+      "label": "Local blocks",
+      "file": "LOCAL_BLOCKS.md"
+    },
+    {
       "id": "jump-block-max",
       "label": "Jump entry limits",
       "file": "JUMP_BLOCK_MAX.md"

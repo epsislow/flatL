@@ -1,0 +1,8 @@
+#main
+  false == true
+    false == true
+      io.outln('nested guard')
+      FAIL
+    io.outln('outer handler')
+    FAIL
+  OK

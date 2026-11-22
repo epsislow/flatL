@@ -1,0 +1,4 @@
+#main
+  jump #:
+    io.outln('jumped')
+    OK

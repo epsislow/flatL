@@ -1,0 +1,9 @@
+#main
+  items = ['a', 'b']
+  foreach(items, item, '#:')
+    call #:
+      io.outln(item)
+      return
+    next
+  io.outln('done')
+  OK

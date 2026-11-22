@@ -32,6 +32,52 @@ static int line_starts_with(const char *p, const char *prefix) {
     return strncmp(p, prefix, strlen(prefix)) == 0;
 }
 
+
+static int line_indent_width(const char *line) {
+    int width = 0;
+    while (line && (*line == ' ' || *line == '\t')) {
+        width += (*line == '\t') ? 4 : 1;
+        line++;
+    }
+    return width;
+}
+
+typedef struct {
+    int parent_block;
+    int body_indent;
+} LocalBlockFrame;
+
+static void replace_local_token(char *text, const char *label) {
+    char *p = strstr(text, "#:");
+    if (!p || !label) return;
+    {
+        char tail[FGIR_MAX_LINE];
+        snprintf(tail, sizeof tail, "%s", p + 2);
+        snprintf(p, FGIR_MAX_LINE - (size_t)(p - text), "%s%s", label, tail);
+    }
+}
+
+static int block_label_exists(const FgirProgram *out, const char *label) {
+    int i;
+    for (i = 0; i < out->block_count; i++) {
+        if (strcmp(out->blocks[i].label, label) == 0) return 1;
+    }
+    return 0;
+}
+
+static int append_local_block(FgirProgram *out, const char *label, int *index,
+                              const char *path, int line_no, char *err, size_t err_size) {
+    if (out->block_count >= FGIR_MAX_BLOCKS) {
+        snprintf(err, err_size, "%s:%d: too many blocks (including local blocks)", path, line_no);
+        return -1;
+    }
+    *index = out->block_count++;
+    memset(&out->blocks[*index], 0, sizeof out->blocks[*index]);
+    out->blocks[*index].jump_block_max_override = -1;
+    snprintf(out->blocks[*index].label, sizeof out->blocks[*index].label, "%s", label);
+    return 0;
+}
+
 static int line_is_block_comment_open(const char *p) {
     return line_starts_with(p, "--<");
 }
@@ -711,11 +757,20 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
     int open_fn_sugar_base = -1;
     int schema_cur = -1;
     int hdr;
+    LocalBlockFrame local_frames[64];
+    int local_depth = 0;
+    int local_serial = 0;
+    int pending_local = 0;
+    int pending_required = 0;
+    int pending_owner_indent = 0;
+    int pending_parent_block = -1;
+    char pending_label[FGIR_MAX_LABEL];
 
     if (!path || !out) {
         return -1;
     }
     memset(out, 0, sizeof *out);
+    pending_label[0] = '\0';
     out->main_index = -1;
     flat_func_meta_init(out);
 
@@ -727,6 +782,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
 
     while (fgets(line, sizeof line, f)) {
         char *p;
+        int indent = line_indent_width(line);
         line_no++;
         if (schema_cur >= 0 && (line[0] == ' ' || line[0] == '\t')) {
             FgirSchemaDecl *sd = &out->schemas[schema_cur];
@@ -790,6 +846,39 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
         }
         if (line_is_line_comment(p)) {
             continue;
+        }
+
+        /* Local blocks are delimited only by indentation. Terminal instructions
+         * (next/return/OK/FAIL) remain ordinary instructions inside the block. */
+        if (pending_local) {
+            if (indent > pending_owner_indent) {
+                int local_idx;
+                if (local_depth >= (int)(sizeof local_frames / sizeof local_frames[0])) {
+                    snprintf(err, err_size, "%s:%d: local block nesting is too deep", path, line_no);
+                    fclose(f);
+                    return -1;
+                }
+                if (append_local_block(out, pending_label, &local_idx, path, line_no, err, err_size) != 0) {
+                    fclose(f);
+                    return -1;
+                }
+                local_frames[local_depth].parent_block = pending_parent_block;
+                local_frames[local_depth].body_indent = indent;
+                local_depth++;
+                cur = local_idx;
+            } else if (pending_required) {
+                snprintf(err, err_size, "%s:%d: %s requires an indented local block", path, line_no,
+                         pending_label);
+                fclose(f);
+                return -1;
+            }
+            pending_local = 0;
+            pending_required = 0;
+            pending_label[0] = '\0';
+        }
+        while (local_depth > 0 && indent < local_frames[local_depth - 1].body_indent) {
+            cur = local_frames[local_depth - 1].parent_block;
+            local_depth--;
         }
         if (cur < 0) {
             int sr = try_begin_schema(out, path, line_no, p, &schema_cur, err, err_size);
@@ -1073,7 +1162,78 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 parse_io_bind(ins);
             }
             b->instr_count++;
+
+            /* A literal #: binds the immediately following indented source block.
+             * Guard instructions also accept an indented local #or handler. */
+            {
+                const char *kind = NULL;
+                int wants_local = 0;
+                int required = 0;
+                char target[FGIR_MAX_LABEL];
+                target[0] = '\0';
+                if (ins->kind == FGIR_FOR && strcmp(ins->foreach_block, "#:") == 0) {
+                    kind = "for"; wants_local = required = 1;
+                } else if (ins->kind == FGIR_FOREACH && strcmp(ins->foreach_block, "#:") == 0) {
+                    kind = "foreach"; wants_local = required = 1;
+                } else if ((ins->kind == FGIR_CALL || ins->kind == FGIR_JUMP) &&
+                           strcmp(ins->call_target, "#:") == 0) {
+                    kind = ins->kind == FGIR_CALL ? "call" : "jump";
+                    wants_local = required = 1;
+                } else if (ins->kind == FGIR_GUARD || ins->line_mod == FGIR_LINE_MOD_TILDE) {
+                    kind = "guard"; wants_local = 1;
+                }
+                if (wants_local) {
+                    local_serial++;
+                    if (kind && strcmp(kind, "guard") == 0) {
+                        char suffix[24];
+                        snprintf(suffix, sizeof suffix, ".%d", ins->index);
+                        if (strlen(b->label) + 4u + strlen(suffix) >= sizeof target) {
+                            snprintf(err, err_size, "%s:%d: owner block label is too long for a local #or handler", path, line_no);
+                            fclose(f);
+                            return -1;
+                        }
+                        {
+                            size_t owner_len = strlen(b->label);
+                            size_t suffix_len = strlen(suffix);
+                            memcpy(target, "#or.", 4);
+                            memcpy(target + 4, b->label, owner_len);
+                            memcpy(target + 4 + owner_len, suffix, suffix_len + 1);
+                        }
+                    } else {
+                        int attempts = 0;
+                        snprintf(target, sizeof target, "#local_%d_%s", local_serial, kind);
+                        while (block_label_exists(out, target) && attempts < FGIR_MAX_BLOCKS) {
+                            local_serial++;
+                            snprintf(target, sizeof target, "#local_%d_%s", local_serial, kind);
+                            attempts++;
+                        }
+                        if (block_label_exists(out, target)) {
+                            snprintf(err, err_size, "%s:%d: cannot generate unique local block label", path, line_no);
+                            fclose(f);
+                            return -1;
+                        }
+                        if (ins->kind == FGIR_FOR || ins->kind == FGIR_FOREACH) {
+                            snprintf(ins->foreach_block, sizeof ins->foreach_block, "%s", target);
+                            replace_local_token(ins->text, target);
+                        } else {
+                            snprintf(ins->call_target, sizeof ins->call_target, "%s", target);
+                            replace_local_token(ins->text, target);
+                        }
+                    }
+                    pending_local = 1;
+                    pending_required = required;
+                    pending_owner_indent = indent;
+                    pending_parent_block = cur;
+                    snprintf(pending_label, sizeof pending_label, "%s", target);
+                }
+            }
         }
+    }
+    if (pending_local && pending_required) {
+        snprintf(err, err_size, "%s:%d: %s requires an indented local block", path, line_no,
+                 pending_label);
+        fclose(f);
+        return -1;
     }
     fclose(f);
 

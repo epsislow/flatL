@@ -1,0 +1,6 @@
+#main
+  for(3, i, '#:')
+    io.outln(i)
+    next
+  io.outln('done')
+  OK

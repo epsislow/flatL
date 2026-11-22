@@ -1,0 +1,18 @@
+suite = "local_blocks"
+id = 2
+desc = "nested foreach and call local blocks"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "a"
+stdout_contains_2 = "b"
+stdout_contains_3 = "done"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "a"
+stdout_contains_2 = "b"
+stdout_contains_3 = "done"

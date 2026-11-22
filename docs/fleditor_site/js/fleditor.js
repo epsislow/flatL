@@ -3972,9 +3972,13 @@
     const cursor = cm.getCursor();
     const line = cursor.line + 1;
     const path = currentOpenPath();
-    const block = codeMapModel.blocks.find(function (item) {
+    const block = codeMapModel.blocks.filter(function (item) {
       return item.file === path && line >= item.startLine && line <= item.endLine;
-    });
+    }).sort(function (a, b) {
+      const spanA = a.endLine - a.startLine;
+      const spanB = b.endLine - b.startLine;
+      return spanA - spanB || b.startLine - a.startLine;
+    })[0];
     return block ? block.id : null;
   }
 

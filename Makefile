@@ -390,6 +390,7 @@ fleditor-examples-smoke:
 
 fleditor-block-map-smoke:
 	$(NODE) test/fleditor/block_analyzer.mjs
+	$(NODE) test/fleditor/local_blocks.mjs
 
 fleditor-wasm-csv-smoke: fleditor-wasm
 	$(NODE) test/fleditor/wasm_csv_smoke.mjs

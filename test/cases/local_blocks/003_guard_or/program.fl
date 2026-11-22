@@ -1,0 +1,6 @@
+#main
+  false == true
+    io.outln('guard failed')
+    FAIL
+  io.outln('after')
+  OK

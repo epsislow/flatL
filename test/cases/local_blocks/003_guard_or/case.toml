@@ -1,0 +1,14 @@
+suite = "local_blocks"
+id = 3
+desc = "indented guard body becomes a local #or handler"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 2
+stdout_contains = "guard failed"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 2
+stdout_contains = "guard failed"
