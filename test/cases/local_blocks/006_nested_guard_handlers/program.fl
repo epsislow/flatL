@@ -1,0 +1,11 @@
+#main
+  p = [{"id":1,"price":20},{"id":2,"price":50},{"id":3,"price":80}]
+  found = json.find(p, "$[*].price between 40 to 60", "$[@]")
+  found == 2
+    found == 3
+      io.out('yes')
+    io.out('test')
+    found == 4
+      io.out('not 4')
+  io.out(found)
+  OK

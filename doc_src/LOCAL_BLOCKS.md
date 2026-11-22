@@ -72,6 +72,8 @@ A guard followed by an indented block uses that block as the guard's local `#or`
 
 If the guard succeeds, execution continues in the parent block and skips the handler. If the guard fails, execution transfers to the generated handler block using the existing `#or` behavior.
 
+When a local guard handler reaches the end of its indented source block without executing an explicit terminal instruction, the compiler adds an implicit `OK` at that block boundary. This prevents execution from falling through into the next generated handler block. An explicit `next`, `return`, `OK`, `FAIL` or jump keeps its normal behavior; these instructions still do not define the indentation boundary.
+
 A tilde (`~`) instruction can also use an indented local handler for its logical-failure route:
 
 ```flatL

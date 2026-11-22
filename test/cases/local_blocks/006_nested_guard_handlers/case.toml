@@ -1,0 +1,16 @@
+suite = "local_blocks"
+id = 6
+desc = "nested local guard handlers do not fall through into sibling handler blocks"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "yes"
+stdout_not_contains = "not 4"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "yes"
+stdout_not_contains = "not 4"

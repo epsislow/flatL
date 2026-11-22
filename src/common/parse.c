@@ -45,7 +45,36 @@ static int line_indent_width(const char *line) {
 typedef struct {
     int parent_block;
     int body_indent;
+    int block_index;
+    int terminate_on_end;
 } LocalBlockFrame;
+
+static int append_local_block_terminator(FgirProgram *out, int block_index,
+                                         const char *path, int line_no,
+                                         char *err, size_t err_size) {
+    FgirBlock *b;
+    FgirInstr *ins;
+    if (block_index < 0 || block_index >= out->block_count) return -1;
+    b = &out->blocks[block_index];
+    if (b->instr_count > 0) {
+        FgirInstrKind last = b->instr[b->instr_count - 1].kind;
+        if (last == FGIR_OK || last == FGIR_FAIL || last == FGIR_RETURN ||
+            last == FGIR_NEXT || last == FGIR_JUMP || last == FGIR_RAISE_PANIC) {
+            return 0;
+        }
+    }
+    if (b->instr_count >= FGIR_MAX_INSTR) {
+        snprintf(err, err_size, "%s:%d: too many instructions in local handler", path, line_no);
+        return -1;
+    }
+    ins = &b->instr[b->instr_count];
+    memset(ins, 0, sizeof *ins);
+    ins->kind = FGIR_OK;
+    ins->index = b->instr_count + 1;
+    snprintf(ins->text, sizeof ins->text, "OK");
+    b->instr_count++;
+    return 0;
+}
 
 static void replace_local_token(char *text, const char *label) {
     char *p = strstr(text, "#:");
@@ -764,6 +793,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
     int pending_required = 0;
     int pending_owner_indent = 0;
     int pending_parent_block = -1;
+    int pending_terminate_on_end = 0;
     char pending_label[FGIR_MAX_LABEL];
 
     if (!path || !out) {
@@ -864,6 +894,8 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 }
                 local_frames[local_depth].parent_block = pending_parent_block;
                 local_frames[local_depth].body_indent = indent;
+                local_frames[local_depth].block_index = local_idx;
+                local_frames[local_depth].terminate_on_end = pending_terminate_on_end;
                 local_depth++;
                 cur = local_idx;
             } else if (pending_required) {
@@ -874,10 +906,18 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             }
             pending_local = 0;
             pending_required = 0;
+            pending_terminate_on_end = 0;
             pending_label[0] = '\0';
         }
         while (local_depth > 0 && indent < local_frames[local_depth - 1].body_indent) {
-            cur = local_frames[local_depth - 1].parent_block;
+            LocalBlockFrame *frame = &local_frames[local_depth - 1];
+            if (frame->terminate_on_end &&
+                append_local_block_terminator(out, frame->block_index, path, line_no,
+                                              err, err_size) != 0) {
+                fclose(f);
+                return -1;
+            }
+            cur = frame->parent_block;
             local_depth--;
         }
         if (cur < 0) {
@@ -1222,6 +1262,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                     }
                     pending_local = 1;
                     pending_required = required;
+                    pending_terminate_on_end = (kind && strcmp(kind, "guard") == 0);
                     pending_owner_indent = indent;
                     pending_parent_block = cur;
                     snprintf(pending_label, sizeof pending_label, "%s", target);
@@ -1234,6 +1275,17 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                  pending_label);
         fclose(f);
         return -1;
+    }
+    while (local_depth > 0) {
+        LocalBlockFrame *frame = &local_frames[local_depth - 1];
+        if (frame->terminate_on_end &&
+            append_local_block_terminator(out, frame->block_index, path, line_no,
+                                          err, err_size) != 0) {
+            fclose(f);
+            return -1;
+        }
+        cur = frame->parent_block;
+        local_depth--;
     }
     fclose(f);
 
