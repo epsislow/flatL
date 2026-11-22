@@ -1,0 +1,9 @@
+suite = "perf"
+id = 19
+categ = "perf"
+desc = "VCX variable lookup: first of 256 variables"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} vcx_lookup_first_256"
+expect_exit = 0
+stderr_contains = "perf: scenario=vcx_lookup_first_256"
+show_output = true

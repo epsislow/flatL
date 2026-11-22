@@ -152,7 +152,7 @@ help:
 	@echo "  make test         all + run_tests --categ=default (excludes bench/slow)"
 	@echo "  make test-all     all + run_tests --categ=all"
 	@echo "  make test-bench   all + run_tests --categ=bench"
-	@echo "  make test-perf    all + run_tests --categ=perf (informational performance baselines)"
+	@echo "  make test-perf    all + run_tests --each --categ=perf (informational performance baselines)"
 	@echo "  make test-flatl     all + run_tests --flatl --categ=default"
 	@echo "  bin/run_tests -h  filters, -v, -e, -t, --list, -w, --flatl (see doc_src/TOOLCHAIN.md)"
 	@echo ""

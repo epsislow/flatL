@@ -1,0 +1,9 @@
+suite = "perf"
+id = 16
+categ = "perf"
+desc = "Pool scan control: 1024 numeric variables"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} pool_numbers_1024"
+expect_exit = 0
+stderr_contains = "perf: scenario=pool_numbers_1024"
+show_output = true

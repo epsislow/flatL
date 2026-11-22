@@ -524,8 +524,8 @@ flatL/
 | kind | Purpose |
 |------|---------|
 | `files` | Assert paths exist under repo root (`check = "relative/path"`) |
-| `exec` | Run shell command (`cmd`, `expect_exit`, optional `stdout_contains`, `show_output`) |
-| `pipeline` | `source`, `compile`, `run`, `expect_exit`, optional `show_output` — see [TOOLCHAIN.md](./TOOLCHAIN.md) |
+| `exec` | Run shell command (`cmd`, `expect_exit`, optional `stdout_contains`) |
+| `pipeline` | `source`, `compile`, `run`, `expect_exit` — see [TOOLCHAIN.md](./TOOLCHAIN.md) |
 
 Discovery: `bin/run_tests` scans `test/cases/*/*/case.toml`.
 

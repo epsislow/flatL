@@ -1,0 +1,9 @@
+suite = "perf"
+id = 15
+categ = "perf"
+desc = "Pool scan: 1024 live long strings versus numeric control"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} pool_strings_1024"
+expect_exit = 0
+stderr_contains = "perf: scenario=pool_strings_1024"
+show_output = true

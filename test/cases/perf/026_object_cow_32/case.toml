@@ -1,0 +1,9 @@
+suite = "perf"
+id = 26
+categ = "perf"
+desc = "Object COW set: 32 properties"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} object_cow_32"
+expect_exit = 0
+stderr_contains = "perf: scenario=object_cow_32"
+show_output = true

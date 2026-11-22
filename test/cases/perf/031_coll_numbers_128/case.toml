@@ -1,0 +1,9 @@
+suite = "perf"
+id = 31
+categ = "perf"
+desc = "Collection scan control: 128 numeric variables"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} coll_numbers_128"
+expect_exit = 0
+stderr_contains = "perf: scenario=coll_numbers_128"
+show_output = true

@@ -1,0 +1,9 @@
+suite = "perf"
+id = 24
+categ = "perf"
+desc = "List COW set: 1024 elements"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} list_cow_1024"
+expect_exit = 0
+stderr_contains = "perf: scenario=list_cow_1024"
+show_output = true

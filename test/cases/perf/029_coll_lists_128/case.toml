@@ -1,0 +1,9 @@
+suite = "perf"
+id = 29
+categ = "perf"
+desc = "Collection scan: 128 live lists"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} coll_lists_128"
+expect_exit = 0
+stderr_contains = "perf: scenario=coll_lists_128"
+show_output = true

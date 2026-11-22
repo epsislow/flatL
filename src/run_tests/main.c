@@ -544,6 +544,7 @@ int main(int argc, char **argv) {
     int i;
     double session_t0;
     FlatCaseRunOptions run_opts = {0};
+    char captured_output[4096];
     FailEntry *fail_list = NULL;
     int fail_list_count = 0;
     int fail_list_cap = 0;
@@ -584,6 +585,8 @@ int main(int argc, char **argv) {
     session_t0 = flat_time_monotonic_ms();
     run_opts.measure = 1;
     run_opts.inject_tool_time = each && show_time;
+    run_opts.captured_output = captured_output;
+    run_opts.captured_output_size = sizeof captured_output;
 
     printf("Running (%d selected", run_total);
     if (run_total != ncases) {
@@ -632,9 +635,7 @@ int main(int argc, char **argv) {
                 printf("%s%s:%s\n", ANSI_YELLOW, c->suite, ANSI_RESET);
             }
 
-            char captured_output[4096];
-            run_opts.captured_output = c->show_output ? captured_output : NULL;
-            run_opts.captured_output_size = c->show_output ? sizeof captured_output : 0;
+            captured_output[0] = '\0';
             ok = flat_case_run_ex(c, repo, use_flatl, &run_opts, &timing, err, sizeof err) == 0;
             if (ok) {
                 passed++;
@@ -651,10 +652,9 @@ int main(int argc, char **argv) {
             }
             if (c->show_output && captured_output[0] != '\0') {
                 size_t output_len = strlen(captured_output);
-                if (captured_output[output_len - 1] != '\n') {
-                    printf("%s\n", captured_output);
-                } else {
-                    printf("%s", captured_output);
+                printf("%s", captured_output);
+                if (output_len > 0 && captured_output[output_len - 1] != '\n') {
+                    printf("\n");
                 }
                 fflush(stdout);
             }

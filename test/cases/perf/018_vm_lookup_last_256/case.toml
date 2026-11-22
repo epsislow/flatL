@@ -1,0 +1,9 @@
+suite = "perf"
+id = 18
+categ = "perf"
+desc = "VM variable lookup: last of 256 variables"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} vm_lookup_last_256"
+expect_exit = 0
+stderr_contains = "perf: scenario=vm_lookup_last_256"
+show_output = true
