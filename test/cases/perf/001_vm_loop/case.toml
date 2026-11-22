@@ -1,0 +1,8 @@
+suite = "perf"
+id = 1
+categ = "perf"
+desc = "Informational performance baseline: vm_loop (compile and execution measured separately)"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} vm_loop"
+expect_exit = 0
+stderr_contains = "perf: scenario=vm_loop"

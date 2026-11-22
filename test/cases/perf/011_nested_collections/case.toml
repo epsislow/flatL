@@ -1,0 +1,8 @@
+suite = "perf"
+id = 11
+categ = "perf"
+desc = "Informational performance baseline: nested_collections (compile and execution measured separately)"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} nested_collections"
+expect_exit = 0
+stderr_contains = "perf: scenario=nested_collections"

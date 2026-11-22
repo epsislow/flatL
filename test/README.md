@@ -118,3 +118,37 @@ Optional: `test/cases/io/gen_cases.sh` — thin Bash wrapper that execs `bin/io_
 - **Regenerate stubs:** only a C compiler + `make io_generate_tests` (or compile `io_generate_tests` yourself).
 - **Run the full suite:** `run_tests` runs each pipeline line through **`sh`** on Unix and, on Windows, through **`sh.exe` from `PATH`** (use **MSYS2 UCRT64** so GNU `sh` is available). That matches **`VAR=value`**, **`</dev/null`**, **`printf | flvm`**. Pure **cmd.exe** without **`sh.exe` on PATH** is not supported for the full suite — use **WSL** or see [TOOLCHAIN.md — Portability](../doc_src/TOOLCHAIN.md#portability-windows-shell-and-io-tests).
 - **Run programs:** `flc` / `flvm` work like any native binaries; redirect stdin manually if you skip `run_tests`.
+
+### Performance baselines (`cases/perf/`)
+
+The `perf` category contains independent informational microbenchmarks. Each case compiles
+its own FlatL source once, reports compiler time separately, then runs the resulting bytecode
+for `FLAT_PERF_ROUNDS` repetitions and reports best/average VM execution time. Compilation
+is therefore excluded from the execution measurements. No machine-dependent timing threshold
+is used.
+
+Current scenarios:
+
+| ID | Scenario | Focus |
+|----|----------|-------|
+| 001 | `vm_loop` | VM loop / per-op overhead |
+| 002 | `string_churn` | String allocation and pool cleanup |
+| 003 | `collection_pool_churn` | List/object allocation and collection pool cleanup |
+| 004 | `list_push_cow` | Repeated list push / COW |
+| 005 | `list_set_remove_cow` | List set/remove / COW |
+| 006 | `object_set_cow` | Object set / COW |
+| 007–010 | `vars_16` … `vars_1024` | Expression variable lookup at increasing table sizes |
+| 011 | `nested_collections` | Nested list/object access |
+| 012 | `handle_churn` | Repeated collection handle replacement and release |
+
+Run the whole category or an individual case:
+
+```bash
+bin/run_tests --categ=perf -v
+bin/run_tests perf[1] -v
+bin/run_tests perf[7-10] -v
+```
+
+Increase repetitions for more stable comparisons, e.g. `FLAT_PERF_ROUNDS=9 make test-perf`.
+These are diagnostic baselines, not claims that a single scenario isolates one internal function
+perfectly; interpret them alongside profiling and source inspection.

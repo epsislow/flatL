@@ -1,0 +1,8 @@
+suite = "perf"
+id = 12
+categ = "perf"
+desc = "Informational performance baseline: handle_churn (compile and execution measured separately)"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} handle_churn"
+expect_exit = 0
+stderr_contains = "perf: scenario=handle_churn"

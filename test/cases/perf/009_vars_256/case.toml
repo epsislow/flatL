@@ -1,0 +1,8 @@
+suite = "perf"
+id = 9
+categ = "perf"
+desc = "Informational performance baseline: vars_256 (compile and execution measured separately)"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} vars_256"
+expect_exit = 0
+stderr_contains = "perf: scenario=vars_256"

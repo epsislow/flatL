@@ -1,0 +1,8 @@
+suite = "perf"
+id = 5
+categ = "perf"
+desc = "Informational performance baseline: list_set_remove_cow (compile and execution measured separately)"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} list_set_remove_cow"
+expect_exit = 0
+stderr_contains = "perf: scenario=list_set_remove_cow"

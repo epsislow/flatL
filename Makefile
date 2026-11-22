@@ -96,7 +96,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-all test-bench test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
+.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -152,6 +152,7 @@ help:
 	@echo "  make test         all + run_tests --categ=default (excludes bench/slow)"
 	@echo "  make test-all     all + run_tests --categ=all"
 	@echo "  make test-bench   all + run_tests --categ=bench"
+	@echo "  make test-perf    all + run_tests --categ=perf (informational performance baselines)"
 	@echo "  make test-flatl     all + run_tests --flatl --categ=default"
 	@echo "  bin/run_tests -h  filters, -v, -e, -t, --list, -w, --flatl (see doc_src/TOOLCHAIN.md)"
 	@echo ""
@@ -301,6 +302,10 @@ test-all: all
 test-bench: all
 	./$(BINDIR)/run_tests$(EXEEXT) --categ=bench
 	@echo "OK: make test-bench finished"
+
+test-perf: all
+	./$(BINDIR)/run_tests$(EXEEXT) --categ=perf
+	@echo "OK: make test-perf finished"
 
 test-flatl: all
 	./$(BINDIR)/run_tests$(EXEEXT) --flatl --categ=default

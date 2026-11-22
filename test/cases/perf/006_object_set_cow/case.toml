@@ -1,0 +1,8 @@
+suite = "perf"
+id = 6
+categ = "perf"
+desc = "Informational performance baseline: object_set_cow (compile and execution measured separately)"
+kind = "exec"
+cmd = "sh {root}/test/bench/perf_case.sh {root} object_set_cow"
+expect_exit = 0
+stderr_contains = "perf: scenario=object_set_cow"
