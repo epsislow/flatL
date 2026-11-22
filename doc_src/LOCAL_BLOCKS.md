@@ -128,7 +128,20 @@ Ordinary local blocks receive unique internal labels such as:
 
 The exact sequence follows the order in which local blocks are encountered during compilation. Generated labels are implementation details and should not be referenced manually.
 
-A local guard handler uses the existing indexed handler label convention (`#or.<owner-block>.<instruction-index>`) so the current guard compiler and VM behavior remain unchanged. In Code Map it is displayed with a short synthetic name such as `#local_4_guard`.
+A local guard handler without a line label uses the existing indexed handler label convention (`#or.<owner-block>.<instruction-index>`). To keep nested handler names short, a guard inside an `#or` handler can use the existing line-label syntax:
+
+```flatL
+#main
+  found == 2
+    found == 3  #.local_2
+      io.out('yes')
+    io.out('test')
+    found == 4  #.local_3
+      io.out('not 4')
+  OK
+```
+
+The nested local handlers are named `#or.local_2` and `#or.local_3`, using the same `#.` line-label mechanism as other instructions. No additional syntax is introduced. A guard in an ordinary block with a line label uses `#or.<owner-block>.<line-label>`.
 
 ## 5. Code Map
 

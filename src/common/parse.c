@@ -3,6 +3,7 @@
 #include "flat_func.h"
 #include "flat_func_tag.h"
 #include "flat_line_label.h"
+#include "flat_guard.h"
 #include "flat_link.h"
 #include "flat_native.h"
 #include "flat_str.h"
@@ -1225,18 +1226,28 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 if (wants_local) {
                     local_serial++;
                     if (kind && strcmp(kind, "guard") == 0) {
-                        char suffix[24];
-                        snprintf(suffix, sizeof suffix, ".%d", ins->index);
-                        if (strlen(b->label) + 4u + strlen(suffix) >= sizeof target) {
-                            snprintf(err, err_size, "%s:%d: owner block label is too long for a local #or handler", path, line_no);
-                            fclose(f);
-                            return -1;
-                        }
-                        {
-                            size_t owner_len = strlen(b->label);
-                            size_t suffix_len = strlen(suffix);
+                        char suffix[72];
+                        const char *owner = b->label;
+                        size_t owner_len;
+                        size_t suffix_len;
+                        if (ins->line_label[0] && flat_label_is_or_handler(b->label)) {
+                            /* Nested #or handlers can use the existing short alias form. */
+                            snprintf(target, sizeof target, "#or.%s", ins->line_label);
+                        } else {
+                            snprintf(suffix, sizeof suffix, ".%s",
+                                     ins->line_label[0] ? ins->line_label : "");
+                            if (!ins->line_label[0]) {
+                                snprintf(suffix, sizeof suffix, ".%d", ins->index);
+                            }
+                            owner_len = strlen(owner);
+                            suffix_len = strlen(suffix);
+                            if (owner_len + 4u + suffix_len >= sizeof target) {
+                                snprintf(err, err_size, "%s:%d: owner block label is too long for a local #or handler", path, line_no);
+                                fclose(f);
+                                return -1;
+                            }
                             memcpy(target, "#or.", 4);
-                            memcpy(target + 4, b->label, owner_len);
+                            memcpy(target + 4, owner, owner_len);
                             memcpy(target + 4 + owner_len, suffix, suffix_len + 1);
                         }
                     } else {

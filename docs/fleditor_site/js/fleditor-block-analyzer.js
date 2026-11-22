@@ -312,8 +312,15 @@
         }
         if (ownerType) {
           localSerial += 1;
+          const lineLabelMatch = ownerType === 'guard'
+            ? trimmed.match(/#\\.([A-Za-z][A-Za-z0-9_]*)\\s*$/)
+            : null;
           const generated = ownerType === 'guard'
-            ? '#or.' + current.name + '.' + instructionIndex
+            ? (lineLabelMatch
+                ? (current.name.startsWith('#or.')
+                    ? '#or.' + lineLabelMatch[1]
+                    : '#or.' + current.name + '.' + lineLabelMatch[1])
+                : '#or.' + current.name + '.' + instructionIndex)
             : '#local_' + localSerial + '_' + ownerType;
           if (target) instruction.text = instruction.text.replace('#:', generated);
           pendingLocal = {
