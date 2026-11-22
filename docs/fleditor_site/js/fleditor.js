@@ -4720,6 +4720,8 @@
       card.appendChild(summary);
       const body = document.createElement('div');
       body.className = 'fleditor-fbviewer-item-body';
+      const tableWrap = document.createElement('div');
+      tableWrap.className = 'fleditor-fbviewer-instructions-scroll';
       const table = document.createElement('table');
       table.className = 'fleditor-fbviewer-table fleditor-fbviewer-instructions';
       const thead = document.createElement('thead');
@@ -4743,13 +4745,22 @@
             navigateToFbSource(sourceBlock.file, sourceInstruction.line);
           });
         }
-        [instruction.ip, instruction.opcode + ' (0x' + instruction.hex + ')', instruction.operands].forEach(function (value) {
-          const td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        const instructionLabel = instruction.opcode.toLowerCase().replace(/_/g, ' ');
+        const instructionCell = document.createElement('td');
+        instructionCell.textContent = instructionLabel;
+        instructionCell.title = instruction.opcode + ' (0x' + instruction.hex + ')';
+        [instruction.ip, instructionCell, instruction.operands].forEach(function (value) {
+          const td = document.createElement('td');
+          if (value && value.nodeType) td.appendChild(value);
+          else td.textContent = value == null ? '' : String(value);
+          tr.appendChild(td);
         });
+        tr.title = tr.title || (instruction.opcode + ' (0x' + instruction.hex + ')');
         tbody.appendChild(tr);
       });
       table.appendChild(tbody);
-      body.appendChild(table);
+      tableWrap.appendChild(table);
+      body.appendChild(tableWrap);
       card.appendChild(body);
       codeBody.appendChild(card);
     });

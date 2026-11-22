@@ -406,10 +406,27 @@ body {
 .fleditor-fbviewer-native-list li { padding: 0.15rem 0; }
 .fleditor-fbviewer-native { padding: 0.2rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .fleditor-fbviewer-muted { color: var(--fl-text-muted); margin: 0.25rem 0; }
-.fleditor-fbviewer-instructions { min-width: 48rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-.fleditor-fbviewer-instructions td:first-child { width: 5rem; color: var(--fl-text-muted); }
-.fleditor-fbviewer-instructions td:nth-child(2) { width: 13rem; white-space: nowrap; }
-.fleditor-fbviewer-instructions td:last-child { white-space: pre-wrap; }
+.fleditor-fbviewer-instructions-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.fleditor-fbviewer-instructions {
+  min-width: 42rem;
+  width: max-content;
+  table-layout: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+.fleditor-fbviewer-instructions th,
+.fleditor-fbviewer-instructions td {
+  padding-left: 0.45rem;
+  padding-right: 0.45rem;
+}
+.fleditor-fbviewer-instructions td:first-child { width: 3.5rem; color: var(--fl-text-muted); }
+.fleditor-fbviewer-instructions td:nth-child(2) { width: 9rem; white-space: nowrap; }
+.fleditor-fbviewer-instructions td:last-child { white-space: pre; }
 .fleditor-fbviewer-instructions tbody tr { cursor: default; }
 .fleditor-fbviewer-instructions tbody tr.fleditor-fbviewer-instruction--linked { cursor: pointer; }
 .fleditor-fbviewer-instructions tbody tr.fleditor-fbviewer-instruction--linked:hover {
@@ -586,6 +603,14 @@ body.fleditor-resize-active * {
 .fleditor-panel-label-text {
   flex: 1 1 auto;
 }
+
+/* FB Viewer follows the editor label casing instead of the generic panel's
+   uppercase treatment. */
+#fbViewerPanelResize {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 
 .fleditor-panel-label--editor {
   text-transform: none;
