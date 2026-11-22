@@ -278,6 +278,7 @@ typedef enum {
 struct FlatVcxRuntime;
 struct FlatCsvRuntime;
 struct FlatClockRuntime;
+struct FlatHttpRuntime;
 
 typedef struct {
     FlatStringPool *pool;

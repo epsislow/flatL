@@ -1,0 +1,24 @@
+# First transport-level fixture format; FlatL test-runner integration is pending.
+[[http.mock]]
+name = "success"
+method = "GET"
+path = "/ok"
+status = 200
+headers = { "Content-Type" = ["text/plain"], "X-Trace" = ["one", "two"] }
+body = "mock-ok"
+
+[[http.mock]]
+name = "not_found"
+method = "GET"
+path = "/missing"
+status = 404
+headers = { "Content-Type" = ["text/plain"] }
+body = "not found"
+
+[[http.mock]]
+name = "server_error"
+method = "GET"
+path = "/error"
+status = 500
+headers = { "Content-Type" = ["text/plain"] }
+body = "server error"
