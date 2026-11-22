@@ -30,6 +30,7 @@
   const statusEl = document.getElementById('status');
   const bannerEl = document.getElementById('wasmBanner');
   const runBtn = document.getElementById('runBtn');
+  const fbDumpBtn = document.getElementById('fbDumpBtn');
   const codeMapBtn = document.getElementById('codeMapBtn');
   const csvViewToggleBtn = document.getElementById('csvViewToggleBtn');
   const jsonlViewToggleBtn = document.getElementById('jsonlViewToggleBtn');
@@ -122,12 +123,19 @@
   const editorPanelResize = document.getElementById('editorPanelResize');
   const terminalPanelResize = document.getElementById('terminalPanelResize');
   const terminalPanel = document.getElementById('terminalPanel');
+  const fbViewerPanel = document.getElementById('fbViewerPanel');
+  const fbViewerPanelResize = document.getElementById('fbViewerPanelResize');
+  const fbViewerPanelToggle = document.getElementById('fbViewerPanelToggle');
+  const fbViewerContent = document.getElementById('fbViewerContent');
+  const fbViewerConnection = document.getElementById('fbViewerConnection');
+  const fbViewerConnectionText = document.getElementById('fbViewerConnectionText');
   const workPanel = document.getElementById('workPanel');
   const editorWrap = document.getElementById('editorWrap');
   const projectPanelToggle = document.getElementById('projectPanelToggle');
   const terminalPanelToggle = document.getElementById('terminalPanelToggle');
   const dockRestoreProject = document.getElementById('dockRestoreProject');
   const dockRestoreTerminal = document.getElementById('dockRestoreTerminal');
+  const dockRestoreFbViewer = document.getElementById('dockRestoreFbViewer');
   const dockResetLayoutBtn = document.getElementById('dockResetLayoutBtn');
   const resetProjectBtn = document.getElementById('resetProjectBtn');
   const editorEmptyOverlay = document.getElementById('editorEmptyOverlay');
@@ -135,6 +143,10 @@
   let wasmModule = null;
   let wasmLoadPromise = null;
   let running = false;
+  let fbDumping = false;
+  let fbDumpText = null;
+  let fbDumpSourceSnapshot = null;
+  let fbDumpSourceMap = null;
   let term = null;
   let cm = null;
   let codeMapVisible = false;
@@ -317,6 +329,9 @@
     if (dockRestoreTerminal) {
       dockRestoreTerminal.hidden = layoutState.terminalOpen;
     }
+    if (dockRestoreFbViewer) {
+      dockRestoreFbViewer.hidden = layoutState.fbViewerOpen;
+    }
   }
 
   const stackLayoutMq = window.matchMedia('(max-aspect-ratio: 1/1)');
@@ -394,6 +409,20 @@
     }
   }
 
+  function applyFbViewerPanelSizing() {
+    if (!fbViewerPanel) return;
+    if (layoutState.fbViewerOpen) {
+      const pct = Math.round(layoutState.fbViewerFraction * 1000) / 10;
+      fbViewerPanel.style.flexBasis = pct + '%';
+      fbViewerPanel.style.flexGrow = '0';
+      fbViewerPanel.style.flexShrink = '0';
+    } else {
+      fbViewerPanel.style.flexBasis = '';
+      fbViewerPanel.style.flexGrow = '';
+      fbViewerPanel.style.flexShrink = '';
+    }
+  }
+
   function applyLayout() {
     syncLayoutModeClass();
     const stack = isStackLayout();
@@ -423,8 +452,11 @@
     }
     if (terminalPanel && workPanel) {
       terminalPanel.hidden = !layoutState.terminalOpen;
-      workPanel.classList.toggle('fleditor-work--no-terminal', !layoutState.terminalOpen);
+      if (fbViewerPanel) fbViewerPanel.hidden = !layoutState.fbViewerOpen;
+      const anyBottomPanel = layoutState.terminalOpen || layoutState.fbViewerOpen;
+      workPanel.classList.toggle('fleditor-work--no-terminal', !anyBottomPanel);
       applyTerminalPanelSizing(stack);
+      applyFbViewerPanelSizing();
     }
     syncDock();
     scheduleLayoutRefresh();
@@ -469,6 +501,14 @@
 
   function setTerminalOpen(open) {
     layoutState.terminalOpen = !!open;
+    if (layoutState.terminalOpen) layoutState.fbViewerOpen = false;
+    persistLayout();
+    applyLayout();
+  }
+
+  function setFbViewerOpen(open) {
+    layoutState.fbViewerOpen = !!open;
+    if (layoutState.fbViewerOpen) layoutState.terminalOpen = false;
     persistLayout();
     applyLayout();
   }
@@ -2870,6 +2910,11 @@
     if (!running) {
       runBtn.disabled = !open;
     }
+    if (fbDumpBtn) {
+      const flOpen = open && editorViewMode === 'flatl' && /\.fl$/i.test(currentOpenPath());
+      fbDumpBtn.hidden = !flOpen;
+      fbDumpBtn.disabled = !flOpen || running || fbDumping;
+    }
     saveBtn.disabled = !open || !dirty;
   }
 
@@ -2881,6 +2926,7 @@
     updateEditorHeader();
     renderFileTree();
     updateRunSaveButtons();
+    updateFbViewerConnection();
   }
 
   function flushEditorToProject() {
@@ -3376,6 +3422,7 @@
     }
 
     renderNodes(P.buildTree(project), 0);
+    updateFbViewerConnection();
   }
 
   function initFileTreeOpen() {
@@ -4305,8 +4352,223 @@
     };
   }
 
+  function currentProjectSource(path) {
+    const norm = P.normalizePath(path);
+    if (hasOpenFile() && currentOpenPath() === norm && editorViewMode === 'flatl' && cm) {
+      return cm.getValue();
+    }
+    return typeof project.files[norm] === 'string' ? project.files[norm] : null;
+  }
+
+  function fbDumpIsConnected() {
+    if (!fbDumpText || !fbDumpSourceSnapshot) return false;
+    const paths = Object.keys(fbDumpSourceSnapshot);
+    for (let i = 0; i < paths.length; i += 1) {
+      if (currentProjectSource(paths[i]) !== fbDumpSourceSnapshot[paths[i]]) return false;
+    }
+    return true;
+  }
+
+  function updateFbViewerConnection() {
+    if (!fbViewerConnection || !fbViewerConnectionText) return;
+    fbViewerConnection.classList.remove(
+      'fleditor-fbviewer-connection--empty',
+      'fleditor-fbviewer-connection--connected',
+      'fleditor-fbviewer-connection--disconnected'
+    );
+    if (!fbDumpText) {
+      fbViewerConnection.classList.add('fleditor-fbviewer-connection--empty');
+      fbViewerConnectionText.textContent = 'Not compiled';
+      fbViewerConnection.title = 'No bytecode compiled';
+    } else if (fbDumpIsConnected()) {
+      fbViewerConnection.classList.add('fleditor-fbviewer-connection--connected');
+      fbViewerConnectionText.textContent = 'Connected';
+      fbViewerConnection.title = 'Source matches the compiled bytecode. Click an instruction to open its source line.';
+    } else {
+      fbViewerConnection.classList.add('fleditor-fbviewer-connection--disconnected');
+      fbViewerConnectionText.textContent = 'Disconnected';
+      fbViewerConnection.title = 'Source changed after compilation. Source navigation is disabled.';
+    }
+    const connected = fbDumpIsConnected();
+    if (fbViewerContent) {
+      fbViewerContent.querySelectorAll('.fleditor-fbviewer-line--linked').forEach(function (row) {
+        row.disabled = !connected;
+        row.title = connected ? row.dataset.sourceTitle : 'Source changed after compilation';
+      });
+    }
+  }
+
+  function navigateToFbSource(path, lineNumber) {
+    if (!fbDumpIsConnected() || !path || !Number.isFinite(lineNumber)) return;
+    const norm = P.resolveProjectFilePath(project, path);
+    if (!norm || project.files[norm] == null) return;
+    const go = function () {
+      if (currentOpenPath() !== norm) loadFileIntoEditor(norm);
+      if (currentOpenPath() !== norm || editorViewMode !== 'flatl') return;
+      const line = Math.max(0, Math.min(cm.lineCount() - 1, lineNumber - 1));
+      if (blockNavigationMark) {
+        cm.removeLineClass(blockNavigationMark.line, 'background', 'cm-fl-block-target');
+        blockNavigationMark = null;
+      }
+      cm.setCursor({ line: line, ch: 0 });
+      cm.scrollIntoView({ line: line, ch: 0 }, 120);
+      cm.addLineClass(line, 'background', 'cm-fl-block-target');
+      blockNavigationMark = { line: line };
+      window.setTimeout(function () {
+        if (blockNavigationMark && blockNavigationMark.line === line) {
+          cm.removeLineClass(line, 'background', 'cm-fl-block-target');
+          blockNavigationMark = null;
+        }
+      }, 1400);
+      cm.focus();
+    };
+    if (norm !== currentOpenPath() && hasOpenFile() && dirty) {
+      confirmDiscardIfDirty(function () {
+        persistProject();
+        go();
+      });
+      return;
+    }
+    if (norm !== currentOpenPath() && hasOpenFile()) {
+      flushEditorToProject();
+      persistProject();
+    }
+    go();
+  }
+
+  function renderFbDump() {
+    if (!fbViewerContent) return;
+    fbViewerContent.textContent = '';
+    if (!fbDumpText) {
+      const empty = document.createElement('div');
+      empty.className = 'fleditor-fbviewer-empty';
+      const title = document.createElement('strong');
+      title.textContent = 'No .fl source was compiled';
+      const hint = document.createElement('span');
+      hint.textContent = 'Press FbDump to compile and inspect the bytecode.';
+      empty.appendChild(title);
+      empty.appendChild(hint);
+      fbViewerContent.appendChild(empty);
+      return;
+    }
+
+    const connected = fbDumpIsConnected();
+    const lines = fbDumpText.split('\n');
+    const output = document.createElement('div');
+    output.className = 'fleditor-fbviewer-output';
+    let sourceBlock = null;
+    let sourceInstructionIndex = 0;
+    lines.forEach(function (line) {
+      const blockMatch = line.match(/^--- block id=\d+\s+(.*?)\s+\(ip\s/);
+      if (blockMatch) {
+        const label = blockMatch[1].trim();
+        sourceBlock = fbDumpSourceMap && fbDumpSourceMap.blocks.find(function (block) {
+          return block.qualifiedName === label || block.name === label;
+        });
+        sourceInstructionIndex = 0;
+      }
+      const instructionLine = /^\s+ip=\d+\s+[A-Z_]+\(0x[0-9a-f]+\)/i.test(line);
+      let sourceInstruction = null;
+      if (instructionLine) {
+        if (sourceBlock) {
+          sourceInstruction = sourceBlock.instructions[sourceInstructionIndex] || null;
+        }
+        sourceInstructionIndex += 1;
+      }
+      if (connected && sourceInstruction && sourceBlock) {
+        const linkedBlock = sourceBlock;
+        const linkedInstruction = sourceInstruction;
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'fleditor-fbviewer-line fleditor-fbviewer-line--linked';
+        row.textContent = line;
+        row.title = 'Open ' + linkedBlock.file + ':' + linkedInstruction.line;
+        row.dataset.sourceTitle = row.title;
+        row.addEventListener('click', function () {
+          navigateToFbSource(linkedBlock.file, linkedInstruction.line);
+        });
+        output.appendChild(row);
+      } else {
+        const row = document.createElement('div');
+        row.className = 'fleditor-fbviewer-line';
+        row.textContent = line || ' ';
+        output.appendChild(row);
+      }
+    });
+    fbViewerContent.appendChild(output);
+  }
+
+  async function onFbDump() {
+    if (fbDumping || running || !hasOpenFile() || editorViewMode !== 'flatl' || !/\.fl$/i.test(currentOpenPath())) return;
+    setFbViewerOpen(true);
+    if (!wasmModule) {
+      wasmModule = await loadWasm();
+      if (!wasmModule) return;
+    }
+    if (typeof wasmModule._flat_wasm_disassemble_entry !== 'function') {
+      await showAlert('The FLEditor WASM toolchain is outdated. Rebuild it with: make -f Makefile.wasm fleditor-wasm', 'FbDump');
+      return;
+    }
+    fbDumping = true;
+    updateRunSaveButtons();
+    setStatus('compiling bytecode');
+    try {
+      implicitSaveForRun();
+      P.syncToMemfs(wasmModule, project.files);
+      const entryPath = runEntryPath();
+      const errPtr = wasmModule._malloc(4096);
+      const outTextPtr = wasmModule._malloc(4);
+      const outLenPtr = wasmModule._malloc(4);
+      wasmModule.setValue(errPtr, 0, 'i8');
+      wasmModule.setValue(outTextPtr, 0, 'i32');
+      wasmModule.setValue(outLenPtr, 0, 'i32');
+      let rc = -1;
+      try {
+        rc = wasmModule.ccall(
+          'flat_wasm_disassemble_entry',
+          'number',
+          ['string', 'number', 'number', 'number', 'number'],
+          [P.memfsEntryPath(entryPath), outTextPtr, outLenPtr, errPtr, 4096]
+        );
+        if (rc === 0) {
+          const textPtr = wasmModule.getValue(outTextPtr, 'i32');
+          const textLen = wasmModule.getValue(outLenPtr, 'i32');
+          fbDumpText = textPtr ? wasmModule.UTF8ToString(textPtr, textLen) : '';
+          if (textPtr) wasmModule._flat_wasm_free(textPtr);
+          fbDumpSourceMap = FleditorBlockAnalyzer.analyze(project.files, entryPath);
+          fbDumpSourceSnapshot = Object.create(null);
+          fbDumpSourceMap.files.forEach(function (item) {
+            fbDumpSourceSnapshot[item.path] = project.files[item.path];
+          });
+          updateFbViewerConnection();
+          renderFbDump();
+          setStatus('bytecode compiled');
+        } else {
+          const message = wasmModule.UTF8ToString(errPtr) || 'bytecode compilation failed';
+          setStatus('FbDump failed', true);
+          await showAlert(message, 'FbDump');
+        }
+      } finally {
+        wasmModule._free(errPtr);
+        wasmModule._free(outTextPtr);
+        wasmModule._free(outLenPtr);
+      }
+    } catch (e) {
+      setStatus('FbDump failed', true);
+      await showAlert(e && e.message ? e.message : String(e), 'FbDump');
+    } finally {
+      fbDumping = false;
+      updateRunSaveButtons();
+      if (statusEl.textContent === 'bytecode compiled') {
+        window.setTimeout(function () {
+          if (!running && !fbDumping && statusEl.textContent === 'bytecode compiled') setStatus('idle');
+        }, 1200);
+      }
+    }
+  }
+
   async function onRun() {
-    if (running) return;
+    if (running || fbDumping) return;
     if (!hasOpenFile()) {
       return;
     }
@@ -4319,6 +4581,7 @@
     }
     running = true;
     runBtn.disabled = true;
+    if (fbDumpBtn) fbDumpBtn.disabled = true;
     setStatus('compiling');
     setTerminalOpen(true);
     scheduleLayoutRefresh();
@@ -4338,6 +4601,7 @@
       runOutcome = await runProjectEntry(wasmModule, runEntryPath());
       const importReport = P.syncMemfsChangesToProject(wasmModule, project, memfsBeforeRun);
       const importMsg = P.formatMemfsImportReport(importReport);
+      updateFbViewerConnection();
       if (importMsg) {
         P.saveProject(project);
         renderFileTree();
@@ -4346,6 +4610,7 @@
       if (hasOpenFile()) {
         loadFileIntoEditor(currentOpenPath());
       }
+      updateFbViewerConnection();
     } catch (e) {
       term.write('\r\n[error] ' + e.message + '\r\n');
       runOutcome = {
@@ -4555,6 +4820,26 @@
       });
     }
 
+    if (fbViewerPanelResize && workPanel && fbViewerPanel) {
+      fbViewerPanelResize.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0 || !layoutState.fbViewerOpen || isInteractiveTarget(e.target) ||
+            (e.target.closest && e.target.closest('.fleditor-fbviewer-connection'))) return;
+        e.preventDefault();
+        startPointerDrag(
+          e,
+          fbViewerPanelResize,
+          function (_x, clientY) {
+            const workRect = workPanel.getBoundingClientRect();
+            const frac = L.clampFraction((workRect.bottom - clientY) / workRect.height);
+            layoutState.fbViewerFraction = frac;
+            fbViewerPanel.style.flexBasis = (Math.round(frac * 1000) / 10) + '%';
+            scheduleLayoutRefresh();
+          },
+          function () { persistLayout(); }
+        );
+      });
+    }
+
     if (typeof stackLayoutMq.addEventListener === 'function') {
       stackLayoutMq.addEventListener('change', function () {
         const nowStack = isStackLayout();
@@ -4579,11 +4864,17 @@
     if (terminalPanelToggle) {
       terminalPanelToggle.addEventListener('click', () => setTerminalOpen(false));
     }
+    if (fbViewerPanelToggle) {
+      fbViewerPanelToggle.addEventListener('click', () => setFbViewerOpen(false));
+    }
     if (dockRestoreProject) {
       dockRestoreProject.addEventListener('click', () => setProjectOpen(true));
     }
     if (dockRestoreTerminal) {
       dockRestoreTerminal.addEventListener('click', () => setTerminalOpen(true));
+    }
+    if (dockRestoreFbViewer) {
+      dockRestoreFbViewer.addEventListener('click', () => setFbViewerOpen(true));
     }
     if (dockResetLayoutBtn) {
       dockResetLayoutBtn.addEventListener('click', resetLayout);
@@ -5377,6 +5668,7 @@
     window.addEventListener('resize', scheduleLayoutRefresh);
     clearBtn.addEventListener('click', () => term.clear());
     runBtn.addEventListener('click', () => onRun());
+    if (fbDumpBtn) fbDumpBtn.addEventListener('click', () => onFbDump());
     if (codeMapBtn) {
       codeMapBtn.addEventListener('click', function () {
         if (editorViewMode !== 'flatl' || !hasOpenFile()) return;

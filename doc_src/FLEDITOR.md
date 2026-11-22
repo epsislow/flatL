@@ -383,3 +383,10 @@ Output: **`docs/fleditor_site/wasm/`**. See `Makefile.wasm` (`-DFLAT_WASM_BUILD`
 ### Code Map layouts (v1.3)
 
 The Code Map provides three interchangeable layouts: **Vertical** (execution layers from top to bottom), **Horizontal** (execution layers from left to right), and **By file** (blocks grouped by source file). All layouts use the same analyzed nodes and transfers; layout changes never filter transfer edges. Edge colors continue to identify transfer types. Selecting a block highlights its incoming and outgoing transfers, and nodes can be repositioned by dragging. Zoom controls are available in the map toolbar.
+
+
+## FB Viewer
+
+For an open `.fl` source file, the **FbDump** editor action compiles the project entry point and displays the resulting bytecode disassembly in the read-only **FB Viewer** panel. It uses the same disassembler as the `fbdump` command-line tool and does not execute the program. Opening FB Viewer from the panel dock is also possible before any compilation; in that case it prompts the user to press FbDump.
+
+The panel indicates whether the project source files used by the last successful compilation still match the current project. A green **Connected** indicator enables source navigation for mapped instructions. Editing any reachable `.fl` source changes the indicator to red **Disconnected**; the previous disassembly remains visible, but source navigation is disabled until the next successful FbDump.

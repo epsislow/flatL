@@ -16,7 +16,7 @@ WASM_LDFLAGS = \
   -s ASYNCIFY=1 \
   -s ASYNCIFY_STACK_SIZE=1048576 \
   -s 'ASYNCIFY_IMPORTS=[emscripten_sleep]' \
-  -s 'EXPORTED_FUNCTIONS=[_flat_wasm_compile,_flat_wasm_compile_entry,_flat_wasm_run,_flat_wasm_run_source,_flat_wasm_run_entry,_flat_wasm_get_last_termination,_flat_wasm_get_last_panic,_flat_wasm_toolchain_version,_flat_wasm_set_run_limits,_flat_wasm_free,_malloc,_free]' \
+  -s 'EXPORTED_FUNCTIONS=[_flat_wasm_compile,_flat_wasm_compile_entry,_flat_wasm_disassemble_entry,_flat_wasm_run,_flat_wasm_run_source,_flat_wasm_run_entry,_flat_wasm_get_last_termination,_flat_wasm_get_last_panic,_flat_wasm_toolchain_version,_flat_wasm_set_run_limits,_flat_wasm_free,_malloc,_free]' \
   -s 'EXPORTED_RUNTIME_METHODS=[ccall,cwrap,UTF8ToString,getValue,setValue,HEAPU8,Asyncify,FS]' \
   -lm
 
@@ -58,7 +58,7 @@ FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/
            src/common/line_label.c src/common/flat_jump_block.c src/common/native_use.c \
            src/common/flat_native_tag_validate.c
 
-WASM_SRC = src/fleditor_wasm/flat_wasm.c src/fleditor_wasm/flat_wasm_io.c \
+WASM_SRC = src/fleditor_wasm/flat_wasm.c src/fleditor_wasm/flat_wasm_io.c src/common/flat_disasm.c \
            $(FGIR_SRC) $(FB_SRC) $(VM_SRC) $(PORT_SRC)
 
 .PHONY: fleditor-wasm fleditor-wasm-clean

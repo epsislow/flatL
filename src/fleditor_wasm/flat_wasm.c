@@ -1,4 +1,5 @@
 #include "flat_wasm.h"
+#include "flat_disasm.h"
 #include "flat.h"
 #include "fb_format.h"
 #include "flat_link.h"
@@ -154,6 +155,61 @@ int flat_wasm_compile(const char *source, uint8_t **out_fb, size_t *out_len, cha
 int flat_wasm_compile_entry(const char *entry_path, uint8_t **out_fb, size_t *out_len, char *err,
                             size_t err_sz) {
     return compile_linked_entry(entry_path, out_fb, out_len, err, err_sz);
+}
+
+int flat_wasm_disassemble_entry(const char *entry_path, char **out_text, size_t *out_len,
+                                char *err, size_t err_sz) {
+    uint8_t *fb = NULL;
+    size_t fb_len = 0;
+    FlatBytecode bc;
+    FlatDisasmOpts opts;
+    FILE *stream = NULL;
+    char *text = NULL;
+    size_t text_len = 0;
+    int rc = -1;
+
+    if (!entry_path || !out_text || !out_len) {
+        if (err && err_sz) snprintf(err, err_sz, "invalid arguments");
+        return -1;
+    }
+    *out_text = NULL;
+    *out_len = 0;
+    memset(&bc, 0, sizeof bc);
+
+    if (compile_linked_entry(entry_path, &fb, &fb_len, err, err_sz) != 0) {
+        goto done;
+    }
+    if (flat_fb_load_buffer(fb, fb_len, &bc) != 0) {
+        if (err && err_sz) snprintf(err, err_sz, "cannot load compiled bytecode");
+        goto done;
+    }
+    flat_disasm_opts_init(&opts);
+    stream = open_memstream(&text, &text_len);
+    if (!stream) {
+        if (err && err_sz) snprintf(err, err_sz, "cannot create disassembly output");
+        goto done;
+    }
+    if (flat_disasm_print(&bc, stream, &opts) != 0) {
+        if (err && err_sz) snprintf(err, err_sz, "bytecode disassembly failed");
+        goto done;
+    }
+    if (fclose(stream) != 0) {
+        stream = NULL;
+        if (err && err_sz) snprintf(err, err_sz, "cannot finalize disassembly output");
+        goto done;
+    }
+    stream = NULL;
+    *out_text = text;
+    *out_len = text_len;
+    text = NULL;
+    rc = 0;
+
+done:
+    if (stream) fclose(stream);
+    free(text);
+    free(fb);
+    flat_fb_free(&bc);
+    return rc;
 }
 
 static int compile_run_fb(int (*compile_fn)(const char *, uint8_t **, size_t *, char *, size_t),

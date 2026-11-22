@@ -8,6 +8,8 @@
     projectOpen: true,
     terminalOpen: false,
     terminalFraction: 0.35,
+    fbViewerOpen: false,
+    fbViewerFraction: 0.35,
     projectWidthPx: 240,
     stackProjectFraction: 0.28,
   };
@@ -49,6 +51,8 @@
       projectOpen: DEFAULT_LAYOUT.projectOpen,
       terminalOpen: DEFAULT_LAYOUT.terminalOpen,
       terminalFraction: DEFAULT_LAYOUT.terminalFraction,
+      fbViewerOpen: DEFAULT_LAYOUT.fbViewerOpen,
+      fbViewerFraction: DEFAULT_LAYOUT.fbViewerFraction,
       projectWidthPx: DEFAULT_LAYOUT.projectWidthPx,
       stackProjectFraction: DEFAULT_LAYOUT.stackProjectFraction,
       stackTerminalHeightPx: null,
@@ -62,7 +66,12 @@
     if (typeof raw.terminalOpen === 'boolean') {
       out.terminalOpen = raw.terminalOpen;
     }
+    if (typeof raw.fbViewerOpen === 'boolean') {
+      out.fbViewerOpen = raw.fbViewerOpen;
+    }
+    if (out.fbViewerOpen) out.terminalOpen = false;
     out.terminalFraction = clampFraction(raw.terminalFraction);
+    out.fbViewerFraction = clampFraction(raw.fbViewerFraction);
     out.projectWidthPx = clampProjectWidthPx(raw.projectWidthPx);
     out.stackProjectFraction = clampStackProjectFraction(raw.stackProjectFraction);
     if (typeof raw.stackTerminalHeightPx === 'number' && !Number.isNaN(raw.stackTerminalHeightPx)) {

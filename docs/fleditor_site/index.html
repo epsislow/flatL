@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=27">
+  <link rel="stylesheet" href="css/fleditor.css?v=28">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -55,6 +55,7 @@
               <button type="button" id="jsonlViewToggleBtn" class="fleditor-jsonl-view-toggle" hidden title="Open records editor" aria-label="Open records editor">Records</button>
               <button type="button" id="textFormatBtn" hidden title="Line endings and encoding">Format…</button>
               <button type="button" id="runBtn" class="btn-run" title="Run">Run</button>
+              <button type="button" id="fbDumpBtn" class="btn-fbdump" title="Compile and inspect bytecode" disabled>FbDump</button>
             </div>
           </div>
           <div id="csvTableBar" class="fleditor-csv-bar" hidden>
@@ -195,6 +196,25 @@
           </div>
           <div id="terminalHost"></div>
         </section>
+        <section id="fbViewerPanel" class="fleditor-fbviewer-wrap" hidden>
+          <div id="fbViewerPanelResize" class="fleditor-panel-label fleditor-panel-label--resize-ns"
+            title="Drag to resize FB Viewer">
+            <span class="fleditor-panel-label-text">FB Viewer</span>
+            <div class="fleditor-panel-label-actions">
+              <span id="fbViewerConnection" class="fleditor-fbviewer-connection fleditor-fbviewer-connection--empty" title="No bytecode compiled">
+                <span class="fleditor-fbviewer-led" aria-hidden="true"></span>
+                <span id="fbViewerConnectionText">Not compiled</span>
+              </span>
+              <button type="button" id="fbViewerPanelToggle" class="fleditor-panel-toggle" title="Minimize FB Viewer" aria-label="Minimize FB Viewer">[−]</button>
+            </div>
+          </div>
+          <div id="fbViewerContent" class="fleditor-fbviewer-content" aria-label="Read-only bytecode disassembly">
+            <div class="fleditor-fbviewer-empty">
+              <strong>No .fl source was compiled</strong>
+              <span>Press FbDump to compile and inspect the bytecode.</span>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
     <footer class="fleditor-dock" id="panelDock" aria-label="Panel dock">
@@ -203,6 +223,9 @@
       </button>
       <button type="button" id="dockRestoreTerminal" class="fleditor-dock-restore" hidden aria-label="Restore terminal panel">
         <span class="fleditor-dock-restore-mark" aria-hidden="true">[+]</span> Terminal
+      </button>
+      <button type="button" id="dockRestoreFbViewer" class="fleditor-dock-restore" hidden aria-label="Restore FB Viewer">
+        <span class="fleditor-dock-restore-mark" aria-hidden="true">[+]</span> FB Viewer
       </button>
       <span class="fleditor-dock-spacer" aria-hidden="true"></span>
       <button type="button" id="dockResetLayoutBtn" class="fleditor-dock-icon" title="Reset layout" aria-label="Reset layout">↺</button>
@@ -488,12 +511,12 @@
   <script src="js/fleditor-jsonl-adv-filter.js?v=3"></script>
   <script src="js/fleditor-jsonl-ui.js?v=5"></script>
   <script src="js/fleditor-project.js?v=7"></script>
-  <script src="js/fleditor-layout.js"></script>
+  <script src="js/fleditor-layout.js?v=2"></script>
   <script src="js/fleditor-version.js"></script>
   <script src="js/fleditor-theme.js"></script>
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=4"></script>
   <script src="js/fleditor-code-map.js?v=14"></script>
-  <script src="js/fleditor.js?v=83"></script>
+  <script src="js/fleditor.js?v=84"></script>
 </body>
 </html>

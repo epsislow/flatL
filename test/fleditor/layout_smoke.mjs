@@ -31,7 +31,7 @@ class MemStorage {
 }
 
 const d = mergeLayout(null);
-if (d.projectOpen !== true || d.terminalOpen !== false) {
+if (d.projectOpen !== true || d.terminalOpen !== false || d.fbViewerOpen !== false) {
   console.error('layout_smoke: defaults wrong', d);
   process.exit(1);
 }
@@ -42,6 +42,12 @@ if (m.terminalFraction !== 0.6) {
   process.exit(1);
 }
 
+const exclusive = mergeLayout({ terminalOpen: true, fbViewerOpen: true });
+if (exclusive.terminalOpen !== false || exclusive.fbViewerOpen !== true) {
+  console.error('layout_smoke: bottom panels should be mutually exclusive', exclusive);
+  process.exit(1);
+}
+
 const w = mergeLayout({ projectWidthPx: 900, stackProjectFraction: 0.9 });
 if (w.projectWidthPx !== 560 || w.stackProjectFraction !== 0.55) {
   console.error('layout_smoke: size clamp failed', w);
@@ -49,9 +55,9 @@ if (w.projectWidthPx !== 560 || w.stackProjectFraction !== 0.55) {
 }
 
 const store = new MemStorage();
-saveLayout(store, { projectOpen: false, terminalOpen: true });
+saveLayout(store, { projectOpen: false, terminalOpen: false, fbViewerOpen: true, fbViewerFraction: 0.42 });
 const loaded = loadLayout(store);
-if (loaded.projectOpen !== false || loaded.terminalOpen !== true) {
+if (loaded.projectOpen !== false || loaded.terminalOpen !== false || loaded.fbViewerOpen !== true || loaded.fbViewerFraction !== 0.42) {
   console.error('layout_smoke: roundtrip failed', loaded);
   process.exit(1);
 }
@@ -61,7 +67,7 @@ if (store.getItem('flatl-fleditor-layout') != null) {
   console.error('layout_smoke: reset should remove key');
   process.exit(1);
 }
-if (after.terminalOpen !== DEFAULT_LAYOUT.terminalOpen) {
+if (after.terminalOpen !== DEFAULT_LAYOUT.terminalOpen || after.fbViewerOpen !== DEFAULT_LAYOUT.fbViewerOpen) {
   console.error('layout_smoke: reset defaults wrong', after);
   process.exit(1);
 }
