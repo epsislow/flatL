@@ -6,3 +6,4 @@ kind = "exec"
 cmd = "sh {root}/test/bench/perf_case.sh {root} nested_collections"
 expect_exit = 0
 stderr_contains = "perf: scenario=nested_collections"
+show_output = true

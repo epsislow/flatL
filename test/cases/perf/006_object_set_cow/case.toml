@@ -6,3 +6,4 @@ kind = "exec"
 cmd = "sh {root}/test/bench/perf_case.sh {root} object_set_cow"
 expect_exit = 0
 stderr_contains = "perf: scenario=object_set_cow"
+show_output = true

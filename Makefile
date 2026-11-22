@@ -304,7 +304,7 @@ test-bench: all
 	@echo "OK: make test-bench finished"
 
 test-perf: all
-	./$(BINDIR)/run_tests$(EXEEXT) --categ=perf
+	./$(BINDIR)/run_tests$(EXEEXT) --each --categ=perf
 	@echo "OK: make test-perf finished"
 
 test-flatl: all

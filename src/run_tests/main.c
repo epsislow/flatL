@@ -632,6 +632,9 @@ int main(int argc, char **argv) {
                 printf("%s%s:%s\n", ANSI_YELLOW, c->suite, ANSI_RESET);
             }
 
+            char captured_output[4096];
+            run_opts.captured_output = c->show_output ? captured_output : NULL;
+            run_opts.captured_output_size = c->show_output ? sizeof captured_output : 0;
             ok = flat_case_run_ex(c, repo, use_flatl, &run_opts, &timing, err, sizeof err) == 0;
             if (ok) {
                 passed++;
@@ -645,6 +648,15 @@ int main(int argc, char **argv) {
                 progress_on_result(&progress, ok, c, verbose, each, 1, use_flatl, &timing, err);
             } else {
                 progress_on_result(&progress, ok, c, verbose, each, 0, use_flatl, NULL, err);
+            }
+            if (c->show_output && captured_output[0] != '\0') {
+                size_t output_len = strlen(captured_output);
+                if (captured_output[output_len - 1] != '\n') {
+                    printf("%s\n", captured_output);
+                } else {
+                    printf("%s", captured_output);
+                }
+                fflush(stdout);
             }
         }
         progress_finish_line(&progress);

@@ -439,7 +439,7 @@ compile = "{root}/bin/flatl compile -o {tmp}/out.fb {src}"
 run = "printf '' | {root}/bin/flatl run {tmp}/out.fb"
 ```
 
-Pipeline cases may set `stdout_contains` / `stderr_contains`. The runner merges stderr into captured output when executing `run` (`2>&1`), so substring checks usually target the combined stream.
+Cases may set `show_output = true` in `case.toml` to print the command output captured by the runner after that case finishes, whether it passes or fails. The runner currently captures stdout and stderr together, so `show_output` displays the combined stream. By default, captured output remains hidden. Pipeline cases may also set `stdout_contains` / `stderr_contains`; the runner merges stderr into captured output when executing `run` (`2>&1`), so substring checks usually target the combined stream.
 
 ---
 

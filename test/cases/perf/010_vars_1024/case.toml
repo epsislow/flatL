@@ -6,3 +6,4 @@ kind = "exec"
 cmd = "sh {root}/test/bench/perf_case.sh {root} vars_1024"
 expect_exit = 0
 stderr_contains = "perf: scenario=vars_1024"
+show_output = true

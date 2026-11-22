@@ -36,6 +36,7 @@ typedef struct {
     int stdout_contains_extra_count;
     char stdout_must_not_contain[FLAT_CASE_MAX_DESC];
     char stderr_contains[FLAT_CASE_MAX_DESC];
+    int show_output;
 
     char pipeline_compile[FLAT_CASE_MAX_CMD];
     char pipeline_run[FLAT_CASE_MAX_CMD];
@@ -82,6 +83,8 @@ typedef struct {
 typedef struct {
     int inject_tool_time;
     int measure;
+    char *captured_output;
+    size_t captured_output_size;
 } FlatCaseRunOptions;
 
 int flat_case_load(const char *case_toml_path, FlatCase *out);

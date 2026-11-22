@@ -6,3 +6,4 @@ kind = "exec"
 cmd = "sh {root}/test/bench/perf_case.sh {root} collection_pool_churn"
 expect_exit = 0
 stderr_contains = "perf: scenario=collection_pool_churn"
+show_output = true

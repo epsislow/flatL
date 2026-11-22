@@ -124,6 +124,8 @@ static void apply_kv(FlatCase *c, const char *key, char *val) {
         snprintf(c->stdout_must_not_contain, sizeof c->stdout_must_not_contain, "%s", val);
     } else if (strcmp(key, "stderr_contains") == 0) {
         snprintf(c->stderr_contains, sizeof c->stderr_contains, "%s", val);
+    } else if (strcmp(key, "show_output") == 0) {
+        c->show_output = (strcmp(val, "true") == 0 || strcmp(val, "1") == 0);
     } else if (strcmp(key, "source") == 0) {
         snprintf(c->pipeline_source, sizeof c->pipeline_source, "%s", val);
     } else if (strcmp(key, "compile") == 0) {
@@ -396,6 +398,13 @@ static int shell_capture_timed(const char *cmd, int *code, char *out, size_t out
     return rc;
 }
 
+static void expose_captured_output(const FlatCaseRunOptions *opts, const char *out) {
+    if (!opts || !opts->captured_output || opts->captured_output_size == 0) {
+        return;
+    }
+    snprintf(opts->captured_output, opts->captured_output_size, "%s", out ? out : "");
+}
+
 static void timing_finish(FlatCaseTiming *timing, double t_case_start, int measure) {
     if (!timing || !measure) {
         return;
@@ -468,6 +477,9 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
     double t_case = 0.0;
     double t_prep_done = 0.0;
 
+    if (opts && opts->captured_output && opts->captured_output_size > 0) {
+        opts->captured_output[0] = '\0';
+    }
     if (!c || !repo_root) {
         snprintf(err, (size_t)err_size, "invalid arguments");
         return -1;
@@ -515,6 +527,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             timing_finish(timing, t_case, measure);
             return -1;
         }
+        expose_captured_output(opts, out);
         if (code != c->expect_exit) {
             snprintf(err, (size_t)err_size, "exit %d want %d (cmd: %s)", code, c->expect_exit, cmd);
             if (timing && measure) {
@@ -588,6 +601,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
+            expose_captured_output(opts, out);
             if (timing && measure) {
                 parse_flatl_crun_capture(out, timing);
                 if (!timing->have_compile && !timing->have_run) {
@@ -635,6 +649,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
+            expose_captured_output(opts, out);
             if (timing && measure) {
                 timing->compile_ms = compile_ms;
                 timing->have_compile = 1;
@@ -651,6 +666,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
+            expose_captured_output(opts, out);
             if (timing && measure) {
                 timing->run_ms = run_ms;
                 timing->have_run = 1;
@@ -708,6 +724,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             timing_finish(timing, t_case, measure);
             return -1;
         }
+        expose_captured_output(opts, out);
         if (timing && measure) {
             if (use_flatl) {
                 timing->have_compile = 1;
@@ -733,6 +750,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             timing_finish(timing, t_case, measure);
             return -1;
         }
+        expose_captured_output(opts, out);
         if (timing && measure) {
             if (use_flatl) {
                 timing->have_run = 1;
