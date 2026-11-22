@@ -1,0 +1,8 @@
+suite = "fbdump"
+id = 6
+desc = "FNUN disassembly maps native units to assigned blocks"
+kind = "exec"
+
+cmd = "sh -c '{root}/bin/flc -o {tmp}/t.fb {root}/test/cases/func/017_varslots_explicit/program.fl && {root}/bin/fbdump --sections-only {tmp}/t.fb'"
+expect_exit = 0
+stdout_contains = "blocks:"

@@ -296,8 +296,17 @@ static void print_fnun(FILE *out, const FlatBytecode *bc) {
         return;
     }
     for (ui = 0; ui < bc->native_unit_count; ui++) {
-        int di;
+        int di, bi;
         fprintf(out, "  unit %d:\n", ui);
+        fprintf(out, "    blocks:");
+        for (bi = 0; bi < (int)bc->block_count; bi++) {
+            if (bc->block_native_unit && bc->block_native_unit[bi] == (uint8_t)ui) {
+                const char *lab = label_for_block_index(bc, bi);
+                fprintf(out, " id=%" PRIu32, bc->blocks[bi].block_id);
+                if (lab) fprintf(out, ":%s", lab);
+            }
+        }
+        fputc('\n', out);
         for (di = 0; di < bc->native_units[ui].decl_count; di++) {
             fprintf(out, "    %s", bc->native_units[ui].decls[di].module);
             if (bc->native_units[ui].decls[di].alias[0] != '\0') {
@@ -328,28 +337,35 @@ static void print_ffun(FILE *out, const FlatBytecode *bc) {
             exec = label_for_block_index(bc, eb);
         }
         {
-            int ri;
-            uint8_t rc = f->return_count;
-            if (rc == 0) {
-                rc = 1;
-            }
+            int ri, pi;
+            uint8_t rc = f->return_count ? f->return_count : 1;
             fprintf(out, "  [%d] %s params=%u returns=%u vcx_slots=%" PRIu32 "\n", i, f->name,
                     (unsigned)f->param_count, (unsigned)rc, f->func_vcx_slots);
-            fprintf(out, "      return names:");
-            for (ri = 0; ri < (int)rc; ri++) {
-                fprintf(out, " %s", f->return_names[ri][0] ? f->return_names[ri] : f->return_name);
+            for (pi = 0; pi < (int)f->param_count; pi++) {
+                fprintf(out, "      param[%d] type=%s\n", pi,
+                        f->param_has_type[pi] && f->param_type_spec[pi][0]
+                            ? f->param_type_spec[pi] : "(unspecified)");
             }
-            fputc('\n', out);
+            for (ri = 0; ri < (int)rc; ri++) {
+                const char *rn = f->return_names[ri][0] ? f->return_names[ri] : f->return_name;
+                const char *rt = NULL;
+                if (f->return_has_type_arr[ri] && f->return_type_spec_arr[ri][0])
+                    rt = f->return_type_spec_arr[ri];
+                else if (ri == 0 && f->return_has_type && f->return_type_spec[0])
+                    rt = f->return_type_spec;
+                fprintf(out, "      return[%d] name=%s type=%s\n", ri,
+                        rn[0] ? rn : "(unnamed)", rt ? rt : "(unspecified)");
+            }
         }
         fprintf(out, "      impl_block_id=%" PRIu32, f->impl_block_id);
-        if (impl) {
-            fprintf(out, " (%s)", impl);
-        }
-        fprintf(out, " executor_block_id=%" PRIu32, f->executor_block_id);
-        if (exec) {
-            fprintf(out, " (%s)", exec);
-        }
-        fputc('\n', out);
+        if (impl) fprintf(out, " (%s)", impl);
+        fprintf(out, "\n      executor_block_id=%" PRIu32, f->executor_block_id);
+        if (exec) fprintf(out, " (%s)", exec);
+        fprintf(out, "\n      executor_scope=%s\n",
+                f->func_vcx_slots == 0 ? "global-or-default-unique-seed" : "unique");
+        if (f->def_tag_has_section)
+            fprintf(out, "      tag=%s\n",
+                    f->def_tag_canonical[0] ? f->def_tag_canonical : "(empty)");
     }
 }
 

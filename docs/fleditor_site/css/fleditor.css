@@ -342,6 +342,89 @@ body {
   color: var(--fl-text);
 }
 
+
+.fleditor-fbviewer-section {
+  border-bottom: 1px solid var(--fl-border);
+  font-size: 0.82rem;
+}
+.fleditor-fbviewer-section > summary,
+.fleditor-fbviewer-item > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  padding: 0.55rem 0.8rem;
+  color: var(--fl-text);
+  font-weight: 600;
+  background: rgba(255,255,255,0.025);
+}
+.fleditor-fbviewer-section > summary::-webkit-details-marker,
+.fleditor-fbviewer-item > summary::-webkit-details-marker { display: none; }
+.fleditor-fbviewer-section > summary::before,
+.fleditor-fbviewer-item > summary::before {
+  content: "▸";
+  display: inline-block;
+  width: 1.1rem;
+  color: var(--fl-text-muted);
+}
+.fleditor-fbviewer-section[open] > summary::before,
+.fleditor-fbviewer-item[open] > summary::before { content: "▾"; }
+.fleditor-fbviewer-section > summary:hover,
+.fleditor-fbviewer-item > summary:hover { background: rgba(255,255,255,0.055); }
+.fleditor-fbviewer-section-body { padding: 0.45rem 0.8rem 0.7rem; }
+.fleditor-fbviewer-item {
+  margin: 0.35rem 0;
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.fleditor-fbviewer-item > summary {
+  padding: 0.4rem 0.55rem;
+  font-weight: 500;
+  background: var(--fl-bg);
+}
+.fleditor-fbviewer-item-body { padding: 0.4rem 0.65rem; }
+.fleditor-fbviewer-item-body p { margin: 0.35rem 0; }
+.fleditor-fbviewer-table {
+  width: 100%;
+  border-collapse: collapse;
+  font: inherit;
+  text-align: left;
+}
+.fleditor-fbviewer-table th,
+.fleditor-fbviewer-table td {
+  padding: 0.35rem 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  vertical-align: top;
+}
+.fleditor-fbviewer-table th {
+  color: var(--fl-text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.fleditor-fbviewer-table td { overflow-wrap: anywhere; }
+.fleditor-fbviewer-native-list { margin: 0; padding-left: 1.35rem; }
+.fleditor-fbviewer-native-list li { padding: 0.15rem 0; }
+.fleditor-fbviewer-native { padding: 0.2rem 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.fleditor-fbviewer-muted { color: var(--fl-text-muted); margin: 0.25rem 0; }
+.fleditor-fbviewer-instructions { min-width: 48rem; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.fleditor-fbviewer-instructions td:first-child { width: 5rem; color: var(--fl-text-muted); }
+.fleditor-fbviewer-instructions td:nth-child(2) { width: 13rem; white-space: nowrap; }
+.fleditor-fbviewer-instructions td:last-child { white-space: pre-wrap; }
+.fleditor-fbviewer-instructions tbody tr { cursor: default; }
+.fleditor-fbviewer-instructions tbody tr.fleditor-fbviewer-instruction--linked { cursor: pointer; }
+.fleditor-fbviewer-instructions tbody tr.fleditor-fbviewer-instruction--linked:hover {
+  background: rgba(143,207,114,0.12);
+  color: var(--fl-success);
+}
+.fleditor-fbviewer-instructions tbody tr.fleditor-fbviewer-instruction--disconnected {
+  cursor: default;
+  color: var(--fl-text-muted);
+}
+.fleditor-fbviewer-instructions tbody tr.fleditor-fbviewer-instruction--disconnected:hover {
+  background: transparent;
+  color: var(--fl-text-muted);
+}
+.fleditor-fbviewer-code-section > .fleditor-fbviewer-section-body { padding-top: 0.25rem; }
 .fleditor-fbviewer-empty {
   min-height: 100%;
   display: flex;

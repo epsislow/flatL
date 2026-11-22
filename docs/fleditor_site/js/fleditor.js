@@ -145,6 +145,7 @@
   let running = false;
   let fbDumping = false;
   let fbDumpText = null;
+  let fbDumpEntryPath = null;
   let fbDumpSourceSnapshot = null;
   let fbDumpSourceMap = null;
   let term = null;
@@ -4395,6 +4396,11 @@
         row.disabled = !connected;
         row.title = connected ? row.dataset.sourceTitle : 'Source changed after compilation';
       });
+      fbViewerContent.querySelectorAll('.fleditor-fbviewer-instruction--linked').forEach(function (row) {
+        if (!row.dataset.sourceTitle) row.dataset.sourceTitle = row.title;
+        row.classList.toggle('fleditor-fbviewer-instruction--disconnected', !connected);
+        row.title = connected ? row.dataset.sourceTitle : 'Source changed after compilation';
+      });
     }
   }
 
@@ -4439,6 +4445,12 @@
   function renderFbDump() {
     if (!fbViewerContent) return;
     fbViewerContent.textContent = '';
+    const titleEl = document.getElementById('fbViewerTitle');
+    if (titleEl) {
+      const shortName = fbDumpEntryPath ? fbDumpEntryPath.split('/').pop() : '';
+      titleEl.textContent = shortName ? 'FB Viewer — ' + shortName : 'FB Viewer';
+      titleEl.title = fbDumpEntryPath || 'FB Viewer';
+    }
     if (!fbDumpText) {
       const empty = document.createElement('div');
       empty.className = 'fleditor-fbviewer-empty';
@@ -4452,50 +4464,257 @@
       return;
     }
 
-    const connected = fbDumpIsConnected();
     const lines = fbDumpText.split('\n');
-    const output = document.createElement('div');
-    output.className = 'fleditor-fbviewer-output';
-    let sourceBlock = null;
-    let sourceInstructionIndex = 0;
+    const sections = Object.create(null);
+    let current = 'Header';
+    sections[current] = [];
     lines.forEach(function (line) {
-      const blockMatch = line.match(/^--- block id=\d+\s+(.*?)\s+\(ip\s/);
-      if (blockMatch) {
-        const label = blockMatch[1].trim();
-        sourceBlock = fbDumpSourceMap && fbDumpSourceMap.blocks.find(function (block) {
-          return block.qualifiedName === label || block.name === label;
-        });
-        sourceInstructionIndex = 0;
-      }
-      const instructionLine = /^\s+ip=\d+\s+[A-Z_]+\(0x[0-9a-f]+\)/i.test(line);
-      let sourceInstruction = null;
-      if (instructionLine) {
-        if (sourceBlock) {
-          sourceInstruction = sourceBlock.instructions[sourceInstructionIndex] || null;
-        }
-        sourceInstructionIndex += 1;
-      }
-      if (connected && sourceInstruction && sourceBlock) {
-        const linkedBlock = sourceBlock;
-        const linkedInstruction = sourceInstruction;
-        const row = document.createElement('button');
-        row.type = 'button';
-        row.className = 'fleditor-fbviewer-line fleditor-fbviewer-line--linked';
-        row.textContent = line;
-        row.title = 'Open ' + linkedBlock.file + ':' + linkedInstruction.line;
-        row.dataset.sourceTitle = row.title;
-        row.addEventListener('click', function () {
-          navigateToFbSource(linkedBlock.file, linkedInstruction.line);
-        });
-        output.appendChild(row);
+      const heading = line.match(/^===\s*(.*?)\s*===\s*$/);
+      if (heading) {
+        current = heading[1];
+        sections[current] = [];
       } else {
-        const row = document.createElement('div');
-        row.className = 'fleditor-fbviewer-line';
-        row.textContent = line || ' ';
-        output.appendChild(row);
+        sections[current].push(line);
       }
     });
-    fbViewerContent.appendChild(output);
+
+    function makeDetails(label, open, className) {
+      const details = document.createElement('details');
+      details.className = 'fleditor-fbviewer-section' + (className ? ' ' + className : '');
+      details.open = !!open;
+      const summary = document.createElement('summary');
+      summary.textContent = label;
+      details.appendChild(summary);
+      const body = document.createElement('div');
+      body.className = 'fleditor-fbviewer-section-body';
+      details.appendChild(body);
+      fbViewerContent.appendChild(details);
+      return body;
+    }
+    function makeTable(headers, rows, className) {
+      const table = document.createElement('table');
+      table.className = 'fleditor-fbviewer-table' + (className ? ' ' + className : '');
+      const thead = document.createElement('thead');
+      const hr = document.createElement('tr');
+      headers.forEach(function (h) {
+        const th = document.createElement('th');
+        th.textContent = h;
+        hr.appendChild(th);
+      });
+      thead.appendChild(hr);
+      table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      rows.forEach(function (values) {
+        const tr = document.createElement('tr');
+        values.forEach(function (v) {
+          const td = document.createElement('td');
+          if (v && v.nodeType) td.appendChild(v);
+          else td.textContent = v == null ? '' : String(v);
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      return table;
+    }
+    function appendEmpty(body, message) {
+      const p = document.createElement('p');
+      p.className = 'fleditor-fbviewer-muted';
+      p.textContent = message;
+      body.appendChild(p);
+    }
+    function linesFor(name) { return sections[name] || []; }
+
+    // Header metadata.
+    const headerBody = makeDetails('FB Header', false);
+    const headerRows = linesFor('.fb header').map(function (line) {
+      const m = line.match(/^\s*([^:]+):\s*(.*)$/);
+      return m ? [m[1], m[2]] : null;
+    }).filter(Boolean);
+    if (headerRows.length) headerBody.appendChild(makeTable(['Field', 'Value'], headerRows));
+    else appendEmpty(headerBody, 'No header metadata.');
+
+    // Block directory: label first, followed by stable numeric identifiers.
+    const directoryBody = makeDetails('Block Directory', false);
+    const blockRows = [];
+    linesFor('block directory').forEach(function (line) {
+      const m = line.match(/^\s*id=(\d+)\s+ip=(\d+)(?:\s+label=(.*?))?(?:\s+native_unit=(\d+))?\s*$/);
+      if (m) blockRows.push([m[3] || '(anonymous)', m[1], m[2], m[4] == null || m[4] === '255' ? '—' : m[4]]);
+    });
+    if (blockRows.length) directoryBody.appendChild(makeTable(['Label', 'ID', 'IP', 'Native Unit'], blockRows));
+    else appendEmpty(directoryBody, 'No blocks.');
+
+    // FNAT: global optional native declarations.
+    const fnatBody = makeDetails('Optional Natives (FNAT)', false);
+    const fnat = linesFor('optional natives (FNAT)').map(function (line) {
+      return line.trim();
+    }).filter(function (line) { return line && line !== '(none)'; });
+    if (fnat.length) {
+      const list = document.createElement('ul');
+      list.className = 'fleditor-fbviewer-native-list';
+      fnat.forEach(function (decl) {
+        const li = document.createElement('li');
+        li.textContent = decl;
+        list.appendChild(li);
+      });
+      fnatBody.appendChild(list);
+    } else appendEmpty(fnatBody, 'No global optional native declarations.');
+
+    // FNUN: each unit is a declaration set mapped to one or more blocks.
+    const fnunBody = makeDetails('Native Units (FNUN)', false);
+    const fnunNote = document.createElement('p');
+    fnunNote.className = 'fleditor-fbviewer-muted';
+    fnunNote.textContent = 'A Native Unit is a set of optional native declarations assigned to one or more blocks; it is not itself a module or a code block.';
+    fnunBody.appendChild(fnunNote);
+    const fnunLines = linesFor('FNUN');
+    let activeUnit = null;
+    fnunLines.forEach(function (line) {
+      const um = line.match(/^\s*unit\s+(\d+):\s*$/);
+      if (um) {
+        activeUnit = document.createElement('details');
+        activeUnit.className = 'fleditor-fbviewer-item';
+        activeUnit.dataset.unitId = um[1];
+        activeUnit.open = false;
+        const summary = document.createElement('summary');
+        summary.textContent = 'Native Unit ' + um[1];
+        activeUnit.appendChild(summary);
+        const body = document.createElement('div');
+        body.className = 'fleditor-fbviewer-item-body';
+        activeUnit.appendChild(body);
+        fnunBody.appendChild(activeUnit);
+        return;
+      }
+      if (!activeUnit || !line.trim() || line.trim() === '(none)') return;
+      const body = activeUnit.querySelector('.fleditor-fbviewer-item-body');
+      const bm = line.match(/^\s*blocks:(.*)$/);
+      if (bm) {
+        const p = document.createElement('p');
+        const strong = document.createElement('strong');
+        strong.textContent = 'Assigned blocks: ';
+        p.appendChild(strong);
+        const text = bm[1].trim();
+        p.appendChild(document.createTextNode(text ? text.replace(/id=(\d+)(?::([^\s]+))?/g, function (_all, id, label) {
+          return (label || '(anonymous)') + ' [ID ' + id + ']';
+        }) : '(none)'));
+        body.appendChild(p);
+      } else {
+        const item = document.createElement('div');
+        item.className = 'fleditor-fbviewer-native';
+        item.textContent = line.trim();
+        body.appendChild(item);
+      }
+    });
+    if (!fnunBody.querySelector('.fleditor-fbviewer-item')) appendEmpty(fnunBody, 'No native units.');
+
+    // FFUN: metadata is expanded into per-function cards.
+    const ffunBody = makeDetails('Functions (FFUN)', false);
+    const ffunLines = linesFor('FFUN');
+    const ffunNote = document.createElement('p');
+    ffunNote.className = 'fleditor-fbviewer-muted';
+    ffunNote.textContent = 'VCX seed is the initial capacity hint for a unique executor, not a hard limit. Zero means the default seed for a unique executor or no child VCX for a global executor. FFUN stores parameter types but not parameter names.';
+    ffunBody.appendChild(ffunNote);
+    let functionCard = null;
+    let functionBody = null;
+    ffunLines.forEach(function (line) {
+      const fm = line.match(/^\s*\[(\d+)\]\s+(.+?)\s+params=(\d+)\s+returns=(\d+)\s+vcx_slots=(\d+)/);
+      if (fm) {
+        functionCard = document.createElement('details');
+        functionCard.className = 'fleditor-fbviewer-item';
+        functionCard.open = false;
+        const summary = document.createElement('summary');
+        summary.textContent = fm[2] + '  ·  ' + fm[3] + ' params  ·  ' + fm[4] + ' returns';
+        functionCard.appendChild(summary);
+        functionBody = document.createElement('div');
+        functionBody.className = 'fleditor-fbviewer-item-body';
+        functionBody.dataset.params = fm[3];
+        functionBody.dataset.returns = fm[4];
+        functionBody.dataset.vcx = fm[5];
+        functionCard.appendChild(functionBody);
+        ffunBody.appendChild(functionCard);
+        const meta = document.createElement('p');
+        meta.textContent = 'Index: ' + fm[1] + ' · VCX seed: ' + fm[5];
+        functionBody.appendChild(meta);
+        return;
+      }
+      if (!functionBody || !line.trim()) return;
+      const pm = line.match(/^\s*param\[(\d+)\]\s+type=(.*)$/);
+      const rm = line.match(/^\s*return\[(\d+)\]\s+name=(.*?)\s+type=(.*)$/);
+      const impl = line.match(/^\s*impl_block_id=(\d+)(?:\s+\((.*?)\))?/);
+      const exec = line.match(/^\s*executor_block_id=(\d+)(?:\s+\((.*?)\))?/);
+      const scope = line.match(/^\s*executor_scope=(.*)$/);
+      const tag = line.match(/^\s*tag=(.*)$/);
+      const p = document.createElement('p');
+      if (pm) p.textContent = 'Parameter ' + (Number(pm[1]) + 1) + ' · type: ' + pm[2] + ' (parameter names are not stored in FFUN)';
+      else if (rm) p.textContent = 'Return ' + (Number(rm[1]) + 1) + ' · ' + rm[2] + ' · type: ' + rm[3];
+      else if (impl) p.textContent = 'Implementation block: ' + (impl[2] || '(anonymous)') + ' [ID ' + impl[1] + ']';
+      else if (exec) p.textContent = 'Executor block: ' + (exec[2] || '(anonymous)') + ' [ID ' + exec[1] + ']';
+      else if (scope) p.textContent = 'Executor scope: ' + (scope[1] === 'unique' ? 'unique VCX' : 'global or default unique seed');
+      else if (tag) p.textContent = 'Tag: ' + tag[1];
+      else return;
+      functionBody.appendChild(p);
+    });
+    if (!ffunBody.querySelector('.fleditor-fbviewer-item')) appendEmpty(ffunBody, 'No function metadata.');
+
+    // Code: each block is a card with an instruction table. Instruction rows remain
+    // source-linked when the compiled source snapshot is still current.
+    const codeBody = makeDetails('Code', true, 'fleditor-fbviewer-code-section');
+    const blockHeaders = [];
+    let currentBlock = null;
+    lines.forEach(function (line) {
+      const bm = line.match(/^--- block id=(\d+)(?:\s+(.*?))?\s+\(ip\s+(\d+)\.\.(\d+)\)\s+---$/);
+      if (bm) {
+        currentBlock = { id: bm[1], label: bm[2] || '(anonymous)', start: bm[3], end: bm[4], instructions: [] };
+        blockHeaders.push(currentBlock);
+        return;
+      }
+      if (currentBlock) {
+        const im = line.match(/^\s+ip=(\d+)\s+([A-Z_]+)\(0x([0-9a-f]+)\)\s+len=(\d+)(.*)$/i);
+        if (im) currentBlock.instructions.push({ ip: im[1], opcode: im[2], hex: im[3], length: im[4], operands: im[5].trim() });
+      }
+    });
+    blockHeaders.forEach(function (block) {
+      const card = document.createElement('details');
+      card.className = 'fleditor-fbviewer-item fleditor-fbviewer-code-block';
+      card.open = true;
+      const summary = document.createElement('summary');
+      summary.textContent = block.label + '  ·  ID ' + block.id + '  ·  IP ' + block.start + '–' + block.end;
+      card.appendChild(summary);
+      const body = document.createElement('div');
+      body.className = 'fleditor-fbviewer-item-body';
+      const table = document.createElement('table');
+      table.className = 'fleditor-fbviewer-table fleditor-fbviewer-instructions';
+      const thead = document.createElement('thead');
+      const hr = document.createElement('tr');
+      ['IP', 'Instruction', 'Operands / Payload'].forEach(function (h) {
+        const th = document.createElement('th'); th.textContent = h; hr.appendChild(th);
+      });
+      thead.appendChild(hr); table.appendChild(thead);
+      const tbody = document.createElement('tbody');
+      const sourceBlock = fbDumpSourceMap && fbDumpSourceMap.blocks.find(function (candidate) {
+        return candidate.qualifiedName === block.label || candidate.name === block.label;
+      });
+      block.instructions.forEach(function (instruction, index) {
+        const tr = document.createElement('tr');
+        const sourceInstruction = sourceBlock && sourceBlock.instructions[index];
+        if (fbDumpIsConnected() && sourceInstruction && sourceBlock) {
+          tr.className = 'fleditor-fbviewer-instruction--linked';
+          tr.title = 'Open ' + sourceBlock.file + ':' + sourceInstruction.line;
+          tr.dataset.sourceTitle = tr.title;
+          tr.addEventListener('click', function () {
+            navigateToFbSource(sourceBlock.file, sourceInstruction.line);
+          });
+        }
+        [instruction.ip, instruction.opcode + ' (0x' + instruction.hex + ')', instruction.operands].forEach(function (value) {
+          const td = document.createElement('td'); td.textContent = value; tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      body.appendChild(table);
+      card.appendChild(body);
+      codeBody.appendChild(card);
+    });
+    if (!blockHeaders.length) appendEmpty(codeBody, 'No code blocks.');
   }
 
   async function onFbDump() {
@@ -4534,6 +4753,7 @@
           const textPtr = wasmModule.getValue(outTextPtr, 'i32');
           const textLen = wasmModule.getValue(outLenPtr, 'i32');
           fbDumpText = textPtr ? wasmModule.UTF8ToString(textPtr, textLen) : '';
+          fbDumpEntryPath = entryPath;
           if (textPtr) wasmModule._flat_wasm_free(textPtr);
           fbDumpSourceMap = FleditorBlockAnalyzer.analyze(project.files, entryPath);
           fbDumpSourceSnapshot = Object.create(null);
