@@ -15,6 +15,7 @@
 #include "flat_number.h"
 #include "flat_value.h"
 #include "flat_csv_runtime.h"
+#include "flat_clock_runtime.h"
 #include "flat_vcx.h"
 #include "flat_executor.h"
 #include "flat_list_typed.h"
@@ -90,6 +91,7 @@ typedef struct {
     const FlatVmOptions *run_opts;
     FlatVcxRuntime *vcx;
     FlatCsvRuntime *csv;
+    FlatClockRuntime clock;
 } VmState;
 
 static VmState *g_vm_call_instr;
@@ -1128,6 +1130,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.file_tbl = &st->files;
             ctx.vcx = st->vcx;
             ctx.csv = st->csv;
+            ctx.clock = &st->clock;
             ctx.var_slot_types = slot_types;
             ctx.var_has_slot_type = has_types;
             ctx.var_slot_frozen = frozen_flags;
@@ -2106,6 +2109,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.file_tbl = &st->files;
     ctx.vcx = st->vcx;
     ctx.csv = st->csv;
+    ctx.clock = &st->clock;
     ctx.var_slot_types = slot_types;
     ctx.var_has_slot_type = has_types;
     ctx.var_slot_frozen = frozen_flags;

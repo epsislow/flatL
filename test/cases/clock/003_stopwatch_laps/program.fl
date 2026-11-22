@@ -1,0 +1,47 @@
+#main
+  sw = clock.create()
+  mem.infoResId(sw, 'clock') -> kind
+  kind == 'sw'
+  clock.running(sw) -> is_running
+  is_running == false
+  clock.start(sw)
+  clock.running(sw) -> is_running
+  is_running == true
+  clock.lap(sw) -> lap1
+  lap1 >= 0
+  clock.lap(sw) -> lap2
+  lap2 >= 0
+  clock.lapCount(sw) -> count
+  count == 2
+  clock.lapLast(sw) -> last
+  last >= 0
+  clock.lapGet(sw, 0) -> first_total
+  first_total >= 0
+  clock.elapsed(sw) -> elapsed1
+  elapsed1 >= first_total
+  clock.stop(sw)
+  clock.running(sw) -> is_running
+  is_running == false
+  clock.elapsed(sw) -> stopped_elapsed
+  stopped_elapsed >= elapsed1
+  clock.start(sw)
+  clock.elapsed(sw) -> resumed_elapsed
+  resumed_elapsed >= stopped_elapsed
+  clock.lapClear(sw)
+  clock.lapCount(sw) -> count
+  count == 0
+  clock.reset(sw)
+  clock.elapsed(sw) -> reset_elapsed
+  reset_elapsed == 0
+  clock.running(sw) -> is_running
+  is_running == false
+  clock.close(sw)
+  mem.infoResId(sw, 'clock') -> kind
+  kind == 'unknown'
+  sw2 = clock.create()
+  clock.start(sw2)
+  clock.close(sw2)
+  mem.infoResId(sw2, 'clock') -> kind2
+  kind2 == 'unknown'
+  io.outln('clock stopwatch laps ok')
+  OK

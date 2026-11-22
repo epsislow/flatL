@@ -10,6 +10,7 @@
 #include "flat_slot_type.h"
 #include "flat_value.h"
 #include "flat_vcx.h"
+#include "flat_clock_runtime.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -336,7 +337,8 @@ static int info_parse_hint(FlatNativeCtx *ctx, const char *expr, char *hint, siz
 enum {
     INFO_HINT_CSV = 1,
     INFO_HINT_FILE,
-    INFO_HINT_VCX
+    INFO_HINT_VCX,
+    INFO_HINT_CLOCK
 };
 
 static int info_parse_hint_kind(const char *hint) {
@@ -351,6 +353,9 @@ static int info_parse_hint_kind(const char *hint) {
     }
     if (strcmp(hint, "vcx") == 0) {
         return INFO_HINT_VCX;
+    }
+    if (strcmp(hint, "clock") == 0) {
+        return INFO_HINT_CLOCK;
     }
     return 0;
 }
@@ -382,6 +387,10 @@ static int info_res_kind(FlatNativeCtx *ctx, int hint_kind, uint32_t id, const c
         }
         return 0;
     }
+    if (hint_kind == INFO_HINT_CLOCK) {
+        if (flat_clock_stopwatch_live(ctx->clock, id)) *out_kind = "sw";
+        return 0;
+    }
     return 0;
 }
 
@@ -402,6 +411,7 @@ static int info_parse_id_for_hint(int hint_kind, const FlatValue *v, uint32_t *o
         *out_id = (uint32_t)d;
         return 0;
     }
+    if (hint_kind == INFO_HINT_CLOCK && (d < 1.0 || d > (double)FLAT_CLOCK_MAX_STOPWATCHES)) return -1;
     if (d < 1.0) {
         return -1;
     }

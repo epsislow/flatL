@@ -194,6 +194,18 @@ int flat_native_date_run_offset(FlatNativeCtx *ctx);
 
 int flat_native_clock_now(FlatNativeCtx *ctx);
 int flat_native_clock_now_us(FlatNativeCtx *ctx);
+int flat_native_clock_create(FlatNativeCtx *ctx);
+int flat_native_clock_start(FlatNativeCtx *ctx);
+int flat_native_clock_stop(FlatNativeCtx *ctx);
+int flat_native_clock_reset(FlatNativeCtx *ctx);
+int flat_native_clock_elapsed(FlatNativeCtx *ctx);
+int flat_native_clock_running(FlatNativeCtx *ctx);
+int flat_native_clock_lap(FlatNativeCtx *ctx);
+int flat_native_clock_lap_count(FlatNativeCtx *ctx);
+int flat_native_clock_lap_last(FlatNativeCtx *ctx);
+int flat_native_clock_lap_get(FlatNativeCtx *ctx);
+int flat_native_clock_lap_clear(FlatNativeCtx *ctx);
+int flat_native_clock_close(FlatNativeCtx *ctx);
 
 int flat_native_vcx_current(FlatNativeCtx *ctx);
 int flat_native_vcx_isactive(FlatNativeCtx *ctx);

@@ -1,0 +1,5 @@
+#main
+  sw = clock.create()
+  clock.close(sw)
+  clock.elapsed(sw)
+  OK

@@ -75,6 +75,18 @@ static void register_embedded_date(void) {
 static void register_embedded_clock(void) {
     flat_native_plugin_register(FLAT_NATIVE_CLOCK_NOW, flat_native_clock_now);
     flat_native_plugin_register(FLAT_NATIVE_CLOCK_NOW_US, flat_native_clock_now_us);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_CREATE, flat_native_clock_create);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_START, flat_native_clock_start);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_STOP, flat_native_clock_stop);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_RESET, flat_native_clock_reset);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_ELAPSED, flat_native_clock_elapsed);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_RUNNING, flat_native_clock_running);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_LAP, flat_native_clock_lap);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_LAP_COUNT, flat_native_clock_lap_count);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_LAP_LAST, flat_native_clock_lap_last);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_LAP_GET, flat_native_clock_lap_get);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_LAP_CLEAR, flat_native_clock_lap_clear);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_CLOSE, flat_native_clock_close);
 }
 
 static void register_embedded_vcx(void) {

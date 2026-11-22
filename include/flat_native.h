@@ -244,6 +244,18 @@ typedef enum {
     FLAT_NATIVE_CSV_WRITE_COLLECTION,
     FLAT_NATIVE_CLOCK_NOW,
     FLAT_NATIVE_CLOCK_NOW_US,
+    FLAT_NATIVE_CLOCK_CREATE,
+    FLAT_NATIVE_CLOCK_START,
+    FLAT_NATIVE_CLOCK_STOP,
+    FLAT_NATIVE_CLOCK_RESET,
+    FLAT_NATIVE_CLOCK_ELAPSED,
+    FLAT_NATIVE_CLOCK_RUNNING,
+    FLAT_NATIVE_CLOCK_LAP,
+    FLAT_NATIVE_CLOCK_LAP_COUNT,
+    FLAT_NATIVE_CLOCK_LAP_LAST,
+    FLAT_NATIVE_CLOCK_LAP_GET,
+    FLAT_NATIVE_CLOCK_LAP_CLEAR,
+    FLAT_NATIVE_CLOCK_CLOSE,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
@@ -265,6 +277,7 @@ typedef enum {
 
 struct FlatVcxRuntime;
 struct FlatCsvRuntime;
+struct FlatClockRuntime;
 
 typedef struct {
     FlatStringPool *pool;
@@ -290,6 +303,7 @@ typedef struct {
     struct FlatVcxRuntime *vcx;
     char panic_detail[64];
     struct FlatCsvRuntime *csv; /* after panic_detail — ABI for optional .so plugins */
+    struct FlatClockRuntime *clock; /* stopwatch resources */
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

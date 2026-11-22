@@ -3,10 +3,12 @@
 #include "flat_date.h"
 #include "flat_number.h"
 #include "flat_native_mod.h"
+#include "flat_clock_runtime.h"
 #include "flat_native_util.h"
 #include "flat_value.h"
 
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 
 static int io_ok(FlatNativeCtx *ctx) {
@@ -530,4 +532,161 @@ int flat_native_clock_now_us(FlatNativeCtx *ctx) {
     }
     io_ok(ctx);
     return flat_value_set_number(ctx->out, flat_time_monotonic_ms() * 1000.0);
+}
+
+/* Stopwatch resources share the VM's monotonic clock and are owned by one VM run. */
+int flat_clock_stopwatch_live(const FlatClockRuntime *rt, uint32_t id) {
+    return rt && id >= 1u && id <= FLAT_CLOCK_MAX_STOPWATCHES && rt->sw[id].live;
+}
+
+static int clock_sw_fail(FlatNativeCtx *ctx, const char *why) {
+    if (ctx && ctx->io_status) *ctx->io_status = FLAT_IO_ERR;
+    if (ctx && why) snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", why);
+    return -1;
+}
+
+static int clock_sw_out_num(FlatNativeCtx *ctx, double n) {
+    if (!ctx || !ctx->out || !ctx->io_status) return -1;
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_number(ctx->out, n);
+}
+
+static int clock_sw_out_bool(FlatNativeCtx *ctx, int b) {
+    if (!ctx || !ctx->out || !ctx->io_status) return -1;
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_bool(ctx->out, b);
+}
+
+static int clock_sw_parse_num(FlatNativeCtx *ctx, const char *expr, double *out) {
+    FlatValue v;
+    if (!ctx || !expr || !out || flat_native_parse_expr(ctx, expr, &v) != 0 || v.tag != VAL_NUMBER) return -1;
+    *out = flat_number_as_f64(&v);
+    return 0;
+}
+
+static int clock_sw_args(FlatNativeCtx *ctx, double *a, double *b, int need_two) {
+    char buf[512], *comma;
+    double x, y = 0;
+    if (!ctx || !ctx->inner) return -1;
+    snprintf(buf, sizeof buf, "%s", ctx->inner);
+    comma = strchr(buf, ',');
+    if (need_two) {
+        if (!comma) return -1;
+        *comma++ = '\0';
+        if (strchr(comma, ',')) return -1;
+    } else if (comma) return -1;
+    if (clock_sw_parse_num(ctx, flat_native_trim(buf), &x) != 0) return -1;
+    if (need_two && clock_sw_parse_num(ctx, flat_native_trim(comma), &y) != 0) return -1;
+    *a = x; if (b) *b = y;
+    return 0;
+}
+
+static int clock_sw_resolve(FlatNativeCtx *ctx, uint32_t *id) {
+    double n;
+    if (clock_sw_args(ctx, &n, NULL, 0) != 0 || n < 1.0 || n > (double)FLAT_CLOCK_MAX_STOPWATCHES || floor(n) != n) return -1;
+    *id = (uint32_t)n;
+    return flat_clock_stopwatch_live(ctx->clock, *id) ? 0 : -1;
+}
+
+static double clock_sw_elapsed_at(const FlatClockStopwatch *sw, double now) {
+    return sw->accumulated_ms + (sw->running ? now - sw->started_ms : 0.0);
+}
+
+int flat_native_clock_create(FlatNativeCtx *ctx) {
+    uint32_t i;
+    if (!ctx || !ctx->clock) return clock_sw_fail(ctx, "clock.create");
+    for (i = 1; i <= FLAT_CLOCK_MAX_STOPWATCHES; ++i) {
+        if (!ctx->clock->sw[i].live) {
+            memset(&ctx->clock->sw[i], 0, sizeof ctx->clock->sw[i]);
+            ctx->clock->sw[i].live = 1;
+            return clock_sw_out_num(ctx, (double)i);
+        }
+    }
+    return clock_sw_fail(ctx, "clock.create.limit");
+}
+
+int flat_native_clock_start(FlatNativeCtx *ctx) {
+    uint32_t id; FlatClockStopwatch *sw;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.start.id");
+    sw = &ctx->clock->sw[id];
+    if (!sw->running) { sw->started_ms = flat_time_monotonic_ms(); sw->running = 1; }
+    *ctx->io_status = FLAT_IO_OK; return 0;
+}
+
+int flat_native_clock_stop(FlatNativeCtx *ctx) {
+    uint32_t id; FlatClockStopwatch *sw; double now;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.stop.id");
+    sw = &ctx->clock->sw[id];
+    if (sw->running) { now = flat_time_monotonic_ms(); sw->accumulated_ms += now - sw->started_ms; sw->running = 0; }
+    *ctx->io_status = FLAT_IO_OK; return 0;
+}
+
+int flat_native_clock_reset(FlatNativeCtx *ctx) {
+    uint32_t id;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.reset.id");
+    memset(&ctx->clock->sw[id], 0, sizeof ctx->clock->sw[id]); ctx->clock->sw[id].live = 1;
+    *ctx->io_status = FLAT_IO_OK; return 0;
+}
+
+int flat_native_clock_elapsed(FlatNativeCtx *ctx) {
+    uint32_t id;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.elapsed.id");
+    return clock_sw_out_num(ctx, clock_sw_elapsed_at(&ctx->clock->sw[id], flat_time_monotonic_ms()));
+}
+
+int flat_native_clock_running(FlatNativeCtx *ctx) {
+    uint32_t id;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.running.id");
+    return clock_sw_out_bool(ctx, ctx->clock->sw[id].running);
+}
+
+int flat_native_clock_lap(FlatNativeCtx *ctx) {
+    uint32_t id; FlatClockStopwatch *sw; double total, lap;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.lap.id");
+    sw = &ctx->clock->sw[id];
+    if (!sw->running) return clock_sw_fail(ctx, "clock.lap.stopped");
+    if (sw->lap_count >= FLAT_CLOCK_MAX_LAPS) return clock_sw_fail(ctx, "clock.lap.limit");
+    total = clock_sw_elapsed_at(sw, flat_time_monotonic_ms());
+    lap = total - sw->last_lap_ms;
+    sw->last_lap_ms = total;
+    sw->laps[sw->lap_count++] = total;
+    return clock_sw_out_num(ctx, lap);
+}
+
+int flat_native_clock_lap_count(FlatNativeCtx *ctx) {
+    uint32_t id;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.lapCount.id");
+    return clock_sw_out_num(ctx, (double)ctx->clock->sw[id].lap_count);
+}
+
+int flat_native_clock_lap_last(FlatNativeCtx *ctx) {
+    uint32_t id; FlatClockStopwatch *sw; double total;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.lapLast.id");
+    sw = &ctx->clock->sw[id];
+    if (!sw->lap_count) return clock_sw_fail(ctx, "clock.lapLast.empty");
+    total = sw->laps[sw->lap_count - 1u];
+    return clock_sw_out_num(ctx, total - (sw->lap_count > 1u ? sw->laps[sw->lap_count - 2u] : 0.0));
+}
+
+int flat_native_clock_lap_get(FlatNativeCtx *ctx) {
+    double did, dindex; uint32_t id, index;
+    if (clock_sw_args(ctx, &did, &dindex, 1) != 0 || did < 1.0 || did > FLAT_CLOCK_MAX_STOPWATCHES || floor(did) != did || dindex < 0.0 || dindex >= FLAT_CLOCK_MAX_LAPS || floor(dindex) != dindex) return clock_sw_fail(ctx, "clock.lapGet.arg");
+    id = (uint32_t)did; index = (uint32_t)dindex;
+    if (!flat_clock_stopwatch_live(ctx->clock, id)) return clock_sw_fail(ctx, "clock.lapGet.id");
+    if (index >= ctx->clock->sw[id].lap_count) return clock_sw_fail(ctx, "clock.lapGet.index");
+    return clock_sw_out_num(ctx, ctx->clock->sw[id].laps[index]);
+}
+
+int flat_native_clock_lap_clear(FlatNativeCtx *ctx) {
+    uint32_t id; FlatClockStopwatch *sw;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.lapClear.id");
+    sw = &ctx->clock->sw[id]; sw->lap_count = 0; sw->last_lap_ms = clock_sw_elapsed_at(sw, flat_time_monotonic_ms());
+    *ctx->io_status = FLAT_IO_OK; return 0;
+}
+
+int flat_native_clock_close(FlatNativeCtx *ctx) {
+    uint32_t id;
+    if (clock_sw_resolve(ctx, &id) != 0) return clock_sw_fail(ctx, "clock.close.id");
+    memset(&ctx->clock->sw[id], 0, sizeof ctx->clock->sw[id]);
+    *ctx->io_status = FLAT_IO_OK; return 0;
 }

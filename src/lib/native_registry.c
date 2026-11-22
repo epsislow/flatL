@@ -254,6 +254,18 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("csv", "writeCollection", "csv.writeCollection(wid, collection)"),
     META_SIG("clock", "now", "clock.now()"),
     META_SIG("clock", "now_us", "clock.now_us()"),
+    META_SIG("clock", "create", "clock.create()"),
+    META_SIG("clock", "start", "clock.start(id)"),
+    META_SIG("clock", "stop", "clock.stop(id)"),
+    META_SIG("clock", "reset", "clock.reset(id)"),
+    META_SIG("clock", "elapsed", "clock.elapsed(id)"),
+    META_SIG("clock", "running", "clock.running(id)"),
+    META_SIG("clock", "lap", "clock.lap(id)"),
+    META_SIG("clock", "lapCount", "clock.lapCount(id)"),
+    META_SIG("clock", "lapLast", "clock.lapLast(id)"),
+    META_SIG("clock", "lapGet", "clock.lapGet(id, index)"),
+    META_SIG("clock", "lapClear", "clock.lapClear(id)"),
+    META_SIG("clock", "close", "clock.close(id)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

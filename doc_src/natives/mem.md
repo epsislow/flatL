@@ -49,13 +49,14 @@ Open file ids from **`file.readCtx`** and related calls are **`number`** values 
 |------|------|---------|
 | `infoResId(id, kind)` | NUMBER id, STRING kind | STRING |
 
-**`kind`** selects which **resource namespace** to query (`"csv"`, `"file"`, or `"vcx"`). File, CSV session, and VCX context ids are independent counters; the hint is required so the same numeric id is not ambiguous.
+**`kind`** selects which **resource namespace** to query (`"csv"`, `"file"`, `"vcx"`, or `"clock"`). File, CSV session, VCX context, and clock stopwatch ids are independent counters; the hint is required so the same numeric id is not ambiguous.
 
 | `kind` | Live id → result |
 |--------|------------------|
 | `"csv"` | `csv.reader` / `csv.writer`, else `unknown` |
 | `"file"` | `file` (slot **0 … max−1**), else `unknown` |
 | `"vcx"` | `vcx`, else `unknown` |
+| `"clock"` | `sw` (stopwatch), else `unknown` |
 
 #### What `unknown` means
 
@@ -76,7 +77,7 @@ The **same integer** can be live in one family and `unknown` in another (e.g. fi
 | Call problem | Outcome |
 |--------------|---------|
 | One argument only, e.g. `mem.infoResId(1)` | **PANIC** `mem.infoResId.kind` |
-| Invalid **`kind`** (not `csv` / `file` / `vcx`) | **PANIC** `mem.infoResId.kind` |
+| Invalid **`kind`** (not `csv` / `file` / `vcx` / `clock`) | **PANIC** `mem.infoResId.kind` |
 | **`id`** not a whole number, or out of range for **`kind`** | **PANIC** `mem.infoResId.id` |
 | Valid **`kind`** + **`id`**, but nothing live in that table | STRING **`unknown`** |
 
