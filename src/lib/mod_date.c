@@ -1,4 +1,5 @@
 #include "flat_number.h"
+#include "flat_time.h"
 #include "flat_date.h"
 #include "flat_number.h"
 #include "flat_native_mod.h"
@@ -510,4 +511,23 @@ int flat_native_str_to_datetime(FlatNativeCtx *ctx) {
         return io_err(ctx);
     }
     return emit_string(ctx, out);
+}
+
+
+/* Monotonic performance clock. Values are elapsed units from an unspecified
+ * origin; callers should compare differences, never interpret them as dates. */
+int flat_native_clock_now(FlatNativeCtx *ctx) {
+    if (!ctx || !ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    io_ok(ctx);
+    return flat_value_set_number(ctx->out, flat_time_monotonic_ms());
+}
+
+int flat_native_clock_now_us(FlatNativeCtx *ctx) {
+    if (!ctx || !ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    io_ok(ctx);
+    return flat_value_set_number(ctx->out, flat_time_monotonic_ms() * 1000.0);
 }

@@ -72,6 +72,11 @@ static void register_embedded_date(void) {
     flat_native_plugin_register(FLAT_NATIVE_DATE_RUN_OFFSET, flat_native_date_run_offset);
 }
 
+static void register_embedded_clock(void) {
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_NOW, flat_native_clock_now);
+    flat_native_plugin_register(FLAT_NATIVE_CLOCK_NOW_US, flat_native_clock_now_us);
+}
+
 static void register_embedded_vcx(void) {
     flat_native_plugin_register(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
     flat_native_plugin_register(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
@@ -525,6 +530,7 @@ void flat_native_runtime_reset(void) {
     register_embedded_mem();
     register_embedded_file();
     register_embedded_date();
+    register_embedded_clock();
     register_embedded_vcx();
     register_embedded_executor();
     register_embedded_str_extras();

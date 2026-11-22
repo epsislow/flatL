@@ -192,6 +192,9 @@ int flat_native_date_time_to_sec(FlatNativeCtx *ctx);
 int flat_native_date_sec_to_time(FlatNativeCtx *ctx);
 int flat_native_date_run_offset(FlatNativeCtx *ctx);
 
+int flat_native_clock_now(FlatNativeCtx *ctx);
+int flat_native_clock_now_us(FlatNativeCtx *ctx);
+
 int flat_native_vcx_current(FlatNativeCtx *ctx);
 int flat_native_vcx_isactive(FlatNativeCtx *ctx);
 int flat_native_vcx_set(FlatNativeCtx *ctx);

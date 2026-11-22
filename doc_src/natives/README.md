@@ -1,6 +1,6 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`, `date`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
+**Core natives** (`io`, `json`, `str`, `date`, `clock`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [clock.md](./clock.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
 
 **Optional natives** extend the VM (for example trigonometry). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
@@ -37,11 +37,11 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
-- **`use native io`** (or `json` / `str` / `mem` without `with`) is an error — use **`use native mem with Alias`** only when you want a short prefix; canonical names always work.
+- **`use native io`** (or `json` / `str` / `clock` / `mem` without `with`) is an error — use **`use native mem with Alias`** only when you want a short prefix; canonical names always work.
 - Duplicate **`use native`** for the **same module** in one file is an error.
 
 ## `io.docs`
@@ -58,6 +58,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `file` | [file.md](./file.md) |
 | `str` | [str.md](./str.md) |
 | `date` | [date.md](./date.md) |
+| `clock` | [clock.md](./clock.md) — monotonic elapsed-time measurements |
 | `mem` | [mem.md](./mem.md) |
 
 ## Optional modules (documented)

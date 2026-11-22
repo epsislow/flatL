@@ -38,7 +38,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/mod_file.c \
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
-VM_SRC = src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \
+VM_SRC = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \
          src/common/flat_file.c src/common/flat_csv.c src/common/flat_csv_runtime.c \
          src/common/flat_io_ctx.c src/common/flat_memstream.c \
          src/common/value_collection.c \

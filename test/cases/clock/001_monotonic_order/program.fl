@@ -1,0 +1,6 @@
+#main
+  ms_a = clock.now()
+  ms_b = clock.now()
+  elapsed_ms = ms_b - ms_a
+  io.outln('clock.now ok')
+  OK

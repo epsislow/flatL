@@ -137,6 +137,11 @@
       "file": "natives/date.md"
     },
     {
+      "id": "clock-native",
+      "label": "Native clock",
+      "file": "natives/clock.md"
+    },
+    {
       "id": "obj-native",
       "label": "Native obj",
       "file": "natives/obj.md"
@@ -167,4 +172,4 @@
       "file": "natives/csv.md"
     }
   ]
-}
+}\n

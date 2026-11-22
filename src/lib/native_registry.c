@@ -252,6 +252,8 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("csv", "getCollection", "csv.getCollection(id, offset, limit)"),
     META_SIG("csv", "writeRecords", "csv.writeRecords(wid, records)"),
     META_SIG("csv", "writeCollection", "csv.writeCollection(wid, collection)"),
+    META_SIG("clock", "now", "clock.now()"),
+    META_SIG("clock", "now_us", "clock.now_us()"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -259,7 +261,8 @@ int flat_native_is_core_module(const char *mod) {
         return 0;
     }
     return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0 ||
-           strcmp(mod, FLAT_NATIVE_MODULE_DATE) == 0 || strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0 ||
+           strcmp(mod, FLAT_NATIVE_MODULE_DATE) == 0 || strcmp(mod, FLAT_NATIVE_MODULE_CLOCK) == 0 ||
+           strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0 ||
            strcmp(mod, FLAT_NATIVE_MODULE_FILE) == 0;
 }
 
@@ -269,6 +272,7 @@ int flat_native_is_module_id(const char *mod) {
         "json",
         "str",
         FLAT_NATIVE_MODULE_DATE,
+        FLAT_NATIVE_MODULE_CLOCK,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

@@ -20,6 +20,8 @@ Human-facing **string profiles** (`DD.MM.YYYY`, …) live on **`str.to_date`** /
 
 There is **no** `VAL_DATE` tag. Use **NUMBER** seconds for compare, add, and epoch math.
 
+For measuring short elapsed durations or profiling code, use the separate monotonic [`clock` module](./clock.md). `date.now()` has second-level granularity and is not a performance timer.
+
 ## Line modifiers and errors
 
 See [SPECIFICATION.md](../SPECIFICATION.md) §1.2.2. On recoverable failure (invalid parse, bad offset, bad format input, …):

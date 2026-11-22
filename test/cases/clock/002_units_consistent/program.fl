@@ -1,0 +1,7 @@
+#main
+  us_a = clock.now_us()
+  us_b = clock.now_us()
+  elapsed_us = us_b - us_a
+  ms = clock.now()
+  io.outln('clock.now_us ok')
+  OK
