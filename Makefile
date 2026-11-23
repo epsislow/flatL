@@ -208,6 +208,7 @@ rebuild-native: clean all
 .PHONY: fleditor-wasm-optional
 fleditor-wasm-optional:
 	@if command -v emcc >/dev/null 2>&1; then \
+		$(MAKE) -f Makefile.wasm fleditor-wasm-clean; \
 		$(MAKE) -f Makefile.wasm fleditor-wasm; \
 		echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"; \
 	else \
