@@ -1,0 +1,11 @@
+suite = "fs"
+mods = "fs path"
+id = 6
+desc = "fs.mkdir with path.join"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm --path-sep / out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "true"
+stdout_contains_2 = "nested"

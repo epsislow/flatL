@@ -1,0 +1,8 @@
+use native fs
+
+#main
+  fp = file.createCtx('f.txt')
+  file.write(fp, 'x')
+  file.close(fp)
+  xs = fs.listDir('f.txt')
+  OK

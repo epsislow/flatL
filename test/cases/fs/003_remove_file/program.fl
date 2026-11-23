@@ -1,0 +1,13 @@
+use native fs
+
+#main
+  fp = file.createCtx('gone.txt')
+  file.write(fp, 'z')
+  file.close(fp)
+  io.outln(fs.exists('gone.txt'))
+  fs.remove('gone.txt')
+  io.outln(fs.exists('gone.txt'))
+  fs.mkdir('empty')
+  fs.remove('empty')
+  io.outln(fs.exists('empty'))
+  OK

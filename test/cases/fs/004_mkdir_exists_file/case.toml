@@ -1,0 +1,10 @@
+suite = "fs"
+mods = "fs"
+id = 4
+desc = "fs.mkdir panics when path is an existing file"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "fs.mkdir.exists"

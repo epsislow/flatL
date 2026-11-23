@@ -1,0 +1,16 @@
+use native fs
+use native list
+
+#main
+  fs.mkdir('d')
+  fp = file.createCtx('d/a.txt')
+  file.write(fp, 'x')
+  file.close(fp)
+  fp2 = file.createCtx('d/b.txt')
+  file.write(fp2, 'y')
+  file.close(fp2)
+  xs = fs.listDir('d')
+  io.outln(list.len(xs))
+  io.outln(list.get(xs, 0))
+  io.outln(list.get(xs, 1))
+  OK

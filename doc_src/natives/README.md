@@ -68,6 +68,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `http` | [http.md](./http.md) — synchronous HTTP/HTTPS requests |
 | `env` | [env.md](./env.md) — process / override env + program argv |
 | `path` | [path.md](./path.md) — string path join / base / dir / ext / normalize |
+| `fs` | [fs.md](./fs.md) — exists / mkdir / listDir / remove / isFile / isDir |
 | `math` | [math.md](./math.md) |
 | `math.trig` | [math.trig.md](./math.trig.md) |
 | `math.stats` | [math.stats.md](./math.stats.md) |

@@ -1,0 +1,10 @@
+use native fs
+use native path
+
+#main
+  fs.mkdir('root')
+  p = path.join('root', 'nested')
+  fs.mkdir(p)
+  io.outln(fs.isDir(p))
+  io.outln(path.base(p))
+  OK

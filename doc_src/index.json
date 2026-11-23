@@ -185,6 +185,11 @@
       "id": "path-native",
       "label": "Native path",
       "file": "natives/path.md"
+    },
+    {
+      "id": "fs-native",
+      "label": "Native fs",
+      "file": "natives/fs.md"
     }
   ]
 }

@@ -308,4 +308,11 @@ int flat_native_path_ext(FlatNativeCtx *ctx);
 int flat_native_path_normalize(FlatNativeCtx *ctx);
 int flat_native_path_is_abs(FlatNativeCtx *ctx);
 
+int flat_native_fs_exists(FlatNativeCtx *ctx);
+int flat_native_fs_is_file(FlatNativeCtx *ctx);
+int flat_native_fs_is_dir(FlatNativeCtx *ctx);
+int flat_native_fs_mkdir(FlatNativeCtx *ctx);
+int flat_native_fs_list_dir(FlatNativeCtx *ctx);
+int flat_native_fs_remove(FlatNativeCtx *ctx);
+
 #endif

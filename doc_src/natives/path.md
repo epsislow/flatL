@@ -147,4 +147,5 @@ FlEditor: **Settings → Path** (Auto / `/` / `\`). Same override feeds future *
 ## Related
 
 - [file.md](./file.md) — `file.sep()`, file handles  
+- [fs.md](./fs.md) — directory / existence ops on disk or MEMFS  
 - Implementation: `src/lib/mod_path.c`, `src/common/flat_path.c`

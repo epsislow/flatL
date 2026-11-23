@@ -110,6 +110,17 @@ static void register_embedded_path(void) {
 }
 #endif
 
+#if FLAT_WITH_FS
+static void register_embedded_fs(void) {
+    flat_native_plugin_register(FLAT_NATIVE_FS_EXISTS, flat_native_fs_exists);
+    flat_native_plugin_register(FLAT_NATIVE_FS_IS_FILE, flat_native_fs_is_file);
+    flat_native_plugin_register(FLAT_NATIVE_FS_IS_DIR, flat_native_fs_is_dir);
+    flat_native_plugin_register(FLAT_NATIVE_FS_MKDIR, flat_native_fs_mkdir);
+    flat_native_plugin_register(FLAT_NATIVE_FS_LIST_DIR, flat_native_fs_list_dir);
+    flat_native_plugin_register(FLAT_NATIVE_FS_REMOVE, flat_native_fs_remove);
+}
+#endif
+
 #if FLAT_WITH_HTTP
 static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
@@ -608,6 +619,9 @@ void flat_native_runtime_reset(void) {
 #endif
 #if FLAT_WITH_PATH
     register_embedded_path();
+#endif
+#if FLAT_WITH_FS
+    register_embedded_fs();
 #endif
     register_embedded_vcx();
     register_embedded_executor();

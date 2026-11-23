@@ -1,0 +1,11 @@
+use native fs
+
+#main
+  io.outln(fs.exists('hello.txt'))
+  io.outln(fs.isFile('hello.txt'))
+  io.outln(fs.isDir('hello.txt'))
+  io.outln(fs.exists('subdir'))
+  io.outln(fs.isDir('subdir'))
+  io.outln(fs.isFile('subdir'))
+  io.outln(fs.exists('nope'))
+  OK

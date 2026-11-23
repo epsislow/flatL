@@ -307,6 +307,12 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("path", "ext", "path.ext(p)"),
     META_SIG("path", "normalize", "path.normalize(p)"),
     META_SIG("path", "isAbs", "path.isAbs(p)"),
+    META_SIG("fs", "exists", "fs.exists(path)"),
+    META_SIG("fs", "isFile", "fs.isFile(path)"),
+    META_SIG("fs", "isDir", "fs.isDir(path)"),
+    META_SIG("fs", "mkdir", "fs.mkdir(path)"),
+    META_SIG("fs", "listDir", "fs.listDir(path)"),
+    META_SIG("fs", "remove", "fs.remove(path)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -329,6 +335,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_HTTP,
         FLAT_NATIVE_MODULE_ENV,
         FLAT_NATIVE_MODULE_PATH,
+        FLAT_NATIVE_MODULE_FS,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

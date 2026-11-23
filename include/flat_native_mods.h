@@ -14,6 +14,9 @@
 #ifndef FLAT_WITH_PATH
 #define FLAT_WITH_PATH 1
 #endif
+#ifndef FLAT_WITH_FS
+#define FLAT_WITH_FS 1
+#endif
 
 /* 1 if this toolchain binary was built with the named module. */
 int flat_native_mod_is_built(const char *mod);

@@ -1,0 +1,12 @@
+suite = "fs"
+mods = "fs"
+id = 2
+desc = "fs.mkdir + listDir sorted names"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "2"
+stdout_contains_2 = "a.txt"
+stdout_contains_3 = "b.txt"

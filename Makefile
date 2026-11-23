@@ -18,6 +18,10 @@ path ?= 1
 ifeq ($(path),0)
 CFLAGS += -DFLAT_WITH_PATH=0
 endif
+fs ?= 1
+ifeq ($(fs),0)
+CFLAGS += -DFLAT_WITH_FS=0
+endif
 
 # Optional: FLC_LDFLAGS=-Wl,--stack,8388608 if an old flc ever overflows stack (heap IR is default).
 FLC_LDFLAGS ?=
@@ -90,14 +94,19 @@ PATH_SRC =
 else
 PATH_SRC = src/lib/mod_path.c
 endif
-# flat_path always linked (file.sep + future fs); mod_path optional
+ifeq ($(fs),0)
+FS_SRC =
+else
+FS_SRC = src/lib/mod_fs.c src/common/flat_fs.c
+endif
+# flat_path always linked (file.sep + path/fs); mod_path optional
 FLAT_PATH_SRC = src/common/flat_path.c
 NATIVE_MODS_SRC = src/lib/native_mods.c
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_parse_rhs.c \
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(ENV_SRC) $(PATH_SRC) $(FLAT_PATH_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(FLAT_PATH_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \

@@ -1,0 +1,8 @@
+use native fs
+
+#main
+  fp = file.createCtx('clash')
+  file.write(fp, 'x')
+  file.close(fp)
+  fs.mkdir('clash')
+  OK

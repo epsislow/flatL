@@ -92,4 +92,5 @@ file.close(fp)
 - [IO_CONTEXTS.md](../IO_CONTEXTS.md) — `io.ctx*` redirect rules  
 - [mem.md](./mem.md) — `mem.ref_empty()` for in-memory capture  
 - [path.md](./path.md) — optional string path helpers; share `file.sep`  
+- [fs.md](./fs.md) — exists / mkdir / listDir / remove  
 - Implementation: `src/lib/mod_file.c`, `src/common/flat_file.c`, `src/common/flat_path.c`
