@@ -1,0 +1,8 @@
+use native path
+
+#main
+  io.outln(path.ext('a/b/c.fl'))
+  io.outln(path.ext('readme'))
+  io.outln(path.ext('a.tar.gz'))
+  io.outln(path.ext('.hidden'))
+  OK

@@ -1,6 +1,7 @@
 #include "fb_format.h"
 #include "flat.h"
 #include "flat_env.h"
+#include "flat_path.h"
 #include "flat_native_mods.h"
 #include "flat_native_plugin.h"
 #include "flat_time.h"
@@ -27,6 +28,7 @@ static int usage(const char *prog) {
     fprintf(stderr, "  --time        print load/run timings on stderr (flvm: time_ms …)\n");
     fprintf(stderr, "  FLAT_TIME=1   same as --time when flag omitted\n");
     fprintf(stderr, "  --env KEY=VAL override / set env var for env.get / env.has (repeatable)\n");
+    fprintf(stderr, "  --path-sep S  path separator override: / or \\ (file.sep / path.*)\n");
     fprintf(stderr, "  -- arg...     program argv for env.args / env.argc (after program.fb)\n");
     fprintf(stderr, "  --max-jumps N cap OP_JUMP count (default %u; 0 = default)\n",
             (unsigned)FLAT_VM_DEFAULT_MAX_JUMPS);
@@ -61,6 +63,7 @@ int main(int argc, char **argv) {
 
     flat_env_reset();
     flat_env_set_use_process(1);
+    flat_path_sep_reset();
 
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
@@ -90,6 +93,16 @@ int main(int argc, char **argv) {
             }
             if (flat_env_override_parse(argv[++i]) != 0) {
                 fprintf(stderr, "flvm: invalid --env (expected KEY=VAL)\n");
+                return 2;
+            }
+            continue;
+        }
+        if (strcmp(argv[i], "--path-sep") == 0) {
+            if (i + 1 >= argc) {
+                return usage(argv[0]);
+            }
+            if (flat_path_sep_set_str(argv[++i]) != 0) {
+                fprintf(stderr, "flvm: invalid --path-sep (expected / or \\)\n");
                 return 2;
             }
             continue;

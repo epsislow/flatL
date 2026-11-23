@@ -180,6 +180,11 @@
       "id": "env-native",
       "label": "Native env",
       "file": "natives/env.md"
+    },
+    {
+      "id": "path-native",
+      "label": "Native path",
+      "file": "natives/path.md"
     }
   ]
 }

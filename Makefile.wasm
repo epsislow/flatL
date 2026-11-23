@@ -22,8 +22,17 @@ else
 WASM_ENV_CFLAGS =
 ENV_SRC = src/lib/mod_env.c src/common/flat_env.c
 endif
+path ?= 1
+ifeq ($(path),0)
+WASM_PATH_CFLAGS = -DFLAT_WITH_PATH=0
+PATH_SRC =
+else
+WASM_PATH_CFLAGS =
+PATH_SRC = src/lib/mod_path.c
+endif
+FLAT_PATH_SRC = src/common/flat_path.c
 
-WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2 $(WASM_HTTP_CFLAGS) $(WASM_ENV_CFLAGS)
+WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2 $(WASM_HTTP_CFLAGS) $(WASM_ENV_CFLAGS) $(WASM_PATH_CFLAGS)
 WASM_LDFLAGS = \
   -s MODULARIZE=1 \
   -s EXPORT_NAME=FlatLModule \
@@ -34,7 +43,7 @@ WASM_LDFLAGS = \
   -s ASYNCIFY=1 \
   -s ASYNCIFY_STACK_SIZE=1048576 \
   -s 'ASYNCIFY_IMPORTS=[emscripten_sleep,flat_http_fetch_sync_js]' \
-  -s 'EXPORTED_FUNCTIONS=[_flat_wasm_compile,_flat_wasm_compile_entry,_flat_wasm_disassemble_entry,_flat_wasm_run,_flat_wasm_run_source,_flat_wasm_run_entry,_flat_wasm_get_last_termination,_flat_wasm_get_last_panic,_flat_wasm_toolchain_version,_flat_wasm_mods,_flat_wasm_set_run_limits,_flat_wasm_env_clear,_flat_wasm_env_set,_flat_wasm_env_args_clear,_flat_wasm_env_args_push,_flat_wasm_free,_malloc,_free]' \
+  -s 'EXPORTED_FUNCTIONS=[_flat_wasm_compile,_flat_wasm_compile_entry,_flat_wasm_disassemble_entry,_flat_wasm_run,_flat_wasm_run_source,_flat_wasm_run_entry,_flat_wasm_get_last_termination,_flat_wasm_get_last_panic,_flat_wasm_toolchain_version,_flat_wasm_mods,_flat_wasm_set_run_limits,_flat_wasm_env_clear,_flat_wasm_env_set,_flat_wasm_env_args_clear,_flat_wasm_env_args_push,_flat_wasm_path_sep_set,_flat_wasm_path_sep_reset,_flat_wasm_free,_malloc,_free]' \
   -s 'EXPORTED_RUNTIME_METHODS=[ccall,cwrap,UTF8ToString,getValue,setValue,HEAPU8,Asyncify,FS]' \
   -lm
 
@@ -53,7 +62,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c \
-                src/lib/mod_file.c $(HTTP_SRC) $(ENV_SRC) src/lib/native_mods.c \
+                src/lib/mod_file.c $(HTTP_SRC) $(ENV_SRC) $(PATH_SRC) $(FLAT_PATH_SRC) src/lib/native_mods.c \
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
 VM_SRC = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \

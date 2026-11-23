@@ -1,0 +1,7 @@
+use native path
+
+#main
+  io.outln(path.normalize('a/./b/../c'))
+  io.outln(path.normalize('/../x'))
+  io.outln(path.normalize('a\\b/c'))
+  OK

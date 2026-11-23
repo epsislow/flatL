@@ -4312,6 +4312,11 @@
     } catch (_envErr) {
       /* older UI / wasm without env exports */
     }
+    try {
+      FleditorSettings.applyPathToWasm(Module);
+    } catch (_pathErr) {
+      /* older UI / wasm without path exports */
+    }
     setStatus('running');
     const memPath = P.memfsEntryPath(entryPath);
     let runRc = Module.ccall(

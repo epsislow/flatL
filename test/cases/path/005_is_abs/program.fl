@@ -1,0 +1,7 @@
+use native path
+
+#main
+  io.outln(path.isAbs('/a'))
+  io.outln(path.isAbs('a/b'))
+  io.outln(path.isAbs('C:\\x'))
+  OK

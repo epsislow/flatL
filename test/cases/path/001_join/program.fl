@@ -1,0 +1,7 @@
+use native path
+
+#main
+  io.outln(path.join('a', 'b', 'c.fl'))
+  io.outln(path.join('/root', 'x'))
+  io.outln(path.join('a', '/abs', 'b'))
+  OK

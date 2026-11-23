@@ -47,4 +47,8 @@ int flat_wasm_env_set(const char *key, const char *val);
 void flat_wasm_env_args_clear(void);
 int flat_wasm_env_args_push(const char *arg);
 
+/* Path separator override for file.sep / path.* (NULL or "" = host default /). */
+void flat_wasm_path_sep_reset(void);
+int flat_wasm_path_sep_set(const char *sep); /* "/" or "\\" */
+
 #endif

@@ -15,6 +15,8 @@
   let httpPrefs = T.loadHttpPrefs();
   /** @type {ReturnType<typeof T.loadEnvPrefs>} */
   let envPrefs = T.loadEnvPrefs();
+  /** @type {ReturnType<typeof T.loadPathPrefs>} */
+  let pathPrefs = T.loadPathPrefs();
 
   /** @type {null | HTMLElement} */
   let appEl = null;
@@ -255,6 +257,7 @@
         terminal: 'Terminal',
         http: 'HTTP',
         env: 'Env',
+        path: 'Path',
         about: 'About',
       };
       title.textContent = labels[sectionId] || 'Settings';
@@ -267,6 +270,23 @@
     }
     if (sectionId === 'env') {
       refreshEnvPanel();
+    }
+    if (sectionId === 'path') {
+      refreshPathPanel();
+    }
+  }
+
+  function refreshPathPanel() {
+    pathPrefs = T.loadPathPrefs();
+    const sel = document.getElementById('settingsPathSep');
+    if (sel) {
+      if (pathPrefs.sep === '/') {
+        sel.value = '/';
+      } else if (pathPrefs.sep === '\\') {
+        sel.value = 'backslash';
+      } else {
+        sel.value = 'auto';
+      }
     }
   }
 
@@ -565,7 +585,7 @@
       resetAllBtn.addEventListener('click', async function () {
         if (
           !window.confirm(
-            'Reset all settings? Theme, editor, terminal, HTTP, and Env preferences will return to defaults. Project and panel layout are not affected.'
+            'Reset all settings? Theme, editor, terminal, HTTP, Env, and Path preferences will return to defaults. Project and panel layout are not affected.'
           )
         ) {
           return;
@@ -578,6 +598,7 @@
         envPrefs =
           defaults.envPrefs ||
           Object.assign({}, T.DEFAULT_ENV_PREFS, { entries: [] });
+        pathPrefs = defaults.pathPrefs || Object.assign({}, T.DEFAULT_PATH_PREFS);
         persistThemeAndApply();
         refreshThemeSelect();
         buildTokenCustomizeUI();
@@ -587,6 +608,7 @@
         applyHttpPrefs();
         refreshHttpPanel();
         refreshEnvPanel();
+        refreshPathPanel();
         if (showAlertFn) {
           await showAlertFn('Settings restored to defaults.', 'About');
         }
@@ -829,6 +851,14 @@
         renderEnvList();
       });
     }
+
+    const pathSep = document.getElementById('settingsPathSep');
+    if (pathSep) {
+      pathSep.addEventListener('change', function () {
+        const v = pathSep.value === 'backslash' ? '\\' : pathSep.value;
+        pathPrefs = T.savePathPrefs(null, { sep: v });
+      });
+    }
   }
 
   function init(options) {
@@ -846,6 +876,7 @@
     terminalPrefs = T.loadTerminalPrefs();
     httpPrefs = T.loadHttpPrefs();
     envPrefs = T.loadEnvPrefs();
+    pathPrefs = T.loadPathPrefs();
     applyHttpPrefs();
 
     if (appEl) {
@@ -884,6 +915,26 @@
       }
     }
     return out;
+  }
+
+  function getPathPrefs() {
+    return T.loadPathPrefs();
+  }
+
+  /** Push Settings→Path sep into WASM before run. */
+  function applyPathToWasm(Module) {
+    if (!Module) {
+      return;
+    }
+    const prefs = getPathPrefs();
+    const sep = prefs.sep === '/' || prefs.sep === '\\' ? prefs.sep : 'auto';
+    try {
+      if (typeof Module._flat_wasm_path_sep_set === 'function') {
+        Module.ccall('flat_wasm_path_sep_set', 'number', ['string'], [sep]);
+      }
+    } catch (_e) {
+      /* older wasm */
+    }
   }
 
   /** Push Settings→Env into WASM before flat_wasm_run*. Safe no-op on older builds. */
@@ -948,7 +999,9 @@
     getTerminalPrefs,
     getHttpPrefs,
     getEnvPrefs,
+    getPathPrefs,
     applyEnvToWasm,
+    applyPathToWasm,
     applyThemeFromStorage,
     applyEditorPrefs,
     applyTerminalPrefs,
@@ -957,5 +1010,6 @@
     refreshAboutPanel,
     refreshHttpPanel,
     refreshEnvPanel,
+    refreshPathPanel,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

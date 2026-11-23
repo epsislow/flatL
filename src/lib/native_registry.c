@@ -154,6 +154,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("file", "iseof", "file.iseof(fp)"),
     META_SIG("file", "close", "file.close(fp)"),
     META_SIG("file", "truncate", "file.truncate(fp, len)"),
+    META_SIG("file", "sep", "file.sep()"),
     META_SIG("str", "to_date", "str.to_date(s)"),
     META_SIG("str", "to_time", "str.to_time(s)"),
     META_SIG("str", "to_datetime", "str.to_datetime(s)"),
@@ -300,6 +301,12 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("env", "get", "env.get(name, default?)"),
     META_SIG("env", "argc", "env.argc()"),
     META_SIG("env", "args", "env.args()"),
+    META_SIG("path", "join", "path.join(a, b, ...)"),
+    META_SIG("path", "base", "path.base(p)"),
+    META_SIG("path", "dir", "path.dir(p)"),
+    META_SIG("path", "ext", "path.ext(p)"),
+    META_SIG("path", "normalize", "path.normalize(p)"),
+    META_SIG("path", "isAbs", "path.isAbs(p)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -321,6 +328,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_CLOCK,
         FLAT_NATIVE_MODULE_HTTP,
         FLAT_NATIVE_MODULE_ENV,
+        FLAT_NATIVE_MODULE_PATH,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

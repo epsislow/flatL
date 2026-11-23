@@ -1,0 +1,9 @@
+use native path
+
+#main
+  io.outln(path.base('/a/b/c.fl'))
+  io.outln(path.dir('/a/b/c.fl'))
+  io.outln(path.base('/'))
+  io.outln(path.dir('/'))
+  io.outln(path.dir('only'))
+  OK

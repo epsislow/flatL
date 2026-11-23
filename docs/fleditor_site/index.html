@@ -412,6 +412,7 @@
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="terminal">Terminal</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="http">HTTP</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="env">Env</button>
+        <button type="button" class="fleditor-settings-nav-btn" data-settings-section="path">Path</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="about">About</button>
       </nav>
       <div class="fleditor-settings-main">
@@ -534,6 +535,21 @@
                 </div>
               </div>
               <ul id="settingsEnvList" class="fleditor-env-list" aria-label="Environment variables"></ul>
+            </div>
+          </div>
+          <div id="settingsSectionPath" class="fleditor-settings-section" data-settings-section="path" hidden>
+            <p class="fleditor-settings-hint">
+              Separator for core <code>file.sep()</code> and optional <code>use native path</code>
+              (<code>path.join</code>, …). Same value will apply to future <code>fs</code>. Prefs:
+              <code>flatl-fleditor-path-prefs</code>.
+            </p>
+            <div class="fleditor-settings-field">
+              <label for="settingsPathSep">Path separator</label>
+              <select id="settingsPathSep" class="fleditor-settings-select">
+                <option value="auto">Auto ( / in WASM )</option>
+                <option value="/">/ (POSIX)</option>
+                <option value="backslash">\ (Windows)</option>
+              </select>
             </div>
           </div>
           <div id="settingsSectionAbout" class="fleditor-settings-section" data-settings-section="about" hidden>

@@ -1,6 +1,7 @@
 #include "flat_csv_runtime.h"
 #include "flat_number.h"
 #include "flat_file.h"
+#include "flat_path.h"
 #include "flat_number.h"
 #include "flat_io_ctx.h"
 #include "flat_memstream.h"
@@ -502,6 +503,15 @@ int flat_native_file_iseof(FlatNativeCtx *ctx) {
     }
     *ctx->io_status = FLAT_IO_OK;
     return flat_value_set_bool(ctx->out, feof(fp) ? 1 : 0);
+}
+
+int flat_native_file_sep(FlatNativeCtx *ctx) {
+    char sep[2];
+    if (!ctx || !ctx->out) return -1;
+    sep[0] = flat_path_sep();
+    sep[1] = '\0';
+    if (ctx->io_status) *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_str_inline(ctx->out, sep, 1);
 }
 
 int flat_native_file_truncate(FlatNativeCtx *ctx) {

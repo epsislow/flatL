@@ -99,6 +99,17 @@ static void register_embedded_env(void) {
 }
 #endif
 
+#if FLAT_WITH_PATH
+static void register_embedded_path(void) {
+    flat_native_plugin_register(FLAT_NATIVE_PATH_JOIN, flat_native_path_join);
+    flat_native_plugin_register(FLAT_NATIVE_PATH_BASE, flat_native_path_base);
+    flat_native_plugin_register(FLAT_NATIVE_PATH_DIR, flat_native_path_dir);
+    flat_native_plugin_register(FLAT_NATIVE_PATH_EXT, flat_native_path_ext);
+    flat_native_plugin_register(FLAT_NATIVE_PATH_NORMALIZE, flat_native_path_normalize);
+    flat_native_plugin_register(FLAT_NATIVE_PATH_IS_ABS, flat_native_path_is_abs);
+}
+#endif
+
 #if FLAT_WITH_HTTP
 static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
@@ -188,6 +199,7 @@ static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_ISEOF, flat_native_file_iseof);
     flat_native_plugin_register(FLAT_NATIVE_FILE_CLOSE, flat_native_file_close);
     flat_native_plugin_register(FLAT_NATIVE_FILE_TRUNCATE, flat_native_file_truncate);
+    flat_native_plugin_register(FLAT_NATIVE_FILE_SEP, flat_native_file_sep);
 }
 
 static int manifest_has_module(const char *mod) {
@@ -593,6 +605,9 @@ void flat_native_runtime_reset(void) {
 #endif
 #if FLAT_WITH_ENV
     register_embedded_env();
+#endif
+#if FLAT_WITH_PATH
+    register_embedded_path();
 #endif
     register_embedded_vcx();
     register_embedded_executor();

@@ -53,6 +53,20 @@ Binary reads/writes use the current position; combine **`setpos`** / **`setposre
 
 All open handles are closed on VM exit.
 
+## Path separator
+
+| Call | Result |
+|------|--------|
+| `file.sep()` | Effective path separator STRING: `"/"` or `"\\"` |
+
+**Core** (no `use native`). Same runtime value used by optional [`path`](./path.md) and future `fs`. Defaults: `/` on POSIX and WASM; `\` on native Windows. Override: `flvm --path-sep /` or `--path-sep \`, or FlEditor **Settings → Path**.
+
+```text
+#main
+  io.outln(file.sep())
+  OK
+```
+
 ## With `io.ctx*`
 
 See [IO_CONTEXTS.md](../IO_CONTEXTS.md).
@@ -77,4 +91,5 @@ file.close(fp)
 
 - [IO_CONTEXTS.md](../IO_CONTEXTS.md) — `io.ctx*` redirect rules  
 - [mem.md](./mem.md) — `mem.ref_empty()` for in-memory capture  
-- Implementation: `src/lib/mod_file.c`, `src/common/flat_file.c`
+- [path.md](./path.md) — optional string path helpers; share `file.sep`  
+- Implementation: `src/lib/mod_file.c`, `src/common/flat_file.c`, `src/common/flat_path.c`

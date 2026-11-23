@@ -2,6 +2,7 @@
 #include "fgir.h"
 #include "flat.h"
 #include "flat_env.h"
+#include "flat_path.h"
 #include "flat_link.h"
 #include "flat_port.h"
 #include "flat_native_mods.h"
@@ -30,6 +31,7 @@ static int top_usage(const char *prog) {
     fprintf(stderr, "\n  --mods        list native modules built into this binary (one per line)\n");
     fprintf(stderr, "  --time        print timings on stderr (flatl: time_ms …); FLAT_TIME=1 equivalent\n");
     fprintf(stderr, "  --env KEY=VAL override env for env.get / env.has (repeatable)\n");
+    fprintf(stderr, "  --path-sep S  path separator: / or \\ (file.sep / path.*)\n");
     fprintf(stderr, "  -- arg...     program argv for env.args / env.argc\n");
     return 2;
 }
@@ -153,6 +155,7 @@ static int parse_run_flags(int *argc, char ***argv, FlatVmOptions *opts, int *re
 
     flat_env_reset();
     flat_env_set_use_process(1);
+    flat_path_sep_reset();
 
     if (report_time && !*report_time) {
         *report_time = flat_time_env_enabled();
@@ -181,6 +184,17 @@ static int parse_run_flags(int *argc, char ***argv, FlatVmOptions *opts, int *re
             }
             if (flat_env_override_parse(a[++i]) != 0) {
                 fprintf(stderr, "flatl: invalid --env (expected KEY=VAL)\n");
+                return -1;
+            }
+            continue;
+        }
+        if (strcmp(a[i], "--path-sep") == 0) {
+            if (i + 1 >= n) {
+                fprintf(stderr, "flatl: --path-sep requires / or \\\n");
+                return -1;
+            }
+            if (flat_path_sep_set_str(a[++i]) != 0) {
+                fprintf(stderr, "flatl: invalid --path-sep (expected / or \\)\n");
                 return -1;
             }
             continue;

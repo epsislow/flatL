@@ -1,0 +1,6 @@
+use native path
+
+#main
+  io.outln(file.sep())
+  io.outln(path.join('a', 'b'))
+  OK

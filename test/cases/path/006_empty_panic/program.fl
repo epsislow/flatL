@@ -1,0 +1,5 @@
+use native path
+
+#main
+  io.outln(path.normalize(''))
+  OK

@@ -173,6 +173,7 @@ int flat_native_file_setposrel(FlatNativeCtx *ctx);
 int flat_native_file_iseof(FlatNativeCtx *ctx);
 int flat_native_file_close(FlatNativeCtx *ctx);
 int flat_native_file_truncate(FlatNativeCtx *ctx);
+int flat_native_file_sep(FlatNativeCtx *ctx);
 
 int flat_native_str_to_date(FlatNativeCtx *ctx);
 int flat_native_str_to_time(FlatNativeCtx *ctx);
@@ -299,5 +300,12 @@ int flat_native_env_has(FlatNativeCtx *ctx);
 int flat_native_env_get(FlatNativeCtx *ctx);
 int flat_native_env_argc(FlatNativeCtx *ctx);
 int flat_native_env_args(FlatNativeCtx *ctx);
+
+int flat_native_path_join(FlatNativeCtx *ctx);
+int flat_native_path_base(FlatNativeCtx *ctx);
+int flat_native_path_dir(FlatNativeCtx *ctx);
+int flat_native_path_ext(FlatNativeCtx *ctx);
+int flat_native_path_normalize(FlatNativeCtx *ctx);
+int flat_native_path_is_abs(FlatNativeCtx *ctx);
 
 #endif

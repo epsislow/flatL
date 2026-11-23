@@ -7,6 +7,7 @@
   const TERMINAL_PREFS_KEY = 'flatl-fleditor-terminal-prefs';
   const HTTP_PREFS_KEY = 'flatl-fleditor-http-prefs';
   const ENV_PREFS_KEY = 'flatl-fleditor-env-prefs';
+  const PATH_PREFS_KEY = 'flatl-fleditor-path-prefs';
 
   const CUSTOM_PRESET_ID = 'custom';
   const DEFAULT_PRESET_ID = 'dark';
@@ -248,6 +249,11 @@
     entries: [],
     /** Space-separated program argv for env.args / env.argc */
     programArgs: '',
+  };
+
+  const DEFAULT_PATH_PREFS = {
+    /** 'auto' | '/' | '\\' */
+    sep: 'auto',
   };
 
   function normalizeProgramInput(v) {
@@ -542,12 +548,14 @@
     store.removeItem(TERMINAL_PREFS_KEY);
     store.removeItem(HTTP_PREFS_KEY);
     store.removeItem(ENV_PREFS_KEY);
+    store.removeItem(PATH_PREFS_KEY);
     return {
       theme: defaultThemeState(),
       editorPrefs: Object.assign({}, DEFAULT_EDITOR_PREFS),
       terminalPrefs: Object.assign({}, DEFAULT_TERMINAL_PREFS),
       httpPrefs: Object.assign({}, DEFAULT_HTTP_PREFS),
       envPrefs: Object.assign({}, DEFAULT_ENV_PREFS, { entries: [] }),
+      pathPrefs: Object.assign({}, DEFAULT_PATH_PREFS),
     };
   }
 
@@ -686,6 +694,37 @@
     return merged;
   }
 
+  function normalizePathSep(v) {
+    if (v === '/' || v === '\\' || v === 'backslash') {
+      return v === 'backslash' ? '\\' : v;
+    }
+    return 'auto';
+  }
+
+  function loadPathPrefs(storage) {
+    const store = storage || global.localStorage;
+    try {
+      const raw = store.getItem(PATH_PREFS_KEY);
+      if (!raw) {
+        return Object.assign({}, DEFAULT_PATH_PREFS);
+      }
+      const p = JSON.parse(raw);
+      return { sep: normalizePathSep(p.sep) };
+    } catch (_e) {
+      return Object.assign({}, DEFAULT_PATH_PREFS);
+    }
+  }
+
+  function savePathPrefs(storage, prefs) {
+    const store = storage || global.localStorage;
+    const merged = loadPathPrefs(store);
+    if (prefs && Object.prototype.hasOwnProperty.call(prefs, 'sep')) {
+      merged.sep = normalizePathSep(prefs.sep);
+    }
+    store.setItem(PATH_PREFS_KEY, JSON.stringify(merged));
+    return merged;
+  }
+
   function clampNum(n, min, max, fallback) {
     if (typeof n !== 'number' || Number.isNaN(n)) {
       return fallback;
@@ -716,6 +755,7 @@
     TERMINAL_PREFS_KEY,
     HTTP_PREFS_KEY,
     ENV_PREFS_KEY,
+    PATH_PREFS_KEY,
     TOKEN_KEYS,
     TOKEN_META,
     GROUP_LABELS,
@@ -726,6 +766,7 @@
     DEFAULT_TERMINAL_PREFS,
     DEFAULT_HTTP_PREFS,
     DEFAULT_ENV_PREFS,
+    DEFAULT_PATH_PREFS,
     isBuiltInPresetId,
     isUserPresetId,
     darkTokens,
@@ -753,6 +794,8 @@
     saveHttpPrefs,
     loadEnvPrefs,
     saveEnvPrefs,
+    loadPathPrefs,
+    savePathPrefs,
     listPresetOptions,
     normalizeThemeState,
   };

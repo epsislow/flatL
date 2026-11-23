@@ -2,6 +2,7 @@
 #include "flat_disasm.h"
 #include "flat.h"
 #include "flat_env.h"
+#include "flat_path.h"
 #include "fb_format.h"
 #include "flat_link.h"
 #include "flat_native_mods.h"
@@ -50,6 +51,18 @@ void flat_wasm_env_args_clear(void) {
 
 int flat_wasm_env_args_push(const char *arg) {
     return flat_env_args_push(arg);
+}
+
+void flat_wasm_path_sep_reset(void) {
+    flat_path_sep_reset();
+}
+
+int flat_wasm_path_sep_set(const char *sep) {
+    if (!sep || !sep[0] || strcmp(sep, "auto") == 0) {
+        flat_path_sep_reset();
+        return 0;
+    }
+    return flat_path_sep_set_str(sep);
 }
 
 static void flat_wasm_fill_vm_opts(FlatVmOptions *opts) {
