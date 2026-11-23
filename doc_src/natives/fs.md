@@ -27,7 +27,7 @@ Build toggle: `make … fs=0`.
 | `fs.isFile(path)` | BOOL | **`fs.isFile.empty`** / **`fs.isFile.args`** — missing / not file → `false` |
 | `fs.isDir(path)` | BOOL | **`fs.isDir.empty`** / **`fs.isDir.args`** — missing / not dir → `false` |
 | `fs.mkdir(path)` | (null) | **`fs.mkdir`**, **`fs.mkdir.exists`** if a non-dir already exists; idempotent if already a dir |
-| `fs.listDir(path)` | LIST of STRING | **`fs.listDir`** if not a directory; names sorted, no `.` / `..` |
+| `fs.listDir(path)` | LIST of STRING | **`fs.listDir`** if not a directory; **`fs.listDir.limit`** above 512 entries; names sorted, no `.` / `..`; maximum 512 entries per call |
 | `fs.remove(path)` | (null) | **`fs.remove.missing`**, **`fs.remove.not_empty`** (non-empty dir), **`fs.remove`** |
 
 `mkdir` creates **one** level (parent must exist). `remove` deletes a **file** or an **empty** directory (no recursive tree wipe).

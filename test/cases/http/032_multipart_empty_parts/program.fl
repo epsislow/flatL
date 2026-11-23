@@ -1,0 +1,15 @@
+use native http
+
+#main
+  req = http.create('POST', 'http://mock.local/empty-parts')
+  http.addPart(req, 'empty', '')
+  http.addFilePart(req, 'empty-file', '', 'empty.bin')
+  http.send(req)
+  http.transportOk(req)
+  body = http.responseBody(req)
+  io.outln(http.status(req))
+  io.outln(str.contains(body, 'name="empty"'))
+  io.outln(str.contains(body, 'name="empty-file"'))
+  io.outln(str.contains(body, 'filename="empty.bin"'))
+  http.close(req)
+  OK

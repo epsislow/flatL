@@ -1,0 +1,9 @@
+use native fs
+
+#main
+  fs.mkdir('nonempty')
+  fp = file.createCtx('nonempty/child.txt')
+  file.write(fp, 'x')
+  file.close(fp)
+  fs.remove('nonempty')
+  OK

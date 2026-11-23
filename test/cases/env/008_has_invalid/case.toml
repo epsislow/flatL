@@ -1,0 +1,10 @@
+suite = "env"
+mods = "env"
+id = 8
+desc = "env.has rejects non-string arguments without releasing an uninitialized value"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "env.has.args"

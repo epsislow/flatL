@@ -1,0 +1,10 @@
+suite = "fs"
+mods = "fs"
+id = 11
+desc = "fs.listDir reports its explicit limit above 512 entries"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && mkdir many && i=0; while [ $i -lt 513 ]; do : > many/$i; i=$((i+1)); done; {root}/bin/flvm out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "fs.listDir.limit"

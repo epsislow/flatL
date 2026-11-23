@@ -1,0 +1,6 @@
+use native path
+
+#main
+  io.outln(path.join('alpha', 'beta', 'gamma', 'delta'))
+  io.outln(path.normalize('one/two/three/../../four/five'))
+  OK

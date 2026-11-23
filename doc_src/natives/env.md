@@ -22,7 +22,7 @@ Recoverable failures → **PANIC** with reason **`env.<fn>…`** unless the line
 
 | Call | Returns | Panic (no modifier) |
 |------|---------|---------------------|
-| `env.has(name)` | BOOL | **`env.has.args`** — bad / empty name |
+| `env.has(name)` | BOOL | **`env.has.args`** — bad type / empty name |
 | `env.get(name)` | STRING | **`env.get.missing`** if key absent; **`env.get.args`** on bad name |
 | `env.get(name, default)` | STRING | Value or **default** (STRING); **no** panic on missing |
 | `env.argc()` | NUMBER | — |
@@ -36,6 +36,7 @@ use native env
 #main
   io.outln(env.has('PATH'))
   io.outln(env.has('FLAT_ENV_DOES_NOT_EXIST'))
+  # Non-STRING arguments panic with env.has.args.
   OK
 ```
 

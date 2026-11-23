@@ -444,7 +444,7 @@ Runnable samples (CLI + fleditor):
 
 They use a public HTTPS JSON API that allows browser CORS so **Run** works in the WASM playground as well as with native `flvm`/`flatl`.
 
-Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the native transport. Redirect following is controlled by `http.maxRedirects` (default **10**). HTTPS peer and host certificate verification are enabled by default.
+Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the native transport. Redirect following is controlled by `http.maxRedirects` (default **10**). HTTPS peer and host certificate verification are enabled by default. When following redirects, libcurl is explicitly configured not to forward credentials to a different host (`CURLOPT_UNRESTRICTED_AUTH = 0`); cross-host Authorization forwarding is not enabled.
 
 `http.send()` is synchronous from the FlatL program's point of view. The internal transport boundary is kept separate so a future asynchronous executor can reuse the same request and response representation; asynchronous calls are not part of this API yet.
 

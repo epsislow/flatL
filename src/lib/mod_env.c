@@ -87,6 +87,7 @@ static int out_string(FlatNativeCtx *ctx, const char *data, size_t len) {
 
 int flat_native_env_has(FlatNativeCtx *ctx) {
     FlatValue v;
+    memset(&v, 0, sizeof v);
     char *name = NULL;
     size_t nl;
     char buf[FLAT_ENV_VAL_MAX + 1];

@@ -1,0 +1,6 @@
+use native fs
+
+#main
+  xs = fs.listDir('many')
+  io.outln(xs)
+  OK

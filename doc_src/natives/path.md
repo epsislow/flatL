@@ -99,7 +99,7 @@ use native path
 
 ## `path.normalize`
 
-Collapses `.` and empty segments; applies `..` (does not climb above an absolute root). Mixed `/` and `\` are rewritten with the effective sep. Empty string → **`path.normalize.empty`**. No I/O / no symlinks.
+Collapses `.` and empty segments; applies `..` (does not climb above an absolute root). Mixed `/` and `\` are rewritten with the effective sep. Empty string → **`path.normalize.empty`**. No I/O / no symlinks. Segment storage is heap-backed (up to 256 segments, each shorter than 4096 bytes), avoiding multi-megabyte stack allocations.
 
 ```text
 use native path

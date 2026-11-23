@@ -1,0 +1,10 @@
+suite = "fs"
+mods = "fs list"
+id = 10
+desc = "fs.listDir returns all entries up to its 512-entry capacity"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && mkdir many && i=0; while [ $i -lt 512 ]; do : > many/$i; i=$((i+1)); done; {root}/bin/flvm out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "512"

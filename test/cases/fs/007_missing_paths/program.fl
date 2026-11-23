@@ -1,0 +1,7 @@
+use native fs
+
+#main
+  io.outln(fs.exists('missing-file.txt'))
+  io.outln(fs.isFile('missing-file.txt'))
+  io.outln(fs.isDir('missing-dir'))
+  OK

@@ -1,0 +1,5 @@
+use native env
+
+#main
+  io.outln(env.has(123))
+  OK

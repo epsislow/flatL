@@ -1,0 +1,7 @@
+use native fs
+use native list
+
+#main
+  xs = fs.listDir('many')
+  io.outln(list.len(xs))
+  OK

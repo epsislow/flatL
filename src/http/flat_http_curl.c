@@ -327,6 +327,8 @@ int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     transfer.overflow = 0;
     curl_easy_setopt(curl, CURLOPT_URL, req->url);
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req->method);
+    /* Never forward credentials to a different host across redirects. */
+    curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 0L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, req->timeout_ms);
     if (req->max_redirects == 0) {
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);

@@ -1,0 +1,8 @@
+use native fs
+use native list
+
+#main
+  fs.mkdir('empty')
+  xs = fs.listDir('empty')
+  io.outln(list.len(xs))
+  OK
