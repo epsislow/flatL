@@ -1,0 +1,14 @@
+suite = "http"
+id = 18
+desc = "requestInfo exposes method url sent bodyLen headers timeout without body bytes"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "POST"
+stdout_contains_2 = "http://mock.local/users"
+stdout_contains_3 = "false"
+stdout_contains_4 = "0"
+stdout_contains_5 = "2500"
+stdout_contains_6 = "application/json"

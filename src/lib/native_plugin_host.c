@@ -105,6 +105,8 @@ static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_MAX_BODY, flat_native_http_max_body);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_TRANSPORT_OK, flat_native_http_transport_ok);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_STATUS_OK, flat_native_http_status_ok);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_REQUEST_INFO, flat_native_http_request_info);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_RESPONSE_INFO, flat_native_http_response_info);
 }
 
 static void register_embedded_vcx(void) {

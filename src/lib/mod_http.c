@@ -137,48 +137,75 @@ done:
     return rc == 0 ? 0 : http_fail(ctx, "http.headers.invalid");
 }
 
-int flat_native_http_response_headers(FlatNativeCtx *ctx) {
-    uint32_t id, obj_id;
-    FlatHttpRequestSlot *s;
-    FlatValue arg, lists_v[FLAT_OBJ_MAX_KEYS];
-    char keys[FLAT_OBJ_MAX_KEYS][FLAT_OBJ_KEY_MAX + 1];
-    FlatValue grouped[FLAT_OBJ_MAX_KEYS][64];
-    int counts[FLAT_OBJ_MAX_KEYS] = {0};
-    int i, j, nkeys = 0;
-    if (!ctx || !ctx->out || get_args(ctx, &arg, 1) != 0 || num_arg(&arg, &id) != 0 ||
-        !flat_http_request_live(ctx->http, id)) return http_fail(ctx, "http.responseHeaders.id");
-    s = &ctx->http->requests[id];
-    if (!s->sent) return http_fail(ctx, "http.responseHeaders.not_sent");
-    for (i = 0; i < (int)s->response.header_count; ++i) {
-        char *line = s->response.headers[i], *colon = strchr(line, ':');
+/* Build OBJECT map name -> LIST of STRING from "name: value" header lines.
+ * Grouping buffers are heap-allocated (FlatValue grid is ~1MB — too large for stack). */
+static int build_headers_object(FlatNativeCtx *ctx, char **lines, size_t count, uint32_t *out_obj) {
+    FlatValue *lists_v = NULL;
+    char (*keys)[FLAT_OBJ_KEY_MAX + 1] = NULL;
+    FlatValue (*grouped)[64] = NULL;
+    int *counts = NULL;
+    int i, j, nkeys = 0, rc = -1;
+    uint32_t obj_id = 0;
+    if (!ctx || !out_obj) return -1;
+    lists_v = (FlatValue *)calloc((size_t)FLAT_OBJ_MAX_KEYS, sizeof *lists_v);
+    keys = (char (*)[FLAT_OBJ_KEY_MAX + 1])calloc((size_t)FLAT_OBJ_MAX_KEYS, sizeof *keys);
+    grouped = (FlatValue (*)[64])calloc((size_t)FLAT_OBJ_MAX_KEYS, sizeof *grouped);
+    counts = (int *)calloc((size_t)FLAT_OBJ_MAX_KEYS, sizeof *counts);
+    if (!lists_v || !keys || !grouped || !counts) goto done;
+    for (i = 0; i < (int)count; ++i) {
+        char *line = lines[i], *colon;
         char name[FLAT_OBJ_KEY_MAX + 1], *value;
         int found = -1;
         size_t k, nn;
         FlatValue item;
+        if (!line) continue;
+        colon = strchr(line, ':');
         if (!colon) continue;
         nn = (size_t)(colon - line);
         if (!nn || nn > FLAT_OBJ_KEY_MAX) continue;
         for (k = 0; k < nn; ++k) name[k] = (char)tolower((unsigned char)line[k]);
         name[nn] = '\0';
-        value = colon + 1; while (*value == ' ' || *value == '\t') value++;
+        value = colon + 1;
+        while (*value == ' ' || *value == '\t') value++;
         for (j = 0; j < nkeys; ++j) if (strcmp(keys[j], name) == 0) { found = j; break; }
         if (found < 0) {
             if (nkeys >= FLAT_OBJ_MAX_KEYS) continue;
-            found = nkeys++; snprintf(keys[found], sizeof keys[found], "%s", name);
+            found = nkeys++;
+            snprintf(keys[found], sizeof keys[found], "%s", name);
         }
         if (counts[found] >= 64) continue;
         if (make_string_value(ctx, value, strlen(value), &item) != 0) continue;
         grouped[found][counts[found]++] = item;
     }
-    if (flat_obj_empty(ctx->coll, ctx->pool, &obj_id) != 0) return http_fail(ctx, "http.responseHeaders.memory");
+    if (flat_obj_empty(ctx->coll, ctx->pool, &obj_id) != 0) goto done;
     for (i = 0; i < nkeys; ++i) {
         uint32_t list_id, next_obj;
         if (flat_list_build(ctx->coll, ctx->pool, grouped[i], counts[i], &list_id) != 0 ||
             flat_value_set_list(&lists_v[i], list_id) != 0 ||
             flat_obj_set_copy(ctx->coll, ctx->pool, obj_id, keys[i], &lists_v[i], &next_obj) != 0)
-            return http_fail(ctx, "http.responseHeaders.memory");
+            goto done;
         obj_id = next_obj;
     }
+    *out_obj = obj_id;
+    rc = 0;
+done:
+    free(lists_v);
+    free(keys);
+    free(grouped);
+    free(counts);
+    return rc;
+}
+
+int flat_native_http_response_headers(FlatNativeCtx *ctx) {
+    uint32_t id, obj_id;
+    FlatHttpRequestSlot *s;
+    FlatValue arg;
+    if (!ctx || !ctx->out || get_args(ctx, &arg, 1) != 0 || num_arg(&arg, &id) != 0 ||
+        !flat_http_request_live(ctx->http, id)) return http_fail(ctx, "http.responseHeaders.id");
+    s = &ctx->http->requests[id];
+    if (!s->sent) return http_fail(ctx, "http.responseHeaders.not_sent");
+    if (build_headers_object(ctx, s->response.headers, s->response.header_count, &obj_id) != 0)
+        return http_fail(ctx, "http.responseHeaders.memory");
     http_ok(ctx);
     return flat_value_set_object(ctx->out, obj_id);
 }
@@ -235,4 +262,62 @@ int flat_native_http_status_ok(FlatNativeCtx *ctx) {
     label = http_status_label(s->response.status);
     if (label) return http_fail(ctx, label);
     return http_ok(ctx);
+}
+
+int flat_native_http_request_info(FlatNativeCtx *ctx) {
+    uint32_t id, obj_id, headers_id;
+    char keys[7][FLAT_OBJ_KEY_MAX + 1];
+    FlatValue vals[7];
+    FlatHttpRequestSlot *s = resolve(ctx, "http.requestInfo.id", &id);
+    if (!s || !ctx->out) return s ? http_fail(ctx, "http.requestInfo.args") : -1;
+    if (build_headers_object(ctx, s->headers, s->header_count, &headers_id) != 0)
+        return http_fail(ctx, "http.requestInfo.memory");
+    memset(vals, 0, sizeof vals);
+    if (make_string_value(ctx, s->method ? s->method : "", s->method ? strlen(s->method) : 0, &vals[0]) != 0 ||
+        make_string_value(ctx, s->url ? s->url : "", s->url ? strlen(s->url) : 0, &vals[1]) != 0 ||
+        flat_value_set_object(&vals[2], headers_id) != 0 ||
+        flat_value_set_number(&vals[3], (double)s->timeout_ms) != 0 ||
+        flat_value_set_number(&vals[4], (double)s->max_body_bytes) != 0 ||
+        flat_value_set_bool(&vals[5], s->sent ? 1 : 0) != 0 ||
+        flat_value_set_number(&vals[6], (double)s->body_len) != 0)
+        return http_fail(ctx, "http.requestInfo.memory");
+    snprintf(keys[0], sizeof keys[0], "method");
+    snprintf(keys[1], sizeof keys[1], "url");
+    snprintf(keys[2], sizeof keys[2], "headers");
+    snprintf(keys[3], sizeof keys[3], "timeoutMs");
+    snprintf(keys[4], sizeof keys[4], "maxBody");
+    snprintf(keys[5], sizeof keys[5], "sent");
+    snprintf(keys[6], sizeof keys[6], "bodyLen");
+    /* flat_obj_build pins vals (incl. headers object) before allocating the root. */
+    if (flat_obj_build(ctx->coll, ctx->pool, keys, vals, 7, &obj_id) != 0)
+        return http_fail(ctx, "http.requestInfo.memory");
+    http_ok(ctx);
+    return flat_value_set_object(ctx->out, obj_id);
+}
+
+int flat_native_http_response_info(FlatNativeCtx *ctx) {
+    uint32_t id, obj_id, headers_id;
+    char keys[5][FLAT_OBJ_KEY_MAX + 1];
+    FlatValue vals[5];
+    FlatHttpRequestSlot *s = resolve(ctx, "http.responseInfo.id", &id);
+    if (!s || !ctx->out) return s ? http_fail(ctx, "http.responseInfo.args") : -1;
+    if (!s->sent) return http_fail(ctx, "http.responseInfo.not_sent");
+    if (build_headers_object(ctx, s->response.headers, s->response.header_count, &headers_id) != 0)
+        return http_fail(ctx, "http.responseInfo.memory");
+    memset(vals, 0, sizeof vals);
+    if (flat_value_set_number(&vals[0], (double)s->response.status) != 0 ||
+        flat_value_set_object(&vals[1], headers_id) != 0 ||
+        make_string_value(ctx, s->response.error, strlen(s->response.error), &vals[2]) != 0 ||
+        flat_value_set_number(&vals[3], (double)s->response.error_code) != 0 ||
+        flat_value_set_number(&vals[4], (double)s->response.body_len) != 0)
+        return http_fail(ctx, "http.responseInfo.memory");
+    snprintf(keys[0], sizeof keys[0], "status");
+    snprintf(keys[1], sizeof keys[1], "headers");
+    snprintf(keys[2], sizeof keys[2], "error");
+    snprintf(keys[3], sizeof keys[3], "errorCode");
+    snprintf(keys[4], sizeof keys[4], "bodyLen");
+    if (flat_obj_build(ctx->coll, ctx->pool, keys, vals, 5, &obj_id) != 0)
+        return http_fail(ctx, "http.responseInfo.memory");
+    http_ok(ctx);
+    return flat_value_set_object(ctx->out, obj_id);
 }

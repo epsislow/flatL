@@ -141,6 +141,45 @@ body = http.body(req)
 
 When 404 is expected, call `transportOk` only and branch on `http.status(req)` — do not call `statusOk`.
 
+## Snapshots: `requestInfo` / `responseInfo`
+
+These return an **OBJECT** built on demand from the live request slot (no second transport buffer). They do **not** include body bytes — use `http.body(id)` for the response body. `bodyLen = 0` means there is no useful body.
+
+### `http.requestInfo(id)`
+
+Available while the request resource is live (before or after `send`):
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `method` | STRING | HTTP method |
+| `url` | STRING | request URL |
+| `headers` | OBJECT | request headers → LIST of STRING (same shape as `http.headers` input) |
+| `timeoutMs` | NUMBER | timeout in milliseconds |
+| `maxBody` | NUMBER | configured max response body bytes |
+| `sent` | BOOL | whether `http.send` has been called |
+| `bodyLen` | NUMBER | request body length (`0` = none / empty) |
+
+### `http.responseInfo(id)`
+
+Requires `send` first (`http.responseInfo.not_sent` otherwise):
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `status` | NUMBER | HTTP status (`0` if no HTTP response) |
+| `headers` | OBJECT | response headers → LIST of STRING (same as `responseHeaders`) |
+| `error` | STRING | transport error message (empty if none) |
+| `errorCode` | NUMBER | transport error code (`0` = none) |
+| `bodyLen` | NUMBER | response body length (`0` = none / empty) |
+
+```flat
+http.send(req)
+info = http.responseInfo(req)
+obj.get(info, '"status"') -> status
+obj.get(info, '"bodyLen"') -> n
+if n > 0
+  body = http.body(req)
+```
+
 ## Limits and lifecycle
 
 - Default timeout: 10 seconds.

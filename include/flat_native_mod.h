@@ -279,5 +279,7 @@ int flat_native_http_response_headers(FlatNativeCtx *ctx);
 int flat_native_http_max_body(FlatNativeCtx *ctx);
 int flat_native_http_transport_ok(FlatNativeCtx *ctx);
 int flat_native_http_status_ok(FlatNativeCtx *ctx);
+int flat_native_http_request_info(FlatNativeCtx *ctx);
+int flat_native_http_response_info(FlatNativeCtx *ctx);
 
 #endif

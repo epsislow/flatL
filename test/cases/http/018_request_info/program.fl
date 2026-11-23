@@ -1,0 +1,26 @@
+use native obj
+use native list
+#main
+  req = http.create('POST', 'http://mock.local/users')
+  info = http.requestInfo(req)
+  obj.get(info, '"method"') -> method
+  obj.get(info, '"url"') -> url
+  obj.get(info, '"sent"') -> sent
+  obj.get(info, '"bodyLen"') -> bl0
+  io.outln(method)
+  io.outln(url)
+  io.outln(sent)
+  io.outln(bl0)
+  data = {"name": "FlatL"}
+  http.json(req, data)
+  http.timeout(req, 2500)
+  info2 = http.requestInfo(req)
+  obj.get(info2, '"bodyLen"') -> bl1
+  obj.get(info2, '"timeoutMs"') -> ms
+  obj.get(info2, '"headers"') -> hdrs
+  obj.get(hdrs, '"content-type"') -> cts
+  io.outln(bl1)
+  io.outln(ms)
+  io.outln(list.get(cts, 0))
+  http.close(req)
+  OK
