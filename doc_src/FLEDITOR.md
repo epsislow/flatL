@@ -350,13 +350,14 @@ Layout prefs: `localStorage` key `flatl-fleditor-layout`.
 
 ### Settings
 
-- Toolbar **⚙ Settings** (right of **Docs**) opens a modal: **Display**, **Editor**, **Terminal**, **HTTP**, **About** (nav left, content right).
+- Toolbar **⚙ Settings** (right of **Docs**) opens a modal: **Display**, **Editor**, **Terminal**, **HTTP**, **Env**, **About** (nav left, content right).
 - **Display:** theme preset (**Dark**, **Light**, **Carbon**, **Turquoise Gray**, **Custom**, plus **My themes** you save). Colors apply live to chrome, **Project panel** (sidebar only), **Fl editor** + **FlatL syntax**, **Text editor**, **Hex editor**, and **Terminal**. Project panel background does not paint the editor area. Any manual color edit switches to **Custom**. **Save as new theme…** / **Delete theme** (user themes only) / **Reset to Dark**.
 - **Editor:** font size, line numbers, tab size, word wrap (`flatl-fleditor-editor-prefs`).
 - **Terminal:** font size, **Clear on Run**, **Program input** (`io.in*` — terminal inline vs dialog modal), **Max jumps** / **Max VM steps** / **No jump limit** (WASM run uses same limits as `flvm --max-jumps` / `--max-steps`; stored in `flatl-fleditor-terminal-prefs`).
 - **HTTP:** if the WASM build has no `http` module (`http=0`), shows **No HTTP module in FlatL WASM build** (+ rebuild hint). When HTTP is present: **Cross-origin requests** ON/OFF (default ON). OFF refuses cross-origin URLs before `fetch` — it never bypasses browser CORS. Prefs: `flatl-fleditor-http-prefs`.
+- **Env:** global prefs for native [`env`](./natives/env.md) (`use native env`). Key / value list with **Add / Update** / **Remove**; optional **Sensitive** hides the value in the list (shows a mask) — **Copy** still copies the stored value; **Edit** on a sensitive row leaves the value field empty so you do not re-display the secret. **Program args** (space-separated, quotes allowed) feed `env.args` / `env.argc`. Prefs: `flatl-fleditor-env-prefs` (not per-project). Injected into WASM at each **Run** (no browser/OS process env). Cleared by **Reset all settings**.
 - Theme state: `localStorage` key **`flatl-fleditor-theme`**. Does not change project files or panel layout reset (↺).
-- **About:** fleditor UI version, **flatL WASM** toolchain version, HTTP module / built mods (after `make fleditor-wasm`). **Reset all settings** — theme + editor + terminal + HTTP prefs only (not project or dock layout ↺).
+- **About:** fleditor UI version, **flatL WASM** toolchain version, HTTP module / built mods (after `make fleditor-wasm`). **Reset all settings** — theme + editor + terminal + HTTP + Env prefs only (not project or dock layout ↺).
 
 ## Limits
 

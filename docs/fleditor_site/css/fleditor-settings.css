@@ -209,3 +209,49 @@
   font-family: ui-monospace, Menlo, Consolas, monospace;
   color: var(--fl-text);
 }
+
+.fleditor-env-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.fleditor-env-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 14rem;
+  overflow: auto;
+}
+
+.fleditor-env-list-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.35rem 0.5rem;
+  align-items: center;
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--fl-border, #444);
+  background: var(--fl-panel, transparent);
+}
+
+.fleditor-env-list-item button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.fleditor-env-list-meta {
+  grid-column: 1 / -1;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.85em;
+  color: var(--fl-text);
+  word-break: break-all;
+}
+
+.fleditor-env-list-meta .fleditor-env-sensitive-mark {
+  color: var(--fl-text-muted);
+  margin-left: 0.35rem;
+}

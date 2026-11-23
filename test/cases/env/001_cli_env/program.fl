@@ -1,0 +1,5 @@
+use native env
+
+#main
+  io.outln(env.get('FLAT_ENV_CLI'))
+  OK

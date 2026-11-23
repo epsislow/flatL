@@ -295,4 +295,9 @@ int flat_native_http_parts_load(FlatNativeCtx *ctx);
 int flat_native_http_parts_max(FlatNativeCtx *ctx);
 int flat_native_http_part_info(FlatNativeCtx *ctx);
 
+int flat_native_env_has(FlatNativeCtx *ctx);
+int flat_native_env_get(FlatNativeCtx *ctx);
+int flat_native_env_argc(FlatNativeCtx *ctx);
+int flat_native_env_args(FlatNativeCtx *ctx);
+
 #endif

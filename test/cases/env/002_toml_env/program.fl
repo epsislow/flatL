@@ -1,0 +1,6 @@
+use native env
+
+#main
+  io.outln(env.get('FLAT_ENV_TOML'))
+  io.outln(env.get('FLAT_ENV_TOKEN'))
+  OK

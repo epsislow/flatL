@@ -90,6 +90,15 @@ static void register_embedded_clock(void) {
     flat_native_plugin_register(FLAT_NATIVE_CLOCK_CLOSE, flat_native_clock_close);
 }
 
+#if FLAT_WITH_ENV
+static void register_embedded_env(void) {
+    flat_native_plugin_register(FLAT_NATIVE_ENV_HAS, flat_native_env_has);
+    flat_native_plugin_register(FLAT_NATIVE_ENV_GET, flat_native_env_get);
+    flat_native_plugin_register(FLAT_NATIVE_ENV_ARGC, flat_native_env_argc);
+    flat_native_plugin_register(FLAT_NATIVE_ENV_ARGS, flat_native_env_args);
+}
+#endif
+
 #if FLAT_WITH_HTTP
 static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
@@ -581,6 +590,9 @@ void flat_native_runtime_reset(void) {
     register_embedded_clock();
 #if FLAT_WITH_HTTP
     register_embedded_http();
+#endif
+#if FLAT_WITH_ENV
+    register_embedded_env();
 #endif
     register_embedded_vcx();
     register_embedded_executor();

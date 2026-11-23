@@ -175,6 +175,11 @@
       "id": "http-native",
       "label": "Native http",
       "file": "natives/http.md"
+    },
+    {
+      "id": "env-native",
+      "label": "Native env",
+      "file": "natives/env.md"
     }
   ]
 }

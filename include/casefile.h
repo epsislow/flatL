@@ -13,6 +13,9 @@
 #define FLAT_CASE_CATEG_DEFAULT "default"
 #define FLAT_CASE_MAX_MODS 8
 #define FLAT_CASE_MOD_LEN 32
+#define FLAT_CASE_MAX_ENV 32
+#define FLAT_CASE_ENV_KEY_LEN 64
+#define FLAT_CASE_ENV_VAL_LEN 256
 
 typedef enum {
     CASE_KIND_FILES,
@@ -43,6 +46,10 @@ typedef struct {
     /* Required built modules (from mods= in case.toml); empty = no requirement. */
     char mods[FLAT_CASE_MAX_MODS][FLAT_CASE_MOD_LEN];
     int mods_count;
+    /* [env] KEY = "VAL" — injected into child process environment for this case. */
+    char env_keys[FLAT_CASE_MAX_ENV][FLAT_CASE_ENV_KEY_LEN];
+    char env_vals[FLAT_CASE_MAX_ENV][FLAT_CASE_ENV_VAL_LEN];
+    int env_count;
 
     char pipeline_compile[FLAT_CASE_MAX_CMD];
     char pipeline_run[FLAT_CASE_MAX_CMD];

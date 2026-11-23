@@ -1,0 +1,11 @@
+suite = "env"
+mods = "env"
+id = 3
+desc = "env.get(name, default) returns default when missing"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm --env FLAT_ENV_DEF_HIT=present {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "fallback"
+stdout_contains_2 = "present"

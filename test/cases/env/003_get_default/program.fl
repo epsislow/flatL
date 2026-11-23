@@ -1,0 +1,6 @@
+use native env
+
+#main
+  io.outln(env.get('FLAT_ENV_MISSING_DEFAULT', 'fallback'))
+  io.outln(env.get('FLAT_ENV_DEF_HIT', 'unused'))
+  OK

@@ -6,6 +6,7 @@
   const EDITOR_PREFS_KEY = 'flatl-fleditor-editor-prefs';
   const TERMINAL_PREFS_KEY = 'flatl-fleditor-terminal-prefs';
   const HTTP_PREFS_KEY = 'flatl-fleditor-http-prefs';
+  const ENV_PREFS_KEY = 'flatl-fleditor-env-prefs';
 
   const CUSTOM_PRESET_ID = 'custom';
   const DEFAULT_PRESET_ID = 'dark';
@@ -240,6 +241,13 @@
   const DEFAULT_HTTP_PREFS = {
     /** When false, WASM Fetch refuses cross-origin URLs before fetch (does not bypass CORS). */
     allowCrossOrigin: true,
+  };
+
+  const DEFAULT_ENV_PREFS = {
+    /** @type {{ key: string, value: string, sensitive: boolean }[]} */
+    entries: [],
+    /** Space-separated program argv for env.args / env.argc */
+    programArgs: '',
   };
 
   function normalizeProgramInput(v) {
@@ -533,11 +541,13 @@
     store.removeItem(EDITOR_PREFS_KEY);
     store.removeItem(TERMINAL_PREFS_KEY);
     store.removeItem(HTTP_PREFS_KEY);
+    store.removeItem(ENV_PREFS_KEY);
     return {
       theme: defaultThemeState(),
       editorPrefs: Object.assign({}, DEFAULT_EDITOR_PREFS),
       terminalPrefs: Object.assign({}, DEFAULT_TERMINAL_PREFS),
       httpPrefs: Object.assign({}, DEFAULT_HTTP_PREFS),
+      envPrefs: Object.assign({}, DEFAULT_ENV_PREFS, { entries: [] }),
     };
   }
 
@@ -624,6 +634,58 @@
     return merged;
   }
 
+  function normalizeEnvEntries(raw) {
+    if (!Array.isArray(raw)) {
+      return [];
+    }
+    /** @type {{ key: string, value: string, sensitive: boolean }[]} */
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const e = raw[i];
+      if (!e || typeof e.key !== 'string' || !e.key.trim()) {
+        continue;
+      }
+      out.push({
+        key: e.key.trim(),
+        value: typeof e.value === 'string' ? e.value : '',
+        sensitive: !!e.sensitive,
+      });
+    }
+    return out;
+  }
+
+  function loadEnvPrefs(storage) {
+    const store = storage || global.localStorage;
+    try {
+      const raw = store.getItem(ENV_PREFS_KEY);
+      if (!raw) {
+        return Object.assign({}, DEFAULT_ENV_PREFS, { entries: [] });
+      }
+      const p = JSON.parse(raw);
+      return {
+        entries: normalizeEnvEntries(p.entries),
+        programArgs: typeof p.programArgs === 'string' ? p.programArgs : '',
+      };
+    } catch (_e) {
+      return Object.assign({}, DEFAULT_ENV_PREFS, { entries: [] });
+    }
+  }
+
+  function saveEnvPrefs(storage, prefs) {
+    const store = storage || global.localStorage;
+    const merged = loadEnvPrefs(store);
+    if (prefs) {
+      if (Object.prototype.hasOwnProperty.call(prefs, 'entries')) {
+        merged.entries = normalizeEnvEntries(prefs.entries);
+      }
+      if (Object.prototype.hasOwnProperty.call(prefs, 'programArgs')) {
+        merged.programArgs = typeof prefs.programArgs === 'string' ? prefs.programArgs : '';
+      }
+    }
+    store.setItem(ENV_PREFS_KEY, JSON.stringify(merged));
+    return merged;
+  }
+
   function clampNum(n, min, max, fallback) {
     if (typeof n !== 'number' || Number.isNaN(n)) {
       return fallback;
@@ -653,6 +715,7 @@
     EDITOR_PREFS_KEY,
     TERMINAL_PREFS_KEY,
     HTTP_PREFS_KEY,
+    ENV_PREFS_KEY,
     TOKEN_KEYS,
     TOKEN_META,
     GROUP_LABELS,
@@ -662,6 +725,7 @@
     DEFAULT_EDITOR_PREFS,
     DEFAULT_TERMINAL_PREFS,
     DEFAULT_HTTP_PREFS,
+    DEFAULT_ENV_PREFS,
     isBuiltInPresetId,
     isUserPresetId,
     darkTokens,
@@ -687,6 +751,8 @@
     saveTerminalPrefs,
     loadHttpPrefs,
     saveHttpPrefs,
+    loadEnvPrefs,
+    saveEnvPrefs,
     listPresetOptions,
     normalizeThemeState,
   };

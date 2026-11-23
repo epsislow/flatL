@@ -1,6 +1,7 @@
 #include "flat_wasm.h"
 #include "flat_disasm.h"
 #include "flat.h"
+#include "flat_env.h"
 #include "fb_format.h"
 #include "flat_link.h"
 #include "flat_native_mods.h"
@@ -31,6 +32,24 @@ void flat_wasm_set_run_limits(unsigned max_jumps, unsigned max_steps, int no_jum
     g_wasm_run_limits.max_jumps = max_jumps;
     g_wasm_run_limits.max_steps = max_steps;
     g_wasm_run_limits.no_jump_limit = no_jump_limit ? 1 : 0;
+}
+
+void flat_wasm_env_clear(void) {
+    flat_env_reset();
+    flat_env_set_use_process(0);
+}
+
+int flat_wasm_env_set(const char *key, const char *val) {
+    flat_env_set_use_process(0);
+    return flat_env_override_set(key, val);
+}
+
+void flat_wasm_env_args_clear(void) {
+    (void)flat_env_args_clear();
+}
+
+int flat_wasm_env_args_push(const char *arg) {
+    return flat_env_args_push(arg);
 }
 
 static void flat_wasm_fill_vm_opts(FlatVmOptions *opts) {

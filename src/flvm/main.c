@@ -1,5 +1,6 @@
 #include "fb_format.h"
 #include "flat.h"
+#include "flat_env.h"
 #include "flat_native_mods.h"
 #include "flat_native_plugin.h"
 #include "flat_time.h"
@@ -16,12 +17,17 @@ static void print_version(void) {
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
     fprintf(stderr, "       %s --mods\n", prog);
-    fprintf(stderr, "       %s [--trace] [--trace-vars] [--max-steps N] [--time] program.fb\n", prog);
+    fprintf(stderr,
+            "       %s [--trace] [--trace-vars] [--max-steps N] [--time] [--env KEY=VAL]...\n"
+            "           program.fb [-- arg...]\n",
+            prog);
     fprintf(stderr, "\n  --trace       log each opcode to stderr\n");
     fprintf(stderr, "  --trace-vars  log opcode + variable snapshot to stderr\n");
     fprintf(stderr, "  --mods        list native modules built into this binary (one per line)\n");
     fprintf(stderr, "  --time        print load/run timings on stderr (flvm: time_ms …)\n");
     fprintf(stderr, "  FLAT_TIME=1   same as --time when flag omitted\n");
+    fprintf(stderr, "  --env KEY=VAL override / set env var for env.get / env.has (repeatable)\n");
+    fprintf(stderr, "  -- arg...     program argv for env.args / env.argc (after program.fb)\n");
     fprintf(stderr, "  --max-jumps N cap OP_JUMP count (default %u; 0 = default)\n",
             (unsigned)FLAT_VM_DEFAULT_MAX_JUMPS);
     fprintf(stderr, "  --no-jump-limit disable jump cap\n");
@@ -53,6 +59,9 @@ int main(int argc, char **argv) {
 
     report_time = flat_time_env_enabled();
 
+    flat_env_reset();
+    flat_env_set_use_process(1);
+
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
             print_version();
@@ -75,6 +84,16 @@ int main(int argc, char **argv) {
             report_time = 1;
             continue;
         }
+        if (strcmp(argv[i], "--env") == 0) {
+            if (i + 1 >= argc) {
+                return usage(argv[0]);
+            }
+            if (flat_env_override_parse(argv[++i]) != 0) {
+                fprintf(stderr, "flvm: invalid --env (expected KEY=VAL)\n");
+                return 2;
+            }
+            continue;
+        }
         if (strcmp(argv[i], "--max-steps") == 0) {
             if (i + 1 >= argc) {
                 return usage(argv[0]);
@@ -93,10 +112,27 @@ int main(int argc, char **argv) {
             opts.no_jump_limit = 1;
             continue;
         }
+        if (strcmp(argv[i], "--") == 0) {
+            /* program args without a .fb yet — treat as usage error */
+            return usage(argv[0]);
+        }
         if (argv[i][0] == '-') {
             return usage(argv[0]);
         }
         fb_path = argv[i];
+        /* Remaining: optional `--` then program args */
+        i++;
+        if (i < argc && strcmp(argv[i], "--") == 0) {
+            i++;
+        }
+        for (; i < argc; i++) {
+            if (flat_env_args_push(argv[i]) != 0) {
+                fprintf(stderr, "flvm: too many program args (max %u)\n",
+                        (unsigned)FLAT_ENV_MAX_ARGS);
+                return 2;
+            }
+        }
+        break;
     }
     if (!fb_path) {
         return usage(argv[0]);

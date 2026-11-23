@@ -1,6 +1,7 @@
 #include "fb_format.h"
 #include "fgir.h"
 #include "flat.h"
+#include "flat_env.h"
 #include "flat_link.h"
 #include "flat_port.h"
 #include "flat_native_mods.h"
@@ -20,10 +21,16 @@ static int top_usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
     fprintf(stderr, "       %s --mods\n", prog);
     fprintf(stderr, "       %s compile [--verbose] [--time] -o out.fb program.fl\n", prog);
-    fprintf(stderr, "       %s run [--trace] [--trace-vars] [--time] program.fb\n", prog);
-    fprintf(stderr, "       %s crun [--trace] [--trace-vars] [--time] [-o out.fb] program.fl\n", prog);
+    fprintf(stderr,
+            "       %s run [--trace] [--trace-vars] [--time] [--env KEY=VAL]... program.fb [-- arg...]\n",
+            prog);
+    fprintf(stderr,
+            "       %s crun [--trace] [--trace-vars] [--time] [--env KEY=VAL]... [-o out.fb] program.fl [-- arg...]\n",
+            prog);
     fprintf(stderr, "\n  --mods        list native modules built into this binary (one per line)\n");
     fprintf(stderr, "  --time        print timings on stderr (flatl: time_ms …); FLAT_TIME=1 equivalent\n");
+    fprintf(stderr, "  --env KEY=VAL override env for env.get / env.has (repeatable)\n");
+    fprintf(stderr, "  -- arg...     program argv for env.args / env.argc\n");
     return 2;
 }
 
@@ -142,6 +149,10 @@ static int parse_run_flags(int *argc, char ***argv, FlatVmOptions *opts, int *re
     int n = *argc;
     int w = 0;
     int i;
+    int saw_prog = 0;
+
+    flat_env_reset();
+    flat_env_set_use_process(1);
 
     if (report_time && !*report_time) {
         *report_time = flat_time_env_enabled();
@@ -162,6 +173,34 @@ static int parse_run_flags(int *argc, char ***argv, FlatVmOptions *opts, int *re
                 *report_time = 1;
             }
             continue;
+        }
+        if (strcmp(a[i], "--env") == 0) {
+            if (i + 1 >= n) {
+                fprintf(stderr, "flatl: --env requires KEY=VAL\n");
+                return -1;
+            }
+            if (flat_env_override_parse(a[++i]) != 0) {
+                fprintf(stderr, "flatl: invalid --env (expected KEY=VAL)\n");
+                return -1;
+            }
+            continue;
+        }
+        if (strcmp(a[i], "--") == 0) {
+            if (!saw_prog) {
+                fprintf(stderr, "flatl: -- program args require a program path first\n");
+                return -1;
+            }
+            for (i++; i < n; i++) {
+                if (flat_env_args_push(a[i]) != 0) {
+                    fprintf(stderr, "flatl: too many program args (max %u)\n",
+                            (unsigned)FLAT_ENV_MAX_ARGS);
+                    return -1;
+                }
+            }
+            break;
+        }
+        if (a[i][0] != '-') {
+            saw_prog = 1;
         }
         a[w++] = a[i];
     }
@@ -242,7 +281,9 @@ static int cmd_run(int argc, char **argv) {
     int report_time = 0;
     int i;
 
-    parse_run_flags(&argc, &argv, &opts, &report_time);
+    if (parse_run_flags(&argc, &argv, &opts, &report_time) != 0) {
+        return 2;
+    }
     for (i = 0; i < argc; i++) {
         if (argv[i][0] == '-') {
             fprintf(stderr, "flatl run: unknown option: %s\n", argv[i]);
@@ -251,7 +292,7 @@ static int cmd_run(int argc, char **argv) {
         fb_path = argv[i];
     }
     if (!fb_path) {
-        fprintf(stderr, "Usage: flatl run [--trace] program.fb\n");
+        fprintf(stderr, "Usage: flatl run [--trace] [--env KEY=VAL] program.fb [-- arg...]\n");
         return 2;
     }
     if (path_has_suffix(fb_path, ".fl")) {
@@ -277,7 +318,9 @@ static int cmd_crun(int argc, char **argv) {
     double run_ms = 0.0;
     FlatLinkReport report = {0};
 
-    parse_run_flags(&argc, &argv, &opts, &report_time);
+    if (parse_run_flags(&argc, &argv, &opts, &report_time) != 0) {
+        return 2;
+    }
     for (i = 0; i < argc; i++) {
         if (strcmp(argv[i], "-o") == 0 && i + 1 < argc) {
             out_path = argv[++i];
@@ -290,7 +333,7 @@ static int cmd_crun(int argc, char **argv) {
         in_path = argv[i];
     }
     if (!in_path) {
-        fprintf(stderr, "Usage: flatl crun [-o out.fb] program.fl\n");
+        fprintf(stderr, "Usage: flatl crun [--env KEY=VAL] [-o out.fb] program.fl [-- arg...]\n");
         return 2;
     }
     if (!path_has_suffix(in_path, ".fl")) {

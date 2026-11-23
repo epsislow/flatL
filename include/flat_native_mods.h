@@ -4,9 +4,12 @@
 #include <stddef.h>
 #include <stdio.h>
 
-/* Build-time feature switches (Makefile: http=0 → -DFLAT_WITH_HTTP=0). */
+/* Build-time feature switches (Makefile: http=0 / env=0). */
 #ifndef FLAT_WITH_HTTP
 #define FLAT_WITH_HTTP 1
+#endif
+#ifndef FLAT_WITH_ENV
+#define FLAT_WITH_ENV 1
 #endif
 
 /* 1 if this toolchain binary was built with the named module. */

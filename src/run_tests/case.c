@@ -217,7 +217,15 @@ int flat_case_load(const char *case_toml_path, FlatCase *out) {
             if (strcmp(section, "flatl") == 0) {
                 out->flatl_section_seen = 1;
                 apply_kv_flatl(out, key, val);
-            } else {
+            } else if (strcmp(section, "env") == 0) {
+                if (out->env_count < FLAT_CASE_MAX_ENV && key[0]) {
+                    char *vcopy = val;
+                    strip_quotes(vcopy);
+                    snprintf(out->env_keys[out->env_count], FLAT_CASE_ENV_KEY_LEN, "%s", key);
+                    snprintf(out->env_vals[out->env_count], FLAT_CASE_ENV_VAL_LEN, "%s", vcopy);
+                    out->env_count++;
+                }
+            } else if (strcmp(section, "http.mock") != 0) {
                 apply_kv(out, key, val);
             }
         }
@@ -447,6 +455,47 @@ static void inject_http_mock(char *cmd, size_t cap, const FlatCase *c) {
     snprintf(cmd, cap, "%s%s", prefix, original);
 }
 
+static void append_shell_env_assign(char *prefix, size_t cap, size_t *o, const char *key,
+                                    const char *val) {
+    size_t i;
+    if (!prefix || !o || !key || !key[0]) return;
+#ifdef _WIN32
+    (void)i;
+    *o += (size_t)snprintf(prefix + *o, cap > *o ? cap - *o : 0, "set \"%s=%s\" && ", key,
+                           val ? val : "");
+#else
+    *o += (size_t)snprintf(prefix + *o, cap > *o ? cap - *o : 0, "%s='", key);
+    for (i = 0; val && val[i] && *o + 5 < cap; ++i) {
+        if (val[i] == '\'') {
+            prefix[(*o)++] = '\\';
+            prefix[(*o)++] = '\'';
+        } else {
+            prefix[(*o)++] = val[i];
+        }
+    }
+    if (*o + 2 < cap) {
+        prefix[(*o)++] = '\'';
+        prefix[(*o)++] = ' ';
+        prefix[*o] = '\0';
+    }
+#endif
+}
+
+static void inject_case_env(char *cmd, size_t cap, const FlatCase *c) {
+    char prefix[FLAT_CASE_MAX_CMD];
+    char original[FLAT_CASE_MAX_CMD];
+    size_t o = 0;
+    int i;
+    if (!cmd || !c || c->env_count <= 0) return;
+    prefix[0] = '\0';
+    for (i = 0; i < c->env_count; i++) {
+        append_shell_env_assign(prefix, sizeof prefix, &o, c->env_keys[i], c->env_vals[i]);
+    }
+    if (!prefix[0]) return;
+    snprintf(original, sizeof original, "%s", cmd);
+    snprintf(cmd, cap, "%s%s", prefix, original);
+}
+
 static int shell_capture_timed(const char *cmd, int *code, char *out, size_t out_sz, double *ms_out) {
     double t0 = flat_time_monotonic_ms();
     int rc = flat_port_shell_capture(cmd, code, out, (int)out_sz);
@@ -564,6 +613,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
 
         expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
         inject_http_mock(cmd, sizeof cmd, c);
+        inject_case_env(cmd, sizeof cmd, c);
         if (inject) {
             inject_tool_time(cmd, sizeof cmd);
         }
@@ -641,6 +691,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                                 src_path, c->flatl_crun);
             inject_http_mock(compile_cmd, sizeof compile_cmd, c);
+            inject_case_env(compile_cmd, sizeof compile_cmd, c);
             if (inject) {
                 inject_tool_time(compile_cmd, sizeof compile_cmd);
             }
@@ -686,6 +737,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                                 c->flatl_run);
             inject_http_mock(run_cmd, sizeof run_cmd, c);
+            inject_case_env(run_cmd, sizeof run_cmd, c);
             if (inject) {
                 inject_tool_time(compile_cmd, sizeof compile_cmd);
                 inject_tool_time(run_cmd, sizeof run_cmd);
@@ -755,6 +807,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                             c->pipeline_run);
         inject_http_mock(run_cmd, sizeof run_cmd, c);
+        inject_case_env(run_cmd, sizeof run_cmd, c);
         if (use_flatl) {
             subst_flvm_with_flatl_run(run_cmd, sizeof run_cmd);
         }

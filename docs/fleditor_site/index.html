@@ -411,6 +411,7 @@
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="editor">Editor</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="terminal">Terminal</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="http">HTTP</button>
+        <button type="button" class="fleditor-settings-nav-btn" data-settings-section="env">Env</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="about">About</button>
       </nav>
       <div class="fleditor-settings-main">
@@ -497,6 +498,42 @@
                 <label for="settingsHttpAllowCrossOrigin">Cross-origin requests</label>
                 <input type="checkbox" id="settingsHttpAllowCrossOrigin" />
               </div>
+            </div>
+          </div>
+          <div id="settingsSectionEnv" class="fleditor-settings-section" data-settings-section="env" hidden>
+            <p id="settingsEnvNoModule" class="fleditor-settings-hint" hidden>
+              <strong>No env module in FlatL WASM build.</strong>
+              Rebuild with <code>env</code> enabled (<code>make fleditor-wasm</code>).
+            </p>
+            <div id="settingsEnvControls">
+              <p class="fleditor-settings-hint">
+                Global prefs (<code>flatl-fleditor-env-prefs</code>) injected at <strong>Run</strong> for
+                <code>use native env</code> — <code>env.get</code> / <code>env.has</code> / <code>env.args</code>.
+                Not process OS env. Sensitive keys hide values in the list; use <strong>Copy</strong>.
+              </p>
+              <div class="fleditor-settings-field">
+                <label for="settingsEnvProgramArgs">Program args (<code>env.args</code>)</label>
+                <input type="text" id="settingsEnvProgramArgs" placeholder="arg1 arg2 …" autocomplete="off" />
+              </div>
+              <div class="fleditor-env-form">
+                <div class="fleditor-settings-field">
+                  <label for="settingsEnvKey">Key</label>
+                  <input type="text" id="settingsEnvKey" autocomplete="off" />
+                </div>
+                <div class="fleditor-settings-field">
+                  <label for="settingsEnvValue">Value</label>
+                  <input type="text" id="settingsEnvValue" autocomplete="off" />
+                </div>
+                <div class="fleditor-settings-field">
+                  <label for="settingsEnvSensitive">Sensitive</label>
+                  <input type="checkbox" id="settingsEnvSensitive" />
+                </div>
+                <div class="fleditor-settings-actions">
+                  <button type="button" id="settingsEnvAddBtn" class="fleditor-io-btn fleditor-io-btn--primary">Add / Update</button>
+                  <button type="button" id="settingsEnvRemoveBtn" class="fleditor-io-btn">Remove</button>
+                </div>
+              </div>
+              <ul id="settingsEnvList" class="fleditor-env-list" aria-label="Environment variables"></ul>
             </div>
           </div>
           <div id="settingsSectionAbout" class="fleditor-settings-section" data-settings-section="about" hidden>

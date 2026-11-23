@@ -1,0 +1,6 @@
+use native env
+
+#main
+  io.outln(env.has('FLAT_ENV_HAS_YES'))
+  io.outln(env.has('FLAT_ENV_HAS_NO'))
+  OK

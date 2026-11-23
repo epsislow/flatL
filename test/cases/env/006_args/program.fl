@@ -1,0 +1,10 @@
+use native env
+use native list
+
+#main
+  io.outln(env.argc())
+  xs = env.args()
+  io.outln(list.len(xs))
+  io.outln(list.get(xs, 0))
+  io.outln(list.get(xs, 1))
+  OK

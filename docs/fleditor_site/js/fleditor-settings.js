@@ -13,6 +13,8 @@
   let terminalPrefs = T.loadTerminalPrefs();
   /** @type {ReturnType<typeof T.loadHttpPrefs>} */
   let httpPrefs = T.loadHttpPrefs();
+  /** @type {ReturnType<typeof T.loadEnvPrefs>} */
+  let envPrefs = T.loadEnvPrefs();
 
   /** @type {null | HTMLElement} */
   let appEl = null;
@@ -252,6 +254,7 @@
         editor: 'Editor',
         terminal: 'Terminal',
         http: 'HTTP',
+        env: 'Env',
         about: 'About',
       };
       title.textContent = labels[sectionId] || 'Settings';
@@ -262,9 +265,12 @@
     if (sectionId === 'http') {
       refreshHttpPanel();
     }
+    if (sectionId === 'env') {
+      refreshEnvPanel();
+    }
   }
 
-  function wasmHasHttpModule() {
+  function wasmHasModule(name) {
     let modsStr = null;
     if (getWasmMods) {
       try {
@@ -274,7 +280,15 @@
       }
     }
     const mods = parseModsList(modsStr);
-    return mods.indexOf('http') >= 0;
+    return mods.indexOf(name) >= 0;
+  }
+
+  function wasmHasHttpModule() {
+    return wasmHasModule('http');
+  }
+
+  function wasmHasEnvModule() {
+    return wasmHasModule('env');
   }
 
   function refreshHttpPanel() {
@@ -293,6 +307,100 @@
       cross.checked = httpPrefs.allowCrossOrigin !== false;
     }
     applyHttpPrefs();
+  }
+
+  function findEnvEntryIndex(key) {
+    const k = (key || '').trim();
+    for (let i = 0; i < envPrefs.entries.length; i++) {
+      if (envPrefs.entries[i].key === k) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function renderEnvList() {
+    const list = document.getElementById('settingsEnvList');
+    if (!list) {
+      return;
+    }
+    list.innerHTML = '';
+    for (let i = 0; i < envPrefs.entries.length; i++) {
+      const e = envPrefs.entries[i];
+      const li = document.createElement('li');
+      li.className = 'fleditor-env-list-item';
+      const meta = document.createElement('div');
+      meta.className = 'fleditor-env-list-meta';
+      const valShown = e.sensitive ? '••••••••' : e.value;
+      meta.textContent = e.key + ' = ' + valShown;
+      if (e.sensitive) {
+        const mark = document.createElement('span');
+        mark.className = 'fleditor-env-sensitive-mark';
+        mark.textContent = '(sensitive)';
+        meta.appendChild(mark);
+      }
+      const actions = document.createElement('div');
+      actions.className = 'fleditor-settings-actions';
+      const editBtn = document.createElement('button');
+      editBtn.type = 'button';
+      editBtn.className = 'fleditor-io-btn';
+      editBtn.textContent = 'Edit';
+      editBtn.addEventListener('click', function () {
+        const keyEl = document.getElementById('settingsEnvKey');
+        const valEl = document.getElementById('settingsEnvValue');
+        const sensEl = document.getElementById('settingsEnvSensitive');
+        if (keyEl) {
+          keyEl.value = e.key;
+        }
+        if (valEl) {
+          valEl.value = e.sensitive ? '' : e.value;
+        }
+        if (sensEl) {
+          sensEl.checked = !!e.sensitive;
+        }
+      });
+      const copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'fleditor-io-btn';
+      copyBtn.textContent = 'Copy';
+      copyBtn.addEventListener('click', async function () {
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(e.value);
+          }
+        } catch (_err) {
+          /* ignore */
+        }
+      });
+      actions.appendChild(editBtn);
+      actions.appendChild(copyBtn);
+      li.appendChild(meta);
+      li.appendChild(actions);
+      list.appendChild(li);
+    }
+  }
+
+  function refreshEnvPanel() {
+    envPrefs = T.loadEnvPrefs();
+    const noMod = document.getElementById('settingsEnvNoModule');
+    const controls = document.getElementById('settingsEnvControls');
+    const argsEl = document.getElementById('settingsEnvProgramArgs');
+    const hasEnv = wasmHasEnvModule();
+    if (noMod) {
+      noMod.hidden = hasEnv;
+    }
+    if (controls) {
+      controls.hidden = !hasEnv;
+    }
+    if (argsEl) {
+      argsEl.value = envPrefs.programArgs || '';
+    }
+    renderEnvList();
+  }
+
+  function persistEnvPrefs(next) {
+    envPrefs = T.saveEnvPrefs(null, next || envPrefs);
+    return envPrefs;
   }
 
   function parseModsList(modsStr) {
@@ -457,7 +565,7 @@
       resetAllBtn.addEventListener('click', async function () {
         if (
           !window.confirm(
-            'Reset all settings? Theme, editor, terminal, and HTTP preferences will return to defaults. Project and panel layout are not affected.'
+            'Reset all settings? Theme, editor, terminal, HTTP, and Env preferences will return to defaults. Project and panel layout are not affected.'
           )
         ) {
           return;
@@ -467,6 +575,9 @@
         editorPrefs = defaults.editorPrefs;
         terminalPrefs = defaults.terminalPrefs;
         httpPrefs = defaults.httpPrefs || Object.assign({}, T.DEFAULT_HTTP_PREFS);
+        envPrefs =
+          defaults.envPrefs ||
+          Object.assign({}, T.DEFAULT_ENV_PREFS, { entries: [] });
         persistThemeAndApply();
         refreshThemeSelect();
         buildTokenCustomizeUI();
@@ -475,6 +586,7 @@
         applyTerminalPrefs();
         applyHttpPrefs();
         refreshHttpPanel();
+        refreshEnvPanel();
         if (showAlertFn) {
           await showAlertFn('Settings restored to defaults.', 'About');
         }
@@ -653,6 +765,70 @@
         applyHttpPrefs();
       });
     }
+
+    const envArgs = document.getElementById('settingsEnvProgramArgs');
+    if (envArgs) {
+      envArgs.addEventListener('change', function () {
+        persistEnvPrefs({ programArgs: envArgs.value });
+      });
+    }
+    const envAdd = document.getElementById('settingsEnvAddBtn');
+    const envRemove = document.getElementById('settingsEnvRemoveBtn');
+    if (envAdd) {
+      envAdd.addEventListener('click', function () {
+        const keyEl = document.getElementById('settingsEnvKey');
+        const valEl = document.getElementById('settingsEnvValue');
+        const sensEl = document.getElementById('settingsEnvSensitive');
+        const key = keyEl ? keyEl.value.trim() : '';
+        if (!key) {
+          return;
+        }
+        const sensitive = !!(sensEl && sensEl.checked);
+        let value = valEl ? valEl.value : '';
+        const ix = findEnvEntryIndex(key);
+        const entries = envPrefs.entries.slice();
+        if (ix >= 0) {
+          if (sensitive && value === '') {
+            value = entries[ix].value;
+          }
+          entries[ix] = { key: key, value: value, sensitive: sensitive };
+        } else {
+          entries.push({ key: key, value: value, sensitive: sensitive });
+        }
+        persistEnvPrefs({ entries: entries });
+        if (keyEl) {
+          keyEl.value = '';
+        }
+        if (valEl) {
+          valEl.value = '';
+        }
+        if (sensEl) {
+          sensEl.checked = false;
+        }
+        renderEnvList();
+      });
+    }
+    if (envRemove) {
+      envRemove.addEventListener('click', function () {
+        const keyEl = document.getElementById('settingsEnvKey');
+        const key = keyEl ? keyEl.value.trim() : '';
+        if (!key) {
+          return;
+        }
+        const entries = envPrefs.entries.filter(function (e) {
+          return e.key !== key;
+        });
+        persistEnvPrefs({ entries: entries });
+        if (keyEl) {
+          keyEl.value = '';
+        }
+        const valEl = document.getElementById('settingsEnvValue');
+        if (valEl) {
+          valEl.value = '';
+        }
+        renderEnvList();
+      });
+    }
   }
 
   function init(options) {
@@ -669,6 +845,7 @@
     editorPrefs = T.loadEditorPrefs();
     terminalPrefs = T.loadTerminalPrefs();
     httpPrefs = T.loadHttpPrefs();
+    envPrefs = T.loadEnvPrefs();
     applyHttpPrefs();
 
     if (appEl) {
@@ -686,6 +863,78 @@
     return httpPrefs;
   }
 
+  function getEnvPrefs() {
+    return T.loadEnvPrefs();
+  }
+
+  function splitProgramArgs(s) {
+    if (!s || typeof s !== 'string') {
+      return [];
+    }
+    const out = [];
+    const re = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|(\S+)/g;
+    let m;
+    while ((m = re.exec(s)) !== null) {
+      if (m[1] != null) {
+        out.push(m[1].replace(/\\"/g, '"'));
+      } else if (m[2] != null) {
+        out.push(m[2].replace(/\\'/g, "'"));
+      } else {
+        out.push(m[3]);
+      }
+    }
+    return out;
+  }
+
+  /** Push Settings→Env into WASM before flat_wasm_run*. Safe no-op on older builds. */
+  function applyEnvToWasm(Module) {
+    if (!Module) {
+      return;
+    }
+    const prefs = getEnvPrefs();
+    try {
+      if (typeof Module._flat_wasm_env_clear === 'function') {
+        Module._flat_wasm_env_clear();
+      } else {
+        return;
+      }
+    } catch (_e) {
+      return;
+    }
+    const entries = prefs.entries || [];
+    for (let i = 0; i < entries.length; i++) {
+      const e = entries[i];
+      if (!e || !e.key) {
+        continue;
+      }
+      try {
+        Module.ccall(
+          'flat_wasm_env_set',
+          'number',
+          ['string', 'string'],
+          [e.key, e.value != null ? String(e.value) : '']
+        );
+      } catch (_setErr) {
+        /* ignore */
+      }
+    }
+    try {
+      if (typeof Module._flat_wasm_env_args_clear === 'function') {
+        Module._flat_wasm_env_args_clear();
+      }
+    } catch (_clearArgs) {
+      /* ignore */
+    }
+    const args = splitProgramArgs(prefs.programArgs || '');
+    for (let j = 0; j < args.length; j++) {
+      try {
+        Module.ccall('flat_wasm_env_args_push', 'number', ['string'], [args[j]]);
+      } catch (_pushErr) {
+        /* ignore */
+      }
+    }
+  }
+
   function applyThemeFromStorage() {
     themeState = T.loadThemeState();
     if (appEl) {
@@ -698,6 +947,8 @@
     init,
     getTerminalPrefs,
     getHttpPrefs,
+    getEnvPrefs,
+    applyEnvToWasm,
     applyThemeFromStorage,
     applyEditorPrefs,
     applyTerminalPrefs,
@@ -705,5 +956,6 @@
     applyTerminalTheme,
     refreshAboutPanel,
     refreshHttpPanel,
+    refreshEnvPanel,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

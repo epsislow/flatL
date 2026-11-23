@@ -296,6 +296,10 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("http", "partsLoad", "http.partsLoad(id)"),
     META_SIG("http", "partsMax", "http.partsMax(id, n?)"),
     META_SIG("http", "partInfo", "http.partInfo(id)"),
+    META_SIG("env", "has", "env.has(name)"),
+    META_SIG("env", "get", "env.get(name, default?)"),
+    META_SIG("env", "argc", "env.argc()"),
+    META_SIG("env", "args", "env.args()"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -316,6 +320,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_DATE,
         FLAT_NATIVE_MODULE_CLOCK,
         FLAT_NATIVE_MODULE_HTTP,
+        FLAT_NATIVE_MODULE_ENV,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

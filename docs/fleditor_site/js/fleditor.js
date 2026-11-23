@@ -4307,6 +4307,11 @@
     Module.setValue(errBuf, 0, 'i8');
     attachWasmHooks(Module);
     applyWasmRunLimits(Module);
+    try {
+      FleditorSettings.applyEnvToWasm(Module);
+    } catch (_envErr) {
+      /* older UI / wasm without env exports */
+    }
     setStatus('running');
     const memPath = P.memfsEntryPath(entryPath);
     let runRc = Module.ccall(

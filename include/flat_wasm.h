@@ -41,4 +41,10 @@ const char *flat_wasm_mods(void);
 /* Applied to the next flat_wasm_run / flat_wasm_run_entry (same semantics as flvm). */
 void flat_wasm_set_run_limits(unsigned max_jumps, unsigned max_steps, int no_jump_limit);
 
+/* Env/argv for native env.* — overrides only (no host process env in WASM). Call before run. */
+void flat_wasm_env_clear(void);
+int flat_wasm_env_set(const char *key, const char *val);
+void flat_wasm_env_args_clear(void);
+int flat_wasm_env_args_push(const char *arg);
+
 #endif
