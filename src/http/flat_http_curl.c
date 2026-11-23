@@ -116,7 +116,15 @@ static int perform_mock(const FlatHttpRequest *req, FlatHttpResponse *out) {
         else snprintf(file_path, sizeof file_path, "%s", body_file);
         bf = fopen(file_path, "rb");
         if (!bf) { out->error_code = 3; snprintf(out->error, sizeof out->error, "HTTP mock body file unavailable"); return 1; }
-        if (fseek(bf, 0, SEEK_END) != 0) { fclose(bf); return 1; }
+        if (fseek(bf, 0, SEEK_END) != 0) {
+            size_t hi;
+            fclose(bf);
+            for (hi = 0; hi < out->header_count; ++hi) free(out->headers[hi]);
+            free(out->headers); out->headers = NULL; out->header_count = 0;
+            out->error_code = 3;
+            snprintf(out->error, sizeof out->error, "HTTP mock body file seek failed");
+            return 1;
+        }
         { long size = ftell(bf); if (size < 0 || (unsigned long)size > req->max_body_bytes) { fclose(bf); out->error_code=23; snprintf(out->error,sizeof out->error,"response body exceeds configured limit"); return 1; } body_len=(size_t)size; }
         rewind(bf); body = malloc(body_len + 1);
         if (!body) { fclose(bf); out->error_code=27; snprintf(out->error,sizeof out->error,"out of memory"); return 1; }
@@ -193,6 +201,22 @@ void flat_http_response_free(FlatHttpResponse *out) {
     memset(out, 0, sizeof *out);
 }
 
+static int ensure_curl_global(FlatHttpResponse *out) {
+    static int ready;
+    CURLcode rc;
+    if (ready) return 0;
+    rc = curl_global_init(CURL_GLOBAL_DEFAULT);
+    if (rc != CURLE_OK) {
+        if (out) {
+            out->error_code = (int)rc;
+            snprintf(out->error, sizeof out->error, "%s", curl_easy_strerror(rc));
+        }
+        return -1;
+    }
+    ready = 1;
+    return 0;
+}
+
 int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     CURL *curl;
     CURLcode result;
@@ -204,6 +228,7 @@ int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
         req->max_body_bytes == SIZE_MAX || req->timeout_ms <= 0) return -1;
     memset(out, 0, sizeof *out);
     { int mocked = perform_mock(req, out); if (mocked) return out->error_code == 0 ? 0 : -1; }
+    if (ensure_curl_global(out) != 0) return -1;
     curl = curl_easy_init();
     if (!curl) { snprintf(out->error, sizeof out->error, "curl init failed"); return -1; }
     transfer.response = out;

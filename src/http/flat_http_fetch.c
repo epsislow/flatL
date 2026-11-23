@@ -4,14 +4,15 @@
 #include <string.h>
 #include <stdio.h>
 
+/* Body is passed as heap bytes + length (binary-safe). URL/method/headers stay UTF-8 text. */
 EM_ASYNC_JS(int, flat_http_fetch_sync_js,
-    (const char *urlp, const char *methodp, const char *bodyp, const char *headerp,
+    (const char *urlp, const char *methodp, const unsigned char *bodyp, size_t body_len,
+     const char *headerp,
      unsigned char *body_out, size_t body_cap, size_t *body_len_out,
      long *status_out, char *headers_out, size_t headers_cap,
      char *error_out, size_t error_cap, int *error_code_out, long timeout_ms), {
     const url = UTF8ToString(urlp);
     const method = UTF8ToString(methodp);
-    const body = UTF8ToString(bodyp);
     const headerText = UTF8ToString(headerp);
     const headers = new Headers();
     for (const line of headerText.split("\n")) {
@@ -19,11 +20,15 @@ EM_ASYNC_JS(int, flat_http_fetch_sync_js,
       const at = line.indexOf(":");
       if (at > 0) headers.append(line.slice(0, at).trim(), line.slice(at + 1).trim());
     }
+    let body;
+    if (method !== "GET" && method !== "HEAD" && body_len > 0) {
+      body = HEAPU8.slice(bodyp, bodyp + body_len);
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout_ms);
     try {
       const response = await fetch(url, {
-        method, headers, body: (method === "GET" || method === "HEAD") ? undefined : body,
+        method, headers, body,
         redirect: "follow", signal: controller.signal
       });
       const data = new Uint8Array(await response.arrayBuffer());
@@ -66,28 +71,30 @@ static int append_response_header(FlatHttpResponse *out, const char *line, size_
 
 int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     char *headers = NULL; size_t headers_cap = 16384, i, used = 0, body_len = 0;
-    char *body_text = NULL; int rc;
+    const unsigned char *bodyp;
+    int rc;
     if (!req || !out || !req->url || !req->method || !req->max_body_bytes || req->timeout_ms <= 0) return -1;
     memset(out, 0, sizeof *out);
-    headers = calloc(headers_cap, 1); body_text = calloc(req->body_len + 1, 1);
+    headers = calloc(headers_cap, 1);
     out->body = malloc(req->max_body_bytes + 1);
-    if (!headers || !body_text || !out->body) { free(headers); free(body_text); flat_http_response_free(out); return -1; }
-    if (req->body && req->body_len) memcpy(body_text, req->body, req->body_len);
+    if (!headers || !out->body) { free(headers); flat_http_response_free(out); return -1; }
     for (i=0; i<req->header_count; ++i) {
         size_t n = strlen(req->headers[i]);
         if (used + n + 2 >= headers_cap) { out->error_code=23; snprintf(out->error,sizeof out->error,"request headers exceed limit"); rc=-1; goto done; }
         memcpy(headers+used, req->headers[i], n); used += n; headers[used++]='\n';
     }
-    rc = flat_http_fetch_sync_js(req->url, req->method, body_text, headers,
+    bodyp = (const unsigned char *)(req->body ? req->body : "");
+    rc = flat_http_fetch_sync_js(req->url, req->method, bodyp, req->body ? req->body_len : 0,
+        headers,
         (unsigned char *)out->body, req->max_body_bytes, &body_len, &out->status,
-        (char *)headers, headers_cap, out->error, sizeof out->error, &out->error_code, req->timeout_ms);
+        headers, headers_cap, out->error, sizeof out->error, &out->error_code, req->timeout_ms);
     out->body_len = body_len; out->body[body_len] = '\0';
-    if (headers[0]) {
+    if (rc == 0 && headers[0]) {
         char *p = headers, *nl;
         while ((nl = strchr(p, '\n')) != NULL) { if (append_response_header(out, p, (size_t)(nl-p)) != 0) break; p = nl + 1; }
     }
 done:
-    free(headers); free(body_text); return rc;
+    free(headers); return rc;
 }
 
 void flat_http_response_free(FlatHttpResponse *out) {
