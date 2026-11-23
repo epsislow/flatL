@@ -2,6 +2,7 @@
 #include "flat.h"
 #include "flat_disasm.h"
 #include "flat_link.h"
+#include "flat_native_mods.h"
 #include "flat_port.h"
 #include "flat_time.h"
 
@@ -16,10 +17,12 @@ static void print_version(void) {
 
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
+    fprintf(stderr, "       %s --mods\n", prog);
     fprintf(stderr, "       %s --dump-ir program.fl\n", prog);
     fprintf(stderr, "       %s --dump-bc [options] program.fl\n", prog);
     fprintf(stderr, "       %s [--verbose] [--time] [-o out.fb] [--dump-bc] program.fl\n", prog);
     fprintf(stderr, "\n  --dump-bc     bytecode disassembly to stdout (fbdump options allowed)\n");
+    fprintf(stderr, "  --mods        list native modules built into this binary (one per line)\n");
     fprintf(stderr, "  --time        print phase timings on stderr (flc: time_ms …)\n");
     fprintf(stderr, "  FLAT_TIME=1   same as --time when flag omitted\n");
     return 2;
@@ -61,6 +64,10 @@ int main(int argc, char **argv) {
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
             print_version();
+            return 0;
+        }
+        if (strcmp(argv[i], "--mods") == 0) {
+            flat_native_mods_print(stdout);
             return 0;
         }
     }

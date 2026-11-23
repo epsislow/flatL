@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 18
 desc = "requestInfo exposes method url sent bodyLen headers timeout without body bytes"
 kind = "pipeline"

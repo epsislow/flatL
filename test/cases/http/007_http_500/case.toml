@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 7
 desc = "HTTP 500 is a valid response and not a transport failure"
 kind = "pipeline"

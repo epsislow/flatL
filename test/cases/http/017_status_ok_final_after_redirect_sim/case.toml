@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 17
 desc = "statusOk passes when final status after redirect follow is 2xx"
 kind = "pipeline"

@@ -4,6 +4,13 @@ endif
 CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude -D_GNU_SOURCE
 LDFLAGS ?=
 
+# Optional modules (lowercase). Example: make rebuild http=0
+# Prefer `make rebuild http=0` (clean+build) when toggling — do not mix object caches.
+http ?= 1
+ifeq ($(http),0)
+CFLAGS += -DFLAT_WITH_HTTP=0
+endif
+
 # Optional: FLC_LDFLAGS=-Wl,--stack,8388608 if an old flc ever overflows stack (heap IR is default).
 FLC_LDFLAGS ?=
 
@@ -56,15 +63,22 @@ PLUGIN_OBJ_SRCS = src/lib/plugin_obj_entry.c src/lib/mod_obj.c $(PLUGIN_COMMON_S
 PLUGIN_CSV_SRCS = src/lib/plugin_csv_entry.c src/lib/mod_csv.c src/common/flat_csv.c \
                src/common/flat_csv_runtime.c src/common/flat_file.c $(PLUGIN_COMMON_SRCS)
 endif
+ifeq ($(http),0)
+HTTP_SRC =
+HTTP_CFLAGS =
+HTTP_LIBS =
+else
 HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
+endif
+NATIVE_MODS_SRC = src/lib/native_mods.c
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_parse_rhs.c \
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
-NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c src/common/flat_native_tag_common.c
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
@@ -117,6 +131,12 @@ help:
 	@echo "  make fixtures     regenerate min_ok.fb examples"
 	@echo "  make rebuild      clean + all; fleditor-wasm if emcc on PATH"
 	@echo "  make rebuild-native  clean + all only (never runs emcc)"
+	@echo ""
+	@echo "Optional modules (pass on the same make line; lowercase):"
+	@echo "  http=0            build without native http / libcurl"
+	@echo "  make rebuild http=0"
+	@echo "  make flvm http=0   (prefer rebuild when toggling http)"
+	@echo "  flc|flvm|flatl --mods   list modules built into the binary"
 	@echo ""
 	@echo "Test generators (rewrite committed cases under test/cases/):"
 	@echo "  make io_generate_tests    bin/io_generate_tests → test/cases/io/*"
@@ -200,16 +220,22 @@ date_generate_tests:
 	python3 scripts/gen_date_tests.py
 	@echo "OK: test/cases/date/ (75 cases)"
 
-rebuild: clean all fleditor-wasm-optional
+# Sequential clean→build so `make -j` cannot delete bin/ while compiling.
+rebuild:
+	$(MAKE) clean
+	$(MAKE) all http=$(http)
+	$(MAKE) fleditor-wasm-optional http=$(http)
 
-rebuild-native: clean all
+rebuild-native:
+	$(MAKE) clean
+	$(MAKE) all http=$(http)
 	@echo "OK: rebuild-native (bin/* only; run make fleditor-wasm when emcc is on PATH)"
 
 .PHONY: fleditor-wasm-optional
 fleditor-wasm-optional:
 	@if command -v emcc >/dev/null 2>&1; then \
-		$(MAKE) -f Makefile.wasm fleditor-wasm-clean; \
-		$(MAKE) -f Makefile.wasm fleditor-wasm; \
+		$(MAKE) -f Makefile.wasm fleditor-wasm-clean http=$(http); \
+		$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http); \
 		echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"; \
 	else \
 		echo "OK: rebuild (bin/*; skipped fleditor-wasm — no emcc on PATH)"; \
@@ -337,7 +363,7 @@ endef
 export FLEDITOR_NODE_HINT
 
 fleditor-wasm:
-	$(MAKE) -f Makefile.wasm fleditor-wasm
+	$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http)
 
 fleditor-rebuild: rebuild
 	@echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R)."

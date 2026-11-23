@@ -37,6 +37,9 @@ setTimeout(() => {
       if (!body.includes('id="settingsModal"')) fail('missing settings modal');
       if (!body.includes('id="settingsBtn"')) fail('missing settings button');
       if (!body.includes('id="settingsSectionAbout"')) fail('missing settings About section');
+      if (!body.includes('id="settingsAboutHttpMod"')) fail('missing About HTTP module row');
+      if (!body.includes('id="settingsAboutBuiltMods"')) fail('missing About built modules row');
+      if (!body.includes('id="settingsAboutHttpHint"')) fail('missing About HTTP rebuild hint');
       if (!body.includes('fleditor-version.js')) fail('missing version script');
       if (!body.includes('>+file<')) fail('missing +file button');
       if (!body.includes('id="binaryHexGrid"')) fail('missing hex grid host');

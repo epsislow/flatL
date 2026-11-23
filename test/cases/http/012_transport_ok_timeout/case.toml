@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 12
 desc = "transportOk panics with http.transport.timeout"
 kind = "pipeline"

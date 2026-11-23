@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 14
 desc = "statusOk panics with http.status.redirect when final status is 3xx"
 kind = "pipeline"

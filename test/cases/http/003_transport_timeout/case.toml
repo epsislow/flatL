@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 3
 desc = "transport timeout is exposed separately from HTTP status"
 kind = "pipeline"

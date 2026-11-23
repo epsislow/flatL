@@ -11,7 +11,10 @@
 #include "flat_value.h"
 #include "flat_vcx.h"
 #include "flat_clock_runtime.h"
+#include "flat_native_mods.h"
+#if FLAT_WITH_HTTP
 #include "flat_http_runtime.h"
+#endif
 
 #include <math.h>
 #include <stdio.h>
@@ -397,7 +400,9 @@ static int info_res_kind(FlatNativeCtx *ctx, int hint_kind, uint32_t id, const c
         return 0;
     }
     if (hint_kind == INFO_HINT_HTTP) {
+#if FLAT_WITH_HTTP
         if (flat_http_request_live(ctx->http, id)) *out_kind = "request";
+#endif
         return 0;
     }
     return 0;
@@ -421,7 +426,11 @@ static int info_parse_id_for_hint(int hint_kind, const FlatValue *v, uint32_t *o
         return 0;
     }
     if (hint_kind == INFO_HINT_CLOCK && (d < 1.0 || d > (double)FLAT_CLOCK_MAX_STOPWATCHES)) return -1;
+#if FLAT_WITH_HTTP
     if (hint_kind == INFO_HINT_HTTP && (d < 1.0 || d > (double)FLAT_HTTP_MAX_REQUESTS)) return -1;
+#else
+    if (hint_kind == INFO_HINT_HTTP) return -1;
+#endif
     if (d < 1.0) {
         return -1;
     }

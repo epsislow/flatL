@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 13
 desc = "statusOk panics with http.status.not_found on 404; transport still OK"
 kind = "pipeline"

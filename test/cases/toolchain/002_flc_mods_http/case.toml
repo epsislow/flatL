@@ -1,0 +1,8 @@
+suite = "toolchain"
+id = 2
+mods = "http"
+desc = "flc --mods lists http in default build"
+kind = "exec"
+cmd = "{root}/bin/flc --mods"
+expect_exit = 0
+stdout_contains = "http"

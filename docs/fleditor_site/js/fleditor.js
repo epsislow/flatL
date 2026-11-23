@@ -4227,6 +4227,20 @@
     }
   }
 
+  function getWasmMods() {
+    if (!wasmModule) {
+      return null;
+    }
+    try {
+      if (typeof wasmModule._flat_wasm_mods === 'function') {
+        return wasmModule.ccall('flat_wasm_mods', 'string', [], []);
+      }
+      return null;
+    } catch (_e) {
+      return null;
+    }
+  }
+
   async function loadWasm() {
     if (wasmLoadPromise) {
       return wasmLoadPromise;
@@ -4235,7 +4249,7 @@
       if (typeof FlatLModule !== 'function') {
         try {
           /* bust browser cache when wasm toolchain is rebuilt */
-          await loadScript('wasm/flatl.js?v=mem-nested1');
+          await loadScript('wasm/flatl.js?v=mods1');
         } catch (_e) {
           showBanner('WASM not built. Run: make -f Makefile.wasm fleditor-wasm');
           return null;
@@ -5929,6 +5943,7 @@
       showPrompt: showPrompt,
       showAlert: showAlert,
       getWasmToolchainVersion: getWasmToolchainVersion,
+      getWasmMods: getWasmMods,
     });
     await initEditor();
     FleditorSettings.applyEditorPrefs();

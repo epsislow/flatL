@@ -1,5 +1,6 @@
 #include "casefile.h"
 #include "discover.h"
+#include "flat_port.h"
 #include "flat_str.h"
 #include "flat_time.h"
 #include "repo.h"
@@ -68,7 +69,112 @@ static void print_help(const char *prog) {
     printf("  --categ=TAG[,TAG...]       run cases with categ TAG (default run: categ=default)\n");
     printf("  --categ=all                all categories (same as make test-all)\n");
     printf("  --list                     list suite names and case counts (no tests run)\n");
+    printf("\nCases with mods= in case.toml are skipped when a required module is not in\n");
+    printf("  `bin/flvm --mods` (fallback: flc / flatl). Example: mods = \"http\"\n");
     printf("\nSession footer Total tests time: is always printed on stdout after the summary.\n");
+}
+
+#define BUILT_MODS_MAX 64
+#define BUILT_MOD_LEN 32
+
+typedef struct {
+    char ids[BUILT_MODS_MAX][BUILT_MOD_LEN];
+    int count;
+    int loaded;
+} BuiltMods;
+
+static int built_mods_has(const BuiltMods *bm, const char *mod) {
+    int i;
+    if (!bm || !mod) {
+        return 0;
+    }
+    for (i = 0; i < bm->count; i++) {
+        if (strcmp(bm->ids[i], mod) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int case_missing_mod(const FlatCase *c, const BuiltMods *bm, char *missing, size_t missing_sz) {
+    int i;
+    if (!c || c->mods_count <= 0) {
+        return 0;
+    }
+    if (!bm || !bm->loaded) {
+        return 0;
+    }
+    for (i = 0; i < c->mods_count; i++) {
+        if (!built_mods_has(bm, c->mods[i])) {
+            if (missing && missing_sz > 0) {
+                snprintf(missing, missing_sz, "%s", c->mods[i]);
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int load_built_mods(const char *repo, BuiltMods *out) {
+    char cmd[FLAT_CASE_MAX_PATH * 2];
+    char buf[4096];
+    int exit_code = 1;
+    char *line;
+
+    if (!repo || !out) {
+        return -1;
+    }
+    memset(out, 0, sizeof *out);
+    snprintf(cmd, sizeof cmd, "%s/bin/flvm --mods", repo);
+    flat_port_prepare_shell_cmd(cmd, sizeof cmd);
+    if (flat_port_shell_capture(cmd, &exit_code, buf, (int)sizeof buf) != 0 || exit_code != 0) {
+        snprintf(cmd, sizeof cmd, "%s/bin/flc --mods", repo);
+        flat_port_prepare_shell_cmd(cmd, sizeof cmd);
+        if (flat_port_shell_capture(cmd, &exit_code, buf, (int)sizeof buf) != 0 || exit_code != 0) {
+            snprintf(cmd, sizeof cmd, "%s/bin/flatl --mods", repo);
+            flat_port_prepare_shell_cmd(cmd, sizeof cmd);
+            if (flat_port_shell_capture(cmd, &exit_code, buf, (int)sizeof buf) != 0 ||
+                exit_code != 0) {
+                return -1;
+            }
+        }
+    }
+    line = buf;
+    while (*line) {
+        char *p;
+        char *eol;
+        size_t n;
+        eol = line;
+        while (*eol && *eol != '\n' && *eol != '\r') {
+            eol++;
+        }
+        p = line;
+        line = (*eol) ? eol + 1 : eol;
+        while (*line == '\n' || *line == '\r') {
+            line++;
+        }
+        while (p < eol && isspace((unsigned char)*p)) {
+            p++;
+        }
+        while (eol > p && isspace((unsigned char)eol[-1])) {
+            eol--;
+        }
+        if (p >= eol || *p == '#') {
+            continue;
+        }
+        n = (size_t)(eol - p);
+        if (n == 0 || out->count >= BUILT_MODS_MAX) {
+            continue;
+        }
+        if (n >= BUILT_MOD_LEN) {
+            n = BUILT_MOD_LEN - 1;
+        }
+        memcpy(out->ids[out->count], p, n);
+        out->ids[out->count][n] = '\0';
+        out->count++;
+    }
+    out->loaded = 1;
+    return 0;
 }
 
 static void progress_flush(void) {
@@ -541,6 +647,7 @@ int main(int argc, char **argv) {
     int run_total = 0;
     int passed = 0;
     int failed = 0;
+    int skipped = 0;
     int i;
     double session_t0;
     FlatCaseRunOptions run_opts = {0};
@@ -548,6 +655,7 @@ int main(int argc, char **argv) {
     FailEntry *fail_list = NULL;
     int fail_list_count = 0;
     int fail_list_cap = 0;
+    BuiltMods built_mods = {0};
 
     categ_filter_init_default(&categ);
 
@@ -587,6 +695,12 @@ int main(int argc, char **argv) {
     run_opts.inject_tool_time = each && show_time;
     run_opts.captured_output = captured_output;
     run_opts.captured_output_size = sizeof captured_output;
+
+    if (load_built_mods(repo, &built_mods) != 0) {
+        fprintf(stderr,
+                "run_tests: warning: could not read flvm/flc/flatl --mods; mods= skips disabled\n");
+        built_mods.loaded = 0;
+    }
 
     printf("Running (%d selected", run_total);
     if (run_total != ncases) {
@@ -635,6 +749,27 @@ int main(int argc, char **argv) {
                 printf("%s%s:%s\n", ANSI_YELLOW, c->suite, ANSI_RESET);
             }
 
+            {
+                char missing[BUILT_MOD_LEN];
+                if (case_missing_mod(c, &built_mods, missing, sizeof missing)) {
+                    skipped++;
+                    progress.run++;
+                    if (each) {
+                        printf("  #%d (%d/%d) %s\n  %ss%s  skip (missing mod %s)\n", c->id,
+                               progress.run, progress.total, c->desc, ANSI_YELLOW, ANSI_RESET,
+                               missing);
+                    } else {
+                        printf("%ss%s", ANSI_YELLOW, ANSI_RESET);
+                        progress.chars_on_line++;
+                        if (progress.chars_on_line >= progress.width) {
+                            progress_finish_line(&progress);
+                        }
+                    }
+                    fflush(stdout);
+                    continue;
+                }
+            }
+
             captured_output[0] = '\0';
             ok = flat_case_run_ex(c, repo, use_flatl, &run_opts, &timing, err, sizeof err) == 0;
             if (ok) {
@@ -666,8 +801,12 @@ int main(int argc, char **argv) {
         printf("\n");
     }
 
-    printf("Passed: %s%d%s Failed: %s%d%s Total: %s%d%s\n", ANSI_YELLOW, passed, ANSI_RESET,
-           ANSI_YELLOW, failed, ANSI_RESET, ANSI_YELLOW, passed + failed, ANSI_RESET);
+    printf("Passed: %s%d%s Failed: %s%d%s", ANSI_YELLOW, passed, ANSI_RESET, ANSI_YELLOW, failed,
+           ANSI_RESET);
+    if (skipped > 0) {
+        printf(" Skipped: %s%d%s", ANSI_YELLOW, skipped, ANSI_RESET);
+    }
+    printf(" Total: %s%d%s\n", ANSI_YELLOW, passed + failed + skipped, ANSI_RESET);
     flat_time_print_tests_footer(flat_time_monotonic_ms() - session_t0);
     if (!each) {
         fail_list_print(fail_list, fail_list_count);

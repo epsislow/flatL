@@ -127,6 +127,34 @@ static void apply_kv(FlatCase *c, const char *key, char *val) {
         c->stderr_contains[sizeof c->stderr_contains - 1] = '\0';
     } else if (strcmp(key, "show_output") == 0) {
         c->show_output = strcmp(val, "true") == 0 || strcmp(val, "1") == 0;
+    } else if (strcmp(key, "mods") == 0) {
+        char *p = val;
+        while (*p && c->mods_count < FLAT_CASE_MAX_MODS) {
+            char *start;
+            char *end;
+            size_t n;
+            while (*p && (isspace((unsigned char)*p) || *p == ',')) {
+                p++;
+            }
+            if (!*p) {
+                break;
+            }
+            start = p;
+            while (*p && *p != ',' && !isspace((unsigned char)*p)) {
+                p++;
+            }
+            end = p;
+            n = (size_t)(end - start);
+            if (n == 0) {
+                continue;
+            }
+            if (n >= FLAT_CASE_MOD_LEN) {
+                n = FLAT_CASE_MOD_LEN - 1;
+            }
+            memcpy(c->mods[c->mods_count], start, n);
+            c->mods[c->mods_count][n] = '\0';
+            c->mods_count++;
+        }
     } else if (strcmp(key, "source") == 0) {
         snprintf(c->pipeline_source, sizeof c->pipeline_source, "%s", val);
     } else if (strcmp(key, "compile") == 0) {

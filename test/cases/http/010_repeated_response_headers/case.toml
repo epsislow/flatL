@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 10
 desc = "repeated response header values are retained in a list"
 kind = "pipeline"

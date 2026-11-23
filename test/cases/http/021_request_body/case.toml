@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 21
 desc = "requestBody get/set for raw request body; responseBody for response"
 kind = "pipeline"

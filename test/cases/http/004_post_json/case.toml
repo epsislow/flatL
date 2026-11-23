@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 4
 desc = "POST JSON request configures body and content type"
 kind = "pipeline"

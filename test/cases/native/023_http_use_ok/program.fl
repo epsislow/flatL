@@ -1,0 +1,5 @@
+use native http
+#main
+  req = http.create('GET', 'http://mock.local/x')
+  http.close(req)
+  OK

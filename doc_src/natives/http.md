@@ -14,6 +14,8 @@ Requests are VM-owned resources identified by numeric IDs. Close each request wi
 
 **Optional** module — requires `use native http` (or `use native http with Alias`) in each `.fl` file that calls `http.*`. Implementation: `src/lib/mod_http.c`, transport `src/http/flat_http_curl.c` (native) / Fetch+Asyncify (WASM).
 
+Build without HTTP (no libcurl / no Fetch glue): `make rebuild http=0`. Then `flc|flvm|flatl --mods` and WASM `flat_wasm_mods()` omit `http`; `run_tests` skips cases with `mods = "http"`. See [TOOLCHAIN.md](../TOOLCHAIN.md#optional-modules-http0).
+
 ### Summary
 
 | Call | Returns | Panic / fail labels |

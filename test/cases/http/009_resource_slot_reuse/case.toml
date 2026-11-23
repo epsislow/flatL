@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 9
 desc = "closing HTTP requests releases resource slots for reuse"
 kind = "pipeline"

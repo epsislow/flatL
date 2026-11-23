@@ -4,7 +4,7 @@ Documentation index: [README.md](./README.md) (English).
 
 Run all commands from the **repository root** (directory containing `Makefile` and `include/flat.h`).
 
-Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make**, and a POSIX shell (WSL/Linux) for the default **`make test`** workflow — see [Portability](#portability-windows-shell-and-io-tests) below. The native HTTP module additionally requires **libcurl development headers and libraries** (`libcurl` package on Termux); `pkg-config libcurl` is used when available.
+Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make**, and a POSIX shell (WSL/Linux) for the default **`make test`** workflow — see [Portability](#portability-windows-shell-and-io-tests) below. The native HTTP module (when enabled) additionally requires **libcurl development headers and libraries** (`libcurl` package on Termux); `pkg-config libcurl` is used when available.
 
 ## Build
 
@@ -15,7 +15,47 @@ make tools        # flc, flvm, mkfb only (+ fbdump when AM-1.0 lands)
 make test         # compile, then ./bin/run_tests (flc + flvm)
 make test-flatl   # same cases via [flatl] in case.toml (see run_tests --flatl)
 make clean        # remove bin/ and generated min_ok.fb copies
+make rebuild      # clean + all (+ fleditor-wasm if emcc on PATH)
 ```
+
+### Optional modules (`http=0`)
+
+Some native modules can be left out of the toolchain at build time. Flags are **lowercase** Make variables on the same command line:
+
+```bash
+make rebuild http=0          # recommended when toggling (clean + build)
+make rebuild-native http=0   # bin/* only, no emcc
+make fleditor-wasm http=0    # WASM build without http (Fetch transport omitted)
+```
+
+With `http=0`:
+
+- `mod_http` / libcurl (native) or Fetch transport (WASM) are **not** linked
+- `use native http` is an unknown module at compile time
+- `flc --mods`, `flvm --mods`, `flatl --mods`, and WASM `flat_wasm_mods()` omit `http`
+
+Prefer **`make rebuild http=0`** (or `rebuild-native`) when switching between builds with and without HTTP. There is a single `bin/` tree; Make does not keep separate object caches per feature set.
+
+List modules built into the current binaries:
+
+```bash
+bin/flvm --mods
+bin/flc --mods
+bin/flatl --mods
+```
+
+Output is one module id per line (lowercase).
+
+### Test skips via `mods=`
+
+In `case.toml`, declare required modules:
+
+```toml
+mods = "http"
+# or: mods = "http,csv"
+```
+
+`bin/run_tests` reads `bin/flvm --mods` (fallback `flc` / `flatl`) once per session. Cases whose `mods=` list a module **not** present are **skipped** (counted separately), not failed. All `test/cases/http/*` cases set `mods = "http"`.
 
 | Target | Effect |
 |--------|--------|

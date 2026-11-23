@@ -2,6 +2,7 @@
 #include "flat_func.h"
 #include "flat_native_use.h"
 #include "flat_native.h"
+#include "flat_native_mods.h"
 #include "flat_native_util.h"
 
 #include <ctype.h>
@@ -9,7 +10,9 @@
 #include <string.h>
 
 static const char *const KNOWN_OPTIONAL_MODULES[] = {
+#if FLAT_WITH_HTTP
     FLAT_NATIVE_MODULE_HTTP,
+#endif
     FLAT_NATIVE_MODULE_MATH_TRIG,
     FLAT_NATIVE_MODULE_MATH_STATS,
     FLAT_NATIVE_MODULE_MATH_MDIM,

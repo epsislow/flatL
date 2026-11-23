@@ -1,5 +1,6 @@
 #include "fb_format.h"
 #include "flat.h"
+#include "flat_native_mods.h"
 #include "flat_native_plugin.h"
 #include "flat_time.h"
 #include "vm.h"
@@ -14,9 +15,11 @@ static void print_version(void) {
 
 static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
+    fprintf(stderr, "       %s --mods\n", prog);
     fprintf(stderr, "       %s [--trace] [--trace-vars] [--max-steps N] [--time] program.fb\n", prog);
     fprintf(stderr, "\n  --trace       log each opcode to stderr\n");
     fprintf(stderr, "  --trace-vars  log opcode + variable snapshot to stderr\n");
+    fprintf(stderr, "  --mods        list native modules built into this binary (one per line)\n");
     fprintf(stderr, "  --time        print load/run timings on stderr (flvm: time_ms …)\n");
     fprintf(stderr, "  FLAT_TIME=1   same as --time when flag omitted\n");
     fprintf(stderr, "  --max-jumps N cap OP_JUMP count (default %u; 0 = default)\n",
@@ -53,6 +56,10 @@ int main(int argc, char **argv) {
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
             print_version();
+            return 0;
+        }
+        if (strcmp(argv[i], "--mods") == 0) {
+            flat_native_mods_print(stdout);
             return 0;
         }
         if (strcmp(argv[i], "--trace") == 0) {

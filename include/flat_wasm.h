@@ -35,6 +35,9 @@ const char *flat_wasm_get_last_panic(void);
 /* flatL toolchain version string (same as flc/flvm). */
 const char *flat_wasm_toolchain_version(void);
 
+/* Space-separated built module ids (same set as flc/flvm/flatl --mods). */
+const char *flat_wasm_mods(void);
+
 /* Applied to the next flat_wasm_run / flat_wasm_run_entry (same semantics as flvm). */
 void flat_wasm_set_run_limits(unsigned max_jumps, unsigned max_steps, int no_jump_limit);
 

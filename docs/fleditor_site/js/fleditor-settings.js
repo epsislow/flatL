@@ -27,6 +27,8 @@
   let showAlertFn = null;
   /** @type {null | (() => string | null)} */
   let getWasmToolchainVersion = null;
+  /** @type {null | (() => string | null)} */
+  let getWasmMods = null;
 
   let dialog = null;
   let themeSelect = null;
@@ -252,9 +254,24 @@
     }
   }
 
+  function parseModsList(modsStr) {
+    if (!modsStr || typeof modsStr !== 'string') {
+      return [];
+    }
+    return modsStr
+      .split(/\s+/)
+      .map(function (s) {
+        return s.trim();
+      })
+      .filter(Boolean);
+  }
+
   function refreshAboutPanel() {
     const uiEl = document.getElementById('settingsAboutUiVersion');
     const wasmEl = document.getElementById('settingsAboutWasmVersion');
+    const httpEl = document.getElementById('settingsAboutHttpMod');
+    const modsEl = document.getElementById('settingsAboutBuiltMods');
+    const httpHint = document.getElementById('settingsAboutHttpHint');
     if (uiEl) {
       uiEl.textContent = V.FLEDITOR_UI_VERSION || '—';
     }
@@ -274,6 +291,40 @@
       } else {
         wasmEl.textContent = 'not loaded';
       }
+    }
+
+    let modsStr = null;
+    if (getWasmMods) {
+      try {
+        modsStr = getWasmMods();
+      } catch (_e) {
+        modsStr = null;
+      }
+    }
+    const mods = parseModsList(modsStr);
+    const hasHttp = mods.indexOf('http') >= 0;
+    if (modsEl) {
+      if (mods.length > 0) {
+        modsEl.textContent = mods.join(', ');
+      } else if (wasmEl && wasmEl.textContent === 'not loaded') {
+        modsEl.textContent = '—';
+      } else {
+        modsEl.textContent = 'unknown (rebuild WASM for flat_wasm_mods)';
+      }
+    }
+    if (httpEl) {
+      if (mods.length > 0) {
+        httpEl.textContent = hasHttp
+          ? 'yes (use native http)'
+          : 'no (built with http=0)';
+      } else if (wasmEl && wasmEl.textContent === 'not loaded') {
+        httpEl.textContent = '—';
+      } else {
+        httpEl.textContent = 'unknown (rebuild WASM)';
+      }
+    }
+    if (httpHint) {
+      httpHint.hidden = !(mods.length > 0 && !hasHttp);
     }
   }
 
@@ -553,6 +604,7 @@
     showPromptFn = options.showPrompt || null;
     showAlertFn = options.showAlert || null;
     getWasmToolchainVersion = options.getWasmToolchainVersion || null;
+    getWasmMods = options.getWasmMods || null;
 
     themeState = T.loadThemeState();
     editorPrefs = T.loadEditorPrefs();

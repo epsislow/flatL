@@ -3,6 +3,7 @@
 #include "flat.h"
 #include "fb_format.h"
 #include "flat_link.h"
+#include "flat_native_mods.h"
 #include "fgir.h"
 #include "vm.h"
 
@@ -286,6 +287,18 @@ const char *flat_wasm_get_last_panic(void) {
 
 const char *flat_wasm_toolchain_version(void) {
     return FLAT_TOOLCHAIN_VERSION;
+}
+
+const char *flat_wasm_mods(void) {
+    static char buf[512];
+    static int ready;
+    if (!ready) {
+        if (flat_native_mods_format(buf, sizeof buf) < 0) {
+            buf[0] = '\0';
+        }
+        ready = 1;
+    }
+    return buf;
 }
 
 void flat_wasm_free(void *p) {

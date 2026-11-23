@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 5
 desc = "response body limit is enforced and reported as transport error"
 kind = "pipeline"

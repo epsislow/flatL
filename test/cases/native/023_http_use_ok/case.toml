@@ -1,0 +1,7 @@
+suite = "native"
+id = 23
+desc = "use native http allows compile of http.create"
+kind = "exec"
+mods = "http"
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl"
+expect_exit = 0

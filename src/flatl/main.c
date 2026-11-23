@@ -3,6 +3,7 @@
 #include "flat.h"
 #include "flat_link.h"
 #include "flat_port.h"
+#include "flat_native_mods.h"
 #include "flat_native_plugin.h"
 #include "flat_time.h"
 #include "vm.h"
@@ -17,10 +18,12 @@ static void print_version(void) {
 
 static int top_usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
+    fprintf(stderr, "       %s --mods\n", prog);
     fprintf(stderr, "       %s compile [--verbose] [--time] -o out.fb program.fl\n", prog);
     fprintf(stderr, "       %s run [--trace] [--trace-vars] [--time] program.fb\n", prog);
     fprintf(stderr, "       %s crun [--trace] [--trace-vars] [--time] [-o out.fb] program.fl\n", prog);
-    fprintf(stderr, "\n  --time        print timings on stderr (flatl: time_ms …); FLAT_TIME=1 equivalent\n");
+    fprintf(stderr, "\n  --mods        list native modules built into this binary (one per line)\n");
+    fprintf(stderr, "  --time        print timings on stderr (flatl: time_ms …); FLAT_TIME=1 equivalent\n");
     return 2;
 }
 
@@ -360,6 +363,10 @@ int main(int argc, char **argv) {
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {
             print_version();
+            return 0;
+        }
+        if (strcmp(argv[i], "--mods") == 0) {
+            flat_native_mods_print(stdout);
             return 0;
         }
     }

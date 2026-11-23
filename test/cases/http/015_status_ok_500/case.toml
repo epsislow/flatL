@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 15
 desc = "statusOk panics with http.status.server_error on 5xx"
 kind = "pipeline"

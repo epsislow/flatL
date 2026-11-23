@@ -18,8 +18,9 @@ C compiler, Python >= 3.11). It starts a loopback HTTP server using cases from
 
 ## Native vs WASM
 
-- **Native** (`flvm` / `flatl`): links **libcurl** (`pkg-config libcurl` or `-lcurl`). Calls `curl_global_init` once on first real (non-mock) request.
-- **WASM / fleditor**: no curl; uses the browser Fetch API. Request bodies are passed as raw heap bytes (binary-safe). Browser CORS and mixed-content rules still apply.
+- **Native** (`flvm` / `flatl`): links **libcurl** (`pkg-config libcurl` or `-lcurl`) unless built with `http=0`. Calls `curl_global_init` once on first real (non-mock) request.
+- **WASM / fleditor**: no curl; uses the browser Fetch API (unless `make fleditor-wasm http=0`). Request bodies are passed as raw heap bytes (binary-safe). Browser CORS and mixed-content rules still apply.
+- **Feature probe**: `flvm --mods` / `flc --mods` / `flatl --mods` / WASM `flat_wasm_mods()` list built modules. Cases under `test/cases/http/` set `mods = "http"` so `run_tests` skips them on an `http=0` toolchain.
 
 ## Mock fixtures
 

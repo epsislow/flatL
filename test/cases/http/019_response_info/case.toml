@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 19
 desc = "responseInfo status headers errorCode bodyLen match response; no body payload in Info"
 kind = "pipeline"

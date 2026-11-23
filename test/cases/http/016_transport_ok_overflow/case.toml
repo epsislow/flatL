@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 16
 desc = "transportOk panics with http.transport.overflow"
 kind = "pipeline"

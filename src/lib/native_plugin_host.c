@@ -1,6 +1,7 @@
 #include "flat_native_plugin.h"
 #include "flat_native.h"
 #include "flat_native_mod.h"
+#include "flat_native_mods.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -89,6 +90,7 @@ static void register_embedded_clock(void) {
     flat_native_plugin_register(FLAT_NATIVE_CLOCK_CLOSE, flat_native_clock_close);
 }
 
+#if FLAT_WITH_HTTP
 static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_HEADER, flat_native_http_header);
@@ -109,6 +111,7 @@ static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_REQUEST_INFO, flat_native_http_request_info);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_RESPONSE_INFO, flat_native_http_response_info);
 }
+#endif
 
 static void register_embedded_vcx(void) {
     flat_native_plugin_register(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
@@ -564,7 +567,9 @@ void flat_native_runtime_reset(void) {
     register_embedded_file();
     register_embedded_date();
     register_embedded_clock();
+#if FLAT_WITH_HTTP
     register_embedded_http();
+#endif
     register_embedded_vcx();
     register_embedded_executor();
     register_embedded_str_extras();
@@ -628,6 +633,10 @@ int flat_native_runtime_prepare(uint16_t native_id, char *err, size_t err_size) 
     }
     if (flat_native_module_for_id(native_id, mod, sizeof mod) != 0) {
         snprintf(err, err_size, "unknown native id %u", (unsigned)native_id);
+        return -1;
+    }
+    if (!flat_native_mod_is_built(mod)) {
+        snprintf(err, err_size, "module %s not built into this toolchain", mod);
         return -1;
     }
     if (!manifest_has_module(mod)) {

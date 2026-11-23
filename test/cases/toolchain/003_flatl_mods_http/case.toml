@@ -1,0 +1,8 @@
+suite = "toolchain"
+id = 3
+mods = "http"
+desc = "flatl --mods lists http in default build"
+kind = "exec"
+cmd = "{root}/bin/flatl --mods"
+expect_exit = 0
+stdout_contains = "http"

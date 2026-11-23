@@ -11,6 +11,8 @@
 #define FLAT_CASE_SUITE_LEN 64
 #define FLAT_CASE_CATEG_LEN 32
 #define FLAT_CASE_CATEG_DEFAULT "default"
+#define FLAT_CASE_MAX_MODS 8
+#define FLAT_CASE_MOD_LEN 32
 
 typedef enum {
     CASE_KIND_FILES,
@@ -38,6 +40,9 @@ typedef struct {
     char stderr_contains[FLAT_CASE_MAX_DESC];
     int show_output; /* print captured command output after this case */
     int http_mock_enabled; /* [http.mock] fixture in this case.toml */
+    /* Required built modules (from mods= in case.toml); empty = no requirement. */
+    char mods[FLAT_CASE_MAX_MODS][FLAT_CASE_MOD_LEN];
+    int mods_count;
 
     char pipeline_compile[FLAT_CASE_MAX_CMD];
     char pipeline_run[FLAT_CASE_MAX_CMD];

@@ -486,7 +486,16 @@
               <dd id="settingsAboutUiVersion">—</dd>
               <dt>flatL WASM (flc + flvm)</dt>
               <dd id="settingsAboutWasmVersion">—</dd>
+              <dt>HTTP module</dt>
+              <dd id="settingsAboutHttpMod">—</dd>
+              <dt>Built modules</dt>
+              <dd id="settingsAboutBuiltMods">—</dd>
             </dl>
+            <p id="settingsAboutHttpHint" class="fleditor-settings-hint" hidden>
+              This WASM build was compiled with <code>http=0</code>. <code>use native http</code> and the
+              <code>examples/http_*.fl</code> samples need a rebuild that includes HTTP
+              (<code>make fleditor-wasm</code> or <code>make rebuild</code>).
+            </p>
             <div class="fleditor-settings-actions">
               <button type="button" id="settingsResetAllBtn" class="fleditor-io-btn fleditor-io-btn--danger">Reset all settings</button>
             </div>

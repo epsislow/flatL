@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 20
 desc = "responseInfo panics when send was not called"
 kind = "pipeline"

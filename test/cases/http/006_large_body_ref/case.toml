@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 6
 desc = "large response body is returned as a persistent string ref"
 kind = "pipeline"

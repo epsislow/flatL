@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 11
 desc = "transportOk and statusOk pass for HTTP 200"
 kind = "pipeline"

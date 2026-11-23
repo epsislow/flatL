@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 8
 desc = "empty HTTP response body is returned as an empty string"
 kind = "pipeline"

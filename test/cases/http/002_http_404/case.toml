@@ -1,4 +1,5 @@
 suite = "http"
+mods = "http"
 id = 2
 desc = "HTTP 404 is a response, not a transport error"
 kind = "pipeline"
