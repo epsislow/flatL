@@ -350,13 +350,17 @@ static void replace_token(char *cmd, size_t cap, const char *from, const char *t
     if (fl == 0 || !cmd) {
         return;
     }
-    while ((pos = strstr(cmd, from)) != NULL) {
+    pos = cmd;
+    while ((pos = strstr(pos, from)) != NULL) {
         size_t tail = strlen(pos + fl);
         if ((size_t)(pos - cmd) + tl + tail + 1 > cap) {
             return;
         }
         memmove(pos + tl, pos + fl, tail + 1);
         memcpy(pos, to, tl);
+        /* Advance past the inserted text so a `to` that still contains `from`
+           as a prefix (e.g. "/bin/flc " -> "/bin/flc --time ") cannot loop. */
+        pos += tl;
     }
 }
 
@@ -384,10 +388,11 @@ static void inject_tool_time(char *cmd, size_t cap) {
     replace_token(cmd, cap, "/bin/flatl.exe crun ", "/bin/flatl.exe crun --time ");
     replace_token(cmd, cap, "/bin/flatl compile ", "/bin/flatl compile --time ");
     replace_token(cmd, cap, "/bin/flatl.exe compile ", "/bin/flatl.exe compile --time ");
-    replace_token(cmd, cap, "/bin/flatl run ", "/bin/flatl run --time ");
-    replace_token(cmd, cap, "/bin/flatl.exe run ", "/bin/flatl.exe run --time ");
+    /* More specific `run --trace` before generic `run`. */
     replace_token(cmd, cap, "/bin/flatl run --trace ", "/bin/flatl run --time --trace ");
     replace_token(cmd, cap, "/bin/flatl.exe run --trace ", "/bin/flatl.exe run --time --trace ");
+    replace_token(cmd, cap, "/bin/flatl run ", "/bin/flatl run --time ");
+    replace_token(cmd, cap, "/bin/flatl.exe run ", "/bin/flatl.exe run --time ");
 }
 
 static void inject_http_mock(char *cmd, size_t cap, const FlatCase *c) {

@@ -1,5 +1,6 @@
 # Minimal HTTPS GET — works in fleditor (WASM Fetch) and native (libcurl).
 # Uses a public JSON demo API that allows browser CORS.
+use native http
 #main
   req = http.create('GET', 'https://jsonplaceholder.typicode.com/todos/1')
   http.timeout(req, 15000)

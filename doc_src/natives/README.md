@@ -1,8 +1,8 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`, `date`, `clock`, `http`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [clock.md](./clock.md), [http.md](./http.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
+**Core natives** (`io`, `json`, `str`, `date`, `clock`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [clock.md](./clock.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
 
-**Optional natives** extend the VM (for example trigonometry). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
+**Optional natives** extend the VM (for example trigonometry, HTTP, CSV). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
 ## Syntax
 
@@ -41,7 +41,7 @@ The token after **`with`** must **not** equal any **module id**: `io`, `str`, `j
 
 ## Core vs optional
 
-- **`use native io`** (or `json` / `str` / `date` / `clock` / `http` / `mem` / `file` without `with`) is an error — use **`use native mem with Alias`** only when you want a short prefix; canonical names always work.
+- **`use native io`** (or `json` / `str` / `date` / `clock` / `mem` / `file` without `with`) is an error — use **`use native mem with Alias`** only when you want a short prefix; canonical names always work.
 - Duplicate **`use native`** for the **same module** in one file is an error.
 
 ## `io.docs`
@@ -59,13 +59,13 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `str` | [str.md](./str.md) |
 | `date` | [date.md](./date.md) |
 | `clock` | [clock.md](./clock.md) — monotonic elapsed-time measurements |
-| `http` | [http.md](./http.md) — synchronous HTTP/HTTPS requests |
 | `mem` | [mem.md](./mem.md) |
 
 ## Optional modules (documented)
 
 | Module | Doc |
 |--------|-----|
+| `http` | [http.md](./http.md) — synchronous HTTP/HTTPS requests |
 | `math` | [math.md](./math.md) |
 | `math.trig` | [math.trig.md](./math.trig.md) |
 | `math.stats` | [math.stats.md](./math.stats.md) |

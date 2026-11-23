@@ -1,12 +1,18 @@
-# Native HTTP
+# Native module `http`
 
-The core `http` module performs synchronous HTTP and HTTPS requests. Native builds use libcurl; the browser/WASM build uses the browser Fetch API through the Emscripten Asyncify bridge. Browser requests remain subject to browser security rules, including CORS.
+**Synchronous HTTP and HTTPS requests.** **Optional** — declare before use:
+
+```text
+use native http
+```
+
+Native builds use libcurl; the browser/WASM build uses the browser Fetch API through the Emscripten Asyncify bridge. Browser requests remain subject to browser security rules, including CORS.
 
 Requests are VM-owned resources identified by numeric IDs. Close each request with `http.close(id)` when it is no longer needed. `mem.infoResId(id, 'http')` returns `request` while the resource is live and `unknown` after it is closed.
 
 ## API reference
 
-**Core** module — always linked into `flvm` / `flatl`. Call `http.*` directly (no `use native http`). Implementation: `src/lib/mod_http.c`, transport `src/http/flat_http_curl.c` (native) / Fetch+Asyncify (WASM).
+**Optional** module — requires `use native http` (or `use native http with Alias`) in each `.fl` file that calls `http.*`. Implementation: `src/lib/mod_http.c`, transport `src/http/flat_http_curl.c` (native) / Fetch+Asyncify (WASM).
 
 ### Summary
 
@@ -204,9 +210,12 @@ http.close(req)
 
 ### End-to-end examples by method
 
+Each sample assumes `use native http` at the top of the file.
+
 **GET** — fetch a resource:
 
 ```flat
+use native http
 req = http.create("GET", "https://jsonplaceholder.typicode.com/todos/1")
 http.timeout(req, 15000)
 http.send(req)
@@ -220,6 +229,7 @@ http.close(req)
 **POST** — create with JSON body:
 
 ```flat
+use native http
 req = http.create("POST", "https://jsonplaceholder.typicode.com/posts")
 http.json(req, {"title": "flatL", "body": "http post example", "userId": 1})
 http.timeout(req, 15000)
@@ -234,6 +244,7 @@ http.close(req)
 **PUT** — replace a resource:
 
 ```flat
+use native http
 req = http.create("PUT", "https://jsonplaceholder.typicode.com/posts/1")
 http.json(req, {"id": 1, "title": "updated", "body": "full replace", "userId": 1})
 http.send(req)
@@ -246,6 +257,7 @@ http.close(req)
 **PATCH** — partial update:
 
 ```flat
+use native http
 req = http.create("PATCH", "https://jsonplaceholder.typicode.com/posts/1")
 http.json(req, {"title": "patched title"})
 http.send(req)
@@ -258,6 +270,7 @@ http.close(req)
 **DELETE** — remove a resource:
 
 ```flat
+use native http
 req = http.create("DELETE", "https://jsonplaceholder.typicode.com/posts/1")
 http.send(req)
 http.transportOk(req)
@@ -269,6 +282,7 @@ http.close(req)
 **HEAD** — headers only (empty or unused body):
 
 ```flat
+use native http
 req = http.create("HEAD", "https://jsonplaceholder.typicode.com/posts/1")
 http.send(req)
 http.transportOk(req)
@@ -283,6 +297,7 @@ Runnable samples: [`examples/http_get.fl`](../../examples/http_get.fl), [`exampl
 ## Create and send a request
 
 ```flat
+use native http
 req = http.create("GET", "https://api.example.com/users")
 http.timeout(req, 10000)
 http.send(req)
@@ -295,6 +310,8 @@ http.close(req)
 Same flow with other methods — set a body when the method carries one:
 
 ```flat
+use native http
+
 # POST + raw body
 req = http.create("POST", "https://api.example.com/notes")
 http.header(req, "Content-Type", "text/plain")

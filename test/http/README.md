@@ -12,7 +12,7 @@ C compiler, Python >= 3.11). It starts a loopback HTTP server using cases from
 | `include/flat_http_transport.h` | request/response interface |
 | `src/http/flat_http_curl.c` | native libcurl transport (+ `FLAT_HTTP_MOCK_FILE` fixtures) |
 | `src/http/flat_http_fetch.c` | WASM/browser Fetch + Asyncify |
-| `src/lib/mod_http.c` | FlatL `http.*` natives (resource IDs) |
+| `src/lib/mod_http.c` | FlatL `http.*` natives (resource IDs; optional — `use native http`) |
 | `doc_src/natives/http.md` | public API docs |
 | `test/cases/http/` | VM cases via `bin/run_tests` (mock fixtures) |
 

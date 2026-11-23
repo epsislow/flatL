@@ -292,7 +292,6 @@ int flat_native_is_core_module(const char *mod) {
     }
     return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0 ||
            strcmp(mod, FLAT_NATIVE_MODULE_DATE) == 0 || strcmp(mod, FLAT_NATIVE_MODULE_CLOCK) == 0 ||
-           strcmp(mod, FLAT_NATIVE_MODULE_HTTP) == 0 ||
            strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0 ||
            strcmp(mod, FLAT_NATIVE_MODULE_FILE) == 0;
 }

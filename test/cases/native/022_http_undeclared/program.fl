@@ -1,0 +1,3 @@
+#main
+  req = http.create('GET', 'http://mock.local/x')
+  OK

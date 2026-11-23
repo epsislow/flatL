@@ -1,3 +1,4 @@
+use native http
 #main
   req = http.create('GET', 'http://mock.local/big')
   http.send(req)
