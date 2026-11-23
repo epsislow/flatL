@@ -1,0 +1,17 @@
+suite = "http"
+mods = "http"
+id = 30
+desc = "partsMax default 32; exceeding limit panics http.addPart.limit"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 1
+stdout_contains = "32"
+stderr_contains = "http.addPart.limit"
+
+[http.mock]
+method = "POST"
+path = "/lim"
+status = 200
+body = "ok"

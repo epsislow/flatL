@@ -1,0 +1,11 @@
+use native http
+#main
+  req = http.create('POST', 'http://mock.local/form')
+  http.form(req, {"name": "Ada Lovelace", "n": 1})
+  raw = http.requestBody(req)
+  io.outln(raw)
+  http.send(req)
+  http.transportOk(req)
+  io.outln(http.status(req))
+  http.close(req)
+  OK

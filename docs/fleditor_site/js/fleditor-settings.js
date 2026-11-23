@@ -11,6 +11,8 @@
   let editorPrefs = T.loadEditorPrefs();
   /** @type {ReturnType<typeof T.loadTerminalPrefs>} */
   let terminalPrefs = T.loadTerminalPrefs();
+  /** @type {ReturnType<typeof T.loadHttpPrefs>} */
+  let httpPrefs = T.loadHttpPrefs();
 
   /** @type {null | HTMLElement} */
   let appEl = null;
@@ -81,6 +83,10 @@
     if (onRefreshLayout) {
       onRefreshLayout();
     }
+  }
+
+  function applyHttpPrefs() {
+    global.FLAT_HTTP_ALLOW_CROSS_ORIGIN = httpPrefs.allowCrossOrigin !== false;
   }
 
   function refreshThemeSelect() {
@@ -245,6 +251,7 @@
         display: 'Display',
         editor: 'Editor',
         terminal: 'Terminal',
+        http: 'HTTP',
         about: 'About',
       };
       title.textContent = labels[sectionId] || 'Settings';
@@ -252,6 +259,40 @@
     if (sectionId === 'about') {
       refreshAboutPanel();
     }
+    if (sectionId === 'http') {
+      refreshHttpPanel();
+    }
+  }
+
+  function wasmHasHttpModule() {
+    let modsStr = null;
+    if (getWasmMods) {
+      try {
+        modsStr = getWasmMods();
+      } catch (_e) {
+        modsStr = null;
+      }
+    }
+    const mods = parseModsList(modsStr);
+    return mods.indexOf('http') >= 0;
+  }
+
+  function refreshHttpPanel() {
+    httpPrefs = T.loadHttpPrefs();
+    const noMod = document.getElementById('settingsHttpNoModule');
+    const controls = document.getElementById('settingsHttpControls');
+    const cross = document.getElementById('settingsHttpAllowCrossOrigin');
+    const hasHttp = wasmHasHttpModule();
+    if (noMod) {
+      noMod.hidden = hasHttp;
+    }
+    if (controls) {
+      controls.hidden = !hasHttp;
+    }
+    if (cross) {
+      cross.checked = httpPrefs.allowCrossOrigin !== false;
+    }
+    applyHttpPrefs();
   }
 
   function parseModsList(modsStr) {
@@ -331,6 +372,7 @@
   function syncEditorTerminalFormInputs() {
     editorPrefs = T.loadEditorPrefs();
     terminalPrefs = T.loadTerminalPrefs();
+    httpPrefs = T.loadHttpPrefs();
     const editorFont = document.getElementById('settingsEditorFontSize');
     const editorLines = document.getElementById('settingsEditorLineNumbers');
     const editorTab = document.getElementById('settingsEditorTabSize');
@@ -341,6 +383,7 @@
     const termMaxJumps = document.getElementById('settingsTerminalMaxJumps');
     const termMaxSteps = document.getElementById('settingsTerminalMaxSteps');
     const termNoJumpLimit = document.getElementById('settingsTerminalNoJumpLimit');
+    const httpCross = document.getElementById('settingsHttpAllowCrossOrigin');
     if (editorFont) {
       editorFont.value = String(editorPrefs.fontSize);
     }
@@ -373,6 +416,10 @@
     if (termNoJumpLimit) {
       termNoJumpLimit.checked = terminalPrefs.noJumpLimit;
     }
+    if (httpCross) {
+      httpCross.checked = httpPrefs.allowCrossOrigin !== false;
+    }
+    applyHttpPrefs();
   }
 
   function syncTerminalRunLimitFieldsDisabled() {
@@ -410,7 +457,7 @@
       resetAllBtn.addEventListener('click', async function () {
         if (
           !window.confirm(
-            'Reset all settings? Theme, editor, and terminal preferences will return to defaults. Project and panel layout are not affected.'
+            'Reset all settings? Theme, editor, terminal, and HTTP preferences will return to defaults. Project and panel layout are not affected.'
           )
         ) {
           return;
@@ -419,12 +466,15 @@
         themeState = defaults.theme;
         editorPrefs = defaults.editorPrefs;
         terminalPrefs = defaults.terminalPrefs;
+        httpPrefs = defaults.httpPrefs || Object.assign({}, T.DEFAULT_HTTP_PREFS);
         persistThemeAndApply();
         refreshThemeSelect();
         buildTokenCustomizeUI();
         syncEditorTerminalFormInputs();
         applyEditorPrefs();
         applyTerminalPrefs();
+        applyHttpPrefs();
+        refreshHttpPanel();
         if (showAlertFn) {
           await showAlertFn('Settings restored to defaults.', 'About');
         }
@@ -594,6 +644,15 @@
       });
       syncTerminalRunLimitFieldsDisabled();
     }
+
+    const httpCross = document.getElementById('settingsHttpAllowCrossOrigin');
+    if (httpCross) {
+      httpCross.checked = httpPrefs.allowCrossOrigin !== false;
+      httpCross.addEventListener('change', function () {
+        httpPrefs = T.saveHttpPrefs(null, { allowCrossOrigin: httpCross.checked });
+        applyHttpPrefs();
+      });
+    }
   }
 
   function init(options) {
@@ -609,6 +668,8 @@
     themeState = T.loadThemeState();
     editorPrefs = T.loadEditorPrefs();
     terminalPrefs = T.loadTerminalPrefs();
+    httpPrefs = T.loadHttpPrefs();
+    applyHttpPrefs();
 
     if (appEl) {
       T.applyTheme(appEl, T.effectiveTokens(themeState));
@@ -619,6 +680,10 @@
 
   function getTerminalPrefs() {
     return terminalPrefs;
+  }
+
+  function getHttpPrefs() {
+    return httpPrefs;
   }
 
   function applyThemeFromStorage() {
@@ -632,10 +697,13 @@
   global.FleditorSettings = {
     init,
     getTerminalPrefs,
+    getHttpPrefs,
     applyThemeFromStorage,
     applyEditorPrefs,
     applyTerminalPrefs,
+    applyHttpPrefs,
     applyTerminalTheme,
     refreshAboutPanel,
+    refreshHttpPanel,
   };
 })(typeof window !== 'undefined' ? window : globalThis);

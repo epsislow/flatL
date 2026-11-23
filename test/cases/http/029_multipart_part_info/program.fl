@@ -1,0 +1,34 @@
+use native http
+use native obj
+use native list
+#main
+  req = http.create('POST', 'http://mock.local/meta')
+  http.addPart(req, 'note', 'hello')
+  http.addFilePart(req, 'file', 'XX')
+  http.addPart(req, 'dup', 'a')
+  http.addPart(req, 'dup', 'b')
+  info = http.requestInfo(req)
+  obj.get(info, '"partCount"') -> pc
+  io.outln(pc)
+  parts = http.partInfo(req)
+  io.outln(list.len(parts))
+  p0 = list.get(parts, 0)
+  obj.get(p0, '"name"') -> n0
+  obj.get(p0, '"kind"') -> k0
+  obj.get(p0, '"size"') -> s0
+  io.outln(n0)
+  io.outln(k0)
+  io.outln(s0)
+  p1 = list.get(parts, 1)
+  obj.get(p1, '"filename"') -> fn
+  io.outln(fn)
+  http.removePart(req, 'dup')
+  info2 = http.requestInfo(req)
+  obj.get(info2, '"partCount"') -> pc2
+  io.outln(pc2)
+  http.partsLoad(req)
+  http.send(req)
+  http.transportOk(req)
+  io.outln(http.status(req))
+  http.close(req)
+  OK

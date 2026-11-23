@@ -6,7 +6,9 @@
 use native http
 ```
 
-Native builds use libcurl; the browser/WASM build uses the browser Fetch API through the Emscripten Asyncify bridge. Browser requests remain subject to browser security rules, including CORS.
+Native builds use libcurl; the browser/WASM build uses the browser Fetch API through the Emscripten Asyncify bridge.
+
+**CORS (fleditor / WASM only):** `http.send` uses the page’s `fetch()`. The browser compares the fleditor origin (e.g. `http://127.0.0.1:8765`) with the request URL. Cross-origin calls need the target server to allow that origin (`Access-Control-Allow-Origin`). The same URL usually works with `bin/flvm` (libcurl has no CORS). Demo examples use CORS-friendly public APIs. There is no `http.allowCORS` on the native API — optional fleditor **Settings → HTTP → Cross-origin requests** only gates whether Fetch may *attempt* cross-origin URLs (it never bypasses browser CORS).
 
 Requests are VM-owned resources identified by numeric IDs. Close each request with `http.close(id)` when it is no longer needed. `mem.infoResId(id, 'http')` returns `request` while the resource is live and `unknown` after it is closed.
 
@@ -28,8 +30,22 @@ Build without HTTP (no libcurl / no Fetch glue): `make rebuild http=0`. Then `fl
 | `json(id, value)` | — | `http.json.args`, `http.json.memory`, `http.json.serialize`, `http.json.content_type` |
 | `timeout(id, milliseconds)` | — | `http.timeout.args`, `http.timeout.range` |
 | `maxBody(id, bytes)` | — | `http.maxBody.args`, `http.maxBody.range` |
-| `send(id)` | — | `http.send.id` |
+| `maxRedirects(id)` | NUMBER | `http.maxRedirects.id` |
+| `maxRedirects(id, n)` | — | `http.maxRedirects.args`, `http.maxRedirects.range` |
+| `bearer(id, token)` | — | `http.bearer.args`, `http.bearer.value`, `http.bearer.memory` |
+| `basic(id, user, pass)` | — | `http.basic.args`, `http.basic.value`, `http.basic.memory` |
+| `form(id, object)` | — | `http.form.args`, `http.form.invalid` |
+| `addPart(id, name, value)` | — | `http.addPart.args`, `http.addPart.value`, `http.addPart.limit`, `http.addPart.memory` |
+| `addFilePart(id, name, dataOrFile, filename?)` | — | `http.addFilePart.args`, `http.addFilePart.data`, `http.addFilePart.file`, `http.addFilePart.filename`, `http.addFilePart.limit`, `http.addFilePart.memory` |
+| `removePart(id, name)` | — | `http.removePart.args` |
+| `resetParts(id)` | — | `http.resetParts.id` |
+| `partsLoad(id)` | — | `http.partsLoad.id`, `http.partsLoad.memory` |
+| `partsMax(id)` | NUMBER | `http.partsMax.id` |
+| `partsMax(id, n)` | — | `http.partsMax.args`, `http.partsMax.range`, `http.partsMax.below_count` |
+| `partInfo(id)` | LIST | `http.partInfo.id`, `http.partInfo.args`, `http.partInfo.memory` |
+| `send(id)` | — | `http.send.id`, `http.redirect.limit`, `http.partsLoad.memory` |
 | `status(id)` | NUMBER | `http.status.id`, `http.status.not_sent` |
+| `responseStatuses(id)` | LIST | `http.responseStatuses.id`, `http.responseStatuses.not_sent`, `http.responseStatuses.memory` |
 | `responseBody(id)` | STRING | `http.responseBody.id`, `http.responseBody.not_sent`, `http.responseBody.memory` |
 | `responseHeaders(id)` | OBJECT | `http.responseHeaders.id`, `http.responseHeaders.not_sent`, `http.responseHeaders.memory` |
 | `error(id)` | STRING | `http.error.id`, `http.error.not_sent`, `http.error.memory` |
@@ -46,7 +62,7 @@ Build without HTTP (no libcurl / no Fetch glue): `make rebuild http=0`. Then `fl
 
 ### `http.create(method, url)`
 
-Allocates a request resource and returns its numeric **id**. Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the transport. Defaults: timeout **10s**, max response body **8 MiB**. At most **16** live requests per VM run (`http.create.limit`).
+Allocates a request resource and returns its numeric **id**. Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the transport. Defaults: timeout **10s**, max response body **8 MiB**, **maxRedirects 10**, **partsMax 32**. At most **16** live requests per VM run (`http.create.limit`).
 
 ```flat
 get = http.create("GET", "https://api.example.com/users/1")
@@ -116,9 +132,85 @@ Sets the maximum response body size for this request (up to the FlatL string-poo
 http.maxBody(req, 1048576)
 ```
 
+### `http.maxRedirects(id)` / `http.maxRedirects(id, n)`
+
+Getter/setter for redirect hop limit (default **10** at `create`).
+
+| `n` | Meaning |
+|-----|---------|
+| `0` | Do not follow redirects; `status` stays on the first response (often 3xx). |
+| `>= 1` | Follow at most **n** hops. |
+| `-1` | Unlimited (no FlatL ceiling; transport may still stop). |
+
+If the hop limit is exceeded while following, `send` panics with **`http.redirect.limit`**. The last status seen remains available via `status` / `responseStatuses` after a recovered panic (or before exit).
+
+```flat
+http.maxRedirects(req, 0)
+limit = http.maxRedirects(req)
+```
+
+### `http.bearer(id, token)` / `http.basic(id, user, pass)`
+
+Set `Authorization`. Both **replace** any existing `Authorization` header.
+
+- `bearer` → `Authorization: Bearer <token>`
+- `basic` → `Authorization: Basic <base64(user:pass)>` (shared Base64 helper; **no** extra `use native` required)
+
+```flat
+http.bearer(req, token)
+http.basic(req, "user", "pass")
+```
+
+### `http.form(id, object)`
+
+Builds an `application/x-www-form-urlencoded` body from an OBJECT (STRING / NUMBER / BOOL / NULL values; keys and values percent-encoded) and sets `Content-Type` accordingly. Replaces any multipart parts on this request.
+
+```flat
+http.form(req, {"name": "Ada Lovelace", "n": 1})
+```
+
+### Multipart builder (`addPart` / `addFilePart`)
+
+Build a `multipart/form-data` body incrementally (no one-shot `http.multipart` in v1). First `addPart` / `addFilePart` switches the request to multipart mode (replaces a previous `json` / `form` / `requestBody`). `http.close` frees all part storage.
+
+| Call | Role |
+|------|------|
+| `http.addPart(id, name, value)` | Text part. `value`: STRING / NUMBER / BOOL / NULL (same rules as `form`). |
+| `http.addFilePart(id, name, dataOrFile, filename?)` | File part. Arg 3 = STRING / STRING REF **or** open `file` handle (bytes read now). `filename` optional → defaults to `name`. |
+| `http.removePart(id, name)` | Removes **all** parts with that `name`. |
+| `http.resetParts(id)` | Clears all parts; request stays live. |
+| `http.partsLoad(id)` | Materializes the wire body + `Content-Type: multipart/form-data; boundary=…`. |
+| `http.partsMax(id)` / `http.partsMax(id, n)` | Getter/setter for part limit (**default 32**, hard max **256**). Cannot set below current `partCount`. |
+| `http.partInfo(id)` | LIST of OBJECT metadata (**no** values/bytes): `name`, `kind` (`"text"`\|`"file"`), `size`, and `filename` (file only, always set). |
+
+`send` calls `partsLoad` automatically when parts are dirty. Wire layout: text parts use `Content-Disposition` only; file parts also get `Content-Type: application/octet-stream`.
+
+```flat
+use native http
+use native file
+use native list
+use native obj
+
+req = http.create("POST", "https://example.com/upload")
+http.addPart(req, "note", "hello")
+fp = file.readCtx("a.bin")
+http.addFilePart(req, "file", fp, "a.bin")
+http.addFilePart(req, "extra", blobBytes)   -- filename defaults to "extra"
+http.removePart(req, "extra")
+
+info = http.requestInfo(req)
+obj.get(info, '"partCount"') -> n          -- e.g. 2
+
+parts = http.partInfo(req)                 -- metadata only
+http.partsLoad(req)                        -- optional; send does this if needed
+http.send(req)
+http.transportOk(req)
+http.close(req)                            -- frees parts + body
+```
+
 ### `http.send(id)`
 
-Performs the request synchronously. Never panics on HTTP 4xx/5xx or on transport failure — inspect `status` / `errorCode` / `error`, or call `transportOk` / `statusOk` afterward. Redirects are followed (bounded).
+Performs the request synchronously. Never panics on HTTP 4xx/5xx or on ordinary transport failure — inspect `status` / `errorCode` / `error`, or call `transportOk` / `statusOk` afterward. Redirects follow `maxRedirects` (see above). Exceeding the redirect limit → **`http.redirect.limit`**. If multipart parts are dirty, **`partsLoad` runs automatically** before the transport call.
 
 ```flat
 http.send(req)
@@ -126,10 +218,21 @@ http.send(req)
 
 ### `http.status(id)`
 
-Returns the HTTP status code after `send`. Returns `0` when no HTTP response was received (e.g. transport failure). Requires `send` first (`http.status.not_sent`).
+Returns the **final** HTTP status (or the last status seen if redirects stopped early). Returns `0` when no HTTP response was received (e.g. transport failure). Requires `send` first (`http.status.not_sent`).
 
 ```flat
 code = http.status(req)
+```
+
+### `http.responseStatuses(id)`
+
+Returns a LIST of NUMBER: ordered status codes from the first response through the last (e.g. `[301, 302, 200]`). With no redirects: a single-element list equal to `status`. Requires `send`.
+
+**WASM / Fetch:** intermediate 3xx codes are usually **not** available to JavaScript; the list may be only `[final]`. Native libcurl can report the full chain when the transport exposes it. DevTools Network ≠ this API.
+
+```flat
+use native list
+chain = http.responseStatuses(req)
 ```
 
 ### `http.responseBody(id)`
@@ -180,7 +283,7 @@ http.statusOk(req)
 
 ### `http.requestInfo(id)`
 
-Returns an OBJECT snapshot of the live request (no body bytes). Keys: `method`, `url`, `headers`, `timeoutMs`, `maxBody`, `sent`, `bodyLen`. Available before or after `send`.
+Returns an OBJECT snapshot of the live request (no body bytes). Keys: `method`, `url`, `headers`, `timeoutMs`, `maxBody`, `maxRedirects`, `sent`, `bodyLen`, **`partCount`**. Available before or after `send`. Part details → `http.partInfo` (not embedded here).
 
 ```flat
 use native obj
@@ -341,7 +444,7 @@ Runnable samples (CLI + fleditor):
 
 They use a public HTTPS JSON API that allows browser CORS so **Run** works in the WASM playground as well as with native `flvm`/`flatl`.
 
-Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the native transport. Redirect following is enabled with a bounded redirect count. HTTPS peer and host certificate verification are enabled by default.
+Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the native transport. Redirect following is controlled by `http.maxRedirects` (default **10**). HTTPS peer and host certificate verification are enabled by default.
 
 `http.send()` is synchronous from the FlatL program's point of view. The internal transport boundary is kept separate so a future asynchronous executor can reuse the same request and response representation; asynchronous calls are not part of this API yet.
 
@@ -475,8 +578,10 @@ Available while the request resource is live (before or after `send`):
 | `headers` | OBJECT | request headers → LIST of STRING (same shape as `http.headers` input) |
 | `timeoutMs` | NUMBER | timeout in milliseconds |
 | `maxBody` | NUMBER | configured max response body bytes |
+| `maxRedirects` | NUMBER | redirect hop limit (`10` default, `0`, `n`, or `-1`) |
 | `sent` | BOOL | whether `http.send` has been called |
 | `bodyLen` | NUMBER | request body length (`0` = none / empty) |
+| `partCount` | NUMBER | number of multipart parts (`0` if none) |
 
 ### `http.responseInfo(id)`
 
@@ -504,9 +609,11 @@ if n > 0
 - Default timeout: 10 seconds.
 - Maximum configurable timeout: 10 minutes.
 - Default response body limit: 8 MiB.
+- Default `maxRedirects`: **10** (`0` = no follow, `-1` = unlimited).
+- Default multipart `partsMax`: **32** (hard ceiling **256** via `http.partsMax`).
 - `http.maxBody(id, bytes)` changes the response body limit up to the FlatL string-pool chunk limit.
 - At most 16 request resources can be live in one VM run. They are automatically released when the VM run ends.
-- `http.close(id)` releases a request and its transport buffers. A STRING/STRING REF already returned by `http.responseBody(id)` remains valid according to normal FlatL value ownership.
+- `http.close(id)` releases the request, transport buffers, **and all multipart part storage**. A STRING/STRING REF already returned by `http.responseBody(id)` remains valid according to normal FlatL value ownership.
 
 ## Deterministic HTTP mocks in tests
 
@@ -540,6 +647,18 @@ path = "/slow"
 error_code = 28
 error = "mock timeout"
 ```
+
+To assert **what was sent**, set `show_request_body = true` — the mock response body becomes the request body bytes received by the transport (useful for multipart / form / json):
+
+```toml
+[http.mock]
+method = "POST"
+path = "/upload"
+status = 200
+show_request_body = true
+```
+
+Then inspect with `http.responseBody(req)` (prefer `str.contains` for large bodies — `io.outln` may preview-truncate long STRING REFs).
 
 The fixture can also set `status = 404`, `status = 500`, or a final `status = 302` to exercise `statusOk` panic labels. Transport failures use `error_code` / `error` (for example `28` → `http.transport.timeout`). Run these tests through the regular suite:
 

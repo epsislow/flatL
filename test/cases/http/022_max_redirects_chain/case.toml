@@ -1,0 +1,21 @@
+suite = "http"
+mods = "http"
+id = 22
+desc = "maxRedirects default follows mock redirect_statuses chain to final 200"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "10"
+stdout_contains_2 = "200"
+stdout_contains_3 = "3"
+stdout_contains_4 = "301"
+stdout_contains_5 = "302"
+
+[http.mock]
+method = "GET"
+path = "/chain"
+status = 200
+body = "final"
+redirect_statuses = [301, 302, 200]

@@ -1,0 +1,16 @@
+use native http
+#main
+  req = http.create('POST', 'http://mock.local/upload')
+  http.addPart(req, 'note', 'hello')
+  http.addFilePart(req, 'file', 'BINDATA', 'a.bin')
+  http.send(req)
+  http.transportOk(req)
+  io.outln(http.status(req))
+  body = http.responseBody(req)
+  io.outln(str.contains(body, 'name="note"'))
+  io.outln(str.contains(body, 'hello'))
+  io.outln(str.contains(body, 'filename="a.bin"'))
+  io.outln(str.contains(body, 'BINDATA'))
+  io.outln(str.contains(body, 'application/octet-stream'))
+  http.close(req)
+  OK

@@ -5,6 +5,7 @@
   const THEME_KEY = 'flatl-fleditor-theme';
   const EDITOR_PREFS_KEY = 'flatl-fleditor-editor-prefs';
   const TERMINAL_PREFS_KEY = 'flatl-fleditor-terminal-prefs';
+  const HTTP_PREFS_KEY = 'flatl-fleditor-http-prefs';
 
   const CUSTOM_PRESET_ID = 'custom';
   const DEFAULT_PRESET_ID = 'dark';
@@ -234,6 +235,11 @@
     /** 0 = unlimited opcode steps per run */
     maxSteps: 0,
     noJumpLimit: false,
+  };
+
+  const DEFAULT_HTTP_PREFS = {
+    /** When false, WASM Fetch refuses cross-origin URLs before fetch (does not bypass CORS). */
+    allowCrossOrigin: true,
   };
 
   function normalizeProgramInput(v) {
@@ -526,10 +532,12 @@
     store.removeItem(THEME_KEY);
     store.removeItem(EDITOR_PREFS_KEY);
     store.removeItem(TERMINAL_PREFS_KEY);
+    store.removeItem(HTTP_PREFS_KEY);
     return {
       theme: defaultThemeState(),
       editorPrefs: Object.assign({}, DEFAULT_EDITOR_PREFS),
       terminalPrefs: Object.assign({}, DEFAULT_TERMINAL_PREFS),
+      httpPrefs: Object.assign({}, DEFAULT_HTTP_PREFS),
     };
   }
 
@@ -589,6 +597,33 @@
     return merged;
   }
 
+  function loadHttpPrefs(storage) {
+    const store = storage || global.localStorage;
+    try {
+      const raw = store.getItem(HTTP_PREFS_KEY);
+      if (!raw) {
+        return Object.assign({}, DEFAULT_HTTP_PREFS);
+      }
+      const p = JSON.parse(raw);
+      return {
+        allowCrossOrigin:
+          typeof p.allowCrossOrigin === 'boolean'
+            ? p.allowCrossOrigin
+            : DEFAULT_HTTP_PREFS.allowCrossOrigin,
+      };
+    } catch (_e) {
+      return Object.assign({}, DEFAULT_HTTP_PREFS);
+    }
+  }
+
+  function saveHttpPrefs(storage, prefs) {
+    const store = storage || global.localStorage;
+    const merged = loadHttpPrefs(store);
+    Object.assign(merged, prefs);
+    store.setItem(HTTP_PREFS_KEY, JSON.stringify(merged));
+    return merged;
+  }
+
   function clampNum(n, min, max, fallback) {
     if (typeof n !== 'number' || Number.isNaN(n)) {
       return fallback;
@@ -617,6 +652,7 @@
     THEME_KEY,
     EDITOR_PREFS_KEY,
     TERMINAL_PREFS_KEY,
+    HTTP_PREFS_KEY,
     TOKEN_KEYS,
     TOKEN_META,
     GROUP_LABELS,
@@ -625,6 +661,7 @@
     BUILTIN_PRESETS,
     DEFAULT_EDITOR_PREFS,
     DEFAULT_TERMINAL_PREFS,
+    DEFAULT_HTTP_PREFS,
     isBuiltInPresetId,
     isUserPresetId,
     darkTokens,
@@ -648,6 +685,8 @@
     saveEditorPrefs,
     loadTerminalPrefs,
     saveTerminalPrefs,
+    loadHttpPrefs,
+    saveHttpPrefs,
     listPresetOptions,
     normalizeThemeState,
   };

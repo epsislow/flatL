@@ -1,0 +1,14 @@
+use native http
+use native list
+#main
+  req = http.create('GET', 'http://mock.local/chain')
+  http.maxRedirects(req, 0)
+  io.outln(http.maxRedirects(req))
+  http.send(req)
+  http.transportOk(req)
+  io.outln(http.status(req))
+  chain = http.responseStatuses(req)
+  io.outln(list.len(chain))
+  io.outln(list.get(chain, 0))
+  http.close(req)
+  OK

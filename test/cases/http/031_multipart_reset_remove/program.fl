@@ -1,0 +1,21 @@
+use native http
+use native obj
+#main
+  req = http.create('POST', 'http://mock.local/rst')
+  http.addPart(req, 'x', 'old')
+  http.resetParts(req)
+  info = http.requestInfo(req)
+  obj.get(info, '"partCount"') -> pc
+  io.outln(pc)
+  http.addPart(req, 'y', 'new')
+  http.addFilePart(req, 'f', 'Z', 'z.bin')
+  http.send(req)
+  http.transportOk(req)
+  body = http.responseBody(req)
+  io.outln(str.contains(body, 'name="y"'))
+  io.outln(str.contains(body, 'new'))
+  io.outln(str.contains(body, 'filename="z.bin"'))
+  io.outln(str.contains(body, 'Z'))
+  io.outln(str.contains(body, 'old'))
+  http.close(req)
+  OK

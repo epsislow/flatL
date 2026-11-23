@@ -110,6 +110,18 @@ static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_STATUS_OK, flat_native_http_status_ok);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_REQUEST_INFO, flat_native_http_request_info);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_RESPONSE_INFO, flat_native_http_response_info);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_MAX_REDIRECTS, flat_native_http_max_redirects);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_RESPONSE_STATUSES, flat_native_http_response_statuses);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_BEARER, flat_native_http_bearer);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_BASIC, flat_native_http_basic);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_FORM, flat_native_http_form);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_ADD_PART, flat_native_http_add_part);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_ADD_FILE_PART, flat_native_http_add_file_part);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_REMOVE_PART, flat_native_http_remove_part);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_RESET_PARTS, flat_native_http_reset_parts);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_PARTS_LOAD, flat_native_http_parts_load);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_PARTS_MAX, flat_native_http_parts_max);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_PART_INFO, flat_native_http_part_info);
 }
 #endif
 

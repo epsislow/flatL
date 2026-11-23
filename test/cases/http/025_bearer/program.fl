@@ -1,0 +1,17 @@
+use native http
+use native obj
+use native list
+#main
+  req = http.create('GET', 'http://mock.local/auth')
+  http.bearer(req, 'tok-1')
+  http.bearer(req, 'tok-2')
+  info = http.requestInfo(req)
+  obj.get(info, '"headers"') -> hdrs
+  obj.get(hdrs, '"authorization"') -> auths
+  io.outln(list.len(auths))
+  io.outln(list.get(auths, 0))
+  http.send(req)
+  http.transportOk(req)
+  io.outln(http.status(req))
+  http.close(req)
+  OK

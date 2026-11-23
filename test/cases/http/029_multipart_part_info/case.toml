@@ -1,0 +1,22 @@
+suite = "http"
+mods = "http"
+id = 29
+desc = "partInfo metadata, partCount, removePart R1, filename default=name"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "4"
+stdout_contains_2 = "note"
+stdout_contains_3 = "text"
+stdout_contains_4 = "5"
+stdout_contains_5 = "file"
+stdout_contains_6 = "2"
+stdout_contains_7 = "200"
+
+[http.mock]
+method = "POST"
+path = "/meta"
+status = 200
+body = "ok"

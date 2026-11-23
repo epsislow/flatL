@@ -282,5 +282,17 @@ int flat_native_http_transport_ok(FlatNativeCtx *ctx);
 int flat_native_http_status_ok(FlatNativeCtx *ctx);
 int flat_native_http_request_info(FlatNativeCtx *ctx);
 int flat_native_http_response_info(FlatNativeCtx *ctx);
+int flat_native_http_max_redirects(FlatNativeCtx *ctx);
+int flat_native_http_response_statuses(FlatNativeCtx *ctx);
+int flat_native_http_bearer(FlatNativeCtx *ctx);
+int flat_native_http_basic(FlatNativeCtx *ctx);
+int flat_native_http_form(FlatNativeCtx *ctx);
+int flat_native_http_add_part(FlatNativeCtx *ctx);
+int flat_native_http_add_file_part(FlatNativeCtx *ctx);
+int flat_native_http_remove_part(FlatNativeCtx *ctx);
+int flat_native_http_reset_parts(FlatNativeCtx *ctx);
+int flat_native_http_parts_load(FlatNativeCtx *ctx);
+int flat_native_http_parts_max(FlatNativeCtx *ctx);
+int flat_native_http_part_info(FlatNativeCtx *ctx);
 
 #endif

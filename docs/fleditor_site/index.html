@@ -410,6 +410,7 @@
         <button type="button" class="fleditor-settings-nav-btn fleditor-settings-nav-btn--active" data-settings-section="display">Display</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="editor">Editor</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="terminal">Terminal</button>
+        <button type="button" class="fleditor-settings-nav-btn" data-settings-section="http">HTTP</button>
         <button type="button" class="fleditor-settings-nav-btn" data-settings-section="about">About</button>
       </nav>
       <div class="fleditor-settings-main">
@@ -479,6 +480,25 @@
               <input type="checkbox" id="settingsTerminalNoJumpLimit" />
             </div>
           </div>
+          <div id="settingsSectionHttp" class="fleditor-settings-section" data-settings-section="http" hidden>
+            <p id="settingsHttpNoModule" class="fleditor-settings-hint" hidden>
+              <strong>No HTTP module in FlatL WASM build.</strong>
+              This build was compiled with <code>http=0</code>. <code>use native http</code> and the
+              <code>examples/http_*.fl</code> samples need a rebuild that includes HTTP
+              (<code>make fleditor-wasm</code> or <code>make rebuild</code>).
+            </p>
+            <div id="settingsHttpControls">
+              <p class="fleditor-settings-hint">
+                Browser Fetch only. Turning <strong>Cross-origin requests</strong> off refuses URLs
+                whose origin differs from this page <em>before</em> <code>fetch</code>. ON does not
+                bypass CORS — the target server must still allow this origin.
+              </p>
+              <div class="fleditor-settings-field">
+                <label for="settingsHttpAllowCrossOrigin">Cross-origin requests</label>
+                <input type="checkbox" id="settingsHttpAllowCrossOrigin" />
+              </div>
+            </div>
+          </div>
           <div id="settingsSectionAbout" class="fleditor-settings-section" data-settings-section="about" hidden>
             <p class="fleditor-settings-hint">flatL browser playground — edit, compile, and run FlatL via WebAssembly.</p>
             <dl class="fleditor-settings-about-dl">
@@ -499,7 +519,7 @@
             <div class="fleditor-settings-actions">
               <button type="button" id="settingsResetAllBtn" class="fleditor-io-btn fleditor-io-btn--danger">Reset all settings</button>
             </div>
-            <p class="fleditor-settings-hint">Reset all settings restores theme (Dark), editor and terminal preferences. It does not change your project, panel layout (↺ dock), or open files.</p>
+            <p class="fleditor-settings-hint">Reset all settings restores theme (Dark), editor, terminal, and HTTP preferences. It does not change your project, panel layout (↺ dock), or open files.</p>
           </div>
         </div>
         <footer class="fleditor-settings-foot">

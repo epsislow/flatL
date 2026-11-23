@@ -284,6 +284,18 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("http", "statusOk", "http.statusOk(id)"),
     META_SIG("http", "requestInfo", "http.requestInfo(id)"),
     META_SIG("http", "responseInfo", "http.responseInfo(id)"),
+    META_SIG("http", "maxRedirects", "http.maxRedirects(id, n?)"),
+    META_SIG("http", "responseStatuses", "http.responseStatuses(id)"),
+    META_SIG("http", "bearer", "http.bearer(id, token)"),
+    META_SIG("http", "basic", "http.basic(id, user, pass)"),
+    META_SIG("http", "form", "http.form(id, object)"),
+    META_SIG("http", "addPart", "http.addPart(id, name, value)"),
+    META_SIG("http", "addFilePart", "http.addFilePart(id, name, dataOrFile, filename?)"),
+    META_SIG("http", "removePart", "http.removePart(id, name)"),
+    META_SIG("http", "resetParts", "http.resetParts(id)"),
+    META_SIG("http", "partsLoad", "http.partsLoad(id)"),
+    META_SIG("http", "partsMax", "http.partsMax(id, n?)"),
+    META_SIG("http", "partInfo", "http.partInfo(id)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

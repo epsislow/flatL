@@ -32,7 +32,10 @@ static int perform_mock(const FlatHttpRequest *req, FlatHttpResponse *out) {
     char method[16] = "", mock_path[512] = "", body_inline[8192] = "";
     char body_file[512] = "", error[256] = "";
     long status = 200;
+    long redirect_statuses[FLAT_HTTP_STATUS_CHAIN_MAX];
+    size_t redirect_status_count = 0;
     int error_code = 0;
+    int show_request_body = 0;
     unsigned char *body = NULL;
     size_t body_len = 0;
     if (!fixture || !*fixture) return 0;
@@ -61,6 +64,28 @@ static int perform_mock(const FlatHttpRequest *req, FlatHttpResponse *out) {
         else if (strcmp(key, "error") == 0) { toml_string(val); snprintf(error, sizeof error, "%s", val); }
         else if (strcmp(key, "status") == 0) status = strtol(val, NULL, 10);
         else if (strcmp(key, "error_code") == 0) error_code = (int)strtol(val, NULL, 10);
+        else if (strcmp(key, "show_request_body") == 0) {
+            char tmp[32];
+            snprintf(tmp, sizeof tmp, "%s", val);
+            toml_string(tmp);
+            show_request_body = (strcmp(tmp, "true") == 0 || strcmp(tmp, "1") == 0 ||
+                                 strcmp(val, "true") == 0 || strcmp(val, "1") == 0);
+        }
+        else if ((strcmp(key, "redirect_statuses") == 0 || strcmp(key, "response_statuses") == 0) &&
+                 val[0] == '[') {
+            char *q = val + 1;
+            redirect_status_count = 0;
+            while (*q && redirect_status_count < FLAT_HTTP_STATUS_CHAIN_MAX) {
+                char *end = NULL;
+                long code;
+                while (*q == ' ' || *q == '\t' || *q == ',') q++;
+                if (*q == ']' || !*q) break;
+                code = strtol(q, &end, 10);
+                if (end == q) break;
+                redirect_statuses[redirect_status_count++] = code;
+                q = end;
+            }
+        }
         else if (strcmp(key, "headers") == 0 && val[0] == '[') {
             char *q = val + 1;
             while (*q) {
@@ -108,7 +133,22 @@ static int perform_mock(const FlatHttpRequest *req, FlatHttpResponse *out) {
             return 1;
         }
     }
-    if (body_file[0]) {
+    if (show_request_body) {
+        body_len = req->body ? req->body_len : 0;
+        if (body_len > req->max_body_bytes) {
+            out->error_code = 23;
+            snprintf(out->error, sizeof out->error, "response body exceeds configured limit");
+            return 1;
+        }
+        body = malloc(body_len + 1);
+        if (!body) {
+            out->error_code = 27;
+            snprintf(out->error, sizeof out->error, "out of memory");
+            return 1;
+        }
+        if (body_len && req->body) memcpy(body, req->body, body_len);
+        body[body_len] = '\0';
+    } else if (body_file[0]) {
         char file_path[1024]; const char *slash = strrchr(fixture, '/'); const char *backslash = strrchr(fixture, '\\'); FILE *bf;
         size_t n;
         if (backslash && (!slash || backslash > slash)) slash = backslash;
@@ -137,9 +177,41 @@ static int perform_mock(const FlatHttpRequest *req, FlatHttpResponse *out) {
         memcpy(body, body_inline, body_len + 1);
         if (body_len > req->max_body_bytes) { free(body); out->error_code=23; snprintf(out->error,sizeof out->error,"response body exceeds configured limit"); return 1; }
     }
-    out->status = status; out->error_code = error_code;
+    out->error_code = error_code;
     if (error[0]) snprintf(out->error, sizeof out->error, "%s", error);
     out->body = (char *)body; out->body_len = body_len;
+    if (redirect_status_count > 0) {
+        size_t hops = redirect_status_count - 1u;
+        size_t take;
+        size_t i;
+        out->redirect_limit_hit = 0;
+        if (req->max_redirects == 0) {
+            take = 1;
+        } else if (req->max_redirects < 0) {
+            take = redirect_status_count;
+        } else if (hops <= (size_t)req->max_redirects) {
+            take = redirect_status_count;
+        } else {
+            take = (size_t)req->max_redirects + 1u;
+            out->redirect_limit_hit = 1;
+        }
+        if (take > FLAT_HTTP_STATUS_CHAIN_MAX) take = FLAT_HTTP_STATUS_CHAIN_MAX;
+        for (i = 0; i < take; ++i) out->status_chain[i] = redirect_statuses[i];
+        out->status_chain_count = take;
+        out->status = redirect_statuses[take - 1];
+        if (out->redirect_limit_hit || (take == 1 && req->max_redirects == 0)) {
+            /* Intermediate stop: drop success body unless it was an error fixture. */
+            if (out->error_code == 0 && out->body) {
+                free(out->body);
+                out->body = calloc(1, 1);
+                out->body_len = 0;
+            }
+        }
+    } else {
+        out->status = status;
+        out->status_chain[0] = status;
+        out->status_chain_count = 1;
+    }
     return 1;
 }
 
@@ -171,8 +243,17 @@ static size_t write_header(char *data, size_t size, size_t count, void *arg) {
     if (n == 0 || n > 16384) return 0;
     if (n >= 5 && memcmp(data, "HTTP/", 5) == 0) {
         size_t j;
+        const char *p = data;
+        long code = 0;
         for (j = 0; j < r->header_count; ++j) free(r->headers[j]);
         free(r->headers); r->headers = NULL; r->header_count = 0;
+        while (p < data + n && *p != ' ' && *p != '\t') p++;
+        while (p < data + n && (*p == ' ' || *p == '\t')) p++;
+        if (p < data + n && *p >= '0' && *p <= '9') {
+            code = strtol(p, NULL, 10);
+            if (code > 0 && r->status_chain_count < FLAT_HTTP_STATUS_CHAIN_MAX)
+                r->status_chain[r->status_chain_count++] = code;
+        }
         return n;
     }
     if (n < 2 || data[0] == '\r' || !memchr(data, ':', n)) return n;
@@ -199,6 +280,16 @@ void flat_http_response_free(FlatHttpResponse *out) {
     free(out->headers);
     free(out->body);
     memset(out, 0, sizeof *out);
+}
+
+static void finalize_status_chain(FlatHttpResponse *out) {
+    if (!out) return;
+    if (out->status_chain_count == 0 && out->status > 0) {
+        out->status_chain[0] = out->status;
+        out->status_chain_count = 1;
+    } else if (out->status_chain_count > 0) {
+        out->status = out->status_chain[out->status_chain_count - 1];
+    }
 }
 
 static int ensure_curl_global(FlatHttpResponse *out) {
@@ -237,8 +328,13 @@ int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     curl_easy_setopt(curl, CURLOPT_URL, req->url);
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req->method);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, req->timeout_ms);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 5L);
+    if (req->max_redirects == 0) {
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
+        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 0L);
+    } else {
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, req->max_redirects < 0 ? -1L : req->max_redirects);
+    }
 #if LIBCURL_VERSION_NUM >= 0x075500
     curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
     curl_easy_setopt(curl, CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
@@ -266,7 +362,20 @@ int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     result = curl_easy_perform(curl);
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &out->status);
     out->error_code = (int)result;
-    if (result != CURLE_OK) snprintf(out->error, sizeof out->error, "%s", transfer.overflow ? "response body exceeds configured limit" : (curl_error[0] ? curl_error : curl_easy_strerror(result)));
+    if (result == CURLE_TOO_MANY_REDIRECTS) {
+        out->redirect_limit_hit = 1;
+        snprintf(out->error, sizeof out->error, "%s",
+                 curl_error[0] ? curl_error : curl_easy_strerror(result));
+        finalize_status_chain(out);
+        curl_slist_free_all(headers);
+        curl_easy_cleanup(curl);
+        return 0; /* response usable; native layer panics http.redirect.limit */
+    }
+    if (result != CURLE_OK)
+        snprintf(out->error, sizeof out->error, "%s",
+                 transfer.overflow ? "response body exceeds configured limit"
+                                   : (curl_error[0] ? curl_error : curl_easy_strerror(result)));
+    finalize_status_chain(out);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     return result == CURLE_OK ? 0 : -1;

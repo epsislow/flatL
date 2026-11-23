@@ -1,0 +1,9 @@
+use native http
+#main
+  req = http.create('POST', 'http://mock.local/lim')
+  io.outln(http.partsMax(req))
+  http.partsMax(req, 2)
+  http.addPart(req, 'a', '1')
+  http.addPart(req, 'b', '2')
+  http.addPart(req, 'c', '3')
+  OK

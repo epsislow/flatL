@@ -96,9 +96,21 @@ if (T.loadEditorPrefs(store).fontSize !== 16) {
 const store2 = new MemStorage();
 T.saveThemeState(store2, T.setActivePreset(T.defaultThemeState(), 'light'));
 T.saveEditorPrefs(store2, { fontSize: 18 });
+T.saveHttpPrefs(store2, { allowCrossOrigin: false });
+if (T.loadHttpPrefs(store2).allowCrossOrigin !== false) {
+  console.error('theme_smoke: http prefs save');
+  process.exit(1);
+}
 T.resetAllSettings(store2);
 if (store2.getItem(T.THEME_KEY) != null || T.loadEditorPrefs(store2).fontSize !== 14) {
   console.error('theme_smoke: resetAllSettings');
+  process.exit(1);
+}
+if (
+  store2.getItem(T.HTTP_PREFS_KEY) != null ||
+  T.loadHttpPrefs(store2).allowCrossOrigin !== true
+) {
+  console.error('theme_smoke: resetAllSettings http prefs');
   process.exit(1);
 }
 

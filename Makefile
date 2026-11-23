@@ -68,7 +68,7 @@ HTTP_SRC =
 HTTP_CFLAGS =
 HTTP_LIBS =
 else
-HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c
+HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c src/common/flat_enc.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 endif

@@ -12,7 +12,7 @@ WASM_HTTP_CFLAGS = -DFLAT_WITH_HTTP=0
 HTTP_SRC =
 else
 WASM_HTTP_CFLAGS =
-HTTP_SRC = src/lib/mod_http.c src/http/flat_http_fetch.c
+HTTP_SRC = src/lib/mod_http.c src/http/flat_http_fetch.c src/common/flat_enc.c
 endif
 
 WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2 $(WASM_HTTP_CFLAGS)
