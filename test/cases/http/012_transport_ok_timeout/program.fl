@@ -1,0 +1,5 @@
+#main
+  req = http.create('GET', 'http://mock.local/slow')
+  http.send(req)
+  http.transportOk(req)
+  OK

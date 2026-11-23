@@ -1,0 +1,8 @@
+#main
+  req = http.create('GET', 'http://mock.local/ok')
+  http.send(req)
+  http.transportOk(req)
+  http.statusOk(req)
+  io.outln(http.status(req))
+  http.close(req)
+  OK

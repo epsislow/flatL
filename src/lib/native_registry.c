@@ -279,6 +279,8 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("http", "json", "http.json(id, value)"),
     META_SIG("http", "responseHeaders", "http.responseHeaders(id)"),
     META_SIG("http", "maxBody", "http.maxBody(id, bytes)"),
+    META_SIG("http", "transportOk", "http.transportOk(id)"),
+    META_SIG("http", "statusOk", "http.statusOk(id)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

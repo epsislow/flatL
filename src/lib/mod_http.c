@@ -186,3 +186,53 @@ int flat_native_http_response_headers(FlatNativeCtx *ctx) {
 int flat_native_http_max_body(FlatNativeCtx *ctx) {
     FlatValue a[2];uint32_t id;double bytes;if(get_args(ctx,a,2)!=0||num_arg(&a[0],&id)!=0||!flat_http_request_live(ctx->http,id)||a[1].tag!=VAL_NUMBER)return http_fail(ctx,"http.maxBody.args");bytes=flat_number_as_f64(&a[1]);if(bytes<1||bytes>FLAT_POOL_MAX_CHUNK||bytes!=(double)(size_t)bytes)return http_fail(ctx,"http.maxBody.range");ctx->http->requests[id].max_body_bytes=(size_t)bytes;return http_ok(ctx);
 }
+
+/* Map CURLcode-like transport codes to stable panic labels (not the full curl enum). */
+static const char *http_transport_label(int code) {
+    if (code == 0) return NULL;
+    if (code == 28) return "http.transport.timeout";
+    if (code == 23) return "http.transport.overflow";
+    if (code == 27) return "http.transport.memory";
+    if (code == 6 || code == 7) return "http.transport.connect";
+    /* Common libcurl TLS / SSL codes (and WASM aliases that reuse them). */
+    if (code == 35 || code == 51 || code == 53 || code == 54 || code == 58 ||
+        code == 59 || code == 60 || code == 64 || code == 66 || code == 77 ||
+        code == 80 || code == 82 || code == 83 || code == 90 || code == 91) {
+        return "http.transport.tls";
+    }
+    return "http.transport.other";
+}
+
+static const char *http_status_label(long status) {
+    if (status >= 200 && status <= 299) return NULL;
+    if (status == 404) return "http.status.not_found";
+    if (status == 401) return "http.status.unauthorized";
+    if (status == 403) return "http.status.forbidden";
+    if (status == 409) return "http.status.conflict";
+    if (status >= 500 && status <= 599) return "http.status.server_error";
+    if (status >= 300 && status <= 399) return "http.status.redirect";
+    if (status >= 400 && status <= 499) return "http.status.client_error";
+    return "http.status.other";
+}
+
+int flat_native_http_transport_ok(FlatNativeCtx *ctx) {
+    uint32_t id;
+    FlatHttpRequestSlot *s = resolve(ctx, "http.transportOk.id", &id);
+    const char *label;
+    if (!s) return -1;
+    if (!s->sent) return http_fail(ctx, "http.transportOk.not_sent");
+    label = http_transport_label(s->response.error_code);
+    if (label) return http_fail(ctx, label);
+    return http_ok(ctx);
+}
+
+int flat_native_http_status_ok(FlatNativeCtx *ctx) {
+    uint32_t id;
+    FlatHttpRequestSlot *s = resolve(ctx, "http.statusOk.id", &id);
+    const char *label;
+    if (!s) return -1;
+    if (!s->sent) return http_fail(ctx, "http.statusOk.not_sent");
+    label = http_status_label(s->response.status);
+    if (label) return http_fail(ctx, label);
+    return http_ok(ctx);
+}

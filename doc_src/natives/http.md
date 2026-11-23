@@ -86,6 +86,55 @@ transport_error = http.error(req)
 transport_code = http.errorCode(req)
 ```
 
+## Assert helpers: `transportOk` / `statusOk`
+
+`http.send` never panics on transport failure or on HTTP 4xx/5xx. Use these helpers when you want a hard stop. Panic location is the helper call site (not `send`).
+
+### `http.transportOk(id)`
+
+After a successful `send`, panics if a **transport** error occurred (`errorCode != 0`). Maps codes to a small set of stable labels (libcurl-like numbers on native / WASM aliases):
+
+| Panic label | Typical codes |
+|-------------|---------------|
+| `http.transport.timeout` | 28 |
+| `http.transport.overflow` | 23 (body/headers limit) |
+| `http.transport.memory` | 27 |
+| `http.transport.connect` | 6, 7 (resolve / connect) |
+| `http.transport.tls` | common TLS/SSL curl codes |
+| `http.transport.other` | everything else ≠ 0 |
+
+Calling before `send` panics with `http.transportOk.not_sent`.
+
+### `http.statusOk(id)`
+
+After a successful `send`, requires an HTTP **2xx** final status. Non-2xx panics with:
+
+| Panic label | Status |
+|-------------|--------|
+| `http.status.not_found` | 404 |
+| `http.status.unauthorized` | 401 |
+| `http.status.forbidden` | 403 |
+| `http.status.conflict` | 409 |
+| `http.status.server_error` | any 5xx |
+| `http.status.redirect` | any 3xx **final** status |
+| `http.status.client_error` | other 4xx |
+| `http.status.other` | anything else (including `0` when no HTTP response) |
+
+Calling before `send` panics with `http.statusOk.not_sent`.
+
+**Redirects:** native curl and WASM Fetch **follow** redirects (bounded). After follow, `http.status` is usually the **final** 2xx, so `statusOk` passes. `http.status.redirect` applies only when the status that remains after the transport step is still 3xx (follow exhausted / blocked), not for intermediate hops.
+
+Typical happy path:
+
+```flat
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+body = http.body(req)
+```
+
+When 404 is expected, call `transportOk` only and branch on `http.status(req)` — do not call `statusOk`.
+
 ## Limits and lifecycle
 
 - Default timeout: 10 seconds.
@@ -128,11 +177,11 @@ error_code = 28
 error = "mock timeout"
 ```
 
-The fixture can also set `status = 404` or `status = 500` to test application-level HTTP errors. Run these tests through the regular suite:
+The fixture can also set `status = 404`, `status = 500`, or a final `status = 302` to exercise `statusOk` panic labels. Transport failures use `error_code` / `error` (for example `28` → `http.transport.timeout`). Run these tests through the regular suite:
 
 ```sh
 make all
-bin/run_tests http -v -e --categ=all
+bin/run_tests -t http -v -e --categ=all
 ```
 
 The mock is test-runner scoped and does not change normal HTTP behavior when `FLAT_HTTP_MOCK_FILE` is not set.

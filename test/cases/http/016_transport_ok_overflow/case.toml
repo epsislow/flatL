@@ -1,0 +1,15 @@
+suite = "http"
+id = 16
+desc = "transportOk panics with http.transport.overflow"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "http.transport.overflow"
+
+[http.mock]
+method = "GET"
+path = "/big"
+error_code = 23
+error = "response body exceeds configured limit"
