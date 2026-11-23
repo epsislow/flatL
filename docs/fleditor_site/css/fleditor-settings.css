@@ -568,3 +568,62 @@
     font-size: 0.6rem;
   }
 }
+
+
+/* Compact settings navigation on tablet and mobile: sections above content. */
+@media (max-width: 760px) {
+  .fleditor-settings-shell {
+    flex-direction: column;
+    min-height: min(72vh, 680px);
+    max-height: min(88vh, 820px);
+  }
+
+  .fleditor-settings-nav {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 0.25rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 0.45rem 0.55rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-right: 0;
+    border-bottom: 1px solid var(--fl-border);
+    scrollbar-width: thin;
+  }
+
+  .fleditor-settings-nav-btn {
+    flex: 0 0 auto;
+    padding: 0.48rem 0.7rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .fleditor-settings-main {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .fleditor-settings-head {
+    padding: 0.65rem 0.9rem 0.45rem;
+  }
+
+  .fleditor-settings-body {
+    min-height: 0;
+    padding: 0.75rem 0.85rem 0.9rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .fleditor-settings-nav {
+    padding: 0.35rem 0.4rem;
+    gap: 0.15rem;
+  }
+
+  .fleditor-settings-nav-btn {
+    padding: 0.42rem 0.55rem;
+    font-size: 0.78rem;
+  }
+}
