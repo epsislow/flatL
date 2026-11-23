@@ -15,6 +15,7 @@
   let httpPrefs = T.loadHttpPrefs();
   /** @type {ReturnType<typeof T.loadEnvPrefs>} */
   let envPrefs = T.loadEnvPrefs();
+  let editingEnvKey = null;
   /** @type {ReturnType<typeof T.loadPathPrefs>} */
   let pathPrefs = T.loadPathPrefs();
 
@@ -341,63 +342,135 @@
 
   function renderEnvList() {
     const list = document.getElementById('settingsEnvList');
+    const empty = document.getElementById('settingsEnvEmpty');
+    const count = document.getElementById('settingsEnvCount');
     if (!list) {
       return;
     }
     list.innerHTML = '';
-    for (let i = 0; i < envPrefs.entries.length; i++) {
-      const e = envPrefs.entries[i];
-      const li = document.createElement('li');
-      li.className = 'fleditor-env-list-item';
-      const meta = document.createElement('div');
-      meta.className = 'fleditor-env-list-meta';
-      const valShown = e.sensitive ? '••••••••' : e.value;
-      meta.textContent = e.key + ' = ' + valShown;
-      if (e.sensitive) {
-        const mark = document.createElement('span');
-        mark.className = 'fleditor-env-sensitive-mark';
-        mark.textContent = '(sensitive)';
-        meta.appendChild(mark);
-      }
+    const entries = envPrefs.entries || [];
+    if (empty) {
+      empty.hidden = entries.length > 0;
+    }
+    if (count) {
+      count.textContent = entries.length + (entries.length === 1 ? ' entry' : ' entries');
+    }
+    if (entries.length === 0) {
+      list.hidden = true;
+      return;
+    }
+    list.hidden = false;
+
+    const header = document.createElement('div');
+    header.className = 'fleditor-env-table-row fleditor-env-table-row--header';
+    header.setAttribute('role', 'row');
+    [
+      ['Key', 'key'],
+      ['Value', 'value'],
+      ['Type', 'type'],
+      ['Actions', 'actions'],
+    ].forEach(function (item) {
+      const cell = document.createElement('div');
+      cell.className = 'fleditor-env-cell fleditor-env-cell--' + item[1];
+      cell.setAttribute('role', 'columnheader');
+      cell.textContent = item[0];
+      header.appendChild(cell);
+    });
+    list.appendChild(header);
+
+    entries.forEach(function (e) {
+      const row = document.createElement('div');
+      row.className = 'fleditor-env-table-row';
+      row.setAttribute('role', 'row');
+
+      const key = document.createElement('div');
+      key.className = 'fleditor-env-cell fleditor-env-cell--key';
+      key.setAttribute('role', 'cell');
+      const keyCode = document.createElement('code');
+      keyCode.textContent = e.key;
+      key.appendChild(keyCode);
+
+      const value = document.createElement('div');
+      value.className = 'fleditor-env-cell fleditor-env-cell--value';
+      value.setAttribute('role', 'cell');
+      const valueCode = document.createElement('code');
+      valueCode.textContent = e.sensitive ? '••••••••' : (e.value === '' ? '(empty)' : e.value);
+      valueCode.title = e.sensitive ? 'Sensitive value hidden' : e.value;
+      value.appendChild(valueCode);
+
+      const type = document.createElement('div');
+      type.className = 'fleditor-env-cell fleditor-env-cell--type';
+      type.setAttribute('role', 'cell');
+      const typeTag = document.createElement('span');
+      typeTag.className = e.sensitive ? 'fleditor-env-type fleditor-env-type--secret' : 'fleditor-env-type';
+      typeTag.textContent = e.sensitive ? 'Secret' : 'Plain';
+      type.appendChild(typeTag);
+
       const actions = document.createElement('div');
-      actions.className = 'fleditor-settings-actions';
+      actions.className = 'fleditor-env-cell fleditor-env-cell--actions';
+      actions.setAttribute('role', 'cell');
+
       const editBtn = document.createElement('button');
       editBtn.type = 'button';
-      editBtn.className = 'fleditor-io-btn';
-      editBtn.textContent = 'Edit';
+      editBtn.className = 'fleditor-env-icon-btn';
+      editBtn.title = 'Edit ' + e.key;
+      editBtn.setAttribute('aria-label', 'Edit ' + e.key);
+      editBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>';
       editBtn.addEventListener('click', function () {
         const keyEl = document.getElementById('settingsEnvKey');
         const valEl = document.getElementById('settingsEnvValue');
         const sensEl = document.getElementById('settingsEnvSensitive');
-        if (keyEl) {
-          keyEl.value = e.key;
+        const addBtn = document.getElementById('settingsEnvAddBtn');
+        editingEnvKey = e.key;
+        if (keyEl) keyEl.value = e.key;
+        if (valEl) valEl.value = e.sensitive ? '' : e.value;
+        if (sensEl) sensEl.checked = !!e.sensitive;
+        if (addBtn) {
+          addBtn.querySelector('span:last-child').textContent = 'Save changes';
+          addBtn.querySelector('.fleditor-env-button-icon').textContent = '✓';
         }
-        if (valEl) {
-          valEl.value = e.sensitive ? '' : e.value;
-        }
-        if (sensEl) {
-          sensEl.checked = !!e.sensitive;
-        }
+        if (keyEl) keyEl.focus();
       });
+
       const copyBtn = document.createElement('button');
       copyBtn.type = 'button';
-      copyBtn.className = 'fleditor-io-btn';
-      copyBtn.textContent = 'Copy';
+      copyBtn.className = 'fleditor-env-icon-btn';
+      copyBtn.title = 'Copy value';
+      copyBtn.setAttribute('aria-label', 'Copy value for ' + e.key);
+      copyBtn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>';
       copyBtn.addEventListener('click', async function () {
         try {
           if (navigator.clipboard && navigator.clipboard.writeText) {
             await navigator.clipboard.writeText(e.value);
+          } else {
+            const temp = document.createElement('textarea');
+            temp.value = e.value;
+            temp.style.position = 'fixed';
+            temp.style.opacity = '0';
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            temp.remove();
           }
+          copyBtn.classList.add('is-copied');
+          copyBtn.title = 'Copied';
+          window.setTimeout(function () {
+            copyBtn.classList.remove('is-copied');
+            copyBtn.title = 'Copy value';
+          }, 1000);
         } catch (_err) {
-          /* ignore */
+          /* Clipboard may be unavailable in an insecure context. */
         }
       });
+
       actions.appendChild(editBtn);
       actions.appendChild(copyBtn);
-      li.appendChild(meta);
-      li.appendChild(actions);
-      list.appendChild(li);
-    }
+      row.appendChild(key);
+      row.appendChild(value);
+      row.appendChild(type);
+      row.appendChild(actions);
+      list.appendChild(row);
+    });
   }
 
   function refreshEnvPanel() {
@@ -796,6 +869,20 @@
     }
     const envAdd = document.getElementById('settingsEnvAddBtn');
     const envRemove = document.getElementById('settingsEnvRemoveBtn');
+    function resetEnvEditor() {
+      const keyEl = document.getElementById('settingsEnvKey');
+      const valEl = document.getElementById('settingsEnvValue');
+      const sensEl = document.getElementById('settingsEnvSensitive');
+      const addBtn = document.getElementById('settingsEnvAddBtn');
+      editingEnvKey = null;
+      if (keyEl) keyEl.value = '';
+      if (valEl) valEl.value = '';
+      if (sensEl) sensEl.checked = false;
+      if (addBtn) {
+        addBtn.querySelector('span:last-child').textContent = 'Add variable';
+        addBtn.querySelector('.fleditor-env-button-icon').textContent = '＋';
+      }
+    }
     if (envAdd) {
       envAdd.addEventListener('click', function () {
         const keyEl = document.getElementById('settingsEnvKey');
@@ -803,51 +890,51 @@
         const sensEl = document.getElementById('settingsEnvSensitive');
         const key = keyEl ? keyEl.value.trim() : '';
         if (!key) {
+          if (keyEl) keyEl.focus();
           return;
         }
         const sensitive = !!(sensEl && sensEl.checked);
         let value = valEl ? valEl.value : '';
-        const ix = findEnvEntryIndex(key);
         const entries = envPrefs.entries.slice();
-        if (ix >= 0) {
-          if (sensitive && value === '') {
-            value = entries[ix].value;
+        const originalIndex = editingEnvKey
+          ? entries.findIndex(function (entry) { return entry.key === editingEnvKey; })
+          : -1;
+        if (originalIndex >= 0) {
+          if (sensitive && value === '') value = entries[originalIndex].value;
+          const duplicateIndex = entries.findIndex(function (entry) {
+            return entry.key === key && entry.key !== editingEnvKey;
+          });
+          if (duplicateIndex >= 0) {
+            entries[duplicateIndex] = { key: key, value: value, sensitive: sensitive };
+            entries.splice(originalIndex, 1);
+          } else {
+            entries[originalIndex] = { key: key, value: value, sensitive: sensitive };
           }
-          entries[ix] = { key: key, value: value, sensitive: sensitive };
         } else {
-          entries.push({ key: key, value: value, sensitive: sensitive });
+          const ix = entries.findIndex(function (entry) { return entry.key === key; });
+          if (ix >= 0) {
+            if (sensitive && value === '') value = entries[ix].value;
+            entries[ix] = { key: key, value: value, sensitive: sensitive };
+          } else {
+            entries.push({ key: key, value: value, sensitive: sensitive });
+          }
         }
         persistEnvPrefs({ entries: entries });
-        if (keyEl) {
-          keyEl.value = '';
-        }
-        if (valEl) {
-          valEl.value = '';
-        }
-        if (sensEl) {
-          sensEl.checked = false;
-        }
+        resetEnvEditor();
         renderEnvList();
       });
     }
     if (envRemove) {
       envRemove.addEventListener('click', function () {
         const keyEl = document.getElementById('settingsEnvKey');
-        const key = keyEl ? keyEl.value.trim() : '';
-        if (!key) {
-          return;
-        }
-        const entries = envPrefs.entries.filter(function (e) {
-          return e.key !== key;
+        const key = editingEnvKey || (keyEl ? keyEl.value.trim() : '');
+        if (!key) return;
+        persistEnvPrefs({
+          entries: envPrefs.entries.filter(function (entry) {
+            return entry.key !== key;
+          }),
         });
-        persistEnvPrefs({ entries: entries });
-        if (keyEl) {
-          keyEl.value = '';
-        }
-        const valEl = document.getElementById('settingsEnvValue');
-        if (valEl) {
-          valEl.value = '';
-        }
+        resetEnvEditor();
         renderEnvList();
       });
     }

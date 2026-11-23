@@ -516,25 +516,48 @@
                 <label for="settingsEnvProgramArgs">Program args (<code>env.args</code>)</label>
                 <input type="text" id="settingsEnvProgramArgs" placeholder="arg1 arg2 …" autocomplete="off" />
               </div>
-              <div class="fleditor-env-form">
-                <div class="fleditor-settings-field">
-                  <label for="settingsEnvKey">Key</label>
-                  <input type="text" id="settingsEnvKey" autocomplete="off" />
+              <div class="fleditor-env-editor">
+                <div class="fleditor-env-editor-heading">
+                  <div>
+                    <strong>Environment entry</strong>
+                    <span>Add a new key or select Edit on an existing row.</span>
+                  </div>
+                  <span class="fleditor-env-editor-badge">KEY / VALUE</span>
                 </div>
-                <div class="fleditor-settings-field">
-                  <label for="settingsEnvValue">Value</label>
-                  <input type="text" id="settingsEnvValue" autocomplete="off" />
-                </div>
-                <div class="fleditor-settings-field">
-                  <label for="settingsEnvSensitive">Sensitive</label>
-                  <input type="checkbox" id="settingsEnvSensitive" />
-                </div>
-                <div class="fleditor-settings-actions">
-                  <button type="button" id="settingsEnvAddBtn" class="fleditor-io-btn fleditor-io-btn--primary">Add / Update</button>
-                  <button type="button" id="settingsEnvRemoveBtn" class="fleditor-io-btn">Remove</button>
+                <div class="fleditor-env-form">
+                  <div class="fleditor-env-input">
+                    <label for="settingsEnvKey">Key</label>
+                    <input type="text" id="settingsEnvKey" placeholder="API_BASE_URL" autocomplete="off" spellcheck="false" />
+                  </div>
+                  <div class="fleditor-env-input fleditor-env-input--value">
+                    <label for="settingsEnvValue">Value</label>
+                    <input type="text" id="settingsEnvValue" placeholder="https://example.com" autocomplete="off" />
+                  </div>
+                  <label class="fleditor-env-sensitive" for="settingsEnvSensitive">
+                    <input type="checkbox" id="settingsEnvSensitive" />
+                    <span>Secret / sensitive</span>
+                  </label>
+                  <div class="fleditor-env-form-actions">
+                    <button type="button" id="settingsEnvAddBtn" class="fleditor-io-btn fleditor-io-btn--primary">
+                      <span class="fleditor-env-button-icon" aria-hidden="true">＋</span>
+                      <span>Add variable</span>
+                    </button>
+                    <button type="button" id="settingsEnvRemoveBtn" class="fleditor-io-btn" title="Remove the key entered above">Remove</button>
+                  </div>
                 </div>
               </div>
-              <ul id="settingsEnvList" class="fleditor-env-list" aria-label="Environment variables"></ul>
+              <div class="fleditor-env-table-wrap">
+                <div class="fleditor-env-table-head">
+                  <strong>Variables</strong>
+                  <span id="settingsEnvCount" class="fleditor-env-count">0 entries</span>
+                </div>
+                <div id="settingsEnvList" class="fleditor-env-table" role="table" aria-label="Environment variables"></div>
+                <div id="settingsEnvEmpty" class="fleditor-env-empty" hidden>
+                  <span aria-hidden="true">◇</span>
+                  <strong>No environment variables yet</strong>
+                  <span>Add a key and value above to configure your program.</span>
+                </div>
+              </div>
             </div>
           </div>
           <div id="settingsSectionPath" class="fleditor-settings-section" data-settings-section="path" hidden>

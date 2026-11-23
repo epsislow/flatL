@@ -255,3 +255,316 @@
   color: var(--fl-text-muted);
   margin-left: 0.35rem;
 }
+
+
+/* Environment variables — compact table and editor */
+.fleditor-env-editor {
+  margin: 0.9rem 0 1rem;
+  padding: 0.9rem;
+  border: 1px solid var(--fl-border);
+  border-radius: 8px;
+  background: var(--fl-bg);
+}
+
+.fleditor-env-editor-heading,
+.fleditor-env-table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.fleditor-env-editor-heading {
+  margin-bottom: 0.8rem;
+}
+
+.fleditor-env-editor-heading > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.fleditor-env-editor-heading strong,
+.fleditor-env-table-head strong {
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.fleditor-env-editor-heading span:not(.fleditor-env-editor-badge) {
+  color: var(--fl-text-muted);
+  font-size: 0.76rem;
+}
+
+.fleditor-env-editor-badge {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  color: var(--fl-text-muted);
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+}
+
+.fleditor-env-form {
+  display: grid;
+  grid-template-columns: minmax(9rem, 0.85fr) minmax(12rem, 1.5fr);
+  align-items: end;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.fleditor-env-input {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  min-width: 0;
+}
+
+.fleditor-env-input label {
+  color: var(--fl-text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.fleditor-env-input input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--fl-border);
+  border-radius: 5px;
+  outline: none;
+  background: var(--fl-surface);
+  color: var(--fl-text);
+  font: inherit;
+  font-size: 0.82rem;
+}
+
+.fleditor-env-input input:focus {
+  border-color: var(--fl-accent, var(--fl-text-muted));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--fl-accent, var(--fl-text-muted)) 18%, transparent);
+}
+
+.fleditor-env-input--value input {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.fleditor-env-sensitive {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+  color: var(--fl-text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.fleditor-env-sensitive input {
+  accent-color: var(--fl-accent, var(--fl-text));
+}
+
+.fleditor-env-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  min-height: 2.25rem;
+}
+
+.fleditor-env-form-actions .fleditor-io-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  white-space: nowrap;
+}
+
+.fleditor-env-button-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.fleditor-env-table-wrap {
+  overflow: hidden;
+  border: 1px solid var(--fl-border);
+  border-radius: 7px;
+  background: var(--fl-surface);
+}
+
+.fleditor-env-table-head {
+  min-height: 2.5rem;
+  padding: 0 0.75rem;
+  border-bottom: 1px solid var(--fl-border);
+}
+
+.fleditor-env-count {
+  color: var(--fl-text-muted);
+  font-size: 0.73rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.fleditor-env-table {
+  max-height: 18rem;
+  overflow: auto;
+}
+
+.fleditor-env-table-row {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.9fr) minmax(10rem, 1.6fr) 5rem 4.5rem;
+  align-items: center;
+  min-height: 2.75rem;
+  border-bottom: 1px solid var(--fl-border);
+}
+
+.fleditor-env-table-row:last-child {
+  border-bottom: 0;
+}
+
+.fleditor-env-table-row:not(.fleditor-env-table-row--header):hover {
+  background: color-mix(in srgb, var(--fl-text) 4%, transparent);
+}
+
+.fleditor-env-table-row--header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  min-height: 2.1rem;
+  background: var(--fl-bg);
+}
+
+.fleditor-env-cell {
+  min-width: 0;
+  padding: 0.45rem 0.7rem;
+  font-size: 0.77rem;
+}
+
+.fleditor-env-table-row--header .fleditor-env-cell {
+  color: var(--fl-text-muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.fleditor-env-cell--key code,
+.fleditor-env-cell--value code {
+  display: block;
+  overflow: hidden;
+  color: var(--fl-text);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.76rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fleditor-env-cell--key code {
+  font-weight: 650;
+}
+
+.fleditor-env-cell--value code {
+  color: var(--fl-text-muted);
+}
+
+.fleditor-env-type {
+  display: inline-block;
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--fl-border);
+  border-radius: 4px;
+  color: var(--fl-text-muted);
+  font-size: 0.66rem;
+}
+
+.fleditor-env-type--secret {
+  border-color: color-mix(in srgb, var(--fl-warning, #c58b37) 45%, var(--fl-border));
+  color: var(--fl-warning, #c58b37);
+}
+
+.fleditor-env-cell--actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  padding-right: 0.55rem;
+}
+
+.fleditor-env-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fl-text-muted);
+  cursor: pointer;
+}
+
+.fleditor-env-icon-btn:hover {
+  border-color: var(--fl-border);
+  background: var(--fl-bg);
+  color: var(--fl-text);
+}
+
+.fleditor-env-icon-btn.is-copied {
+  color: var(--fl-success, #4b9b69);
+}
+
+.fleditor-env-icon-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.fleditor-env-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1.7rem 1rem;
+  color: var(--fl-text-muted);
+  text-align: center;
+}
+
+.fleditor-env-empty[hidden] {
+  display: none;
+}
+
+.fleditor-env-empty > span {
+  font-size: 1.5rem;
+  opacity: 0.65;
+}
+
+.fleditor-env-empty strong {
+  color: var(--fl-text);
+  font-size: 0.82rem;
+}
+
+.fleditor-env-empty span:last-child {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .fleditor-env-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .fleditor-env-form-actions {
+    justify-content: flex-start;
+  }
+
+  .fleditor-env-table-row {
+    grid-template-columns: minmax(6rem, 0.9fr) minmax(7rem, 1.4fr) 3.7rem 4.2rem;
+  }
+
+  .fleditor-env-cell {
+    padding: 0.4rem 0.45rem;
+  }
+
+  .fleditor-env-table-row--header .fleditor-env-cell {
+    font-size: 0.6rem;
+  }
+}
