@@ -15,7 +15,7 @@ use native list
   io.outln(bl)
   io.outln(err)
   io.outln(list.get(cts, 0))
-  body = http.body(req)
+  body = http.responseBody(req)
   io.outln(str.len(body))
   http.close(req)
   OK

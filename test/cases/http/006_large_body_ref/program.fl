@@ -1,7 +1,7 @@
 #main
   req = http.create('GET', 'http://mock.local/large')
   http.send(req)
-  body = http.body(req)
+  body = http.responseBody(req)
   http.close(req)
   io.outln(str.len(body))
   OK

@@ -1,0 +1,10 @@
+#main
+  req = http.create('POST', 'http://mock.local/echo')
+  http.header(req, 'Content-Type', 'text/plain')
+  http.requestBody(req, 'hello-raw')
+  io.outln(http.requestBody(req))
+  http.send(req)
+  io.outln(http.status(req))
+  io.outln(http.responseBody(req))
+  http.close(req)
+  OK

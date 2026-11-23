@@ -92,7 +92,8 @@ static void register_embedded_clock(void) {
 static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_HEADER, flat_native_http_header);
-    flat_native_plugin_register(FLAT_NATIVE_HTTP_BODY, flat_native_http_body);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_REQUEST_BODY, flat_native_http_request_body);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_RESPONSE_BODY, flat_native_http_response_body);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_TIMEOUT, flat_native_http_timeout);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_SEND, flat_native_http_send);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_STATUS, flat_native_http_status);

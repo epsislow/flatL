@@ -266,7 +266,8 @@ int flat_native_csv_get_collection(FlatNativeCtx *ctx);
 
 int flat_native_http_create(FlatNativeCtx *ctx);
 int flat_native_http_header(FlatNativeCtx *ctx);
-int flat_native_http_body(FlatNativeCtx *ctx);
+int flat_native_http_request_body(FlatNativeCtx *ctx);
+int flat_native_http_response_body(FlatNativeCtx *ctx);
 int flat_native_http_timeout(FlatNativeCtx *ctx);
 int flat_native_http_send(FlatNativeCtx *ctx);
 int flat_native_http_status(FlatNativeCtx *ctx);

@@ -9,6 +9,6 @@
   http.transportOk(req)
   http.statusOk(req)
   io.outln(http.status(req))
-  io.outln(http.body(req))
+  io.outln(http.responseBody(req))
   http.close(req)
   OK

@@ -57,7 +57,57 @@ void flat_http_runtime_destroy(FlatHttpRuntime *rt){uint32_t i; if(!rt)return; f
 static int append_header(FlatHttpRequestSlot *s,const char *name,const char *value){size_t n=strlen(name),v=strlen(value),i;char *line;char **next;if(!n||n>FLAT_OBJ_KEY_MAX||strchr(name,':')||strchr(name,'\r')||strchr(name,'\n')||strchr(value,'\r')||strchr(value,'\n'))return -1;line=malloc(n+v+3);if(!line)return -1;for(i=0;i<n;i++)line[i]=(char)tolower((unsigned char)name[i]);line[n]=':';line[n+1]=' ';memcpy(line+n+2,value,v+1);next=realloc(s->headers,(s->header_count+1)*sizeof *next);if(!next){free(line);return -1;}s->headers=next;s->headers[s->header_count++]=line;return 0;}
 int flat_native_http_create(FlatNativeCtx *ctx){FlatValue a[2];char *m=NULL,*u=NULL;size_t ml,ul;uint32_t i;if(!ctx||!ctx->http||!ctx->out||get_args(ctx,a,2)!=0||value_string(ctx,&a[0],&m,&ml)!=0||value_string(ctx,&a[1],&u,&ul)!=0){free(m);free(u);return http_fail(ctx,"http.create.args");}for(i=1;i<=FLAT_HTTP_MAX_REQUESTS;i++)if(!ctx->http->requests[i].live){FlatHttpRequestSlot *s=&ctx->http->requests[i];memset(s,0,sizeof *s);s->live=1;s->method=m;s->url=u;s->timeout_ms=FLAT_HTTP_DEFAULT_TIMEOUT_MS;s->max_body_bytes=FLAT_HTTP_DEFAULT_MAX_BODY;return http_ok(ctx)+flat_value_set_number(ctx->out,(double)i);}free(m);free(u);return http_fail(ctx,"http.create.limit");}
 int flat_native_http_header(FlatNativeCtx *ctx){FlatValue a[3];uint32_t id;char *name=NULL,*val=NULL;size_t nl,vl;FlatHttpRequestSlot *s;if(get_args(ctx,a,3)!=0||num_arg(&a[0],&id)!=0||!flat_http_request_live(ctx->http,id)||value_string(ctx,&a[1],&name,&nl)!=0||value_string(ctx,&a[2],&val,&vl)!=0){free(name);free(val);return http_fail(ctx,"http.header.args");}s=&ctx->http->requests[id];if(append_header(s,name,val)!=0){free(name);free(val);return http_fail(ctx,"http.header.value");}free(name);free(val);return http_ok(ctx);}
-int flat_native_http_body(FlatNativeCtx *ctx){FlatValue a[2];uint32_t id;FlatHttpRequestSlot *s;char *p=NULL;size_t n;if(!ctx||!ctx->out||!ctx->inner)return -1;{char b[4096],*x=NULL,*y=NULL,*z=NULL;snprintf(b,sizeof b,"%s",ctx->inner);int argc=split_args(b,&x,&y,&z);if(argc==1){FlatValue v;if(parse_value(ctx,x,&v)!=0||num_arg(&v,&id)!=0||!flat_http_request_live(ctx->http,id))return http_fail(ctx,"http.body.id");s=&ctx->http->requests[id];if(!s->sent)return http_fail(ctx,"http.body.not_sent");if (s->response.body_len <= FLAT_INLINE_STR_MAX) { http_ok(ctx); return flat_value_set_str_inline(ctx->out, s->response.body ? s->response.body : "", s->response.body_len); } if(flat_pool_alloc_copy(ctx->pool,s->response.body?s->response.body:"",s->response.body_len,&id)!=0)return http_fail(ctx,"http.body.memory");http_ok(ctx);return flat_value_set_str_ref(ctx->out,id);}if(argc!=2||parse_value(ctx,x,&a[0])!=0||parse_value(ctx,y,&a[1])!=0||num_arg(&a[0],&id)!=0||!flat_http_request_live(ctx->http,id)||value_string(ctx,&a[1],&p,&n)!=0){free(p);return http_fail(ctx,"http.body.args");}s=&ctx->http->requests[id];free(s->body);s->body=p;s->body_len=n;s->sent=0;return http_ok(ctx);}}
+static int http_out_body_bytes(FlatNativeCtx *ctx, const char *data, size_t len, const char *oom_why) {
+    uint32_t ref;
+    if (!ctx || !ctx->out) return -1;
+    if (len <= FLAT_INLINE_STR_MAX) {
+        http_ok(ctx);
+        return flat_value_set_str_inline(ctx->out, data ? data : "", len);
+    }
+    if (flat_pool_alloc_copy(ctx->pool, data ? data : "", len, &ref) != 0) return http_fail(ctx, oom_why);
+    http_ok(ctx);
+    return flat_value_set_str_ref(ctx->out, ref);
+}
+
+int flat_native_http_request_body(FlatNativeCtx *ctx) {
+    FlatValue a[2];
+    uint32_t id;
+    FlatHttpRequestSlot *s;
+    char *p = NULL;
+    size_t n;
+    char b[4096], *x = NULL, *y = NULL, *z = NULL;
+    int argc;
+    if (!ctx || !ctx->out || !ctx->inner) return -1;
+    snprintf(b, sizeof b, "%s", ctx->inner);
+    argc = split_args(b, &x, &y, &z);
+    if (argc == 1) {
+        FlatValue v;
+        if (parse_value(ctx, x, &v) != 0 || num_arg(&v, &id) != 0 || !flat_http_request_live(ctx->http, id))
+            return http_fail(ctx, "http.requestBody.id");
+        s = &ctx->http->requests[id];
+        return http_out_body_bytes(ctx, s->body, s->body_len, "http.requestBody.memory");
+    }
+    if (argc != 2 || parse_value(ctx, x, &a[0]) != 0 || parse_value(ctx, y, &a[1]) != 0 ||
+        num_arg(&a[0], &id) != 0 || !flat_http_request_live(ctx->http, id) ||
+        value_string(ctx, &a[1], &p, &n) != 0) {
+        free(p);
+        return http_fail(ctx, "http.requestBody.args");
+    }
+    s = &ctx->http->requests[id];
+    free(s->body);
+    s->body = p;
+    s->body_len = n;
+    s->sent = 0;
+    return http_ok(ctx);
+}
+
+int flat_native_http_response_body(FlatNativeCtx *ctx) {
+    uint32_t id;
+    FlatHttpRequestSlot *s = resolve(ctx, "http.responseBody.id", &id);
+    if (!s) return -1;
+    if (!s->sent) return http_fail(ctx, "http.responseBody.not_sent");
+    return http_out_body_bytes(ctx, s->response.body, s->response.body_len, "http.responseBody.memory");
+}
 int flat_native_http_timeout(FlatNativeCtx *ctx){FlatValue a[2];uint32_t id;double ms;if(get_args(ctx,a,2)!=0||num_arg(&a[0],&id)!=0||!flat_http_request_live(ctx->http,id)||a[1].tag!=VAL_NUMBER)return http_fail(ctx,"http.timeout.args");ms=flat_number_as_f64(&a[1]);if(ms<1||ms>600000)return http_fail(ctx,"http.timeout.range");ctx->http->requests[id].timeout_ms=(long)ms;return http_ok(ctx);}
 int flat_native_http_send(FlatNativeCtx *ctx){uint32_t id;FlatHttpRequestSlot *s=resolve(ctx,"http.send.id",&id);FlatHttpRequest r;if(!s)return -1;flat_http_response_free(&s->response);memset(&r,0,sizeof r);r.method=s->method;r.url=s->url;r.body=s->body;r.body_len=s->body_len;r.headers=(const char *const *)s->headers;r.header_count=s->header_count;r.timeout_ms=s->timeout_ms;r.max_body_bytes=s->max_body_bytes;flat_http_perform(&r,&s->response);s->sent=1;return http_ok(ctx);}
 int flat_native_http_status(FlatNativeCtx *ctx){uint32_t id;FlatHttpRequestSlot *s=resolve(ctx,"http.status.id",&id);if(!s||!s->sent)return http_fail(ctx,"http.status.not_sent");http_ok(ctx);return flat_value_set_number(ctx->out,(double)s->response.status);}

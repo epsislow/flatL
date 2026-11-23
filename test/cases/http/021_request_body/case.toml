@@ -1,0 +1,17 @@
+suite = "http"
+id = 21
+desc = "requestBody get/set for raw request body; responseBody for response"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "hello-raw"
+stdout_contains_2 = "200"
+stdout_contains_3 = "echoed"
+
+[http.mock]
+method = "POST"
+path = "/echo"
+status = 200
+body = "echoed"

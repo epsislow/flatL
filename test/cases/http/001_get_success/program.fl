@@ -5,7 +5,7 @@ use native obj
   io.outln(http.status(req))
   kind_live = mem.infoResId(req, 'http')
   io.outln(kind_live)
-  body = http.body(req)
+  body = http.responseBody(req)
   rh = http.responseHeaders(req)
   obj.get(rh, '"x-trace"') -> traces
   io.outln(traces)
