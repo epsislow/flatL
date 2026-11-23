@@ -421,6 +421,8 @@
         const valEl = document.getElementById('settingsEnvValue');
         const sensEl = document.getElementById('settingsEnvSensitive');
         const addBtn = document.getElementById('settingsEnvAddBtn');
+        const cancelBtn = document.getElementById('settingsEnvCancelBtn');
+        const removeBtn = document.getElementById('settingsEnvRemoveBtn');
         editingEnvKey = e.key;
         if (keyEl) keyEl.value = e.key;
         if (valEl) valEl.value = e.sensitive ? '' : e.value;
@@ -429,6 +431,8 @@
           addBtn.querySelector('span:last-child').textContent = 'Save changes';
           addBtn.querySelector('.fleditor-env-button-icon').textContent = '✓';
         }
+        if (cancelBtn) cancelBtn.hidden = false;
+        if (removeBtn) removeBtn.hidden = false;
         if (keyEl) keyEl.focus();
       });
 
@@ -874,6 +878,8 @@
       const valEl = document.getElementById('settingsEnvValue');
       const sensEl = document.getElementById('settingsEnvSensitive');
       const addBtn = document.getElementById('settingsEnvAddBtn');
+      const cancelBtn = document.getElementById('settingsEnvCancelBtn');
+      const removeBtn = document.getElementById('settingsEnvRemoveBtn');
       editingEnvKey = null;
       if (keyEl) keyEl.value = '';
       if (valEl) valEl.value = '';
@@ -882,6 +888,14 @@
         addBtn.querySelector('span:last-child').textContent = 'Add variable';
         addBtn.querySelector('.fleditor-env-button-icon').textContent = '＋';
       }
+      if (cancelBtn) cancelBtn.hidden = true;
+      if (removeBtn) removeBtn.hidden = true;
+    }
+    const envCancel = document.getElementById('settingsEnvCancelBtn');
+    if (envCancel) {
+      envCancel.addEventListener('click', function () {
+        resetEnvEditor();
+      });
     }
     if (envAdd) {
       envAdd.addEventListener('click', function () {

@@ -627,3 +627,8 @@
     font-size: 0.78rem;
   }
 }
+
+
+.fleditor-env-form-actions [hidden] {
+  display: none !important;
+}
