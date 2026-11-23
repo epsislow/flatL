@@ -1,6 +1,8 @@
 {
   "files": [
     "hello.fl",
+    "http_get.fl",
+    "http_post.fl",
     "io_inln.fl",
     "use/main.fl",
     "use/lib/helper.fl",

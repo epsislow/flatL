@@ -1,0 +1,14 @@
+# Minimal HTTPS POST + JSON body — works in fleditor (WASM Fetch) and native (libcurl).
+# Uses a public JSON demo API that allows browser CORS.
+#main
+  req = http.create('POST', 'https://jsonplaceholder.typicode.com/posts')
+  payload = {"title": "flatL", "body": "http post example", "userId": 1}
+  http.json(req, payload)
+  http.timeout(req, 15000)
+  http.send(req)
+  http.transportOk(req)
+  http.statusOk(req)
+  io.outln(http.status(req))
+  io.outln(http.body(req))
+  http.close(req)
+  OK

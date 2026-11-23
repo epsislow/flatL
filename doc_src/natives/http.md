@@ -16,6 +16,12 @@ body = http.body(req)
 http.close(req)
 ```
 
+Runnable samples (CLI + fleditor):
+- GET: [`examples/http_get.fl`](../../examples/http_get.fl) / fleditor `examples/http_get.fl`
+- POST + JSON: [`examples/http_post.fl`](../../examples/http_post.fl) / fleditor `examples/http_post.fl`
+
+They use a public HTTPS JSON API that allows browser CORS so **Run** works in the WASM playground as well as with native `flvm`/`flatl`.
+
 Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the native transport. Redirect following is enabled with a bounded redirect count. HTTPS peer and host certificate verification are enabled by default.
 
 `http.send()` is synchronous from the FlatL program's point of view. The internal transport boundary is kept separate so a future asynchronous executor can reuse the same request and response representation; asynchronous calls are not part of this API yet.

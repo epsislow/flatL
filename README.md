@@ -42,7 +42,7 @@ Types: `true` / `false`, numbers, quoted strings; `call #block`; guards with `==
 
 **Also in v0.4:** `use "…"`, `use native …`, **`use fmod`** ([FMOD_MODULES.md](doc_src/FMOD_MODULES.md)); user **`def`** + executors ([USER_FUNCTIONS.md](doc_src/USER_FUNCTIONS.md)); dynamic **`call block expr`** ([CALL_BLOCK.md](doc_src/CALL_BLOCK.md)); toolchain **`--time`** ([TOOLCHAIN.md](doc_src/TOOLCHAIN.md)).
 
-Minimal sample: [examples/hello.fl](examples/hello.fl). Payment-style flow with **`def`** (no `form.*` / `kv.*`): [examples/order_flow.fl](examples/order_flow.fl).
+Minimal sample: [examples/hello.fl](examples/hello.fl). HTTPS (`http.*`): [examples/http_get.fl](examples/http_get.fl), [examples/http_post.fl](examples/http_post.fl). Payment-style flow with **`def`** (no `form.*` / `kv.*`): [examples/order_flow.fl](examples/order_flow.fl).
 
 **User function with parameters** (runs today — see `test/cases/func/`):
 
