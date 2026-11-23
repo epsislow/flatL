@@ -1,0 +1,16 @@
+suite = "http"
+id = 5
+desc = "response body limit is enforced and reported as transport error"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "23"
+stdout_contains_2 = "configured limit"
+
+[http.mock]
+method = "GET"
+path = "/large"
+status = 200
+body = "this response is larger than the configured body limit"

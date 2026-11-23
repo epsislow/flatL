@@ -170,6 +170,11 @@
       "id": "csv-native",
       "label": "Native csv",
       "file": "natives/csv.md"
+    },
+    {
+      "id": "http-native",
+      "label": "Native http",
+      "file": "natives/http.md"
     }
   ]
-}\n
+}

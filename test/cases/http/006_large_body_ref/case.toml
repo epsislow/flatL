@@ -1,0 +1,15 @@
+suite = "http"
+id = 6
+desc = "large response body is returned as a persistent string ref"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "12000"
+
+[http.mock]
+method = "GET"
+path = "/large"
+status = 200
+body_file = "response.txt"

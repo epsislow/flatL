@@ -174,6 +174,7 @@ int flat_case_load(const char *case_toml_path, FlatCase *out) {
             if (end) {
                 *end = '\0';
                 snprintf(section, sizeof section, "%s", p + 1);
+                if (strcmp(section, "http.mock") == 0) out->http_mock_enabled = 1;
             }
             continue;
         }
@@ -389,6 +390,30 @@ static void inject_tool_time(char *cmd, size_t cap) {
     replace_token(cmd, cap, "/bin/flatl.exe run --trace ", "/bin/flatl.exe run --time --trace ");
 }
 
+static void inject_http_mock(char *cmd, size_t cap, const FlatCase *c) {
+    char path[FLAT_CASE_MAX_PATH * 2];
+    char prefix[FLAT_CASE_MAX_PATH * 2 + 64];
+    char original[FLAT_CASE_MAX_CMD];
+    if (!cmd || !c || !c->http_mock_enabled || !c->case_dir[0]) return;
+    snprintf(path, sizeof path, "%s/case.toml", c->case_dir);
+    flat_port_path_to_native(path);
+    snprintf(original, sizeof original, "%s", cmd);
+#ifdef _WIN32
+    snprintf(prefix, sizeof prefix, "set \"FLAT_HTTP_MOCK_FILE=%s\" && ", path);
+#else
+    {
+        size_t i, o = 0;
+        o += (size_t)snprintf(prefix + o, sizeof prefix - o, "FLAT_HTTP_MOCK_FILE='");
+        for (i = 0; path[i] && o + 5 < sizeof prefix; ++i) {
+            if (path[i] == '\'') { prefix[o++]='\\'; prefix[o++]='\''; }
+            else prefix[o++]=path[i];
+        }
+        prefix[o++]='\''; prefix[o++]=' '; prefix[o]='\0';
+    }
+#endif
+    snprintf(cmd, cap, "%s%s", prefix, original);
+}
+
 static int shell_capture_timed(const char *cmd, int *code, char *out, size_t out_sz, double *ms_out) {
     double t0 = flat_time_monotonic_ms();
     int rc = flat_port_shell_capture(cmd, code, out, (int)out_sz);
@@ -505,6 +530,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         double exec_ms = 0.0;
 
         expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
+        inject_http_mock(cmd, sizeof cmd, c);
         if (inject) {
             inject_tool_time(cmd, sizeof cmd);
         }
@@ -581,6 +607,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             }
             expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
                                 src_path, c->flatl_crun);
+            inject_http_mock(compile_cmd, sizeof compile_cmd, c);
             if (inject) {
                 inject_tool_time(compile_cmd, sizeof compile_cmd);
             }
@@ -625,6 +652,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                                 src_path, c->flatl_compile);
             expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                                 c->flatl_run);
+            inject_http_mock(run_cmd, sizeof run_cmd, c);
             if (inject) {
                 inject_tool_time(compile_cmd, sizeof compile_cmd);
                 inject_tool_time(run_cmd, sizeof run_cmd);
@@ -693,6 +721,7 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         }
         expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
                             c->pipeline_run);
+        inject_http_mock(run_cmd, sizeof run_cmd, c);
         if (use_flatl) {
             subst_flvm_with_flatl_run(run_cmd, sizeof run_cmd);
         }

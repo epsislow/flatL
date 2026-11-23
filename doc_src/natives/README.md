@@ -1,6 +1,6 @@
 # Optional native modules
 
-**Core natives** (`io`, `json`, `str`, `date`, `clock`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [clock.md](./clock.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
+**Core natives** (`io`, `json`, `str`, `date`, `clock`, `http`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [clock.md](./clock.md), [http.md](./http.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
 
 **Optional natives** extend the VM (for example trigonometry). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
@@ -37,11 +37,11 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `http`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
-- **`use native io`** (or `json` / `str` / `clock` / `mem` without `with`) is an error — use **`use native mem with Alias`** only when you want a short prefix; canonical names always work.
+- **`use native io`** (or `json` / `str` / `date` / `clock` / `http` / `mem` / `file` without `with`) is an error — use **`use native mem with Alias`** only when you want a short prefix; canonical names always work.
 - Duplicate **`use native`** for the **same module** in one file is an error.
 
 ## `io.docs`
@@ -59,6 +59,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `str` | [str.md](./str.md) |
 | `date` | [date.md](./date.md) |
 | `clock` | [clock.md](./clock.md) — monotonic elapsed-time measurements |
+| `http` | [http.md](./http.md) — synchronous HTTP/HTTPS requests |
 | `mem` | [mem.md](./mem.md) |
 
 ## Optional modules (documented)
@@ -88,3 +89,4 @@ When a native splits `inner` into several RHS expressions and parses them **one 
 Rule of thumb: if a later argument can be a literal `[…]` or `{…}` and you still need the earlier collection id, **pin** the earlier operands with `parse_rhs` until the handler finishes. Variadic builders (e.g. `list.pack`) pin each element in the loop. Tests: `test/cases/vm_fixes/006_*`, `007_*`, `math_mdim/007_*`.
 
 User **`def` calls** with multiple inline literals are lowered to sequential `__fl_tmp_i = …` assignments (retain per slot). **`flc`** must split call arguments with bracket-aware commas (`()`, `[]`, `{}`) in `flat_func_split_param_list` / `split_call_param_list` (`flat_func.c`, `flat_func_tag.c`) — otherwise `[1, 2], [3, 4]` is parsed as too many args. Regression: `test/cases/func/032_*` … `035_*`.
+

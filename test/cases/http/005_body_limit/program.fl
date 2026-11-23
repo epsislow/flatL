@@ -1,0 +1,8 @@
+#main
+  req = http.create('GET', 'http://mock.local/large')
+  http.maxBody(req, 8)
+  http.send(req)
+  io.outln(http.errorCode(req))
+  io.outln(http.error(req))
+  http.close(req)
+  OK

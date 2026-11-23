@@ -1,0 +1,20 @@
+suite = "http"
+id = 1
+desc = "GET request returns mocked success response and body"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "200"
+stdout_contains_2 = "mock-success"
+stdout_contains_3 = "two"
+stdout_contains_4 = "request"
+stdout_contains_5 = "unknown"
+
+[http.mock]
+method = "GET"
+path = "/users"
+status = 200
+body = "mock-success"
+headers = ["Content-Type: application/json", "X-Trace: one", "X-Trace: two"]

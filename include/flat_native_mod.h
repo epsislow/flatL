@@ -264,4 +264,18 @@ int flat_native_csv_set_obj_headers(FlatNativeCtx *ctx);
 int flat_native_csv_next_record(FlatNativeCtx *ctx);
 int flat_native_csv_get_collection(FlatNativeCtx *ctx);
 
+int flat_native_http_create(FlatNativeCtx *ctx);
+int flat_native_http_header(FlatNativeCtx *ctx);
+int flat_native_http_body(FlatNativeCtx *ctx);
+int flat_native_http_timeout(FlatNativeCtx *ctx);
+int flat_native_http_send(FlatNativeCtx *ctx);
+int flat_native_http_status(FlatNativeCtx *ctx);
+int flat_native_http_error(FlatNativeCtx *ctx);
+int flat_native_http_error_code(FlatNativeCtx *ctx);
+int flat_native_http_close(FlatNativeCtx *ctx);
+int flat_native_http_headers(FlatNativeCtx *ctx);
+int flat_native_http_json(FlatNativeCtx *ctx);
+int flat_native_http_response_headers(FlatNativeCtx *ctx);
+int flat_native_http_max_body(FlatNativeCtx *ctx);
+
 #endif

@@ -1,0 +1,16 @@
+use native obj
+#main
+  req = http.create('GET', 'http://mock.local/users')
+  http.send(req)
+  io.outln(http.status(req))
+  kind_live = mem.infoResId(req, 'http')
+  io.outln(kind_live)
+  body = http.body(req)
+  rh = http.responseHeaders(req)
+  obj.get(rh, '"x-trace"') -> traces
+  io.outln(traces)
+  http.close(req)
+  io.outln(body)
+  kind = mem.infoResId(req, 'http')
+  io.outln(kind)
+  OK

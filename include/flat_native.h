@@ -256,11 +256,25 @@ typedef enum {
     FLAT_NATIVE_CLOCK_LAP_GET,
     FLAT_NATIVE_CLOCK_LAP_CLEAR,
     FLAT_NATIVE_CLOCK_CLOSE,
+    FLAT_NATIVE_HTTP_CREATE,
+    FLAT_NATIVE_HTTP_HEADER,
+    FLAT_NATIVE_HTTP_BODY,
+    FLAT_NATIVE_HTTP_TIMEOUT,
+    FLAT_NATIVE_HTTP_SEND,
+    FLAT_NATIVE_HTTP_STATUS,
+    FLAT_NATIVE_HTTP_ERROR,
+    FLAT_NATIVE_HTTP_ERROR_CODE,
+    FLAT_NATIVE_HTTP_CLOSE,
+    FLAT_NATIVE_HTTP_HEADERS,
+    FLAT_NATIVE_HTTP_JSON,
+    FLAT_NATIVE_HTTP_RESPONSE_HEADERS,
+    FLAT_NATIVE_HTTP_MAX_BODY,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
 #define FLAT_NATIVE_MODULE_DATE "date"
 #define FLAT_NATIVE_MODULE_CLOCK "clock"
+#define FLAT_NATIVE_MODULE_HTTP "http"
 
 #define FLAT_NATIVE_CORE_COUNT ((int)FLAT_NATIVE_MATH_TRIG_SIN)
 #define FLAT_NATIVE_MODULE_MATH_TRIG "math.trig"
@@ -305,6 +319,7 @@ typedef struct {
     char panic_detail[64];
     struct FlatCsvRuntime *csv; /* after panic_detail — ABI for optional .so plugins */
     struct FlatClockRuntime *clock; /* stopwatch resources */
+    struct FlatHttpRuntime *http; /* synchronous HTTP request resources */
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

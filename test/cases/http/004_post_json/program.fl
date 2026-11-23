@@ -1,0 +1,12 @@
+#main
+  req = http.create('POST', 'http://mock.local/users')
+  headers = {"Accept": ["application/json"], "X-Client": ["FlatL", "Test"]}
+  http.headers(req, headers)
+  data = {"name": "FlatL", "active": true}
+  http.json(req, data)
+  http.timeout(req, 1000)
+  http.send(req)
+  io.outln(http.status(req))
+  io.outln(http.body(req))
+  http.close(req)
+  OK

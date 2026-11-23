@@ -89,6 +89,22 @@ static void register_embedded_clock(void) {
     flat_native_plugin_register(FLAT_NATIVE_CLOCK_CLOSE, flat_native_clock_close);
 }
 
+static void register_embedded_http(void) {
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_HEADER, flat_native_http_header);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_BODY, flat_native_http_body);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_TIMEOUT, flat_native_http_timeout);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_SEND, flat_native_http_send);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_STATUS, flat_native_http_status);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_ERROR, flat_native_http_error);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_ERROR_CODE, flat_native_http_error_code);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_CLOSE, flat_native_http_close);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_HEADERS, flat_native_http_headers);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_JSON, flat_native_http_json);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_RESPONSE_HEADERS, flat_native_http_response_headers);
+    flat_native_plugin_register(FLAT_NATIVE_HTTP_MAX_BODY, flat_native_http_max_body);
+}
+
 static void register_embedded_vcx(void) {
     flat_native_plugin_register(FLAT_NATIVE_VCX_CURRENT, flat_native_vcx_current);
     flat_native_plugin_register(FLAT_NATIVE_VCX_ISACTIVE, flat_native_vcx_isactive);
@@ -543,6 +559,7 @@ void flat_native_runtime_reset(void) {
     register_embedded_file();
     register_embedded_date();
     register_embedded_clock();
+    register_embedded_http();
     register_embedded_vcx();
     register_embedded_executor();
     register_embedded_str_extras();

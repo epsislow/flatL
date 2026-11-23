@@ -16,6 +16,7 @@
 #include "flat_value.h"
 #include "flat_csv_runtime.h"
 #include "flat_clock_runtime.h"
+#include "flat_http_runtime.h"
 #include "flat_vcx.h"
 #include "flat_executor.h"
 #include "flat_list_typed.h"
@@ -92,6 +93,7 @@ typedef struct {
     FlatVcxRuntime *vcx;
     FlatCsvRuntime *csv;
     FlatClockRuntime clock;
+    FlatHttpRuntime http;
 } VmState;
 
 static VmState *g_vm_call_instr;
@@ -1131,6 +1133,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.vcx = st->vcx;
             ctx.csv = st->csv;
             ctx.clock = &st->clock;
+            ctx.http = &st->http;
             ctx.var_slot_types = slot_types;
             ctx.var_has_slot_type = has_types;
             ctx.var_slot_frozen = frozen_flags;
@@ -1447,6 +1450,7 @@ static void vm_teardown(VmState *st, int rc) {
         flat_csv_runtime_destroy(st->csv);
         st->csv = NULL;
     }
+    flat_http_runtime_destroy(&st->http);
     if (st->vcx) {
         flat_vcx_runtime_destroy(st->vcx, st->coll, st->pool, &st->files);
         st->vcx = NULL;
@@ -2110,6 +2114,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.vcx = st->vcx;
     ctx.csv = st->csv;
     ctx.clock = &st->clock;
+    ctx.http = &st->http;
     ctx.var_slot_types = slot_types;
     ctx.var_has_slot_type = has_types;
     ctx.var_slot_frozen = frozen_flags;

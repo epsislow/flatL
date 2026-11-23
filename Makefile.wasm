@@ -35,7 +35,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c \
-                src/lib/mod_file.c \
+                src/lib/mod_file.c src/lib/mod_http.c \
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
 VM_SRC = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \
@@ -59,7 +59,7 @@ FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/
            src/common/flat_native_tag_validate.c
 
 WASM_SRC = src/fleditor_wasm/flat_wasm.c src/fleditor_wasm/flat_wasm_io.c src/common/flat_disasm.c \
-           $(FGIR_SRC) $(FB_SRC) $(VM_SRC) $(PORT_SRC)
+           $(FGIR_SRC) $(FB_SRC) $(VM_SRC) src/http/flat_http_fetch.c $(PORT_SRC)
 
 .PHONY: fleditor-wasm fleditor-wasm-clean
 

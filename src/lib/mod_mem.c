@@ -11,6 +11,7 @@
 #include "flat_value.h"
 #include "flat_vcx.h"
 #include "flat_clock_runtime.h"
+#include "flat_http_runtime.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -338,7 +339,8 @@ enum {
     INFO_HINT_CSV = 1,
     INFO_HINT_FILE,
     INFO_HINT_VCX,
-    INFO_HINT_CLOCK
+    INFO_HINT_CLOCK,
+    INFO_HINT_HTTP
 };
 
 static int info_parse_hint_kind(const char *hint) {
@@ -356,6 +358,9 @@ static int info_parse_hint_kind(const char *hint) {
     }
     if (strcmp(hint, "clock") == 0) {
         return INFO_HINT_CLOCK;
+    }
+    if (strcmp(hint, "http") == 0) {
+        return INFO_HINT_HTTP;
     }
     return 0;
 }
@@ -391,6 +396,10 @@ static int info_res_kind(FlatNativeCtx *ctx, int hint_kind, uint32_t id, const c
         if (flat_clock_stopwatch_live(ctx->clock, id)) *out_kind = "sw";
         return 0;
     }
+    if (hint_kind == INFO_HINT_HTTP) {
+        if (flat_http_request_live(ctx->http, id)) *out_kind = "request";
+        return 0;
+    }
     return 0;
 }
 
@@ -412,6 +421,7 @@ static int info_parse_id_for_hint(int hint_kind, const FlatValue *v, uint32_t *o
         return 0;
     }
     if (hint_kind == INFO_HINT_CLOCK && (d < 1.0 || d > (double)FLAT_CLOCK_MAX_STOPWATCHES)) return -1;
+    if (hint_kind == INFO_HINT_HTTP && (d < 1.0 || d > (double)FLAT_HTTP_MAX_REQUESTS)) return -1;
     if (d < 1.0) {
         return -1;
     }

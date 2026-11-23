@@ -4,7 +4,7 @@ Documentation index: [README.md](./README.md) (English).
 
 Run all commands from the **repository root** (directory containing `Makefile` and `include/flat.h`).
 
-Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make**, and a POSIX shell (WSL/Linux) for the default **`make test`** workflow — see [Portability](#portability-windows-shell-and-io-tests) below.
+Built programs are written to **`bin/`** (gitignored). Requires **gcc**, **make**, and a POSIX shell (WSL/Linux) for the default **`make test`** workflow — see [Portability](#portability-windows-shell-and-io-tests) below. The native HTTP module additionally requires **libcurl development headers and libraries** (`libcurl` package on Termux); `pkg-config libcurl` is used when available.
 
 ## Build
 

@@ -266,6 +266,19 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("clock", "lapGet", "clock.lapGet(id, index)"),
     META_SIG("clock", "lapClear", "clock.lapClear(id)"),
     META_SIG("clock", "close", "clock.close(id)"),
+    META_SIG("http", "create", "http.create(method, url)"),
+    META_SIG("http", "header", "http.header(id, name, value)"),
+    META_SIG("http", "body", "http.body(id, body?)"),
+    META_SIG("http", "timeout", "http.timeout(id, milliseconds)"),
+    META_SIG("http", "send", "http.send(id)"),
+    META_SIG("http", "status", "http.status(id)"),
+    META_SIG("http", "error", "http.error(id)"),
+    META_SIG("http", "errorCode", "http.errorCode(id)"),
+    META_SIG("http", "close", "http.close(id)"),
+    META_SIG("http", "headers", "http.headers(id, object)"),
+    META_SIG("http", "json", "http.json(id, value)"),
+    META_SIG("http", "responseHeaders", "http.responseHeaders(id)"),
+    META_SIG("http", "maxBody", "http.maxBody(id, bytes)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -274,6 +287,7 @@ int flat_native_is_core_module(const char *mod) {
     }
     return strcmp(mod, "io") == 0 || strcmp(mod, "json") == 0 || strcmp(mod, "str") == 0 ||
            strcmp(mod, FLAT_NATIVE_MODULE_DATE) == 0 || strcmp(mod, FLAT_NATIVE_MODULE_CLOCK) == 0 ||
+           strcmp(mod, FLAT_NATIVE_MODULE_HTTP) == 0 ||
            strcmp(mod, FLAT_NATIVE_MODULE_MEM) == 0 ||
            strcmp(mod, FLAT_NATIVE_MODULE_FILE) == 0;
 }
@@ -285,6 +299,7 @@ int flat_native_is_module_id(const char *mod) {
         "str",
         FLAT_NATIVE_MODULE_DATE,
         FLAT_NATIVE_MODULE_CLOCK,
+        FLAT_NATIVE_MODULE_HTTP,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

@@ -56,11 +56,14 @@ PLUGIN_OBJ_SRCS = src/lib/plugin_obj_entry.c src/lib/mod_obj.c $(PLUGIN_COMMON_S
 PLUGIN_CSV_SRCS = src/lib/plugin_csv_entry.c src/lib/mod_csv.c src/common/flat_csv.c \
                src/common/flat_csv_runtime.c src/common/flat_file.c $(PLUGIN_COMMON_SRCS)
 endif
+HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c
+HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
+HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_parse_rhs.c \
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
@@ -215,7 +218,7 @@ fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
 
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(VM_EXTRA_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(HTTP_LIBS) -lm
 
 $(BINDIR)/libflat_math_trig.so: $(PLUGIN_TRIG_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_TRIG_SRCS) $(LDFLAGS) -lm
@@ -245,7 +248,7 @@ $(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(FBDUMP_SRCS) $(LDFLAGS) -lm
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(HTTP_LIBS) -lm
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_TOOL_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_TOOL_SRC) $(LDFLAGS) -lm

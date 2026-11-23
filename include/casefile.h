@@ -37,6 +37,7 @@ typedef struct {
     char stdout_must_not_contain[FLAT_CASE_MAX_DESC];
     char stderr_contains[FLAT_CASE_MAX_DESC];
     int show_output; /* print captured command output after this case */
+    int http_mock_enabled; /* [http.mock] fixture in this case.toml */
 
     char pipeline_compile[FLAT_CASE_MAX_CMD];
     char pipeline_run[FLAT_CASE_MAX_CMD];
