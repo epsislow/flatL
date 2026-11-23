@@ -1,0 +1,12 @@
+use native obj
+use native list
+#main
+  req = http.create('GET', 'http://mock.local/headers')
+  http.send(req)
+  headers = http.responseHeaders(req)
+  obj.get(headers, '"x-repeat"') -> values
+  io.outln(list.len(values))
+  io.outln(list.get(values, 0))
+  io.outln(list.get(values, 2))
+  http.close(req)
+  OK

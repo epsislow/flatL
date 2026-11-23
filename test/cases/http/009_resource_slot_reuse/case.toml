@@ -1,0 +1,17 @@
+suite = "http"
+id = 9
+desc = "closing HTTP requests releases resource slots for reuse"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "19"
+stdout_contains_2 = "unknown"
+stdout_contains_3 = "request"
+
+[http.mock]
+method = "GET"
+path = "/reuse"
+status = 200
+body = "ok"

@@ -1,0 +1,17 @@
+suite = "http"
+id = 7
+desc = "HTTP 500 is a valid response and not a transport failure"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "500"
+stdout_contains_2 = "0"
+stdout_contains_3 = "server-error"
+
+[http.mock]
+method = "GET"
+path = "/failure"
+status = 500
+body = "server-error"

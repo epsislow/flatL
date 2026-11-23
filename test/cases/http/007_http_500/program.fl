@@ -1,0 +1,8 @@
+#main
+  req = http.create('GET', 'http://mock.local/failure')
+  http.send(req)
+  io.outln(http.status(req))
+  io.outln(http.errorCode(req))
+  io.outln(http.body(req))
+  http.close(req)
+  OK

@@ -1,0 +1,18 @@
+suite = "http"
+id = 10
+desc = "repeated response header values are retained in a list"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "3"
+stdout_contains_2 = "alpha"
+stdout_contains_3 = "gamma"
+
+[http.mock]
+method = "GET"
+path = "/headers"
+status = 200
+body = "ok"
+headers = ["X-Repeat: alpha", "X-Repeat: beta", "X-Repeat: gamma"]

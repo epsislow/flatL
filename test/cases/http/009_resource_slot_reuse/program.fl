@@ -1,0 +1,14 @@
+#main
+  for(20, i, '#step')
+  io.outln(i)
+  io.outln(mem.infoResId(req, 'http'))
+  next_req = http.create('GET', 'http://mock.local/reuse')
+  io.outln(mem.infoResId(next_req, 'http'))
+  http.close(next_req)
+  OK
+
+#step
+  req = http.create('GET', 'http://mock.local/reuse')
+  http.send(req)
+  http.close(req)
+  next
