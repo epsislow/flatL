@@ -4,6 +4,282 @@ The core `http` module performs synchronous HTTP and HTTPS requests. Native buil
 
 Requests are VM-owned resources identified by numeric IDs. Close each request with `http.close(id)` when it is no longer needed. `mem.infoResId(id, 'http')` returns `request` while the resource is live and `unknown` after it is closed.
 
+## API reference
+
+**Core** module — always linked into `flvm` / `flatl`. Call `http.*` directly (no `use native http`). Implementation: `src/lib/mod_http.c`, transport `src/http/flat_http_curl.c` (native) / Fetch+Asyncify (WASM).
+
+### Summary
+
+| Call | Returns | Panic / fail labels |
+|------|---------|---------------------|
+| `create(method, url)` | NUMBER `id` | `http.create.args`, `http.create.limit` |
+| `header(id, name, value)` | — | `http.header.args`, `http.header.value` |
+| `headers(id, object)` | — | `http.headers.args`, `http.headers.invalid` |
+| `requestBody(id)` | STRING | `http.requestBody.id`, `http.requestBody.memory` |
+| `requestBody(id, body)` | — | `http.requestBody.args` |
+| `json(id, value)` | — | `http.json.args`, `http.json.memory`, `http.json.serialize`, `http.json.content_type` |
+| `timeout(id, milliseconds)` | — | `http.timeout.args`, `http.timeout.range` |
+| `maxBody(id, bytes)` | — | `http.maxBody.args`, `http.maxBody.range` |
+| `send(id)` | — | `http.send.id` |
+| `status(id)` | NUMBER | `http.status.id`, `http.status.not_sent` |
+| `responseBody(id)` | STRING | `http.responseBody.id`, `http.responseBody.not_sent`, `http.responseBody.memory` |
+| `responseHeaders(id)` | OBJECT | `http.responseHeaders.id`, `http.responseHeaders.not_sent`, `http.responseHeaders.memory` |
+| `error(id)` | STRING | `http.error.id`, `http.error.not_sent`, `http.error.memory` |
+| `errorCode(id)` | NUMBER | `http.errorCode.id`, `http.errorCode.not_sent` |
+| `transportOk(id)` | — | `http.transportOk.id`, `http.transportOk.not_sent`, `http.transport.*` |
+| `statusOk(id)` | — | `http.statusOk.id`, `http.statusOk.not_sent`, `http.status.*` |
+| `requestInfo(id)` | OBJECT | `http.requestInfo.id`, `http.requestInfo.args`, `http.requestInfo.memory` |
+| `responseInfo(id)` | OBJECT | `http.responseInfo.id`, `http.responseInfo.args`, `http.responseInfo.not_sent`, `http.responseInfo.memory` |
+| `close(id)` | — | `http.close.id` |
+
+`*` labels for `transportOk` / `statusOk` are listed under [Assert helpers](#assert-helpers-transportok--statusok).
+
+---
+
+### `http.create(method, url)`
+
+Allocates a request resource and returns its numeric **id**. Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the transport. Defaults: timeout **10s**, max response body **8 MiB**. At most **16** live requests per VM run (`http.create.limit`).
+
+```flat
+get = http.create("GET", "https://api.example.com/users/1")
+head = http.create("HEAD", "https://api.example.com/users/1")
+post = http.create("POST", "https://api.example.com/users")
+put = http.create("PUT", "https://api.example.com/users/1")
+patch = http.create("PATCH", "https://api.example.com/users/1")
+del = http.create("DELETE", "https://api.example.com/users/1")
+```
+
+### `http.header(id, name, value)`
+
+Appends one request header. Names are normalized to lowercase; values are preserved. Repeated names are allowed (multi-value headers).
+
+```flat
+http.header(req, "Accept", "application/json")
+http.header(req, "X-Trace", "first")
+http.header(req, "X-Trace", "second")
+```
+
+### `http.headers(id, object)`
+
+Replaces **all** request headers. The object maps each name to a LIST of STRING values. A STRING value for an entry is treated as a one-element list.
+
+```flat
+headers = {
+  "Accept": ["application/json"],
+  "Cache-Control": ["no-cache", "no-store"]
+}
+http.headers(req, headers)
+```
+
+### `http.requestBody(id)` / `http.requestBody(id, body)`
+
+With one argument: returns the current **request** body as STRING (empty when none). With two arguments: sets a raw STRING request body and clears the `sent` flag so the request can be sent again. Prefer `http.json` when the payload should be JSON. Typical for `POST` / `PUT` / `PATCH`.
+
+```flat
+req = http.create("POST", "https://api.example.com/notes")
+http.header(req, "Content-Type", "text/plain")
+http.requestBody(req, "hello")
+raw = http.requestBody(req)
+```
+
+### `http.json(id, value)`
+
+Serializes `value` with the FlatL JSON serializer into the request body and adds `content-type: application/json` unless that header was already set. Typical for `POST` / `PUT` / `PATCH`.
+
+```flat
+req = http.create("PUT", "https://api.example.com/users/1")
+payload = {"name": "FlatL", "active": true}
+http.json(req, payload)
+```
+
+### `http.timeout(id, milliseconds)`
+
+Sets the request timeout. Valid range: **1 … 600000** ms (10 minutes).
+
+```flat
+http.timeout(req, 15000)
+```
+
+### `http.maxBody(id, bytes)`
+
+Sets the maximum response body size for this request (up to the FlatL string-pool chunk limit). Overflow is reported as a transport error (typically code `23` → `http.transport.overflow` via `transportOk`).
+
+```flat
+http.maxBody(req, 1048576)
+```
+
+### `http.send(id)`
+
+Performs the request synchronously. Never panics on HTTP 4xx/5xx or on transport failure — inspect `status` / `errorCode` / `error`, or call `transportOk` / `statusOk` afterward. Redirects are followed (bounded).
+
+```flat
+http.send(req)
+```
+
+### `http.status(id)`
+
+Returns the HTTP status code after `send`. Returns `0` when no HTTP response was received (e.g. transport failure). Requires `send` first (`http.status.not_sent`).
+
+```flat
+code = http.status(req)
+```
+
+### `http.responseBody(id)`
+
+Returns the **response** body as STRING (STRING REF for larger bodies). Independent of request resource lifetime after the value is returned. Requires `send` (`http.responseBody.not_sent`).
+
+```flat
+body = http.responseBody(req)
+```
+
+### `http.responseHeaders(id)`
+
+Returns an OBJECT mapping lowercase header names to LIST of STRING values. Repeated headers are preserved when exposed by the transport. Requires `send`.
+
+```flat
+use native obj
+rh = http.responseHeaders(req)
+obj.get(rh, '"content-type"') -> cts
+```
+
+### `http.error(id)` / `http.errorCode(id)`
+
+Transport diagnostics after `send`. `errorCode` is `0` when there was no transport error; `error` is then an empty STRING. HTTP 404/500 are **not** transport errors.
+
+```flat
+msg = http.error(req)
+code = http.errorCode(req)
+```
+
+### `http.transportOk(id)`
+
+After `send`, panics if `errorCode != 0`. Panic labels: `http.transport.timeout`, `.overflow`, `.memory`, `.connect`, `.tls`, `.other`. Before `send`: `http.transportOk.not_sent`.
+
+```flat
+http.send(req)
+http.transportOk(req)
+```
+
+### `http.statusOk(id)`
+
+After `send`, requires a final HTTP **2xx** status. Panic labels include `http.status.not_found` (404), `.unauthorized` (401), `.forbidden` (403), `.conflict` (409), `.server_error` (5xx), `.redirect` (final 3xx), `.client_error` (other 4xx), `.other`. Before `send`: `http.statusOk.not_sent`.
+
+```flat
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+```
+
+### `http.requestInfo(id)`
+
+Returns an OBJECT snapshot of the live request (no body bytes). Keys: `method`, `url`, `headers`, `timeoutMs`, `maxBody`, `sent`, `bodyLen`. Available before or after `send`.
+
+```flat
+use native obj
+info = http.requestInfo(req)
+obj.get(info, '"method"') -> method
+obj.get(info, '"bodyLen"') -> n
+```
+
+### `http.responseInfo(id)`
+
+Returns an OBJECT snapshot of the response (no body bytes). Keys: `status`, `headers`, `error`, `errorCode`, `bodyLen`. Requires `send` (`http.responseInfo.not_sent`).
+
+```flat
+use native obj
+info = http.responseInfo(req)
+obj.get(info, '"status"') -> status
+obj.get(info, '"bodyLen"') -> n
+if n > 0
+  body = http.responseBody(req)
+```
+
+### `http.close(id)`
+
+Releases the request slot and its transport buffers. A STRING already returned by `requestBody` / `responseBody` remains valid under normal FlatL value ownership. `mem.infoResId(id, 'http')` becomes `unknown` after close.
+
+```flat
+http.close(req)
+```
+
+### End-to-end examples by method
+
+**GET** — fetch a resource:
+
+```flat
+req = http.create("GET", "https://jsonplaceholder.typicode.com/todos/1")
+http.timeout(req, 15000)
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+io.outln(http.status(req))
+io.outln(http.responseBody(req))
+http.close(req)
+```
+
+**POST** — create with JSON body:
+
+```flat
+req = http.create("POST", "https://jsonplaceholder.typicode.com/posts")
+http.json(req, {"title": "flatL", "body": "http post example", "userId": 1})
+http.timeout(req, 15000)
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+io.outln(http.status(req))
+io.outln(http.responseBody(req))
+http.close(req)
+```
+
+**PUT** — replace a resource:
+
+```flat
+req = http.create("PUT", "https://jsonplaceholder.typicode.com/posts/1")
+http.json(req, {"id": 1, "title": "updated", "body": "full replace", "userId": 1})
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+io.outln(http.responseBody(req))
+http.close(req)
+```
+
+**PATCH** — partial update:
+
+```flat
+req = http.create("PATCH", "https://jsonplaceholder.typicode.com/posts/1")
+http.json(req, {"title": "patched title"})
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+io.outln(http.responseBody(req))
+http.close(req)
+```
+
+**DELETE** — remove a resource:
+
+```flat
+req = http.create("DELETE", "https://jsonplaceholder.typicode.com/posts/1")
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+io.outln(http.status(req))
+http.close(req)
+```
+
+**HEAD** — headers only (empty or unused body):
+
+```flat
+req = http.create("HEAD", "https://jsonplaceholder.typicode.com/posts/1")
+http.send(req)
+http.transportOk(req)
+http.statusOk(req)
+io.outln(http.status(req))
+rh = http.responseHeaders(req)
+http.close(req)
+```
+
+Runnable samples: [`examples/http_get.fl`](../../examples/http_get.fl), [`examples/http_post.fl`](../../examples/http_post.fl).
+
 ## Create and send a request
 
 ```flat
@@ -14,6 +290,30 @@ http.send(req)
 status = http.status(req)
 body = http.responseBody(req)
 http.close(req)
+```
+
+Same flow with other methods — set a body when the method carries one:
+
+```flat
+# POST + raw body
+req = http.create("POST", "https://api.example.com/notes")
+http.header(req, "Content-Type", "text/plain")
+http.requestBody(req, "hello")
+http.send(req)
+
+# PUT + JSON
+req = http.create("PUT", "https://api.example.com/users/1")
+http.json(req, {"name": "Ada", "active": true})
+http.send(req)
+
+# PATCH + JSON
+req = http.create("PATCH", "https://api.example.com/users/1")
+http.json(req, {"active": false})
+http.send(req)
+
+# DELETE
+req = http.create("DELETE", "https://api.example.com/users/1")
+http.send(req)
 ```
 
 Runnable samples (CLI + fleditor):
@@ -230,210 +530,3 @@ bin/run_tests -t http -v -e --categ=all
 ```
 
 The mock is test-runner scoped and does not change normal HTTP behavior when `FLAT_HTTP_MOCK_FILE` is not set.
-
-## API reference
-
-**Core** module — always linked into `flvm` / `flatl`. Call `http.*` directly (no `use native http`). Implementation: `src/lib/mod_http.c`, transport `src/http/flat_http_curl.c` (native) / Fetch+Asyncify (WASM).
-
-### Summary
-
-| Call | Returns | Panic / fail labels |
-|------|---------|---------------------|
-| `create(method, url)` | NUMBER `id` | `http.create.args`, `http.create.limit` |
-| `header(id, name, value)` | — | `http.header.args`, `http.header.value` |
-| `headers(id, object)` | — | `http.headers.args`, `http.headers.invalid` |
-| `requestBody(id)` | STRING | `http.requestBody.id`, `http.requestBody.memory` |
-| `requestBody(id, body)` | — | `http.requestBody.args` |
-| `json(id, value)` | — | `http.json.args`, `http.json.memory`, `http.json.serialize`, `http.json.content_type` |
-| `timeout(id, milliseconds)` | — | `http.timeout.args`, `http.timeout.range` |
-| `maxBody(id, bytes)` | — | `http.maxBody.args`, `http.maxBody.range` |
-| `send(id)` | — | `http.send.id` |
-| `status(id)` | NUMBER | `http.status.id`, `http.status.not_sent` |
-| `responseBody(id)` | STRING | `http.responseBody.id`, `http.responseBody.not_sent`, `http.responseBody.memory` |
-| `responseHeaders(id)` | OBJECT | `http.responseHeaders.id`, `http.responseHeaders.not_sent`, `http.responseHeaders.memory` |
-| `error(id)` | STRING | `http.error.id`, `http.error.not_sent`, `http.error.memory` |
-| `errorCode(id)` | NUMBER | `http.errorCode.id`, `http.errorCode.not_sent` |
-| `transportOk(id)` | — | `http.transportOk.id`, `http.transportOk.not_sent`, `http.transport.*` |
-| `statusOk(id)` | — | `http.statusOk.id`, `http.statusOk.not_sent`, `http.status.*` |
-| `requestInfo(id)` | OBJECT | `http.requestInfo.id`, `http.requestInfo.args`, `http.requestInfo.memory` |
-| `responseInfo(id)` | OBJECT | `http.responseInfo.id`, `http.responseInfo.args`, `http.responseInfo.not_sent`, `http.responseInfo.memory` |
-| `close(id)` | — | `http.close.id` |
-
-`*` labels for `transportOk` / `statusOk` are listed in the assert sections above.
-
----
-
-### `http.create(method, url)`
-
-Allocates a request resource and returns its numeric **id**. Supported methods include `GET`, `HEAD`, `POST`, `PUT`, `PATCH`, and `DELETE`. Only `http://` and `https://` URLs are accepted by the transport. Defaults: timeout **10s**, max response body **8 MiB**. At most **16** live requests per VM run (`http.create.limit`).
-
-```flat
-req = http.create("GET", "https://api.example.com/users")
-```
-
-### `http.header(id, name, value)`
-
-Appends one request header. Names are normalized to lowercase; values are preserved. Repeated names are allowed (multi-value headers).
-
-```flat
-http.header(req, "Accept", "application/json")
-http.header(req, "X-Trace", "first")
-http.header(req, "X-Trace", "second")
-```
-
-### `http.headers(id, object)`
-
-Replaces **all** request headers. The object maps each name to a LIST of STRING values. A STRING value for an entry is treated as a one-element list.
-
-```flat
-headers = {
-  "Accept": ["application/json"],
-  "Cache-Control": ["no-cache", "no-store"]
-}
-http.headers(req, headers)
-```
-
-### `http.requestBody(id)` / `http.requestBody(id, body)`
-
-With one argument: returns the current **request** body as STRING (empty when none). With two arguments: sets a raw STRING request body and clears the `sent` flag so the request can be sent again. Prefer `http.json` when the payload should be JSON.
-
-```flat
-http.header(req, "Content-Type", "text/plain")
-http.requestBody(req, "hello")
-raw = http.requestBody(req)
-```
-
-### `http.json(id, value)`
-
-Serializes `value` with the FlatL JSON serializer into the request body and adds `content-type: application/json` unless that header was already set.
-
-```flat
-payload = {"name": "FlatL", "active": true}
-http.json(req, payload)
-```
-
-### `http.timeout(id, milliseconds)`
-
-Sets the request timeout. Valid range: **1 … 600000** ms (10 minutes).
-
-```flat
-http.timeout(req, 15000)
-```
-
-### `http.maxBody(id, bytes)`
-
-Sets the maximum response body size for this request (up to the FlatL string-pool chunk limit). Overflow is reported as a transport error (typically code `23` → `http.transport.overflow` via `transportOk`).
-
-```flat
-http.maxBody(req, 1048576)
-```
-
-### `http.send(id)`
-
-Performs the request synchronously. Never panics on HTTP 4xx/5xx or on transport failure — inspect `status` / `errorCode` / `error`, or call `transportOk` / `statusOk` afterward. Redirects are followed (bounded).
-
-```flat
-http.send(req)
-```
-
-### `http.status(id)`
-
-Returns the HTTP status code after `send`. Returns `0` when no HTTP response was received (e.g. transport failure). Requires `send` first (`http.status.not_sent`).
-
-```flat
-code = http.status(req)
-```
-
-### `http.responseBody(id)`
-
-Returns the **response** body as STRING (STRING REF for larger bodies). Independent of request resource lifetime after the value is returned. Requires `send` (`http.responseBody.not_sent`).
-
-```flat
-body = http.responseBody(req)
-```
-
-### `http.responseHeaders(id)`
-
-Returns an OBJECT mapping lowercase header names to LIST of STRING values. Repeated headers are preserved when exposed by the transport. Requires `send`.
-
-```flat
-use native obj
-rh = http.responseHeaders(req)
-obj.get(rh, '"content-type"') -> cts
-```
-
-### `http.error(id)` / `http.errorCode(id)`
-
-Transport diagnostics after `send`. `errorCode` is `0` when there was no transport error; `error` is then an empty STRING. HTTP 404/500 are **not** transport errors.
-
-```flat
-msg = http.error(req)
-code = http.errorCode(req)
-```
-
-### `http.transportOk(id)`
-
-After `send`, panics if `errorCode != 0`. Panic labels: `http.transport.timeout`, `.overflow`, `.memory`, `.connect`, `.tls`, `.other`. Before `send`: `http.transportOk.not_sent`.
-
-```flat
-http.send(req)
-http.transportOk(req)
-```
-
-### `http.statusOk(id)`
-
-After `send`, requires a final HTTP **2xx** status. Panic labels include `http.status.not_found` (404), `.unauthorized` (401), `.forbidden` (403), `.conflict` (409), `.server_error` (5xx), `.redirect` (final 3xx), `.client_error` (other 4xx), `.other`. Before `send`: `http.statusOk.not_sent`.
-
-```flat
-http.send(req)
-http.transportOk(req)
-http.statusOk(req)
-```
-
-### `http.requestInfo(id)`
-
-Returns an OBJECT snapshot of the live request (no body bytes). Keys: `method`, `url`, `headers`, `timeoutMs`, `maxBody`, `sent`, `bodyLen`. Available before or after `send`.
-
-```flat
-use native obj
-info = http.requestInfo(req)
-obj.get(info, '"method"') -> method
-obj.get(info, '"bodyLen"') -> n
-```
-
-### `http.responseInfo(id)`
-
-Returns an OBJECT snapshot of the response (no body bytes). Keys: `status`, `headers`, `error`, `errorCode`, `bodyLen`. Requires `send` (`http.responseInfo.not_sent`).
-
-```flat
-use native obj
-info = http.responseInfo(req)
-obj.get(info, '"status"') -> status
-obj.get(info, '"bodyLen"') -> n
-if n > 0
-  body = http.responseBody(req)
-```
-
-### `http.close(id)`
-
-Releases the request slot and its transport buffers. A STRING already returned by `requestBody` / `responseBody` remains valid under normal FlatL value ownership. `mem.infoResId(id, 'http')` becomes `unknown` after close.
-
-```flat
-http.close(req)
-```
-
-### Minimal end-to-end example
-
-```flat
-req = http.create("GET", "https://jsonplaceholder.typicode.com/todos/1")
-http.timeout(req, 15000)
-http.send(req)
-http.transportOk(req)
-http.statusOk(req)
-io.outln(http.status(req))
-io.outln(http.responseBody(req))
-http.close(req)
-```
-
-Runnable samples: [`examples/http_get.fl`](../../examples/http_get.fl), [`examples/http_post.fl`](../../examples/http_post.fl).
-
