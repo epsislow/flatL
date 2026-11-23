@@ -1,5 +1,5 @@
-# Minimal HTTPS GET — works with native flvm/flatl (libcurl) and fleditor WASM.
-# Uses a public JSON demo API that allows browser CORS.
+-- Minimal HTTPS GET — works with native flvm/flatl (libcurl) and fleditor WASM.
+-- Uses a public JSON demo API that allows browser CORS.
 use native http
 #main
   req = http.create('GET', 'https://jsonplaceholder.typicode.com/todos/1')

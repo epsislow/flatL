@@ -1,5 +1,5 @@
-# Minimal HTTPS POST + JSON body — native (libcurl) and fleditor (WASM Fetch).
-# Uses a public JSON demo API that allows browser CORS.
+-- Minimal HTTPS POST + JSON body — native (libcurl) and fleditor (WASM Fetch).
+-- Uses a public JSON demo API that allows browser CORS.
 use native http
 #main
   req = http.create('POST', 'https://jsonplaceholder.typicode.com/posts')
