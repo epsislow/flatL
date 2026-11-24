@@ -19,7 +19,18 @@ make rebuild      # clean + all (+ fleditor-wasm if emcc on PATH)
 make V=1 rebuild  # same, but print full compiler / tool command lines
 ```
 
-By default Make is **quiet**: it prints a `recipe:` line (module flags) and one `OK`/`SKIP` line per step. Pass **`V=1`** for classic verbose command echo.
+By default Make is **quiet**: it prints a `recipe:` line and one `OK`/`SKIP` line per step. Pass **`V=1`** for classic verbose command echo.
+
+**Recipe marks** (disabled optional modules are omitted from the list):
+
+| Mark | Meaning | Examples |
+|------|---------|----------|
+| **`name+`** | Bundled / in-tree sources compiled into the binary | `dom+` (`dom_compile=1`), `re+` (`re_compile=1`), `enc+`, `hash+` |
+| **`name*`** | Linked against a **system** library | `dom*` (`dom=1 dom_compile=0`), `re*` (`re=1 re_compile=0`), `http*` (libcurl) |
+| bare name | Optional module with no third-party link mode | `env`, `path`, `fs` |
+| `(none)` | All listed optionals are off | `make rebuild http=0 dom_compile=0 …` |
+
+Default quiet line looks like: `recipe: http*,dom+,env,path,fs,enc+,re+,hash+`.
 
 ### Optional modules (`http=0`, `dom_compile=0`)
 

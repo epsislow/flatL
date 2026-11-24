@@ -93,15 +93,21 @@ ifneq ($(V),1)
 MAKEFLAGS += -s --no-print-directory
 endif
 
-_mod_http := $(if $(filter 1,$(http)),http,no-http)
-_mod_dom := $(if $(filter 1,$(dom)),$(if $(filter 1,$(dom_compile)),dom,dom-sys),no-dom)
-_mod_env := $(if $(filter 1,$(env)),env,no-env)
-_mod_path := $(if $(filter 1,$(path)),path,no-path)
-_mod_fs := $(if $(filter 1,$(fs)),fs,no-fs)
-_mod_enc := $(if $(filter 1,$(enc)),enc,no-enc)
-_mod_re := $(if $(filter 1,$(re)),$(if $(filter 1,$(re_compile)),re,re-sys),no-re)
-_mod_hash := $(if $(filter 1,$(hash)),hash,no-hash)
-RECIPE := $(_mod_http),$(_mod_dom),$(_mod_env),$(_mod_path),$(_mod_fs),$(_mod_enc),$(_mod_re),$(_mod_hash)
+# Recipe marks: name+ = bundled / in-tree sources; name* = system library link;
+# bare name = optional with no third-party link mode. Disabled modules are omitted.
+empty :=
+space := $(empty) $(empty)
+comma := ,
+_mod_http := $(if $(filter 1,$(http)),http*)
+_mod_dom := $(if $(filter 1,$(dom)),$(if $(filter 1,$(dom_compile)),dom+,dom*))
+_mod_env := $(if $(filter 1,$(env)),env)
+_mod_path := $(if $(filter 1,$(path)),path)
+_mod_fs := $(if $(filter 1,$(fs)),fs)
+_mod_enc := $(if $(filter 1,$(enc)),enc+)
+_mod_re := $(if $(filter 1,$(re)),$(if $(filter 1,$(re_compile)),re+,re*))
+_mod_hash := $(if $(filter 1,$(hash)),hash+)
+RECIPE_TOKENS := $(strip $(_mod_http) $(_mod_dom) $(_mod_env) $(_mod_path) $(_mod_fs) $(_mod_enc) $(_mod_re) $(_mod_hash))
+RECIPE := $(if $(RECIPE_TOKENS),$(subst $(space),$(comma),$(RECIPE_TOKENS)),(none))
 
 # Recurse with the same feature flags + verbosity.
 MAKE_REC = $(MAKE) V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
@@ -286,6 +292,7 @@ help:
 	@echo "Verbosity:"
 	@echo "  make / make rebuild     quiet progress (recipe + OK/SKIP steps)"
 	@echo "  make V=1 …              show full compiler / tool command lines"
+	@echo "  recipe marks: name+ bundled/in-tree, name* system lib, bare=no link mode"
 	@echo ""
 	@echo "Optional modules (pass on the same make line; lowercase):"
 	@echo "  http=0            build without native http / libcurl"
