@@ -9,6 +9,9 @@
 
 #define PCRE2_CODE_UNIT_WIDTH 8
 #ifdef FLAT_RE_BUNDLED
+#ifndef PCRE2_STATIC
+#define PCRE2_STATIC
+#endif
 #include "../../external/pcre2/pcre2.h"
 #else
 #include <pcre2.h>

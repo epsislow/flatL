@@ -2,6 +2,9 @@
 #ifdef FLAT_RE_BUNDLED
 #define PCRE2_CODE_UNIT_WIDTH 8
 #define HAVE_CONFIG_H
+#ifndef PCRE2_STATIC
+#define PCRE2_STATIC
+#endif
 #if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

@@ -67,7 +67,9 @@ else
 CFLAGS += -DFLAT_WITH_RE=1
 ifeq ($(re_compile),1)
 RE_SRC = src/lib/mod_re.c src/lib/flat_re_pcre2.c
-RE_CFLAGS = -DFLAT_RE_BUNDLED
+# PCRE2_STATIC: required on Windows so pcre2.h does not use __declspec(dllimport)
+# (__imp_pcre2_* undefined when the library is compiled into the binary).
+RE_CFLAGS = -DFLAT_RE_BUNDLED -DPCRE2_STATIC
 RE_LIBS =
 else
 RE_SRC = src/lib/mod_re.c
@@ -129,10 +131,13 @@ endif
 
 # MinGW default stack (~1MB) is too small for current flvm/flatl on Windows:
 # STATUS_STACK_OVERFLOW (0xC00000FD) is reported by MSYS2 as exit 127.
+# --export-dynamic is ELF-only; PE ld warns and ignores it.
 ifeq ($(OS),Windows_NT)
 FLC_LDFLAGS ?= -Wl,--stack,8388608
+EXPORT_DYNAMIC =
 else
 FLC_LDFLAGS ?=
+EXPORT_DYNAMIC = -Wl,--export-dynamic
 endif
 
 BINDIR  = bin
@@ -429,7 +434,7 @@ ensure-libz-1:
 
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
 	@$(call step_begin,flvm)
-	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -Wl,--export-dynamic $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 	@$(call step_end)
 
 $(BINDIR)/libflat_math_trig.so: $(PLUGIN_TRIG_SRCS) | $(BINDIR)
@@ -479,7 +484,7 @@ $(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
 	@$(call step_begin,flatl)
-	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -Wl,--export-dynamic $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 	@$(call step_end)
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_TOOL_SRC) | $(BINDIR)
