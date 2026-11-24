@@ -25,5 +25,9 @@ void flat_port_path_to_native(char *path);
 void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap);
 /* MinGW/MSVC: set stdio text mode so piped stdin has LF line ends (matches POSIX tests). */
 void flat_port_stdio_setup(void);
+/* Resolve node/node.exe from PATH only (process PATH, plus Windows Path env on Win32).
+ * Writes a slash-normalized path suitable for sh (quote it if it contains spaces).
+ * Returns 0 on success, -1 if not found. */
+int flat_port_resolve_node(char *out, size_t out_size);
 
 #endif

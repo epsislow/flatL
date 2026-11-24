@@ -33,14 +33,20 @@ for c in /usr/bin/node /usr/bin/nodejs; do
 done
 
 find_win_node() {
-  for w in \
-    "/mnt/c/Program Files/nodejs/node.exe" \
-    "/mnt/c/Program Files (x86)/nodejs/node.exe"; do
-    if [ -f "$w" ]; then
-      printf '%s\n' "$w"
-      return 0
-    fi
-  done
+  # PATH only — no hardcoded Program Files probes.
+  if command -v node.exe >/dev/null 2>&1; then
+    command -v node.exe
+    return 0
+  fi
+  if command -v node >/dev/null 2>&1; then
+    command -v node
+    return 0
+  fi
+  w=$(cmd //c "where node" 2>/dev/null | tr -d '\r' | head -n1)
+  if [ -n "$w" ]; then
+    printf '%s\n' "$w"
+    return 0
+  fi
   return 1
 }
 

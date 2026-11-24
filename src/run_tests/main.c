@@ -771,7 +771,27 @@ int main(int argc, char **argv) {
             }
 
             captured_output[0] = '\0';
-            ok = flat_case_run_ex(c, repo, use_flatl, &run_opts, &timing, err, sizeof err) == 0;
+            {
+                int run_rc =
+                    flat_case_run_ex(c, repo, use_flatl, &run_opts, &timing, err, sizeof err);
+                if (run_rc == -2) {
+                    skipped++;
+                    progress.run++;
+                    if (each) {
+                        printf("  #%d (%d/%d) %s\n  %ss%s  %s\n", c->id, progress.run,
+                               progress.total, c->desc, ANSI_YELLOW, ANSI_RESET, err);
+                    } else {
+                        printf("%ss%s", ANSI_YELLOW, ANSI_RESET);
+                        progress.chars_on_line++;
+                        if (progress.chars_on_line >= progress.width) {
+                            progress_finish_line(&progress);
+                        }
+                    }
+                    fflush(stdout);
+                    continue;
+                }
+                ok = run_rc == 0;
+            }
             if (ok) {
                 passed++;
             } else {

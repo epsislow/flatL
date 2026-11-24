@@ -431,44 +431,19 @@ static void inject_tool_time(char *cmd, size_t cap) {
     replace_token(cmd, cap, "/bin/flatl.exe run ", "/bin/flatl.exe run --time ");
 }
 
-static void inject_http_mock(char *cmd, size_t cap, const FlatCase *c) {
-    char path[FLAT_CASE_MAX_PATH * 2];
-    char prefix[FLAT_CASE_MAX_PATH * 2 + 64];
-    char original[FLAT_CASE_MAX_CMD];
-    if (!cmd || !c || !c->http_mock_enabled || !c->case_dir[0]) return;
-    snprintf(path, sizeof path, "%s/case.toml", c->case_dir);
-    flat_port_path_to_native(path);
-    snprintf(original, sizeof original, "%s", cmd);
-#ifdef _WIN32
-    snprintf(prefix, sizeof prefix, "set \"FLAT_HTTP_MOCK_FILE=%s\" && ", path);
-#else
-    {
-        size_t i, o = 0;
-        o += (size_t)snprintf(prefix + o, sizeof prefix - o, "FLAT_HTTP_MOCK_FILE='");
-        for (i = 0; path[i] && o + 5 < sizeof prefix; ++i) {
-            if (path[i] == '\'') { prefix[o++]='\\'; prefix[o++]='\''; }
-            else prefix[o++]=path[i];
-        }
-        prefix[o++]='\''; prefix[o++]=' '; prefix[o]='\0';
-    }
-#endif
-    snprintf(cmd, cap, "%s%s", prefix, original);
-}
-
 static void append_shell_env_assign(char *prefix, size_t cap, size_t *o, const char *key,
                                     const char *val) {
     size_t i;
     if (!prefix || !o || !key || !key[0]) return;
-#ifdef _WIN32
-    (void)i;
-    *o += (size_t)snprintf(prefix + *o, cap > *o ? cap - *o : 0, "set \"%s=%s\" && ", key,
-                           val ? val : "");
-#else
+    /* Always POSIX: flat_port_shell_capture runs via sh even on Windows (not cmd.exe). */
     *o += (size_t)snprintf(prefix + *o, cap > *o ? cap - *o : 0, "%s='", key);
     for (i = 0; val && val[i] && *o + 5 < cap; ++i) {
         if (val[i] == '\'') {
             prefix[(*o)++] = '\\';
             prefix[(*o)++] = '\'';
+        } else if (val[i] == '\\') {
+            /* Prefer forward slashes in values that may be Windows paths. */
+            prefix[(*o)++] = '/';
         } else {
             prefix[(*o)++] = val[i];
         }
@@ -478,7 +453,29 @@ static void append_shell_env_assign(char *prefix, size_t cap, size_t *o, const c
         prefix[(*o)++] = ' ';
         prefix[*o] = '\0';
     }
-#endif
+}
+
+static void inject_http_mock(char *cmd, size_t cap, const FlatCase *c) {
+    char path[FLAT_CASE_MAX_PATH * 2];
+    char prefix[FLAT_CASE_MAX_PATH * 2 + 64];
+    char original[FLAT_CASE_MAX_CMD];
+    size_t o = 0;
+    if (!cmd || !c || !c->http_mock_enabled || !c->case_dir[0]) return;
+    snprintf(path, sizeof path, "%s/case.toml", c->case_dir);
+    /* Keep slash form for sh; do not force Windows backslashes. */
+    {
+        char *p;
+        for (p = path; *p; p++) {
+            if (*p == '\\') {
+                *p = '/';
+            }
+        }
+    }
+    snprintf(original, sizeof original, "%s", cmd);
+    prefix[0] = '\0';
+    append_shell_env_assign(prefix, sizeof prefix, &o, "FLAT_HTTP_MOCK_FILE", path);
+    if (!prefix[0]) return;
+    snprintf(cmd, cap, "%s%s", prefix, original);
 }
 
 static void inject_case_env(char *cmd, size_t cap, const FlatCase *c) {
@@ -612,6 +609,25 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         double exec_ms = 0.0;
 
         expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
+        /* Optional Node-based cases: resolve node/node.exe (incl. Windows Program Files). */
+        if (strncmp(cmd, "node ", 5) == 0 || strncmp(cmd, "node.exe ", 9) == 0) {
+            char node_bin[FLAT_PORT_PATH_MAX];
+            char rewritten[FLAT_CASE_MAX_CMD];
+            const char *rest = (strncmp(cmd, "node.exe ", 9) == 0) ? cmd + 9 : cmd + 5;
+            if (flat_port_resolve_node(node_bin, sizeof node_bin) != 0) {
+                snprintf(err, (size_t)err_size, "skip: node not on PATH");
+                timing_finish(timing, t_case, measure);
+                return -2;
+            }
+            /* Quote path: "Program Files" etc. must stay one argv for sh. */
+            if (snprintf(rewritten, sizeof rewritten, "'%s' %s", node_bin, rest) >=
+                (int)sizeof rewritten) {
+                snprintf(err, (size_t)err_size, "node cmd too long");
+                timing_finish(timing, t_case, measure);
+                return -1;
+            }
+            snprintf(cmd, sizeof cmd, "%s", rewritten);
+        }
         inject_http_mock(cmd, sizeof cmd, c);
         inject_case_env(cmd, sizeof cmd, c);
         if (inject) {

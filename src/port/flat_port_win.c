@@ -400,8 +400,14 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
         return -1;
     }
 
-    /* Ensure printf(1) / shell and child parse numbers with '.' regardless of host locale. */
-    if (snprintf(prefixed, sizeof prefixed, "export LC_ALL=C; %s", cmd) >= (int)sizeof prefixed) {
+    /*
+     * LC_ALL=C: stable printf / number parsing.
+     * MSYS2_ARG_CONV_EXCL / MSYS_NO_PATHCONV: stop MSYS from rewriting args like
+     * `--path-sep /` into a Windows path (which made flvm exit 2 / usage).
+     */
+    if (snprintf(prefixed, sizeof prefixed,
+                 "export LC_ALL=C; export MSYS2_ARG_CONV_EXCL='*'; export MSYS_NO_PATHCONV=1; %s",
+                 cmd) >= (int)sizeof prefixed) {
         return -1;
     }
 
@@ -472,7 +478,13 @@ static void replace_token(char *cmd, size_t cap, const char *from, const char *t
     }
 }
 
-/* Turn Windows path backslashes into '/' for sh, but not inside '…' (e.g. printf '3.5\n'). */
+/*
+ * Turn Windows path backslashes into '/' for sh.
+ * Outside quotes: all '\' → '/'.
+ * Inside single quotes: keep printf escapes (\n \t \r \\ \') but convert path
+ * separators. Drive paths like D:\foo and segments like \flatL must become /,
+ * otherwise sh -c 'D:\w\...\flatL\bin\flc' collapses to D:w...binflc (exit 127).
+ */
 static void win_paths_to_posix_slashes_outside_quotes(char *cmd) {
     int in_sq = 0;
     char *p;
@@ -481,10 +493,44 @@ static void win_paths_to_posix_slashes_outside_quotes(char *cmd) {
             in_sq = !in_sq;
             continue;
         }
-        if (!in_sq && *p == '\\') {
-            *p = '/';
+        if (*p != '\\') {
+            continue;
         }
+        if (!in_sq) {
+            *p = '/';
+            continue;
+        }
+        /* Inside '...': preserve only common printf / shell escapes. */
+        if (p[1] == 'n' || p[1] == 't' || p[1] == 'r' || p[1] == '\\' || p[1] == '\'') {
+            continue;
+        }
+        *p = '/';
     }
+}
+
+/* case.toml often wraps with sh -c '...'; we already run via sh — unwrap to fix paths. */
+static void unwrap_redundant_sh_c(char *cmd, size_t cmd_cap) {
+    char *body;
+    char *end;
+    size_t len;
+    (void)cmd_cap;
+    if (!cmd) {
+        return;
+    }
+    if (strncmp(cmd, "sh -c '", 7) == 0) {
+        body = cmd + 7;
+    } else if (strncmp(cmd, "sh.exe -c '", 11) == 0) {
+        body = cmd + 11;
+    } else {
+        return;
+    }
+    len = strlen(body);
+    if (len < 2 || body[len - 1] != '\'') {
+        return;
+    }
+    end = body + len - 1;
+    *end = '\0';
+    memmove(cmd, body, (size_t)(end - body) + 1);
 }
 
 /*
@@ -534,16 +580,134 @@ void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
      * in Windows paths are treated as shell escapes (e.g. D:\w\...\bin\flc.exe
      * becomes D:w...binflc.exe and exits 127). Forward slashes work for Win32
      * APIs and our tools, so normalize path segments for the POSIX shell.
-     * Do not rewrite '\' inside single-quoted literals (printf '...\n').
+     * Preserve printf escapes like \n inside single quotes.
      */
+    unwrap_redundant_sh_c(cmd, cmd_cap);
     win_paths_to_posix_slashes_outside_quotes(cmd);
     rewrite_empty_printf_pipe(cmd, cmd_cap);
     replace_token(cmd, cmd_cap, "\\bin\\flc ", "\\bin\\flc.exe ");
     replace_token(cmd, cmd_cap, "\\bin\\flvm ", "\\bin\\flvm.exe ");
+    replace_token(cmd, cmd_cap, "\\bin\\fbdump ", "\\bin\\fbdump.exe ");
     replace_token(cmd, cmd_cap, "/bin/flc ", "/bin/flc.exe ");
     replace_token(cmd, cmd_cap, "/bin/flvm ", "/bin/flvm.exe ");
+    replace_token(cmd, cmd_cap, "/bin/fbdump ", "/bin/fbdump.exe ");
     replace_token(cmd, cmd_cap, "\\bin\\flatl ", "\\bin\\flatl.exe ");
     replace_token(cmd, cmd_cap, "/bin/flatl ", "/bin/flatl.exe ");
+}
+
+static int node_from_dir(const char *dir, char *out, size_t out_size) {
+    char cand[FLAT_PORT_PATH_MAX];
+    char *p;
+    size_t n;
+    static const char *const names[] = {"node.exe", "node"};
+    size_t i;
+
+    if (!dir || !dir[0] || !out || out_size == 0) {
+        return -1;
+    }
+    n = strlen(dir);
+    while (n > 0 && (dir[n - 1] == '\\' || dir[n - 1] == '/' || dir[n - 1] == '"')) {
+        n--;
+    }
+    if (n == 0 || n + 12 >= sizeof cand) {
+        return -1;
+    }
+    for (i = 0; i < sizeof names / sizeof names[0]; i++) {
+        if (snprintf(cand, sizeof cand, "%.*s/%s", (int)n, dir, names[i]) >= (int)sizeof cand) {
+            continue;
+        }
+        for (p = cand; *p; p++) {
+            if (*p == '\\') {
+                *p = '/';
+            }
+        }
+        if (flat_port_path_exists(cand)) {
+            if (snprintf(out, out_size, "%s", cand) >= (int)out_size) {
+                return -1;
+            }
+            return 0;
+        }
+    }
+    return -1;
+}
+
+/* Walk a PATH-like list (sep ':' and/or ';'). Does not invent install dirs. */
+static int node_from_path_list(const char *path_list, char *out, size_t out_size) {
+    char buf[32768];
+    char *p;
+    char *start;
+
+    if (!path_list || !path_list[0]) {
+        return -1;
+    }
+    if (snprintf(buf, sizeof buf, "%s", path_list) >= (int)sizeof buf) {
+        return -1;
+    }
+    start = buf;
+    for (p = buf;; p++) {
+        if (*p == ';' || *p == ':' || *p == '\0') {
+            char save = *p;
+            int is_end = (*p == '\0');
+            /* Skip drive-letter false splits: "D:/foo" must stay one entry when sep is ':'. */
+            if (*p == ':' && p == start + 1 &&
+                ((start[0] >= 'A' && start[0] <= 'Z') || (start[0] >= 'a' && start[0] <= 'z'))) {
+                if (!is_end) {
+                    continue;
+                }
+            }
+            *p = '\0';
+            if (start[0] && node_from_dir(start, out, out_size) == 0) {
+                return 0;
+            }
+            if (is_end) {
+                break;
+            }
+            *p = save;
+            start = p + 1;
+        }
+    }
+    return -1;
+}
+
+static int read_win_path_env(HKEY root, const char *subkey, char *buf, DWORD buf_sz) {
+    DWORD n = buf_sz;
+    DWORD type = 0;
+    if (RegGetValueA(root, subkey, "Path", RRF_RT_REG_SZ | RRF_RT_REG_EXPAND_SZ, &type, buf, &n) !=
+        ERROR_SUCCESS) {
+        return -1;
+    }
+    return 0;
+}
+
+int flat_port_resolve_node(char *out, size_t out_size) {
+    char winpath[32768];
+    const char *env;
+
+    if (!out || out_size == 0) {
+        return -1;
+    }
+    out[0] = '\0';
+
+    env = getenv("PATH");
+    if (env && node_from_path_list(env, out, out_size) == 0) {
+        return 0;
+    }
+    /* MSYS login shells often use a minimal PATH; still honour the real Windows Path. */
+    winpath[0] = '\0';
+    if (read_win_path_env(HKEY_CURRENT_USER, "Environment", winpath, (DWORD)sizeof winpath) == 0) {
+        if (node_from_path_list(winpath, out, out_size) == 0) {
+            return 0;
+        }
+    }
+    winpath[0] = '\0';
+    if (read_win_path_env(HKEY_LOCAL_MACHINE,
+                          "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
+                          winpath, (DWORD)sizeof winpath) == 0) {
+        if (node_from_path_list(winpath, out, out_size) == 0) {
+            return 0;
+        }
+    }
+    return -1;
 }
 
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx) {

@@ -228,6 +228,30 @@ void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
     (void)cmd_cap;
 }
 
+int flat_port_resolve_node(char *out, size_t out_size) {
+    int code = 1;
+    char buf[FLAT_PORT_PATH_MAX];
+    char *nl;
+
+    if (!out || out_size == 0) {
+        return -1;
+    }
+    out[0] = '\0';
+
+    if (flat_port_shell_capture("command -v node 2>/dev/null", &code, buf, (int)sizeof buf) == 0 &&
+        code == 0 && buf[0]) {
+        nl = strchr(buf, '\n');
+        if (nl) {
+            *nl = '\0';
+        }
+        if (snprintf(out, out_size, "%s", buf) < (int)out_size) {
+            return 0;
+        }
+        return -1;
+    }
+    return -1;
+}
+
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx) {
     DIR *d;
     struct dirent *de;

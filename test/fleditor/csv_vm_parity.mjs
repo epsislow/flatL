@@ -11,8 +11,14 @@ import { execSync } from 'child_process';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const examplesDir = path.join(repo, 'docs/fleditor_site/examples');
-const flc = path.join(repo, 'bin/flc');
-const flvm = path.join(repo, 'bin/flvm');
+function binTool(name) {
+  const base = path.join(repo, 'bin', name);
+  if (fs.existsSync(base)) return base;
+  if (fs.existsSync(base + '.exe')) return base + '.exe';
+  return base;
+}
+const flc = binTool('flc');
+const flvm = binTool('flvm');
 const parityFl = path.join(repo, 'test/fleditor/csv_vm_parity.fl');
 
 const require = createRequire(import.meta.url);

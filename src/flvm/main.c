@@ -97,6 +97,13 @@ int main(int argc, char **argv) {
             }
             continue;
         }
+        if (strncmp(argv[i], "--path-sep=", 11) == 0) {
+            if (flat_path_sep_set_str(argv[i] + 11) != 0) {
+                fprintf(stderr, "flvm: invalid --path-sep (expected / or \\)\n");
+                return 2;
+            }
+            continue;
+        }
         if (strcmp(argv[i], "--path-sep") == 0) {
             if (i + 1 >= argc) {
                 return usage(argv[0]);

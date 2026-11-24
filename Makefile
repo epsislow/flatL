@@ -42,12 +42,17 @@ ifeq ($(fs),0)
 CFLAGS += -DFLAT_WITH_FS=0
 endif
 
-# Optional: FLC_LDFLAGS=-Wl,--stack,8388608 if an old flc ever overflows stack (heap IR is default).
+# MinGW default stack (~1MB) is too small for current flvm/flatl on Windows:
+# STATUS_STACK_OVERFLOW (0xC00000FD) is reported by MSYS2 as exit 127.
+ifeq ($(OS),Windows_NT)
+FLC_LDFLAGS ?= -Wl,--stack,8388608
+else
 FLC_LDFLAGS ?=
+endif
 
 BINDIR  = bin
 ifeq ($(OS),Windows_NT)
-EXEEXT = .exe
+    EXEEXT = .exe
 PORT_SRC = src/port/flat_port_win.c
 else
 EXEEXT =
@@ -98,10 +103,19 @@ ifeq ($(http),0)
 HTTP_SRC =
 HTTP_CFLAGS =
 HTTP_LIBS =
+ENSURE_LIBZ_1 =
 else
 HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c src/common/flat_enc.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
+# MSYS2 UCRT64: libcurl PE imports libz-1.dll; mingw zlib package ships zlib1.dll.
+ENSURE_LIBZ_1 =
+ifeq ($(MSYSTEM),UCRT64)
+ENSURE_LIBZ_1 = ensure-libz-1
+endif
+ifneq ($(findstring ucrt64,$(MINGW_PREFIX)),)
+ENSURE_LIBZ_1 = ensure-libz-1
+endif
 endif
 ifeq ($(env),0)
 ENV_SRC =
@@ -161,7 +175,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild
+.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild ensure-libz-1
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -295,8 +309,16 @@ fleditor-wasm-optional:
 fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
 
-$(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) -lm
+# Shim for MSYS2 UCRT64 curl↔zlib DLL name mismatch (safe no-op if already present).
+ensure-libz-1:
+	@zdir="$(or $(MINGW_PREFIX),/ucrt64)/bin"; \
+	if [ -f "$$zdir/zlib1.dll" ] && [ ! -e "$$zdir/libz-1.dll" ]; then \
+		(ln -sf zlib1.dll "$$zdir/libz-1.dll" 2>/dev/null) || cp -f "$$zdir/zlib1.dll" "$$zdir/libz-1.dll"; \
+		echo "OK: $$zdir/libz-1.dll -> zlib1.dll (MSYS2 UCRT64 curl shim)"; \
+	fi
+
+$(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
+	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) -lm
 
 $(BINDIR)/libflat_math_trig.so: $(PLUGIN_TRIG_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_TRIG_SRCS) $(LDFLAGS) -lm
@@ -325,7 +347,7 @@ $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(DISASM_SRC) $(POR
 $(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(FBDUMP_SRCS) $(LDFLAGS) -lm
 
-$(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
+$(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
 	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) -lm
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_TOOL_SRC) | $(BINDIR)
@@ -426,9 +448,13 @@ fleditor-node-check:
 	@/usr/bin/node --version 2>&1 || echo "FAIL: apt node does not run (common on WSL1 → Exec format error)"
 	@echo "=== Linux picker ==="
 	@sh "$(CURDIR)/scripts/fleditor_linux_node.sh" 2>/dev/null || echo "(none)"
-	@echo "=== Windows node.exe ==="
-	@ls "/mnt/c/Program Files/nodejs/node.exe" 2>/dev/null && \
-	  "/mnt/c/Program Files/nodejs/node.exe" --version 2>&1 || echo "(not found)"
+	@echo "=== PATH: command -v node / node.exe ==="
+	@command -v node 2>/dev/null && node --version 2>&1 || \
+	  command -v node.exe 2>/dev/null && node.exe --version 2>&1 || \
+	  echo "(not on MSYS PATH — cmd may still see it; try MSYS2_PATH_TYPE=inherit)"
+	@echo "=== Windows Path via where ==="
+	@cmd //c "where node" 2>/dev/null | tr -d '\r' | head -n1 | \
+	  { read -r w; if [ -n "$$w" ]; then echo "$$w"; cmd //c "node --version"; else echo "(not found)"; fi; }
 	@echo "OK: make fleditor-serve-forced (Linux node, else Windows node.exe + wslpath)"
 
 fleditor-serve:
