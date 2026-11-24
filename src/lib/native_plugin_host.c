@@ -138,6 +138,14 @@ static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_NEXT, flat_native_dom_next);
     flat_native_plugin_register(FLAT_NATIVE_DOM_PREV, flat_native_dom_prev);
     flat_native_plugin_register(FLAT_NATIVE_DOM_CLOSEST, flat_native_dom_closest);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_VALUE, flat_native_dom_value);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_DATA, flat_native_dom_data);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_INPUT_TYPE, flat_native_dom_input_type);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CHECKED, flat_native_dom_checked);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_DISABLED, flat_native_dom_disabled);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_REQUIRED, flat_native_dom_required);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_OPTIONS, flat_native_dom_options);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_SELECTED_OPTIONS, flat_native_dom_selected_options);
 }
 #endif
 

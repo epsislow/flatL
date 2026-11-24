@@ -723,3 +723,182 @@ done:
     if (rc != 0) return dom_fail(ctx, "dom.closest");
     return dom_ok(ctx);
 }
+
+/* Form-control inspection and data-* helpers. These expose the parsed HTML
+ * attributes/default state; there is no browser layout or live interaction. */
+static int dom_control_disabled(lxb_dom_node_t *node) {
+    lxb_dom_node_t *p;
+    if (!node || node->type != LXB_DOM_NODE_TYPE_ELEMENT) return 0;
+    if (dom_has_attr(node, "disabled")) return 1;
+    /* Disabled optgroups disable their option descendants. */
+    if (dom_node_named(node, "option")) {
+        for (p = node->parent; p; p = p->parent) {
+            if (dom_node_named(p, "optgroup")) return dom_has_attr(p, "disabled");
+            if (dom_node_named(p, "select")) break;
+        }
+    }
+    /* A disabled fieldset disables descendants, except descendants of its
+       first legend. */
+    for (p = node->parent; p; p = p->parent) {
+        if (dom_node_named(p, "fieldset") && dom_has_attr(p, "disabled")) {
+            lxb_dom_node_t *child;
+            for (child = p->first_child; child; child = child->next) {
+                if (dom_node_named(child, "legend")) {
+                    lxb_dom_node_t *a;
+                    for (a = node; a && a != p; a = a->parent) if (a == child) break;
+                    if (a == child) return 0;
+                    break;
+                }
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+static int dom_input_type_value(lxb_dom_node_t *node, char out[32]) {
+    const lxb_char_t *data = NULL; size_t len = 0, i, n;
+    if (!dom_node_named(node, "input")) return -1;
+    (void)dom_attr_value(node, "type", &data, &len);
+    if (!data || len == 0) { strcpy(out, "text"); return 0; }
+    n = len < 31 ? len : 31;
+    for (i = 0; i < n; ++i) out[i] = (char)tolower((unsigned char)data[i]);
+    out[n] = '\0';
+    return 0;
+}
+static int dom_option_list_walk(FlatNativeCtx *ctx, lxb_dom_node_t *root,
+                                uint32_t *list_id, int selected_only,
+                                int *has_selected, int *has_fallback,
+                                lxb_dom_node_t **fallback) {
+    lxb_dom_node_t *node;
+    for (node = root ? root->first_child : NULL; node; node = node->next) {
+        if (dom_node_named(node, "option")) {
+            int selected = dom_has_attr(node, "selected");
+            if (selected) *has_selected = 1;
+            if (!*has_fallback && !dom_control_disabled(node)) { *has_fallback = 1; *fallback = node; }
+            if (!selected_only || selected) {
+                FlatValue item; uint32_t next_id;
+                if (dom_node_result(ctx, node) != 0) return -1;
+                item = *ctx->out;
+                if (flat_list_push_copy(ctx->coll, ctx->pool, *list_id, &item, &next_id) != 0) return -1;
+                *list_id = next_id;
+            }
+        } else if (dom_option_list_walk(ctx, node, list_id, selected_only,
+                                        has_selected, has_fallback, fallback) != 0) return -1;
+    }
+    return 0;
+}
+static int dom_control_arg(FlatNativeCtx *ctx, char *buf, char **args, int wanted,
+                           lxb_dom_node_t **node) {
+    return dom_args(ctx, buf, args, wanted, wanted) == 0 &&
+           dom_node_ref(ctx, args[0], node) == 0 &&
+           (*node)->type == LXB_DOM_NODE_TYPE_ELEMENT ? 0 : -1;
+}
+int flat_native_dom_data(FlatNativeCtx *ctx) {
+    char buf[4096], *args[2], *name = NULL, attr[1029]; int argc;
+    size_t len = 0, i; lxb_dom_node_t *node; const lxb_char_t *value = NULL;
+    if (!ctx || !ctx->out) return dom_fail(ctx, "dom.data");
+    snprintf(buf, sizeof(buf), "%s", ctx->inner ? ctx->inner : "");
+    if (dom_split_args(buf, args, 2, &argc) != 0 || argc != 2 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &name, &len) != 0 || len == 0 || len > 1024) {
+        free(name); return dom_fail(ctx, "dom.data.args");
+    }
+    if (len >= 5 && memcmp(name, "data-", 5) == 0) snprintf(attr, sizeof(attr), "%s", name);
+    else snprintf(attr, sizeof(attr), "data-%s", name);
+    for (i = 0; attr[i]; ++i) attr[i] = (char)tolower((unsigned char)attr[i]);
+    (void)dom_attr_value(node, attr, &value, &len);
+    free(name);
+    if (dom_make_string(ctx, value, value ? len : 0) != 0) return dom_fail(ctx, "dom.data.alloc");
+    return dom_ok(ctx);
+}
+int flat_native_dom_input_type(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1], type[32]; lxb_dom_node_t *node;
+    if (!ctx || !ctx->out || dom_control_arg(ctx, buf, args, 1, &node) != 0 ||
+        dom_input_type_value(node, type) != 0) return dom_fail(ctx, "dom.inputType.args");
+    if (dom_make_string(ctx, (const lxb_char_t *)type, strlen(type)) != 0) return dom_fail(ctx, "dom.inputType");
+    return dom_ok(ctx);
+}
+int flat_native_dom_checked(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1], type[32]; lxb_dom_node_t *node;
+    if (!ctx || !ctx->out || dom_control_arg(ctx, buf, args, 1, &node) != 0 ||
+        dom_input_type_value(node, type) != 0 ||
+        (strcmp(type, "checkbox") != 0 && strcmp(type, "radio") != 0)) return dom_fail(ctx, "dom.checked.args");
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, dom_has_attr(node, "checked"));
+}
+int flat_native_dom_disabled(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node;
+    if (!ctx || !ctx->out || dom_control_arg(ctx, buf, args, 1, &node) != 0) return dom_fail(ctx, "dom.disabled.args");
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, dom_control_disabled(node));
+}
+int flat_native_dom_required(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node;
+    if (!ctx || !ctx->out || dom_control_arg(ctx, buf, args, 1, &node) != 0) return dom_fail(ctx, "dom.required.args");
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, dom_has_attr(node, "required"));
+}
+int flat_native_dom_options(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node, *fallback = NULL;
+    uint32_t list_id; int selected = 0, has_fallback = 0;
+    if (!ctx || !ctx->out || dom_control_arg(ctx, buf, args, 1, &node) != 0 || !dom_node_named(node, "select"))
+        return dom_fail(ctx, "dom.options.args");
+    if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0 ||
+        dom_option_list_walk(ctx, node, &list_id, 0, &selected, &has_fallback, &fallback) != 0)
+        return dom_fail(ctx, "dom.options");
+    return dom_ok(ctx) + flat_value_set_list(ctx->out, list_id);
+}
+int flat_native_dom_selected_options(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node, *fallback = NULL;
+    uint32_t list_id; int selected = 0, has_fallback = 0;
+    if (!ctx || !ctx->out || dom_control_arg(ctx, buf, args, 1, &node) != 0 || !dom_node_named(node, "select"))
+        return dom_fail(ctx, "dom.selectedOptions.args");
+    if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0 ||
+        dom_option_list_walk(ctx, node, &list_id, 1, &selected, &has_fallback, &fallback) != 0)
+        return dom_fail(ctx, "dom.selectedOptions");
+    if (!selected && !dom_has_attr(node, "multiple") && fallback) {
+        uint32_t next_id;
+        if (dom_node_result(ctx, fallback) != 0 ||
+            flat_list_push_copy(ctx->coll, ctx->pool, list_id, ctx->out, &next_id) != 0)
+            return dom_fail(ctx, "dom.selectedOptions");
+        list_id = next_id;
+    }
+    return dom_ok(ctx) + flat_value_set_list(ctx->out, list_id);
+}
+static lxb_dom_node_t *dom_find_option(lxb_dom_node_t *root, int selected_only) {
+    lxb_dom_node_t *node;
+    for (node = root ? root->first_child : NULL; node; node = node->next) {
+        if (dom_node_named(node, "option")) {
+            if ((!selected_only || dom_has_attr(node, "selected")) &&
+                (selected_only || !dom_control_disabled(node))) return node;
+        } else {
+            lxb_dom_node_t *found = dom_find_option(node, selected_only);
+            if (found) return found;
+        }
+    }
+    return NULL;
+}
+int flat_native_dom_value(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node, *option;
+    const lxb_char_t *data = NULL; size_t len = 0; FlatValue value;
+    if (!ctx || !ctx->out || dom_control_arg(ctx, buf, args, 1, &node) != 0)
+        return dom_fail(ctx, "dom.value.args");
+    if (dom_node_named(node, "textarea")) {
+        data = lxb_dom_node_text_content(node, &len);
+    } else if (dom_node_named(node, "select")) {
+        option = dom_find_option(node, 1);
+        if (!option) option = dom_find_option(node, 0);
+        if (option && dom_make_option_value(ctx, option, &value) != 0)
+            return dom_fail(ctx, "dom.value");
+        if (option) { *ctx->out = value; return dom_ok(ctx); }
+        return dom_ok(ctx) + flat_value_set_str_inline(ctx->out, "", 0);
+    } else if (dom_node_named(node, "input") || dom_node_named(node, "button")) {
+        (void)dom_attr_value(node, "value", &data, &len);
+        if (!data && dom_node_named(node, "input")) {
+            char type[32];
+            if (dom_input_type_value(node, type) == 0 &&
+                (strcmp(type, "checkbox") == 0 || strcmp(type, "radio") == 0)) {
+                data = (const lxb_char_t *)"on"; len = 2;
+            }
+        }
+    } else return dom_fail(ctx, "dom.value.type");
+    if (dom_make_string(ctx, data, data ? len : 0) != 0) return dom_fail(ctx, "dom.value.alloc");
+    return dom_ok(ctx);
+}

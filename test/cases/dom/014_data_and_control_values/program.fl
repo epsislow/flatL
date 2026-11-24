@@ -1,0 +1,38 @@
+use native dom
+use native list
+
+#main
+  html_a = '<main><article class="product'
+  html_b = ' featured" data-sku="A-42"'
+  html_c = ' data-stock="7"><input name="q"'
+  html_d = ' value="hello"><textarea name="note">'
+  html_e = 'some text</textarea><select name="country">'
+  html_f = '<option value="ro">Romania</option>'
+  html_g = '<option value="us" selected>USA</option>'
+  html_h = '</select></article></main>'
+  html = str.concat(html_a, html_b, html_c, html_d, html_e, html_f, html_g, html_h)
+  dom.parseHtml(html) -> page
+  dom.select(page, 'article.product') -> nodes
+  list.get(nodes, 0) -> product
+  dom.data(product, 'sku') == 'A-42'
+  dom.data(product, 'data-stock') == '7'
+  dom.data(product, 'missing') == ''
+  dom.select(product, 'input') -> inputs
+  list.get(inputs, 0) -> input
+  dom.value(input) == 'hello'
+  dom.inputType(input) == 'text'
+  dom.select(product, 'textarea') -> textareas
+  list.get(textareas, 0) -> textarea
+  dom.value(textarea) == 'some text'
+  dom.select(product, 'select') -> selects
+  list.get(selects, 0) -> select
+  dom.value(select) == 'us'
+  dom.options(select) -> options
+  list.len(options) == 2
+  dom.selectedOptions(select) -> selected
+  list.len(selected) == 1
+  list.get(selected, 0) -> selected_option
+  dom.text(selected_option) == 'USA'
+  dom.close(page)
+  io.outln('dom-data-values-ok')
+  OK

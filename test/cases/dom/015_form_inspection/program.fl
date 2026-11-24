@@ -1,0 +1,39 @@
+use native dom
+use native list
+
+#main
+  html_a = '<form><input type="checkbox" name="a" checked><input type="radio" name="b"><input type="email" name="mail" required>'
+  html_b = '<input name="locked" disabled><fieldset disabled><input name="inside"><legend><input name="legend"></legend></fieldset>'
+  html_c = '<select><optgroup disabled><option>Hidden</option></optgroup><option>Available</option></select></form>'
+  html = str.concat(html_a, html_b, html_c)
+  dom.parseHtml(html) -> page
+  dom.select(page, 'input[name="a"]') -> a_nodes
+  list.get(a_nodes, 0) -> a
+  dom.inputType(a) == 'checkbox'
+  dom.checked(a) == true
+  dom.value(a) == 'on'
+  dom.disabled(a) == false
+  dom.required(a) == false
+  dom.select(page, 'input[name="b"]') -> b_nodes
+  list.get(b_nodes, 0) -> b
+  dom.inputType(b) == 'radio'
+  dom.checked(b) == false
+  dom.select(page, 'input[name="mail"]') -> mail_nodes
+  list.get(mail_nodes, 0) -> mail
+  dom.inputType(mail) == 'email'
+  dom.required(mail) == true
+  dom.select(page, 'input[name="locked"]') -> locked_nodes
+  list.get(locked_nodes, 0) -> locked
+  dom.disabled(locked) == true
+  dom.select(page, 'input[name="inside"]') -> inside_nodes
+  list.get(inside_nodes, 0) -> inside
+  dom.disabled(inside) == true
+  dom.select(page, 'input[name="legend"]') -> legend_nodes
+  list.get(legend_nodes, 0) -> legend
+  dom.disabled(legend) == false
+  dom.select(page, 'option') -> options
+  list.get(options, 0) -> disabled_option
+  dom.disabled(disabled_option) == true
+  dom.close(page)
+  io.outln('dom-form-inspection-ok')
+  OK

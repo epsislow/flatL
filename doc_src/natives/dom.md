@@ -28,6 +28,14 @@ DOM is disabled by default. It is enabled at build time; see [Build](#build).
 | `children(node)` | LIST of NUMBER node handles | `dom.children` |
 | `next(node)` / `prev(node)` | NUMBER node handle or NULL | `dom.next` / `dom.prev` |
 | `closest(node, cssSelector)` | NUMBER node handle or NULL | `dom.closest` |
+| `value(control)` | STRING control value | `dom.value` |
+| `data(node, name)` | STRING `data-*` value (missing → `""`) | `dom.data` |
+| `inputType(input)` | STRING input type | `dom.inputType` |
+| `checked(input)` | BOOL | `dom.checked` |
+| `disabled(control)` | BOOL effective disabled state | `dom.disabled` |
+| `required(control)` | BOOL | `dom.required` |
+| `options(select)` | LIST of option node handles | `dom.options` |
+| `selectedOptions(select)` | LIST of selected option node handles | `dom.selectedOptions` |
 
 Document and node handles are numeric resources. A document owns every node handle obtained from it; `close(page)` invalidates all of them.
 
@@ -123,6 +131,46 @@ obj.get(fields, '"tag"') -> tags
 
 `formFields` accepts an element handle as its container; normally this is a `form` element selected from the document. It extracts values only; it does not submit the form.
 
+### Control values and data attributes
+
+`value(control)` reads the parsed value of an `input`, `textarea`, `select`, or `button`:
+
+- `input` and `button`: the `value` attribute; checkbox/radio inputs without a `value` attribute return `"on"`.
+- `textarea`: its text content.
+- Single- or multiple-select: the first selected option's value; when no option is explicitly selected, the first enabled option is used. An option without a `value` attribute uses its text content.
+- A control without a value returns an empty string. Unsupported element types cause `dom.value` to fail.
+
+`data(node, name)` reads a `data-*` attribute. Pass either `sku` or `data-sku`; the prefix is added when omitted. Attribute names are treated case-insensitively. A missing attribute returns an empty string.
+
+```flat
+ dom.select(page, 'input[name="email"]') -> inputs
+ list.get(inputs, 0) -> email
+ dom.value(email) -> email_value
+ dom.data(product, 'sku') -> sku
+```
+
+### Form control inspection
+
+- `inputType(input)` returns the normalized, lower-case input type. An omitted `type` defaults to `text`.
+- `checked(input)` returns whether a checkbox or radio input has the `checked` attribute. Other input types are rejected.
+- `disabled(control)` checks the `disabled` attribute and inherited disabled state from a disabled `fieldset` or `optgroup`. Inputs inside the first `legend` of a disabled fieldset are not treated as disabled.
+- `required(control)` checks the `required` attribute.
+- `options(select)` returns all descendant `option` elements as node handles, in document order.
+- `selectedOptions(select)` returns selected option node handles. For a single select with no explicit selection, it returns the first enabled option; for a multiple select with no selected options, it returns an empty list.
+
+These functions inspect the parsed HTML state. FlatL's DOM module does not run browser scripts, perform user interaction, or maintain live form-control state; for example, `checked()` reflects the markup's `checked` attribute.
+
+```flat
+ dom.select(page, 'input[type="checkbox"]') -> checks
+ list.get(checks, 0) -> check
+ dom.checked(check) -> is_checked
+ dom.disabled(check) -> is_disabled
+ dom.required(check) -> is_required
+ dom.inputType(check) -> type
+```
+
+`text(node)` already returns the full descendant text content (the DOM `textContent` concept); a separate `textContent()` alias is not provided.
+
 ### `close(page)`
 
 Destroys the document and invalidates every node handle obtained from it. Node handles are not independently closable. Returns `true` on success.
@@ -202,4 +250,4 @@ The suite covers HTML parsing and recovery, CSS selector groups/combinators/pseu
 
 ## Current scope
 
-This version supports HTML parsing, document- and element-scoped CSS selection, DOM element metadata and navigation, text extraction, attribute access, form field extraction, and document cleanup. XML parsing, XPath, HTML serialization, and form submission are not part of this version.
+This version supports HTML parsing, document- and element-scoped CSS selection, DOM element metadata and navigation, text and form-control value extraction, data attributes, form-control inspection, form field extraction, and document cleanup. XML parsing, XPath, HTML serialization, and form submission are not part of this version.

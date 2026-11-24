@@ -329,5 +329,13 @@ int flat_native_dom_children(FlatNativeCtx *ctx);
 int flat_native_dom_next(FlatNativeCtx *ctx);
 int flat_native_dom_prev(FlatNativeCtx *ctx);
 int flat_native_dom_closest(FlatNativeCtx *ctx);
+int flat_native_dom_value(FlatNativeCtx *ctx);
+int flat_native_dom_data(FlatNativeCtx *ctx);
+int flat_native_dom_input_type(FlatNativeCtx *ctx);
+int flat_native_dom_checked(FlatNativeCtx *ctx);
+int flat_native_dom_disabled(FlatNativeCtx *ctx);
+int flat_native_dom_required(FlatNativeCtx *ctx);
+int flat_native_dom_options(FlatNativeCtx *ctx);
+int flat_native_dom_selected_options(FlatNativeCtx *ctx);
 
 #endif
