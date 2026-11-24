@@ -1,0 +1,7 @@
+suite = "assign"
+id = 20
+desc = "b32 leftover non-zero bits rejected"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+stderr_contains = "lit.b32.align"

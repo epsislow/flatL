@@ -1,0 +1,4 @@
+#main
+  -- '!' is outside base64 alphabet
+  bad = ^Zg!^b64
+  OK

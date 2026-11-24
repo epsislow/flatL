@@ -1,0 +1,7 @@
+suite = "assign"
+id = 16
+desc = "bin literal bit count not multiple of 8"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+stderr_contains = "lit.bin.align"

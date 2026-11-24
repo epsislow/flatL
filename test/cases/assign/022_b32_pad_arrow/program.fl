@@ -1,0 +1,5 @@
+#main
+  ^CPNMU===^b32 -> s
+  s == 'foo'
+  io.outln(s)
+  OK

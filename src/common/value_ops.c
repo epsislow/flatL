@@ -847,6 +847,14 @@ int flat_value_eval_guard(const char *expr, FlatValue *vars, int var_count, cons
             }
             continue;
         }
+        if (c == '^') {
+            /* Skip ^payload^ blob literal (may contain '=' padding for b32). */
+            i++;
+            while (i < blen && lhs[i] != '^') {
+                i++;
+            }
+            continue;
+        }
         if (c == '"' || c == '\'') {
             quote = c;
             continue;

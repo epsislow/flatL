@@ -1,0 +1,17 @@
+#main
+  -- RFC 4648 base32hex vectors
+  f = ^CO======^b32
+  f == 'f'
+  fo = ^CPNG====^b32
+  fo == 'fo'
+  foo = ^CPNMU===^b32
+  foo == 'foo'
+  foobar = ^CPNMUOJ1E8======^b32
+  foobar == 'foobar'
+  -- without pad, spaces ignored, lowercase
+  same = ^cp nmu ===^b32
+  same == 'foo'
+  empty = ^^b32
+  empty == ''
+  io.outln(foo)
+  OK

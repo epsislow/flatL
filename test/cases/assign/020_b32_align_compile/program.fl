@@ -1,0 +1,4 @@
+#main
+  -- single digit leaves non-zero pad bits → align
+  bad = ^1^b32
+  OK

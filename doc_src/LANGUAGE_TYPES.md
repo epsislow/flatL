@@ -47,7 +47,7 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 
 Program text always uses **string** syntax; INLINE vs REF is internal.
 
-### Hex blob literals (`^…^hex`)
+### Blob literals (`^…^hex|bin|oct|b32|b64`)
 
 Static **binary** STRING literals (core language — not `enc`):
 
@@ -56,17 +56,26 @@ buf:t3 = ^a0 49 c0^hex
 buf:t3 = ^A049C0^hex:t3
 raw = ^deadbeef^hex
 empty = ^^hex
+b = ^01000001 01000010^bin          -- "AB"
+o = ^101 102 103^oct                -- "ABC" (octal bytes)
+x = ^CPNMU^b32                      -- "foo" (RFC 4648 base32hex; pad optional)
+y = ^Zm9v^b64                       -- "foo" (RFC 4648 base64; or ^Zm9v^b64 / ^Zm8=^b64)
 ```
 
 | Rule | Detail |
 |------|--------|
-| Form | `^` *payload* `^hex` optional `:t` / `:tN` |
-| Payload | Hex digits `0-9a-fA-F`; **spaces and tabs ignored**; no newlines; **no escapes** |
-| Empty | `^^hex` → empty STRING |
-| Odd digit count | **Compile** error `lit.hex.odd` |
-| `:tN` on literal | **Compile** check: decoded byte length ≤ N → else `lit.hex.len` |
+| Form | `^` *payload* `^(hex\|bin\|oct\|b32\|b64)` optional `:t` / `:tN` |
+| Whitespace | **spaces and tabs ignored** in payload; no newlines; **no escapes** |
+| Empty | `^^hex` / `^^bin` / `^^oct` / `^^b32` / `^^b64` → empty STRING |
+| **hex** | Digits `0-9a-fA-F`; **2 chars → 1 octet**; odd count → `lit.hex.odd` |
+| **bin** | Digits `0`/`1`; count must be multiple of **8** → else `lit.bin.align` |
+| **oct** | Digits `0-7`; groups of **3** per byte (`000`–`377`) → else `lit.oct.align` / `lit.oct.range` |
+| **b32** | RFC **4648 base32hex**: `0-9` / `A-V` (case-insensitive), **5 bits**/digit; optional trailing `=` |
+| **b64** | RFC **4648 base64**: `A-Za-z0-9+/` (**case-sensitive**), **6 bits**/digit; optional trailing `=`; quantum tipic **4 caractere → 3 octeți** |
+| Align (b32/b64) | leftover bits after packing must be 0 → else `lit.b32.align` / `lit.b64.align` |
+| `^…^` scanning | Treated like a quoted zone so padding `=` is not FlatL `==` / assign |
+| `:tN` on literal | **Compile** check: decoded byte length ≤ N → `lit.<codec>.len` |
 | LHS `:tN` | Still enforced at assign (`type.assign.string.len`) |
-| Phase 1 | **`hex` only**; `bin` / `oct` → later (`lit.codec.later`) |
 | Runtime decode | Use **`enc.decode`** (module) — not `^/var^…` |
 
 `math.calc` still uses `^` for **power** inside its expression STRING; that is unrelated to blob literals on FlatL lines.

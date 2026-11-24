@@ -493,16 +493,24 @@ static size_t skip_schema_angle_token(const char *line, size_t i) {
     return i;
 }
 
-/* Comparison guards: ==, != is not a guard, <, >, <=, >= (outside quotes). */
+/* Comparison guards: ==, != is not a guard, <, >, <=, >= (outside quotes / ^…^ blobs). */
 static int line_is_comparison_guard(const char *line) {
     size_t i;
     int in_s = 0;
     int in_d = 0;
+    int in_blob = 0;
 
     if (!line) {
         return 0;
     }
     for (i = 0; line[i]; i++) {
+        if (!in_s && !in_d && line[i] == '^') {
+            in_blob = !in_blob;
+            continue;
+        }
+        if (in_blob) {
+            continue;
+        }
         if (line[i] == '\'' && !in_d) {
             in_s = !in_s;
         } else if (line[i] == '"' && !in_s) {

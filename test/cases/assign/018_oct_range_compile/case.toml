@@ -1,0 +1,7 @@
+suite = "assign"
+id = 18
+desc = "oct literal byte > 377"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+stderr_contains = "lit.oct.range"

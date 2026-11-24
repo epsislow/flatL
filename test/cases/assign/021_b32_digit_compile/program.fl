@@ -1,0 +1,4 @@
+#main
+  -- W is outside 0-9A-V base32hex alphabet
+  bad = ^CW======^b32
+  OK

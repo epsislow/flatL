@@ -1,0 +1,7 @@
+suite = "assign"
+id = 24
+desc = "b64 invalid alphabet digit"
+kind = "compile_fail"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+stderr_contains = "lit.b64.digit"

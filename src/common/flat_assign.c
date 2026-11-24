@@ -23,11 +23,19 @@ static char *trim_mut(char *s) {
 static const char *find_arrow_outside_quotes(const char *s) {
     int in_s = 0;
     int in_d = 0;
+    int in_blob = 0;
 
     if (!s) {
         return NULL;
     }
     for (; *s; s++) {
+        if (!in_s && !in_d && *s == '^') {
+            in_blob = !in_blob;
+            continue;
+        }
+        if (in_blob) {
+            continue;
+        }
         if (*s == '\'' && !in_d) {
             in_s = !in_s;
         } else if (*s == '"' && !in_s) {
@@ -42,11 +50,32 @@ static const char *find_arrow_outside_quotes(const char *s) {
 static char *find_single_assign_eq(char *s) {
     char *p = s;
     int depth = 0;
+    int in_s = 0;
+    int in_d = 0;
+    int in_blob = 0;
 
     if (!s) {
         return NULL;
     }
     for (p = s; *p; p++) {
+        if (!in_s && !in_d && *p == '^') {
+            in_blob = !in_blob;
+            continue;
+        }
+        if (in_blob) {
+            continue;
+        }
+        if (*p == '\'' && !in_d) {
+            in_s = !in_s;
+            continue;
+        }
+        if (*p == '"' && !in_s) {
+            in_d = !in_d;
+            continue;
+        }
+        if (in_s || in_d) {
+            continue;
+        }
         if (*p == '[') {
             depth++;
         } else if (*p == ']') {

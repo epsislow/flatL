@@ -1,0 +1,15 @@
+#main
+  -- 0x41 0x42 = "AB"
+  b = ^01000001 01000010^bin
+  b == 'AB'
+  -- octal 101 102 103 = 65 66 67 = "ABC"
+  o = ^101 102 103^oct
+  o == 'ABC'
+  same:t2 = ^01000001 01000010^bin:t2
+  emptyb = ^^bin
+  emptyb == ''
+  emptyo = ^^oct
+  emptyo == ''
+  io.outln(b)
+  io.outln(o)
+  OK

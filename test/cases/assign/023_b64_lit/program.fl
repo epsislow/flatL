@@ -1,0 +1,16 @@
+#main
+  -- RFC 4648 base64 vectors (pad optional)
+  f = ^Zg==^b64
+  f == 'f'
+  fo = ^Zm8=^b64
+  fo == 'fo'
+  foo = ^Zm9v^b64
+  foo == 'foo'
+  foobar = ^Zm9vYmFy^b64
+  foobar == 'foobar'
+  spaced = ^Zm 9v^b64
+  spaced == 'foo'
+  empty = ^^b64
+  empty == ''
+  io.outln(foo)
+  OK
