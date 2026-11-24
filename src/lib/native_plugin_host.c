@@ -129,6 +129,15 @@ static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_ATTR, flat_native_dom_attr);
     flat_native_plugin_register(FLAT_NATIVE_DOM_FORM_FIELDS, flat_native_dom_form_fields);
     flat_native_plugin_register(FLAT_NATIVE_DOM_CLOSE, flat_native_dom_close);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_TAG, flat_native_dom_tag);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_HAS_ATTR, flat_native_dom_has_attr);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CLASSES, flat_native_dom_classes);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_HAS_CLASS, flat_native_dom_has_class);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_PARENT, flat_native_dom_parent);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CHILDREN, flat_native_dom_children);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_NEXT, flat_native_dom_next);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_PREV, flat_native_dom_prev);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CLOSEST, flat_native_dom_closest);
 }
 #endif
 

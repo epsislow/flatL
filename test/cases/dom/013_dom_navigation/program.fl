@@ -1,0 +1,38 @@
+use native dom
+use native list
+
+#main
+  html = '<main><section class="group active"><p class="item">One</p><p class="item">Two</p><aside>Side</aside></section></main>'
+  dom.parseHtml(html) -> page
+  dom.select(page, 'section.group') -> sections
+  list.get(sections, 0) -> section
+  dom.tag(section) == 'section'
+  dom.hasAttr(section, 'class') == true
+  dom.hasAttr(section, 'missing') == false
+  dom.classes(section) -> classes
+  list.len(classes) == 2
+  list.get(classes, 0) == 'group'
+  dom.hasClass(section, 'active') == true
+  dom.hasClass(section, 'missing') == false
+  dom.select(section, 'p.item') -> items
+  list.len(items) == 2
+  list.get(items, 0) -> first
+  list.get(items, 1) -> second
+  dom.tag(first) == 'p'
+  dom.parent(first) -> parent
+  parent == section
+  dom.children(section) -> children
+  list.len(children) == 3
+  list.get(children, 2) -> aside
+  dom.tag(aside) == 'aside'
+  dom.next(first) -> sibling
+  sibling == second
+  dom.prev(second) -> sibling
+  sibling == first
+  dom.closest(first, 'section.group') -> closest
+  closest == section
+  dom.select(first, 'span') -> none
+  list.len(none) == 0
+  dom.close(page)
+  io.outln('dom-navigation-ok')
+  OK

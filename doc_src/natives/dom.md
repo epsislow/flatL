@@ -20,6 +20,14 @@ DOM is disabled by default. It is enabled at build time; see [Build](#build).
 | `attr(node, name)` | STRING (missing attribute → `""`) | `dom.attr` |
 | `formFields(form)` | OBJECT | `dom.formFields` |
 | `close(page)` | BOOL (`true`) | `dom.close` |
+| `tag(node)` | STRING tag name | `dom.tag` |
+| `hasAttr(node, name)` | BOOL | `dom.hasAttr` |
+| `classes(node)` | LIST of STRING | `dom.classes` |
+| `hasClass(node, className)` | BOOL | `dom.hasClass` |
+| `parent(node)` | NUMBER node handle or NULL | `dom.parent` |
+| `children(node)` | LIST of NUMBER node handles | `dom.children` |
+| `next(node)` / `prev(node)` | NUMBER node handle or NULL | `dom.next` / `dom.prev` |
+| `closest(node, cssSelector)` | NUMBER node handle or NULL | `dom.closest` |
 
 Document and node handles are numeric resources. A document owns every node handle obtained from it; `close(page)` invalidates all of them.
 
@@ -38,7 +46,7 @@ The parser performs HTML5 error recovery for malformed markup. The input limit i
 
 ### `select(page, cssSelector) -> nodes`
 
-Finds matching elements using a CSS selector and returns a `LIST` of numeric node handles. The document root itself is not included. An unmatched selector returns an empty list.
+Finds matching elements using a CSS selector and returns a `LIST` of numeric node handles. The first argument may be either a document handle or an element node handle. When an element is supplied, selection is scoped to that element and searches its descendants. The root element itself is not included. An unmatched selector returns an empty list.
 
 ```flat
 dom.select(page, 'main p') -> paragraphs
@@ -65,6 +73,30 @@ dom.select(page, 'a') -> links
 list.get(links, 0) -> link
 dom.attr(link, 'href') -> href
 ```
+
+### Element metadata and navigation
+
+`tag(node)` returns the lower-case HTML tag name. `hasAttr(node, name)` checks whether an attribute exists; this distinguishes a missing attribute from an attribute present with an empty value.
+
+`classes(node)` returns the element's class tokens as a `LIST` of strings, preserving their document order. `hasClass(node, className)` checks for an exact class token (not a substring).
+
+`parent(node)`, `next(node)`, and `prev(node)` return the related element handle, or `NULL` when there is no related element. Non-element nodes such as text nodes are skipped for sibling navigation. `children(node)` returns only direct element children, in document order.
+
+`closest(node, cssSelector)` tests the node itself first, then walks up its ancestors and returns the first matching element. It returns `NULL` if no element matches. Invalid selectors cause `dom.closest` to fail.
+
+```flat
+ dom.select(page, 'section.products') -> sections
+ list.get(sections, 0) -> section
+ dom.select(section, 'article.product') -> products
+ list.get(products, 0) -> product
+ dom.tag(product) -> tagName
+ dom.parent(product) -> container
+ dom.closest(product, 'main') -> main
+ dom.classes(product) -> classNames
+ dom.hasClass(product, 'featured') -> featured
+```
+
+All returned node handles belong to the same document as their source node and are invalidated by `close(page)`.
 
 ### `formFields(form) -> fields`
 
@@ -170,4 +202,4 @@ The suite covers HTML parsing and recovery, CSS selector groups/combinators/pseu
 
 ## Current scope
 
-This version supports HTML parsing, CSS selection, text extraction, attribute access, form field extraction, and document cleanup. XML parsing, XPath, HTML serialization, and form submission are not part of this version.
+This version supports HTML parsing, document- and element-scoped CSS selection, DOM element metadata and navigation, text extraction, attribute access, form field extraction, and document cleanup. XML parsing, XPath, HTML serialization, and form submission are not part of this version.

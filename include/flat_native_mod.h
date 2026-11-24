@@ -320,5 +320,14 @@ int flat_native_dom_text(FlatNativeCtx *ctx);
 int flat_native_dom_attr(FlatNativeCtx *ctx);
 int flat_native_dom_form_fields(FlatNativeCtx *ctx);
 int flat_native_dom_close(FlatNativeCtx *ctx);
+int flat_native_dom_tag(FlatNativeCtx *ctx);
+int flat_native_dom_has_attr(FlatNativeCtx *ctx);
+int flat_native_dom_classes(FlatNativeCtx *ctx);
+int flat_native_dom_has_class(FlatNativeCtx *ctx);
+int flat_native_dom_parent(FlatNativeCtx *ctx);
+int flat_native_dom_children(FlatNativeCtx *ctx);
+int flat_native_dom_next(FlatNativeCtx *ctx);
+int flat_native_dom_prev(FlatNativeCtx *ctx);
+int flat_native_dom_closest(FlatNativeCtx *ctx);
 
 #endif

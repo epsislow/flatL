@@ -249,6 +249,10 @@ int flat_native_dom_select(FlatNativeCtx *ctx) {
     size_t len;
     uint32_t doc_id, list_id;
     FlatDomDocument *doc;
+    lxb_dom_node_t *root = NULL;
+    FlatValue target_value;
+    double target_number;
+    uint64_t target_handle;
     lxb_css_parser_t *parser = NULL;
     lxb_selectors_t *selectors = NULL;
     lxb_css_selector_list_t *list = NULL;
@@ -258,11 +262,27 @@ int flat_native_dom_select(FlatNativeCtx *ctx) {
     if (!ctx || !ctx->dom || !ctx->out) return dom_fail(ctx, "dom.select");
     snprintf(buf, sizeof(buf), "%s", ctx->inner ? ctx->inner : "");
     if (dom_split_args(buf, args, 2, &argc) != 0 || argc != 2 ||
-        dom_doc_id(ctx, args[0], &doc_id) != 0 ||
-        dom_get_string(ctx, args[1], &selector, &len) != 0 || len == 0 || len > 4096)
+        flat_native_parse_rhs(ctx, args[0], &target_value) != 0)
         goto done;
-    doc = dom_find_document(ctx, doc_id);
-    if (!doc) goto done;
+    if (target_value.tag != VAL_NUMBER) { flat_native_parse_rhs_release(ctx, &target_value); goto done; }
+    if (dom_get_string(ctx, args[1], &selector, &len) != 0 || len == 0 || len > 4096) {
+        flat_native_parse_rhs_release(ctx, &target_value); goto done;
+    }
+    target_number = flat_number_as_f64(&target_value);
+    flat_native_parse_rhs_release(ctx, &target_value);
+    if (target_number < 1.0 || target_number != (double)(uint64_t)target_number) goto done;
+    target_handle = (uint64_t)target_number;
+    if (target_handle <= FLAT_DOM_NODE_MASK) {
+        doc_id = (uint32_t)target_handle;
+        doc = dom_find_document(ctx, doc_id);
+        if (!doc) goto done;
+        root = lxb_dom_interface_node(doc->document);
+    } else {
+        uint32_t token = (uint32_t)(target_handle >> FLAT_DOM_NODE_SHIFT);
+        doc = dom_find_document(ctx, token);
+        if (!doc || dom_node_ref(ctx, args[0], &root) != 0) goto done;
+        doc_id = token;
+    }
     if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0) goto done;
     parser = lxb_css_parser_create();
     selectors = lxb_selectors_create();
@@ -272,7 +292,7 @@ int flat_native_dom_select(FlatNativeCtx *ctx) {
     if (!list) goto done;
     memset(&state, 0, sizeof(state));
     state.ctx = ctx; state.doc = doc; state.doc_id = doc_id; state.list_id = list_id;
-    status = lxb_selectors_find(selectors, lxb_dom_interface_node(doc->document),
+    status = lxb_selectors_find(selectors, root,
                                 list, dom_select_cb, &state);
     if (status != LXB_STATUS_OK || state.failed) goto done;
     rc = flat_value_set_list(ctx->out, state.list_id);
@@ -531,4 +551,175 @@ int flat_native_dom_close(FlatNativeCtx *ctx) {
         dom_doc_id(ctx, args[0], &id) != 0) return dom_fail(ctx, "dom.close.args");
     dom_doc_clear(&ctx->dom->docs[id - 1]);
     return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+/* DOM navigation and element metadata. */
+static int dom_args(FlatNativeCtx *ctx, char *buf, char **args, int max, int wanted) {
+    int argc = 0;
+    snprintf(buf, 4096, "%s", ctx && ctx->inner ? ctx->inner : "");
+    return dom_split_args(buf, args, max, &argc) == 0 && argc == wanted ? 0 : -1;
+}
+static int dom_node_result(FlatNativeCtx *ctx, lxb_dom_node_t *node) {
+    uint64_t handle;
+    FlatDomDocument *doc = NULL;
+    lxb_dom_node_t *ancestor;
+    size_t i;
+    if (!node) return flat_value_set_null(ctx->out);
+    for (ancestor = node; ancestor && !doc; ancestor = ancestor->parent) {
+        for (i = 0; i < FLAT_DOM_MAX_DOCUMENTS && !doc; ++i) {
+            FlatDomDocument *candidate = &ctx->dom->docs[i];
+            size_t j;
+            if (!candidate->live) continue;
+            for (j = 0; j < candidate->node_count; ++j) {
+                if (candidate->nodes[j] == ancestor) { doc = candidate; break; }
+            }
+        }
+    }
+    if (!doc || dom_node_handle(doc, doc->token, node, &handle) != 0) return -1;
+    return flat_value_set_number(ctx->out, (double)handle);
+}
+static int dom_element_arg(FlatNativeCtx *ctx, char *buf, char **args,
+                           int max, int wanted, lxb_dom_node_t **node) {
+    return dom_args(ctx, buf, args, max, wanted) == 0 &&
+           dom_node_ref(ctx, args[0], node) == 0 &&
+           (*node)->type == LXB_DOM_NODE_TYPE_ELEMENT ? 0 : -1;
+}
+int flat_native_dom_tag(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node;
+    const lxb_char_t *name; size_t len = 0;
+    if (!ctx || !ctx->out || dom_element_arg(ctx, buf, args, 1, 1, &node) != 0)
+        return dom_fail(ctx, "dom.tag.args");
+    name = lxb_tag_name_by_id(lxb_dom_element_tag_id(lxb_dom_interface_element(node)), &len);
+    if (!name || dom_make_string(ctx, name, len) != 0) return dom_fail(ctx, "dom.tag");
+    return dom_ok(ctx);
+}
+int flat_native_dom_has_attr(FlatNativeCtx *ctx) {
+    char buf[4096], *args[2], *name = NULL; int argc;
+    size_t len; lxb_dom_node_t *node;
+    if (!ctx || !ctx->out) return dom_fail(ctx, "dom.hasAttr");
+    snprintf(buf, sizeof(buf), "%s", ctx->inner ? ctx->inner : "");
+    if (dom_split_args(buf, args, 2, &argc) != 0 || argc != 2 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &name, &len) != 0 || len == 0 || len > 1024) {
+        free(name); return dom_fail(ctx, "dom.hasAttr.args");
+    }
+    { int found = lxb_dom_element_has_attribute(lxb_dom_interface_element(node),
+                                                 (const lxb_char_t *)name, len);
+      free(name); return dom_ok(ctx) + flat_value_set_bool(ctx->out, found); }
+}
+int flat_native_dom_classes(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node;
+    const lxb_char_t *value; size_t len = 0, i = 0; uint32_t list_id, next_id;
+    if (!ctx || !ctx->out || dom_element_arg(ctx, buf, args, 1, 1, &node) != 0)
+        return dom_fail(ctx, "dom.classes.args");
+    value = lxb_dom_element_get_attribute(lxb_dom_interface_element(node),
+                                          (const lxb_char_t *)"class", 5, &len);
+    if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0) return dom_fail(ctx, "dom.classes");
+    while (value && i < len) {
+        size_t start, n; FlatValue item; uint32_t ref;
+        while (i < len && isspace((unsigned char)value[i])) i++;
+        start = i;
+        while (i < len && !isspace((unsigned char)value[i])) i++;
+        n = i - start;
+        if (!n) continue;
+        if (n <= FLAT_INLINE_STR_MAX) {
+            if (flat_value_set_str_inline(&item, (const char *)value + start, n) != 0) return dom_fail(ctx, "dom.classes");
+        } else {
+            if (flat_pool_alloc_copy(ctx->pool, value + start, n, &ref) != 0 ||
+                flat_value_set_str_ref(&item, ref) != 0) return dom_fail(ctx, "dom.classes");
+        }
+        if (flat_list_push_copy(ctx->coll, ctx->pool, list_id, &item, &next_id) != 0) return dom_fail(ctx, "dom.classes");
+        list_id = next_id;
+    }
+    return dom_ok(ctx) + flat_value_set_list(ctx->out, list_id);
+}
+int flat_native_dom_has_class(FlatNativeCtx *ctx) {
+    char buf[4096], *args[2], *wanted = NULL; int argc, found = 0;
+    size_t wanted_len, len = 0, i = 0; lxb_dom_node_t *node;
+    const lxb_char_t *value;
+    if (!ctx || !ctx->out) return dom_fail(ctx, "dom.hasClass");
+    snprintf(buf, sizeof(buf), "%s", ctx->inner ? ctx->inner : "");
+    if (dom_split_args(buf, args, 2, &argc) != 0 || argc != 2 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &wanted, &wanted_len) != 0 || wanted_len == 0) {
+        free(wanted); return dom_fail(ctx, "dom.hasClass.args");
+    }
+    value = lxb_dom_element_get_attribute(lxb_dom_interface_element(node),
+                                          (const lxb_char_t *)"class", 5, &len);
+    while (value && i < len) {
+        size_t start, n;
+        while (i < len && isspace((unsigned char)value[i])) i++;
+        start = i;
+        while (i < len && !isspace((unsigned char)value[i])) i++;
+        n = i - start;
+        if (n == wanted_len && memcmp(value + start, wanted, n) == 0) { found = 1; break; }
+    }
+    free(wanted);
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, found);
+}
+static int dom_sibling_result(FlatNativeCtx *ctx, int which) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node, *result = NULL;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 || dom_node_ref(ctx, args[0], &node) != 0)
+        return dom_fail(ctx, "dom.navigation.args");
+    if (which == 0) result = node->parent;
+    else if (which == 1) result = node->next;
+    else result = node->prev;
+    if (result && result->type != LXB_DOM_NODE_TYPE_ELEMENT) result = NULL;
+    if (dom_node_result(ctx, result) != 0) return dom_fail(ctx, "dom.navigation");
+    return dom_ok(ctx);
+}
+int flat_native_dom_parent(FlatNativeCtx *ctx) { return dom_sibling_result(ctx, 0); }
+int flat_native_dom_next(FlatNativeCtx *ctx) { return dom_sibling_result(ctx, 1); }
+int flat_native_dom_prev(FlatNativeCtx *ctx) { return dom_sibling_result(ctx, 2); }
+int flat_native_dom_children(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1]; lxb_dom_node_t *node, *child;
+    uint32_t list_id, next_id; FlatValue item;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT)
+        return dom_fail(ctx, "dom.children.args");
+    if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0) return dom_fail(ctx, "dom.children");
+    for (child = node->first_child; child; child = child->next) {
+        if (child->type != LXB_DOM_NODE_TYPE_ELEMENT) continue;
+        if (dom_node_result(ctx, child) != 0) return dom_fail(ctx, "dom.children");
+        item = *ctx->out;
+        if (flat_list_push_copy(ctx->coll, ctx->pool, list_id, &item, &next_id) != 0)
+            return dom_fail(ctx, "dom.children");
+        list_id = next_id;
+    }
+    return dom_ok(ctx) + flat_value_set_list(ctx->out, list_id);
+}
+typedef struct { int matched; } FlatDomMatchState;
+static lxb_status_t dom_match_cb(lxb_dom_node_t *node, lxb_css_selector_specificity_t specificity, void *opaque) {
+    FlatDomMatchState *state = (FlatDomMatchState *)opaque;
+    (void)node; (void)specificity; if (state) state->matched = 1; return LXB_STATUS_OK;
+}
+int flat_native_dom_closest(FlatNativeCtx *ctx) {
+    char buf[4096], *args[2], *selector = NULL; int argc, rc = -1;
+    size_t len; lxb_dom_node_t *node; lxb_css_parser_t *parser = NULL;
+    lxb_selectors_t *selectors = NULL; lxb_css_selector_list_t *list = NULL;
+    FlatDomMatchState state; lxb_status_t status;
+    if (!ctx || !ctx->dom || !ctx->out) return dom_fail(ctx, "dom.closest");
+    snprintf(buf, sizeof(buf), "%s", ctx->inner ? ctx->inner : "");
+    if (dom_split_args(buf, args, 2, &argc) != 0 || argc != 2 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &selector, &len) != 0 || len == 0 || len > 4096) goto done;
+    parser = lxb_css_parser_create(); selectors = lxb_selectors_create();
+    if (!parser || !selectors || lxb_css_parser_init(parser, NULL) != LXB_STATUS_OK ||
+        lxb_selectors_init(selectors) != LXB_STATUS_OK) goto done;
+    list = lxb_css_selectors_parse(parser, (const lxb_char_t *)selector, len);
+    if (!list) goto done;
+    for (; node && node->type == LXB_DOM_NODE_TYPE_ELEMENT; node = node->parent) {
+        memset(&state, 0, sizeof(state));
+        status = lxb_selectors_match_node(selectors, node, list, dom_match_cb, &state);
+        if (status != LXB_STATUS_OK) goto done;
+        if (state.matched) { if (dom_node_result(ctx, node) != 0) goto done; rc = 0; break; }
+    }
+    if (rc != 0) { if (flat_value_set_null(ctx->out) != 0) goto done; rc = 0; }
+done:
+    if (list) lxb_css_selector_list_destroy_memory(list);
+    if (selectors) lxb_selectors_destroy(selectors, true);
+    if (parser) lxb_css_parser_destroy(parser, true);
+    free(selector);
+    if (rc != 0) return dom_fail(ctx, "dom.closest");
+    return dom_ok(ctx);
 }

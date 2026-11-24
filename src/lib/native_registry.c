@@ -319,6 +319,15 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("dom", "attr", "dom.attr(node, name)"),
     META_SIG("dom", "formFields", "dom.formFields(form)"),
     META_SIG("dom", "close", "dom.close(page)"),
+    META_SIG("dom", "tag", "dom.tag(node)"),
+    META_SIG("dom", "hasAttr", "dom.hasAttr(node, name)"),
+    META_SIG("dom", "classes", "dom.classes(node)"),
+    META_SIG("dom", "hasClass", "dom.hasClass(node, className)"),
+    META_SIG("dom", "parent", "dom.parent(node)"),
+    META_SIG("dom", "children", "dom.children(node)"),
+    META_SIG("dom", "next", "dom.next(node)"),
+    META_SIG("dom", "prev", "dom.prev(node)"),
+    META_SIG("dom", "closest", "dom.closest(node, cssSelector)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
