@@ -151,6 +151,7 @@ static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_INNER_TEXT, flat_native_dom_inner_text);
     flat_native_plugin_register(FLAT_NATIVE_DOM_HTML, flat_native_dom_html);
     flat_native_plugin_register(FLAT_NATIVE_DOM_OUTER_HTML, flat_native_dom_outer_html);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_PROP, flat_native_dom_prop);
 }
 #endif
 

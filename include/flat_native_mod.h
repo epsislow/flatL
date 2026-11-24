@@ -342,5 +342,6 @@ int flat_native_dom_text_content(FlatNativeCtx *ctx);
 int flat_native_dom_inner_text(FlatNativeCtx *ctx);
 int flat_native_dom_html(FlatNativeCtx *ctx);
 int flat_native_dom_outer_html(FlatNativeCtx *ctx);
+int flat_native_dom_prop(FlatNativeCtx *ctx);
 
 #endif

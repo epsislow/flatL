@@ -341,6 +341,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("dom", "innerText", "dom.innerText(node)"),
     META_SIG("dom", "html", "dom.html(node)"),
     META_SIG("dom", "outerHtml", "dom.outerHtml(node)"),
+    META_SIG("dom", "prop", "dom.prop(node, name)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

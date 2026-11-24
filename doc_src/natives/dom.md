@@ -210,6 +210,29 @@ These functions inspect the parsed HTML state. FlatL's DOM module does not run b
 
 `text(node)` already returns the full descendant text content (the DOM `textContent` concept); a separate `textContent()` alias is not provided.
 
+### `prop(node, name)`
+
+Reads a supported HTML/DOM property. This is a deliberately limited property accessor, not a JavaScript browser DOM implementation.
+
+Supported names:
+- String properties: `tagName` (uppercase), `id`, `className`, `name`, `type`, `value`, `href`, `src`, `title`.
+- Boolean properties: `checked`, `disabled`, `required`.
+- `checked` is supported only for checkbox and radio inputs. `type` is normalized for input elements.
+- `value` follows the same parsed-markup rules as `value(node)`, including textarea text, select option values, and the checkbox/radio default `"on"`.
+- Unknown or inapplicable properties return `NULL`. Missing string attributes return an empty string.
+
+```flat
+dom.select(page, 'input.email') -> fields
+list.get(fields, 0) -> email
+dom.prop(email, 'tagName') -> tag
+dom.prop(email, 'type') -> input_type
+dom.prop(email, 'name') -> field_name
+dom.prop(email, 'required') -> is_required
+dom.prop(email, 'value') -> current_value
+```
+
+These values describe the parsed HTML, not live browser properties after script execution or user interaction.
+
 ### `close(page)`
 
 Destroys the document and invalidates every node handle obtained from it. Node handles are not independently closable. Returns `true` on success.
@@ -289,4 +312,4 @@ The suite covers HTML parsing and recovery, CSS selector groups/combinators/pseu
 
 ## Current scope
 
-This version supports HTML parsing, document- and element-scoped CSS selection, DOM element metadata and navigation, text and form-control value extraction, data attributes, form-control inspection, form field extraction, and document cleanup. XML parsing, XPath, HTML serialization, and form submission are not part of this version.
+This version supports HTML parsing, document- and element-scoped CSS selection, DOM element metadata and navigation, text and form-control value extraction, data attributes, form-control inspection, limited property access, HTML serialization, form field extraction, and document cleanup. XML parsing, XPath, and form submission are not part of this version.

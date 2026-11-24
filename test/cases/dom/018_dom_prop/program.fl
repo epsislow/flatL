@@ -1,0 +1,32 @@
+use native dom
+use native list
+
+#main
+  html = '<input id="email" class="field" name="email" type="EMAIL" value="a@b.test" required>'
+  dom.parseHtml(html) -> page
+  dom.select(page, '#email') -> fields
+  list.get(fields, 0) -> email
+  dom.prop(email, 'tagName') == 'INPUT'
+  dom.prop(email, 'id') == 'email'
+  dom.prop(email, 'className') == 'field'
+  dom.prop(email, 'name') == 'email'
+  dom.prop(email, 'type') == 'email'
+  dom.prop(email, 'value') == 'a@b.test'
+  dom.prop(email, 'required') == true
+  dom.prop(email, 'unknown') == null
+  dom.close(page)
+  html2 = '<input type="checkbox" checked>'
+  dom.parseHtml(html2) -> page2
+  dom.select(page2, 'input') -> checks
+  list.get(checks, 0) -> check
+  dom.prop(check, 'checked') == true
+  dom.close(page2)
+  html3 = '<a href="/item" title="Item">Item</a>'
+  dom.parseHtml(html3) -> page3
+  dom.select(page3, 'a') -> links
+  list.get(links, 0) -> link
+  dom.prop(link, 'href') == '/item'
+  dom.prop(link, 'title') == 'Item'
+  io.outln('dom-prop-ok')
+  dom.close(page3)
+  OK

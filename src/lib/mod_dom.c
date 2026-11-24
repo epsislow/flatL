@@ -1109,3 +1109,79 @@ int flat_native_dom_value(FlatNativeCtx *ctx) {
     if (dom_make_string(ctx, data, data ? len : 0) != 0) return dom_fail(ctx, "dom.value.alloc");
     return dom_ok(ctx);
 }
+
+
+/* A deliberately small, documented subset of browser-style DOM properties.
+ * Unknown properties return NULL; this is not a JavaScript DOM implementation. */
+int flat_native_dom_prop(FlatNativeCtx *ctx) {
+    char buf[4096], *args[2], *name = NULL, type[32];
+    int argc, rc = -1;
+    size_t name_len = 0, len = 0;
+    lxb_dom_node_t *node = NULL, *option;
+    const lxb_char_t *value = NULL;
+    if (!ctx || !ctx->out || (snprintf(buf, sizeof(buf), "%s", ctx->inner ? ctx->inner : ""),
+         dom_split_args(buf, args, 2, &argc)) != 0 ||
+        argc != 2 || dom_node_ref(ctx, args[0], &node) != 0 ||
+        node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &name, &name_len) != 0 ||
+        name_len == 0 || name_len > 64) goto done;
+
+    if (strcmp(name, "tagName") == 0) {
+        const lxb_char_t *tag = lxb_tag_name_by_id(
+            lxb_dom_element_tag_id(lxb_dom_interface_element(node)), &len);
+        char upper[128]; size_t i, n = len < sizeof(upper) ? len : sizeof(upper);
+        if (!tag) goto done;
+        for (i = 0; i < n; ++i) upper[i] = (char)toupper((unsigned char)tag[i]);
+        rc = dom_make_string(ctx, (const lxb_char_t *)upper, n);
+    } else if (strcmp(name, "checked") == 0) {
+        if (!dom_node_named(node, "input")) goto unknown;
+        if (dom_input_type_value(node, type) != 0 ||
+            (strcmp(type, "checkbox") != 0 && strcmp(type, "radio") != 0)) goto unknown;
+        rc = flat_value_set_bool(ctx->out, dom_has_attr(node, "checked"));
+    } else if (strcmp(name, "disabled") == 0 || strcmp(name, "required") == 0) {
+        rc = flat_value_set_bool(ctx->out, strcmp(name, "disabled") == 0
+            ? dom_control_disabled(node) : dom_has_attr(node, "required"));
+    } else if (strcmp(name, "type") == 0 && dom_node_named(node, "input")) {
+        if (dom_input_type_value(node, type) != 0) goto done;
+        rc = dom_make_string(ctx, (const lxb_char_t *)type, strlen(type));
+    } else if (strcmp(name, "value") == 0) {
+        if (dom_node_named(node, "textarea")) {
+            value = lxb_dom_node_text_content(node, &len);
+        } else if (dom_node_named(node, "select")) {
+            option = dom_find_option(node, 1);
+            if (!option) option = dom_find_option(node, 0);
+            if (option) {
+                FlatValue v;
+                if (dom_make_option_value(ctx, option, &v) != 0) goto done;
+                *ctx->out = v; rc = 0; goto done;
+            }
+        } else {
+            (void)dom_attr_value(node, "value", &value, &len);
+            if (!value && dom_node_named(node, "input") &&
+                dom_input_type_value(node, type) == 0 &&
+                (strcmp(type, "checkbox") == 0 || strcmp(type, "radio") == 0)) {
+                value = (const lxb_char_t *)"on"; len = 2;
+            }
+        }
+        rc = dom_make_string(ctx, value, value ? len : 0);
+    } else {
+        const char *attr = NULL;
+        if (strcmp(name, "id") == 0) attr = "id";
+        else if (strcmp(name, "className") == 0) attr = "class";
+        else if (strcmp(name, "name") == 0) attr = "name";
+        else if (strcmp(name, "href") == 0) attr = "href";
+        else if (strcmp(name, "src") == 0) attr = "src";
+        else if (strcmp(name, "title") == 0) attr = "title";
+        if (attr) {
+            (void)dom_attr_value(node, attr, &value, &len);
+            rc = dom_make_string(ctx, value, value ? len : 0);
+        } else goto unknown;
+    }
+    goto done;
+unknown:
+    rc = flat_value_set_null(ctx->out);
+done:
+    free(name);
+    if (rc != 0) return dom_fail(ctx, "dom.prop");
+    return dom_ok(ctx);
+}
