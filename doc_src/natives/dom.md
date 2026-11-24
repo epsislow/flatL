@@ -88,6 +88,24 @@ Returns an approximate rendered-text representation without a browser layout eng
 dom.innerText(section) -> visible_text
 ```
 
+### `html(node) -> value`
+
+Serializes the element's child nodes and returns their HTML markup. The selected element's own start and end tags are not included. Text and attribute values are escaped by the Lexbor HTML serializer. An element with no children returns an empty string.
+
+```flat
+dom.html(section) -> inner_html
+```
+
+### `outerHtml(node) -> value`
+
+Serializes the selected element and its descendants, including the element's own tag. The result is HTML markup, not a reconstructed or pretty-printed representation; serialization follows Lexbor's HTML serializer.
+
+```flat
+dom.outerHtml(section) -> section_html
+```
+
+Both functions require an element node handle. They return a FlatL string that remains valid independently of the document; the document can be closed after serialization.
+
 ### `attr(node, name) -> value`
 
 Returns an element attribute as a string. A missing attribute returns an empty string. The node must refer to an element.
@@ -116,6 +134,8 @@ dom.attr(link, 'href') -> href
  dom.tag(product) -> tagName
  dom.id(product) -> productId
  dom.textContent(product) -> productText
+ dom.html(product) -> productInnerHtml
+ dom.outerHtml(product) -> productHtml
  dom.innerText(product) -> visibleProductText
  dom.parent(product) -> container
  dom.closest(product, 'main') -> main

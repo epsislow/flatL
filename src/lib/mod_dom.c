@@ -460,6 +460,74 @@ int flat_native_dom_inner_text(FlatNativeCtx *ctx) {
     return dom_ok(ctx);
 }
 
+typedef struct {
+    lxb_char_t *data;
+    size_t len;
+    size_t cap;
+    int failed;
+} FlatDomSerializeBuffer;
+
+static lxb_status_t dom_serialize_append(const lxb_char_t *data, size_t len, void *opaque) {
+    FlatDomSerializeBuffer *out = (FlatDomSerializeBuffer *)opaque;
+    lxb_char_t *next;
+    size_t need, cap;
+    if (!out || (!data && len) || len > SIZE_MAX - out->len - 1) return LXB_STATUS_ERROR;
+    need = out->len + len + 1;
+    if (need > out->cap) {
+        cap = out->cap ? out->cap : 256;
+        while (cap < need) {
+            if (cap > SIZE_MAX / 2) { cap = need; break; }
+            cap *= 2;
+        }
+        next = (lxb_char_t *)realloc(out->data, cap);
+        if (!next) { out->failed = 1; return LXB_STATUS_ERROR_MEMORY_ALLOCATION; }
+        out->data = next;
+        out->cap = cap;
+    }
+    if (len) memcpy(out->data + out->len, data, len);
+    out->len += len;
+    out->data[out->len] = '\0';
+    return LXB_STATUS_OK;
+}
+
+static int dom_serialize_node(FlatNativeCtx *ctx, lxb_dom_node_t *node, int inner) {
+    FlatDomSerializeBuffer out;
+    lxb_dom_node_t *child;
+    lxb_status_t status = LXB_STATUS_OK;
+    memset(&out, 0, sizeof(out));
+    if (inner) {
+        for (child = node->first_child; child; child = child->next) {
+            status = lxb_html_serialize_tree_cb(child, dom_serialize_append, &out);
+            if (status != LXB_STATUS_OK) break;
+        }
+    } else {
+        status = lxb_html_serialize_tree_cb(node, dom_serialize_append, &out);
+    }
+    if (status == LXB_STATUS_OK && !out.failed)
+        status = (lxb_status_t)(dom_make_string(ctx, out.data, out.len) == 0 ? LXB_STATUS_OK : LXB_STATUS_ERROR_MEMORY_ALLOCATION);
+    free(out.data);
+    if (status != LXB_STATUS_OK) return dom_fail(ctx, inner ? "dom.html" : "dom.outerHtml");
+    return dom_ok(ctx);
+}
+
+int flat_native_dom_html(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1];
+    lxb_dom_node_t *node;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT)
+        return dom_fail(ctx, "dom.html.args");
+    return dom_serialize_node(ctx, node, 1);
+}
+
+int flat_native_dom_outer_html(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1];
+    lxb_dom_node_t *node;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT)
+        return dom_fail(ctx, "dom.outerHtml.args");
+    return dom_serialize_node(ctx, node, 0);
+}
+
 int flat_native_dom_attr(FlatNativeCtx *ctx) {
     char buf[2048], *args[2], *name = NULL;
     int argc;

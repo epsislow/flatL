@@ -1,0 +1,18 @@
+use native dom
+use native list
+
+#main
+  html = '<main><section id="catalog" data-x="a&amp;b"><h2>Products &amp; More</h2><p class="item">First <b>bold</b></p></section></main>'
+  dom.parseHtml(html) -> page
+  dom.select(page, 'section') -> sections
+  list.get(sections, 0) -> section
+  dom.html(section) -> inner
+  dom.outerHtml(section) -> outer
+  str.contains(inner, '<h2>Products &amp; More</h2>') == true
+  str.contains(inner, '<section') == false
+  str.contains(outer, '<section') == true
+  str.contains(outer, 'data-x="a&amp;b"') == true
+  str.contains(outer, '<b>bold</b>') == true
+  io.outln('dom-html-serialization-ok')
+  dom.close(page)
+  OK
