@@ -65,11 +65,27 @@ CSS selectors can use the supported Lexbor selector syntax, including combinator
 
 ### `text(node) -> value`
 
-Returns the text content of a node, including text from descendants. HTML character references are decoded by the HTML parser.
+Returns the text content of a node, including text from descendants. HTML character references are decoded by the HTML parser. This is the raw DOM text content: it does not filter hidden elements or normalize whitespace.
 
 ```flat
 list.get(paragraphs, 0) -> paragraph
 dom.text(paragraph) -> value
+```
+
+### `textContent(node) -> value`
+
+Alias for `text(node)`. It returns all descendant text with the same behavior and is provided for callers familiar with the browser DOM API.
+
+```flat
+dom.textContent(paragraph) -> value
+```
+
+### `innerText(node) -> value`
+
+Returns an approximate rendered-text representation without a browser layout engine. It skips descendants marked with `hidden`, `script`, `style`, `template`, `noscript`, and hidden input controls; collapses whitespace and inserts line breaks around common block-level elements. It does not evaluate stylesheets, computed CSS, layout, or visibility inherited from CSS, so it is not identical to the browser's `HTMLElement.innerText`.
+
+```flat
+dom.innerText(section) -> visible_text
 ```
 
 ### `attr(node, name) -> value`
@@ -84,7 +100,7 @@ dom.attr(link, 'href') -> href
 
 ### Element metadata and navigation
 
-`tag(node)` returns the lower-case HTML tag name. `hasAttr(node, name)` checks whether an attribute exists; this distinguishes a missing attribute from an attribute present with an empty value.
+`tag(node)` returns the lower-case HTML tag name. `id(node)` returns the `id` attribute as a string (or an empty string when missing). `hasAttr(node, name)` checks whether an attribute exists; this distinguishes a missing attribute from an attribute present with an empty value.
 
 `classes(node)` returns the element's class tokens as a `LIST` of strings, preserving their document order. `hasClass(node, className)` checks for an exact class token (not a substring).
 
@@ -98,6 +114,9 @@ dom.attr(link, 'href') -> href
  dom.select(section, 'article.product') -> products
  list.get(products, 0) -> product
  dom.tag(product) -> tagName
+ dom.id(product) -> productId
+ dom.textContent(product) -> productText
+ dom.innerText(product) -> visibleProductText
  dom.parent(product) -> container
  dom.closest(product, 'main') -> main
  dom.classes(product) -> classNames

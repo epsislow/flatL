@@ -1,0 +1,26 @@
+use native dom
+use native list
+
+#main
+  a = '<main><section id="catalog"><h2>Products</h2>'
+  b = '<p> First <b>bold</b> item </p><p hidden>secret</p>'
+  c = '<script>ignored()</script><input type="hidden" value="x">'
+  d = '<div>Second line</div></section></main>'
+  html = str.concat(a, b, c, d)
+  dom.parseHtml(html) -> page
+  dom.select(page, 'section') -> sections
+  list.get(sections, 0) -> section
+  dom.id(section) == 'catalog'
+  dom.text(section) -> all_text
+  dom.textContent(section) == all_text
+  str.contains(all_text, 'secret') == true
+  str.contains(all_text, 'ignored()') == true
+  dom.innerText(section) -> visible_text
+  str.contains(visible_text, 'Products') == true
+  str.contains(visible_text, 'bold') == true
+  str.contains(visible_text, 'secret') == false
+  str.contains(visible_text, 'ignored()') == false
+  str.contains(visible_text, 'Second') == true
+  io.outln('dom-text-helpers-ok')
+  dom.close(page)
+  OK

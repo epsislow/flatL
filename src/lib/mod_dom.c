@@ -7,6 +7,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
@@ -321,6 +322,144 @@ int flat_native_dom_text(FlatNativeCtx *ctx) {
     if (rc != 0) return dom_fail(ctx, "dom.text.alloc");
     return dom_ok(ctx);
 }
+static int dom_args(FlatNativeCtx *ctx, char *buf, char **args, int max, int wanted);
+static int dom_attr_value(lxb_dom_node_t *node, const char *name,
+                          const lxb_char_t **value, size_t *len);
+static int dom_has_attr(lxb_dom_node_t *node, const char *name);
+static int dom_node_named(lxb_dom_node_t *node, const char *name);
+
+int flat_native_dom_text_content(FlatNativeCtx *ctx) {
+    /* textContent is intentionally an alias of dom.text(): both return all
+       descendant text, without visibility filtering or whitespace changes. */
+    return flat_native_dom_text(ctx);
+}
+int flat_native_dom_id(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1];
+    lxb_dom_node_t *node;
+    const lxb_char_t *value = NULL;
+    size_t len = 0;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT)
+        return dom_fail(ctx, "dom.id.args");
+    value = lxb_dom_element_get_attribute(lxb_dom_interface_element(node),
+                                          (const lxb_char_t *)"id", 2, &len);
+    if (dom_make_string(ctx, value, value ? len : 0) != 0)
+        return dom_fail(ctx, "dom.id.alloc");
+    return dom_ok(ctx);
+}
+
+typedef struct {
+    lxb_char_t *data;
+    size_t len;
+    size_t cap;
+    int pending_space;
+    int pending_newline;
+} FlatDomInnerText;
+static int dom_inner_text_block(const lxb_dom_node_t *node) {
+    static const char *const names[] = {
+        "address", "article", "aside", "blockquote", "br", "dd", "div",
+        "dl", "dt", "fieldset", "figcaption", "figure", "footer", "form",
+        "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "li",
+        "main", "nav", "ol", "p", "pre", "section", "table", "tbody",
+        "td", "tfoot", "th", "thead", "tr", "ul"
+    };
+    size_t i;
+    if (!node || node->type != LXB_DOM_NODE_TYPE_ELEMENT) return 0;
+    for (i = 0; i < sizeof(names) / sizeof(names[0]); ++i)
+        if (dom_node_named((lxb_dom_node_t *)node, names[i])) return 1;
+    return 0;
+}
+static int dom_inner_text_hidden(lxb_dom_node_t *node) {
+    const lxb_char_t *type = NULL;
+    size_t len = 0;
+    if (!node || node->type != LXB_DOM_NODE_TYPE_ELEMENT) return 0;
+    if (dom_has_attr(node, "hidden")) return 1;
+    if (dom_node_named(node, "script") || dom_node_named(node, "style") ||
+        dom_node_named(node, "template") || dom_node_named(node, "noscript")) return 1;
+    if (dom_node_named(node, "input")) {
+        (void)dom_attr_value(node, "type", &type, &len);
+        if (type && len == 6 && strncasecmp((const char *)type, "hidden", 6) == 0) return 1;
+    }
+    return 0;
+}
+static int dom_inner_text_reserve(FlatDomInnerText *out, size_t extra) {
+    size_t need, cap;
+    lxb_char_t *next;
+    if (extra > SIZE_MAX - out->len - 1) return -1;
+    need = out->len + extra + 1;
+    if (need <= out->cap) return 0;
+    cap = out->cap ? out->cap : 128;
+    while (cap < need) {
+        if (cap > SIZE_MAX / 2) { cap = need; break; }
+        cap *= 2;
+    }
+    next = (lxb_char_t *)realloc(out->data, cap);
+    if (!next) return -1;
+    out->data = next; out->cap = cap;
+    return 0;
+}
+static int dom_inner_text_emit_space(FlatDomInnerText *out, int newline) {
+    if (out->len == 0) return 0;
+    if (newline) {
+        while (out->len && (out->data[out->len - 1] == ' ' || out->data[out->len - 1] == '\t')) out->len--;
+        if (out->len && out->data[out->len - 1] != '\n') {
+            if (dom_inner_text_reserve(out, 1) != 0) return -1;
+            out->data[out->len++] = '\n';
+        }
+    } else if (out->data[out->len - 1] != ' ' && out->data[out->len - 1] != '\n') {
+        if (dom_inner_text_reserve(out, 1) != 0) return -1;
+        out->data[out->len++] = ' ';
+    }
+    return 0;
+}
+static int dom_inner_text_walk(lxb_dom_node_t *node, FlatDomInnerText *out) {
+    lxb_dom_node_t *child;
+    if (!node) return 0;
+    if (node->type == LXB_DOM_NODE_TYPE_TEXT) {
+        lxb_char_t *text;
+        size_t len = 0, i;
+        text = lxb_dom_node_text_content(node, &len);
+        if (!text && len) return -1;
+        for (i = 0; i < len; ++i) {
+            unsigned char c = (unsigned char)text[i];
+            if (isspace(c)) { out->pending_space = 1; continue; }
+            if (out->pending_newline) {
+                if (dom_inner_text_emit_space(out, 1) != 0) return -1;
+                out->pending_newline = 0;
+            } else if (out->pending_space) {
+                if (dom_inner_text_emit_space(out, 0) != 0) return -1;
+            }
+            out->pending_space = 0;
+            if (dom_inner_text_reserve(out, 1) != 0) return -1;
+            out->data[out->len++] = (lxb_char_t)c;
+        }
+        return 0;
+    }
+    if (node->type != LXB_DOM_NODE_TYPE_ELEMENT && node->type != LXB_DOM_NODE_TYPE_DOCUMENT) return 0;
+    if (node->type == LXB_DOM_NODE_TYPE_ELEMENT && dom_inner_text_hidden(node)) return 0;
+    if (dom_inner_text_block(node)) out->pending_newline = 1;
+    for (child = node->first_child; child; child = child->next)
+        if (dom_inner_text_walk(child, out) != 0) return -1;
+    if (dom_inner_text_block(node)) { out->pending_space = 0; out->pending_newline = 1; }
+    return 0;
+}
+int flat_native_dom_inner_text(FlatNativeCtx *ctx) {
+    char buf[4096], *args[1];
+    lxb_dom_node_t *node;
+    FlatDomInnerText out;
+    int rc;
+    memset(&out, 0, sizeof(out));
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT)
+        return dom_fail(ctx, "dom.innerText.args");
+    rc = dom_inner_text_walk(node, &out);
+    while (out.len && (out.data[out.len - 1] == ' ' || out.data[out.len - 1] == '\n' || out.data[out.len - 1] == '\t')) out.len--;
+    if (rc == 0) rc = dom_make_string(ctx, out.data, out.len);
+    free(out.data);
+    if (rc != 0) return dom_fail(ctx, "dom.innerText");
+    return dom_ok(ctx);
+}
+
 int flat_native_dom_attr(FlatNativeCtx *ctx) {
     char buf[2048], *args[2], *name = NULL;
     int argc;

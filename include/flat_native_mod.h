@@ -337,5 +337,8 @@ int flat_native_dom_disabled(FlatNativeCtx *ctx);
 int flat_native_dom_required(FlatNativeCtx *ctx);
 int flat_native_dom_options(FlatNativeCtx *ctx);
 int flat_native_dom_selected_options(FlatNativeCtx *ctx);
+int flat_native_dom_id(FlatNativeCtx *ctx);
+int flat_native_dom_text_content(FlatNativeCtx *ctx);
+int flat_native_dom_inner_text(FlatNativeCtx *ctx);
 
 #endif
