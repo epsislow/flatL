@@ -190,6 +190,11 @@
       "id": "fs-native",
       "label": "Native fs",
       "file": "natives/fs.md"
+    },
+    {
+      "id": "dom-native",
+      "label": "Native dom",
+      "file": "natives/dom.md"
     }
   ]
 }

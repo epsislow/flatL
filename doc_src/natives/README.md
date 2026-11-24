@@ -2,7 +2,7 @@
 
 **Core natives** (`io`, `json`, `str`, `date`, `clock`, `mem`, `file`) are always linked into `flvm`. Call them directly; no header declaration required. API tables: [io.md](./io.md), [json.md](./json.md), [str.md](./str.md), [date.md](./date.md), [clock.md](./clock.md), [mem.md](./mem.md), [file.md](./file.md). Normative I/O: [IO.md](../IO.md), contexts: [IO_CONTEXTS.md](../IO_CONTEXTS.md). Optional alias: `use native mem with M` → **`mem.*` and `M.*` in that file only**.
 
-**Optional natives** extend the VM (for example trigonometry, HTTP, CSV). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
+**Optional natives** extend the VM (for example trigonometry, HTTP, DOM, CSV). Declare them in the **header** of each `.fl` file (before the first `#block`), in the same region as `use "file.fl" as #Prefix`.
 
 ## Syntax
 
@@ -37,7 +37,7 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `http`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `http`, `dom`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
@@ -66,6 +66,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | Module | Doc |
 |--------|-----|
 | `http` | [http.md](./http.md) — synchronous HTTP/HTTPS requests |
+| `dom` | [dom.md](./dom.md) — HTML5 parsing, DOM, CSS selectors |
 | `env` | [env.md](./env.md) — process / override env + program argv |
 | `path` | [path.md](./path.md) — string path join / base / dir / ext / normalize |
 | `fs` | [fs.md](./fs.md) — exists / mkdir / listDir / remove / isFile / isDir |

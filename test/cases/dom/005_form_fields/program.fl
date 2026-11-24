@@ -1,0 +1,33 @@
+use native dom
+use native obj
+use native list
+
+#main
+  html_a = '<form id="login"><input name="username" value="ady"><input type="checkbox" name="remember" value="1" checked>'
+  html_b = '<input type="checkbox" name="unchecked" value="x"><input name="tag" value="one"><input name="tag" value="two">'
+  html_c = '<textarea name="bio">hello</textarea><select name="country"><option value="ro" selected>Romania</option>'
+  html_d = '<option value="us">USA</option></select><select name="colors" multiple><option value="r" selected>Red</option>'
+  html_e = '<option value="b" selected>Blue</option></select></form>'
+  html = str.concat(html_a, html_b, html_c, html_d, html_e)
+  dom.parseHtml(html) -> page
+  dom.select(page, 'form#login') -> forms
+  list.get(forms, 0) -> form
+  dom.formFields(form) -> fields
+  obj.get(fields, '"username"') -> username
+  username == 'ady'
+  obj.get(fields, '"remember"') -> remember
+  remember == '1'
+  obj.has(fields, '"unchecked"') == false
+  obj.get(fields, '"tag"') -> tags
+  list.len(tags) -> tag_count
+  tag_count == 2
+  obj.get(fields, '"bio"') -> bio
+  bio == 'hello'
+  obj.get(fields, '"country"') -> country
+  country == 'ro'
+  obj.get(fields, '"colors"') -> colors
+  list.len(colors) -> color_count
+  color_count == 2
+  dom.close(page)
+  io.outln('dom-form-fields-ok')
+  OK

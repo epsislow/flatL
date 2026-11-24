@@ -121,6 +121,17 @@ static void register_embedded_fs(void) {
 }
 #endif
 
+#if FLAT_WITH_DOM
+static void register_embedded_dom(void) {
+    flat_native_plugin_register(FLAT_NATIVE_DOM_PARSE_HTML, flat_native_dom_parse_html);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_SELECT, flat_native_dom_select);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_TEXT, flat_native_dom_text);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_ATTR, flat_native_dom_attr);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_FORM_FIELDS, flat_native_dom_form_fields);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CLOSE, flat_native_dom_close);
+}
+#endif
+
 #if FLAT_WITH_HTTP
 static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
@@ -613,6 +624,9 @@ void flat_native_runtime_reset(void) {
     register_embedded_clock();
 #if FLAT_WITH_HTTP
     register_embedded_http();
+#endif
+#if FLAT_WITH_DOM
+    register_embedded_dom();
 #endif
 #if FLAT_WITH_ENV
     register_embedded_env();

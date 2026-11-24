@@ -16,6 +16,9 @@
 #include "flat_value.h"
 #include "flat_csv_runtime.h"
 #include "flat_clock_runtime.h"
+#if FLAT_WITH_DOM
+#include "flat_dom_runtime.h"
+#endif
 #include "flat_native_mods.h"
 #if FLAT_WITH_HTTP
 #include "flat_http_runtime.h"
@@ -98,6 +101,9 @@ typedef struct {
     FlatClockRuntime clock;
 #if FLAT_WITH_HTTP
     FlatHttpRuntime http;
+#endif
+#if FLAT_WITH_DOM
+    struct FlatDomRuntime *dom;
 #endif
 } VmState;
 
@@ -1143,6 +1149,11 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
 #else
             ctx.http = NULL;
 #endif
+#if FLAT_WITH_DOM
+            ctx.dom = st->dom;
+#else
+            ctx.dom = NULL;
+#endif
             ctx.var_slot_types = slot_types;
             ctx.var_has_slot_type = has_types;
             ctx.var_slot_frozen = frozen_flags;
@@ -1461,6 +1472,10 @@ static void vm_teardown(VmState *st, int rc) {
     }
 #if FLAT_WITH_HTTP
     flat_http_runtime_destroy(&st->http);
+#endif
+#if FLAT_WITH_DOM
+    flat_dom_runtime_destroy(st->dom);
+    st->dom = NULL;
 #endif
     if (st->vcx) {
         flat_vcx_runtime_destroy(st->vcx, st->coll, st->pool, &st->files);
@@ -2130,6 +2145,11 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
 #else
     ctx.http = NULL;
 #endif
+#if FLAT_WITH_DOM
+    ctx.dom = st->dom;
+#else
+    ctx.dom = NULL;
+#endif
     ctx.var_slot_types = slot_types;
     ctx.var_has_slot_type = has_types;
     ctx.var_slot_frozen = frozen_flags;
@@ -2247,7 +2267,14 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     flat_mem_stats_init(&st.live);
     st.vcx = flat_vcx_runtime_create(scratch_n);
     st.csv = flat_csv_runtime_create();
-    if (!st.vcx || !st.csv || !st.pool || !st.coll) {
+#if FLAT_WITH_DOM
+    st.dom = flat_dom_runtime_create();
+#endif
+    if (!st.vcx || !st.csv || !st.pool || !st.coll
+#if FLAT_WITH_DOM
+        || !st.dom
+#endif
+    ) {
         return vm_fail_setup(&st, opts);
     }
     flat_vcx_runtime_attach_vm(st.vcx,

@@ -13,6 +13,9 @@ static const char *const KNOWN_OPTIONAL_MODULES[] = {
 #if FLAT_WITH_HTTP
     FLAT_NATIVE_MODULE_HTTP,
 #endif
+#if FLAT_WITH_DOM
+    FLAT_NATIVE_MODULE_DOM,
+#endif
 #if FLAT_WITH_ENV
     FLAT_NATIVE_MODULE_ENV,
 #endif

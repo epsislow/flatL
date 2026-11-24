@@ -303,12 +303,19 @@ typedef enum {
     FLAT_NATIVE_FS_MKDIR,
     FLAT_NATIVE_FS_LIST_DIR,
     FLAT_NATIVE_FS_REMOVE,
+    FLAT_NATIVE_DOM_PARSE_HTML,
+    FLAT_NATIVE_DOM_SELECT,
+    FLAT_NATIVE_DOM_TEXT,
+    FLAT_NATIVE_DOM_ATTR,
+    FLAT_NATIVE_DOM_FORM_FIELDS,
+    FLAT_NATIVE_DOM_CLOSE,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
 #define FLAT_NATIVE_MODULE_DATE "date"
 #define FLAT_NATIVE_MODULE_CLOCK "clock"
 #define FLAT_NATIVE_MODULE_HTTP "http"
+#define FLAT_NATIVE_MODULE_DOM "dom"
 #define FLAT_NATIVE_MODULE_ENV "env"
 #define FLAT_NATIVE_MODULE_PATH "path"
 #define FLAT_NATIVE_MODULE_FS "fs"
@@ -330,6 +337,7 @@ struct FlatVcxRuntime;
 struct FlatCsvRuntime;
 struct FlatClockRuntime;
 struct FlatHttpRuntime;
+struct FlatDomRuntime;
 
 typedef struct {
     FlatStringPool *pool;
@@ -357,6 +365,7 @@ typedef struct {
     struct FlatCsvRuntime *csv; /* after panic_detail — ABI for optional .so plugins */
     struct FlatClockRuntime *clock; /* stopwatch resources */
     struct FlatHttpRuntime *http; /* synchronous HTTP request resources */
+    struct FlatDomRuntime *dom; /* HTML DOM resources */
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

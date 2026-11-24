@@ -4,9 +4,28 @@ endif
 CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude -D_GNU_SOURCE
 LDFLAGS ?=
 
-# Optional modules (lowercase). Example: make rebuild http=0
+# Optional modules (lowercase). Examples: make rebuild http=0 | dom=0 | dom_compile=1
 # Prefer `make rebuild http=0` (clean+build) when toggling — do not mix object caches.
 http ?= 1
+dom ?= 0
+dom_compile ?= 0
+ifeq ($(dom_compile),1)
+override dom := 1
+endif
+ifeq ($(dom),0)
+CFLAGS += -DFLAT_WITH_DOM=0
+else
+CFLAGS += -DFLAT_WITH_DOM=1
+ifeq ($(dom_compile),1)
+DOM_SRC = src/lib/mod_dom.c
+DOM_CFLAGS = -DFLAT_DOM_BUNDLED
+DOM_LIBS =
+else
+DOM_SRC = src/lib/mod_dom.c
+DOM_CFLAGS ?= $(shell pkg-config --cflags lexbor 2>/dev/null)
+DOM_LIBS ?= $(shell pkg-config --libs lexbor 2>/dev/null || echo -llexbor)
+endif
+endif
 ifeq ($(http),0)
 CFLAGS += -DFLAT_WITH_HTTP=0
 endif
@@ -106,7 +125,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(FLAT_PATH_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(FLAT_PATH_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
@@ -165,6 +184,9 @@ help:
 	@echo "  http=0            build without native http / libcurl"
 	@echo "  make rebuild http=0"
 	@echo "  make flvm http=0   (prefer rebuild when toggling http)"
+	@echo "  dom=1             enable native DOM (system Lexbor)"
+	@echo "  dom_compile=1     bundle/compile Lexbor from external/lexbor"
+	@echo "  make rebuild dom=0 | make rebuild dom_compile=1"
 	@echo "  flc|flvm|flatl --mods   list modules built into the binary"
 	@echo ""
 	@echo "Test generators (rewrite committed cases under test/cases/):"
@@ -252,19 +274,19 @@ date_generate_tests:
 # Sequential clean→build so `make -j` cannot delete bin/ while compiling.
 rebuild:
 	$(MAKE) clean
-	$(MAKE) all http=$(http)
-	$(MAKE) fleditor-wasm-optional http=$(http)
+	$(MAKE) all http=$(http) dom=$(dom) dom_compile=$(dom_compile)
+	$(MAKE) fleditor-wasm-optional http=$(http) dom=$(dom) dom_compile=$(dom_compile)
 
 rebuild-native:
 	$(MAKE) clean
-	$(MAKE) all http=$(http)
+	$(MAKE) all http=$(http) dom=$(dom) dom_compile=$(dom_compile)
 	@echo "OK: rebuild-native (bin/* only; run make fleditor-wasm when emcc is on PATH)"
 
 .PHONY: fleditor-wasm-optional
 fleditor-wasm-optional:
 	@if command -v emcc >/dev/null 2>&1; then \
-		$(MAKE) -f Makefile.wasm fleditor-wasm-clean http=$(http); \
-		$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http); \
+		$(MAKE) -f Makefile.wasm fleditor-wasm-clean http=$(http) dom=$(dom) dom_compile=$(dom_compile); \
+		$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http) dom=$(dom) dom_compile=$(dom_compile); \
 		echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"; \
 	else \
 		echo "OK: rebuild (bin/*; skipped fleditor-wasm — no emcc on PATH)"; \
@@ -274,7 +296,7 @@ fixtures: $(MIN_OK_FB)
 	@echo "OK: $(MIN_OK_FB)"
 
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(HTTP_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) -lm
 
 $(BINDIR)/libflat_math_trig.so: $(PLUGIN_TRIG_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_TRIG_SRCS) $(LDFLAGS) -lm
@@ -304,7 +326,7 @@ $(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ $(FBDUMP_SRCS) $(LDFLAGS) -lm
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR)
-	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(HTTP_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) -lm
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_TOOL_SRC) | $(BINDIR)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_TOOL_SRC) $(LDFLAGS) -lm
@@ -392,7 +414,7 @@ endef
 export FLEDITOR_NODE_HINT
 
 fleditor-wasm:
-	$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http)
+	$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http) dom=$(dom) dom_compile=$(dom_compile)
 
 fleditor-rebuild: rebuild
 	@echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R)."

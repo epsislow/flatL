@@ -1,0 +1,11 @@
+use native dom
+use native list
+
+#main
+  dom.parseHtml('<p>old</p>') -> old_page
+  dom.select(old_page, 'p') -> old_nodes
+  list.get(old_nodes, 0) -> old_node
+  dom.close(old_page)
+  dom.parseHtml('<p>new</p>') -> new_page
+  dom.text(old_node) -> value
+  OK

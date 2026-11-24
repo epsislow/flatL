@@ -18,7 +18,7 @@ make clean        # remove bin/ and generated min_ok.fb copies
 make rebuild      # clean + all (+ fleditor-wasm if emcc on PATH)
 ```
 
-### Optional modules (`http=0`)
+### Optional modules (`http=0`, `dom=0`)
 
 Some native modules can be left out of the toolchain at build time. Flags are **lowercase** Make variables on the same command line:
 
@@ -35,6 +35,16 @@ With `http=0`:
 - `flc --mods`, `flvm --mods`, `flatl --mods`, and WASM `flat_wasm_mods()` omit `http`
 
 Prefer **`make rebuild http=0`** (or `rebuild-native`) when switching between builds with and without HTTP. There is a single `bin/` tree; Make does not keep separate object caches per feature set.
+
+The optional HTML DOM module follows the same build convention:
+
+```bash
+make rebuild dom=0             # default: no DOM dependency
+make rebuild dom=1             # use Lexbor installed on the system
+make rebuild dom_compile=1     # compile the bundled Lexbor subset in external/lexbor
+```
+
+`dom_compile=1` implies `dom=1`. The bundled build is also the supported way to include DOM in WASM; `dom=1` without `dom_compile=1` expects a native system Lexbor installation. When DOM is disabled, `use native dom` is rejected at compile time and the `test/cases/dom/*` cases are skipped through `mods = "dom"`.
 
 List modules built into the current binaries:
 

@@ -313,6 +313,12 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("fs", "mkdir", "fs.mkdir(path)"),
     META_SIG("fs", "listDir", "fs.listDir(path)"),
     META_SIG("fs", "remove", "fs.remove(path)"),
+    META_SIG("dom", "parseHtml", "dom.parseHtml(html)"),
+    META_SIG("dom", "select", "dom.select(page, cssSelector)"),
+    META_SIG("dom", "text", "dom.text(node)"),
+    META_SIG("dom", "attr", "dom.attr(node, name)"),
+    META_SIG("dom", "formFields", "dom.formFields(form)"),
+    META_SIG("dom", "close", "dom.close(page)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -333,6 +339,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_DATE,
         FLAT_NATIVE_MODULE_CLOCK,
         FLAT_NATIVE_MODULE_HTTP,
+        FLAT_NATIVE_MODULE_DOM,
         FLAT_NATIVE_MODULE_ENV,
         FLAT_NATIVE_MODULE_PATH,
         FLAT_NATIVE_MODULE_FS,

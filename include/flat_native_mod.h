@@ -314,5 +314,11 @@ int flat_native_fs_is_dir(FlatNativeCtx *ctx);
 int flat_native_fs_mkdir(FlatNativeCtx *ctx);
 int flat_native_fs_list_dir(FlatNativeCtx *ctx);
 int flat_native_fs_remove(FlatNativeCtx *ctx);
+int flat_native_dom_parse_html(FlatNativeCtx *ctx);
+int flat_native_dom_select(FlatNativeCtx *ctx);
+int flat_native_dom_text(FlatNativeCtx *ctx);
+int flat_native_dom_attr(FlatNativeCtx *ctx);
+int flat_native_dom_form_fields(FlatNativeCtx *ctx);
+int flat_native_dom_close(FlatNativeCtx *ctx);
 
 #endif

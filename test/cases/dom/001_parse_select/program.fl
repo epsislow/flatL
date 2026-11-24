@@ -1,0 +1,17 @@
+use native dom
+use native list
+
+#main
+  html = '<html><body><main id="app"><a class="item" href="/one">First</a><a class="item" href="/two">Second</a></main></body></html>'
+  dom.parseHtml(html) -> page
+  dom.select(page, 'a.item') -> links
+  list.len(links) -> count
+  count == 2
+  list.get(links, 0) -> first
+  dom.text(first) -> label
+  label == 'First'
+  dom.attr(first, 'href') -> href
+  href == '/one'
+  dom.close(page)
+  io.outln('dom-select-ok')
+  OK

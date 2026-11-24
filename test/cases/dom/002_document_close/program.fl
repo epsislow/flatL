@@ -1,0 +1,7 @@
+use native dom
+
+#main
+  dom.parseHtml('<p>hello</p>') -> page
+  dom.close(page)
+  dom.close(page)
+  OK

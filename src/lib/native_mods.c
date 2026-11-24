@@ -19,6 +19,9 @@ static const FlatModEntry BUILT_MODS[] = {
 #if FLAT_WITH_HTTP
     {FLAT_NATIVE_MODULE_HTTP, 1},
 #endif
+#if FLAT_WITH_DOM
+    {FLAT_NATIVE_MODULE_DOM, 1},
+#endif
 #if FLAT_WITH_ENV
     {FLAT_NATIVE_MODULE_ENV, 1},
 #endif
