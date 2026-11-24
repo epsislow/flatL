@@ -194,38 +194,53 @@ static int sh_exe_path(char *out, size_t out_sz) {
     return -1;
 }
 
-/* sh -c '…' with standard single-quote escaping ('\"'\"''). */
-static int escape_sh_single_quoted(const char *cmd, char *out, size_t out_sz) {
-    const char *s;
-    char *d = out;
-    size_t left = out_sz > 0 ? out_sz - 1 : 0;
+/* Write body to a unique .sh under the temp parent; path_out uses Windows separators. */
+static int write_temp_sh_script(const char *body, char *path_out, size_t path_out_sz) {
+    char parent[FLAT_PORT_PATH_MAX];
+    char win_tmp[FLAT_PORT_PATH_MAX];
+    FILE *f;
+    unsigned long pid;
+    unsigned tick;
+    static unsigned seq;
+    size_t n;
 
-    *d++ = '\'';
-    left--;
-    for (s = cmd; *s && left > 0; s++) {
-        if (*s == '\'') {
-            const char ins[] = "'\"'\"'";
-            size_t k;
-            for (k = 0; k < sizeof ins - 1 && left > 0; k++) {
-                *d++ = ins[k];
-                left--;
-            }
-            if (k < sizeof ins - 1) {
-                return -1;
-            }
-        } else {
-            *d++ = *s;
-            left--;
+    if (!body || !path_out || path_out_sz == 0) {
+        return -1;
+    }
+    if (flat_port_temp_parent(parent, sizeof parent, NULL) != 0) {
+        if (GetTempPathA((DWORD)sizeof win_tmp, win_tmp) == 0 || !dir_writable(win_tmp)) {
+            return -1;
+        }
+        if (snprintf(parent, sizeof parent, "%s", win_tmp) >= (int)sizeof parent) {
+            return -1;
         }
     }
-    if (*s) {
+    pid = (unsigned long)GetCurrentProcessId();
+    tick = (unsigned)GetTickCount();
+    seq++;
+    if (snprintf(path_out, path_out_sz, "%s\\flatl_sh_%lu_%u_%u.sh", parent, pid, tick, seq) >=
+        (int)path_out_sz) {
         return -1;
     }
-    if (left < 1) {
+    f = fopen(path_out, "wb");
+    if (!f) {
         return -1;
     }
-    *d++ = '\'';
-    *d = '\0';
+    n = strlen(body);
+    if (n > 0 && fwrite(body, 1, n, f) != n) {
+        fclose(f);
+        DeleteFileA(path_out);
+        return -1;
+    }
+    if (fputc('\n', f) == EOF) {
+        fclose(f);
+        DeleteFileA(path_out);
+        return -1;
+    }
+    if (fclose(f) != 0) {
+        DeleteFileA(path_out);
+        return -1;
+    }
     return 0;
 }
 
@@ -369,8 +384,10 @@ fail:
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size) {
     char shpath[FLAT_PORT_PATH_MAX];
     char prefixed[16576];
-    char quoted[16384];
+    char script_win[FLAT_PORT_PATH_MAX];
+    char script_posix[FLAT_PORT_PATH_MAX];
     char *cmdline = NULL;
+    char *p;
     size_t cap;
     int rc;
 
@@ -388,22 +405,41 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
         return -1;
     }
 
-    if (escape_sh_single_quoted(prefixed, quoted, sizeof quoted) != 0) {
+    /*
+     * Run via a temp .sh file instead of sh -c '…'. Nested single quotes from
+     * printf '…' / printf '' become '"'"' escapes that inject " into the
+     * CreateProcess command line; MSYS2 argv parsing then mangled -c and
+     * yielded exit 127 (command not found). A script path needs only Windows
+     * double-quote escaping around the two paths.
+     */
+    if (write_temp_sh_script(prefixed, script_win, sizeof script_win) != 0) {
         return -1;
+    }
+    if (snprintf(script_posix, sizeof script_posix, "%s", script_win) >= (int)sizeof script_posix) {
+        DeleteFileA(script_win);
+        return -1;
+    }
+    for (p = script_posix; *p; p++) {
+        if (*p == '\\') {
+            *p = '/';
+        }
     }
 
-    cap = strlen(shpath) + strlen(quoted) + 32;
+    cap = strlen(shpath) + strlen(script_posix) + 16;
     cmdline = malloc(cap);
     if (!cmdline) {
+        DeleteFileA(script_win);
         return -1;
     }
-    if (snprintf(cmdline, cap, "\"%s\" -c %s", shpath, quoted) >= (int)cap) {
+    if (snprintf(cmdline, cap, "\"%s\" \"%s\"", shpath, script_posix) >= (int)cap) {
         free(cmdline);
+        DeleteFileA(script_win);
         return -1;
     }
 
     rc = run_create_process_capture(cmdline, out_buf, out_buf_size, exit_code);
     free(cmdline);
+    DeleteFileA(script_win);
     return rc;
 }
 
@@ -451,18 +487,57 @@ static void win_paths_to_posix_slashes_outside_quotes(char *cmd) {
     }
 }
 
+/*
+ * printf '' | REST  →  REST </dev/null
+ * Empty stdin via pipe+printf is the common case.toml pattern; env/dom already
+ * use </dev/null. Redirect avoids the pipe and matches what works on MSYS2.
+ */
+static void rewrite_empty_printf_pipe(char *cmd, size_t cmd_cap) {
+    static const char needle[] = "printf '' | ";
+    static const char suffix[] = " </dev/null";
+    char *pos;
+    char *rest;
+    size_t before;
+    size_t rest_len;
+    size_t need;
+
+    if (!cmd || cmd_cap < sizeof suffix) {
+        return;
+    }
+    pos = strstr(cmd, needle);
+    if (!pos) {
+        return;
+    }
+    if (pos != cmd) {
+        char prev = pos[-1];
+        if (prev != ' ' && prev != '\t' && prev != ';') {
+            return;
+        }
+    }
+    rest = pos + (sizeof needle - 1);
+    before = (size_t)(pos - cmd);
+    rest_len = strlen(rest);
+    need = before + rest_len + (sizeof suffix - 1) + 1;
+    if (need > cmd_cap) {
+        return;
+    }
+    memmove(pos, rest, rest_len + 1);
+    memcpy(cmd + before + rest_len, suffix, sizeof suffix);
+}
+
 void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
     if (!cmd || cmd_cap == 0) {
         return;
     }
     /*
-     * flat_port_shell_capture runs commands via MSYS2 sh -c '…'. Backslashes in
-     * Windows paths are treated as shell escapes (e.g. D:\w\...\bin\flc.exe
+     * flat_port_shell_capture runs commands via MSYS2 sh (temp .sh). Backslashes
+     * in Windows paths are treated as shell escapes (e.g. D:\w\...\bin\flc.exe
      * becomes D:w...binflc.exe and exits 127). Forward slashes work for Win32
      * APIs and our tools, so normalize path segments for the POSIX shell.
      * Do not rewrite '\' inside single-quoted literals (printf '...\n').
      */
     win_paths_to_posix_slashes_outside_quotes(cmd);
+    rewrite_empty_printf_pipe(cmd, cmd_cap);
     replace_token(cmd, cmd_cap, "\\bin\\flc ", "\\bin\\flc.exe ");
     replace_token(cmd, cmd_cap, "\\bin\\flvm ", "\\bin\\flvm.exe ");
     replace_token(cmd, cmd_cap, "/bin/flc ", "/bin/flc.exe ");
