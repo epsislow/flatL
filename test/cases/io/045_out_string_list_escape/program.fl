@@ -1,0 +1,4 @@
+#main
+  xs = ['Mark', 'a"b', '']
+  io.outln(xs)
+  OK

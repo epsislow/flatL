@@ -1,6 +1,6 @@
-# flatL — JSON & collection I/O (planned)
+# flatL — JSON & collection I/O
 
-**Status:** **implemented** in VM (v0.4) — `src/common/value_json.c`, tests in `test/cases/json/`.  
+**Status:** **implemented** in VM (v0.4) — `src/common/value_json.c`, tests in `test/cases/json/` and `test/cases/io/044`–`048` (LIST/OBJECT `io.out*`).  
 Builds on [IO.md](./IO.md) (streams, prompts, `->`, PANIC on `io.in*`) and [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (LIST/OBJECT).
 
 Native call tables: [natives/json.md](./natives/json.md), [natives/io.md](./natives/io.md) (`io.in_list` / `io.in_object` / `io.in_bools`).
@@ -289,6 +289,8 @@ io.outln({ a: 1 })            → {"a":1}\n   (JSON object)
 **Not simple line:** LIST with mixed types (NUMBER + STRING), nested LIST/OBJECT elements, or BOOL elements → **`json.stringify(list)`** on `io.out` / `io.outln`.
 
 **BOOL list:** not simple-line in v1; use **`json.stringify`** on output (or future dedicated format). Input remains **`io.in_bools`**.
+
+**Implementation note:** `flat_json_fprint_list_io` / `flat_json_fprint_object_io` stream to `FILE` (simple lines and full JSON). They do **not** use a fixed 16 KiB stringify scratch buffer.
 
 ---
 

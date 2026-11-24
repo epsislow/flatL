@@ -744,6 +744,44 @@ static int json_escape_append(char *buf, size_t *pos, size_t max, const char *s,
     return 0;
 }
 
+static int json_escape_fprint(FILE *out, const char *s, size_t len) {
+    size_t i;
+    if (!out || (!s && len)) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        if (c == '"' || c == '\\') {
+            if (fputc('\\', out) == EOF || fputc((int)c, out) == EOF) {
+                return -1;
+            }
+            continue;
+        }
+        if (c == '\n') {
+            if (fputc('\\', out) == EOF || fputc('n', out) == EOF) {
+                return -1;
+            }
+            continue;
+        }
+        if (c == '\r') {
+            if (fputc('\\', out) == EOF || fputc('r', out) == EOF) {
+                return -1;
+            }
+            continue;
+        }
+        if (c == '\t') {
+            if (fputc('\\', out) == EOF || fputc('t', out) == EOF) {
+                return -1;
+            }
+            continue;
+        }
+        if (fputc((int)c, out) == EOF) {
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int stringify_value(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
                            char *buf, size_t *pos, size_t max, int depth);
 
@@ -830,7 +868,6 @@ static int stringify_array(const FlatValue *v, FlatStringPool *pool, FlatCollect
 static int stringify_value(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
                            char *buf, size_t *pos, size_t max, int depth) {
     char tmp[128];
-    char sbuf[4096];
     size_t slen;
 
     if (!v) {
@@ -869,15 +906,10 @@ static int stringify_value(const FlatValue *v, FlatStringPool *pool, FlatCollect
         if (!p) {
             return -1;
         }
-        if (slen >= sizeof sbuf) {
-            return -1;
-        }
-        memcpy(sbuf, p, slen);
-        sbuf[slen] = '\0';
         if (append_char(buf, pos, max, '"') != 0) {
             return -1;
         }
-        if (json_escape_append(buf, pos, max, sbuf, slen) != 0) {
+        if (json_escape_append(buf, pos, max, (const char *)p, slen) != 0) {
             return -1;
         }
         return append_char(buf, pos, max, '"');
@@ -886,6 +918,130 @@ static int stringify_value(const FlatValue *v, FlatStringPool *pool, FlatCollect
         return stringify_array(v, pool, coll, buf, pos, max, depth);
     case VAL_OBJECT:
         return stringify_object(v, pool, coll, buf, pos, max, depth);
+    default:
+        return -1;
+    }
+}
+
+static int stringify_value_fprint(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
+                                  FILE *out, int depth);
+
+static int stringify_object_fprint(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
+                                   FILE *out, int depth) {
+    int len = 0;
+    int i;
+    const char *keys[FLAT_OBJ_MAX_KEYS];
+
+    if (!out || depth > FLAT_JSON_MAX_DEPTH) {
+        return -1;
+    }
+    if (flat_obj_len(coll, v->u.coll_id, &len) != 0) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        if (flat_obj_entry_at(coll, v->u.coll_id, i, &keys[i], NULL) != 0) {
+            return -1;
+        }
+    }
+    qsort(keys, (size_t)len, sizeof keys[0], cmp_str);
+    if (fputc('{', out) == EOF) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        FlatValue val;
+        char keybuf[FLAT_OBJ_KEY_MAX + 1];
+        if (i > 0 && fputc(',', out) == EOF) {
+            return -1;
+        }
+        snprintf(keybuf, sizeof keybuf, "%s", keys[i]);
+        if (fputc('"', out) == EOF) {
+            return -1;
+        }
+        if (json_escape_fprint(out, keybuf, strlen(keybuf)) != 0) {
+            return -1;
+        }
+        if (fputc('"', out) == EOF || fputc(':', out) == EOF) {
+            return -1;
+        }
+        if (flat_obj_get(coll, v->u.coll_id, keybuf, &val) != 0) {
+            return -1;
+        }
+        if (stringify_value_fprint(&val, pool, coll, out, depth + 1) != 0) {
+            return -1;
+        }
+    }
+    return fputc('}', out) == EOF ? -1 : 0;
+}
+
+static int stringify_array_fprint(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
+                                  FILE *out, int depth) {
+    int len = 0;
+    int i;
+
+    if (!out || depth > FLAT_JSON_MAX_DEPTH) {
+        return -1;
+    }
+    if (flat_list_len(coll, v->u.coll_id, &len) != 0) {
+        return -1;
+    }
+    if (fputc('[', out) == EOF) {
+        return -1;
+    }
+    for (i = 0; i < len; i++) {
+        FlatValue el;
+        if (i > 0 && fputc(',', out) == EOF) {
+            return -1;
+        }
+        if (flat_list_get(coll, v->u.coll_id, i, &el) != 0) {
+            return -1;
+        }
+        if (stringify_value_fprint(&el, pool, coll, out, depth + 1) != 0) {
+            return -1;
+        }
+    }
+    return fputc(']', out) == EOF ? -1 : 0;
+}
+
+static int stringify_value_fprint(const FlatValue *v, FlatStringPool *pool, FlatCollectionPool *coll,
+                                  FILE *out, int depth) {
+    size_t slen;
+
+    if (!v || !out) {
+        return -1;
+    }
+    switch (v->tag) {
+    case VAL_NULL:
+        return fputs("null", out) == EOF ? -1 : 0;
+    case VAL_BOOL:
+        return fputs(v->u.boolean ? "true" : "false", out) == EOF ? -1 : 0;
+    case VAL_NUMBER:
+        flat_number_fprint_decimal(out, v);
+        return 0;
+    case VAL_STR_INLINE:
+        if (fputc('"', out) == EOF) {
+            return -1;
+        }
+        if (json_escape_fprint(out, v->u.ins.bytes, v->u.ins.len) != 0) {
+            return -1;
+        }
+        return fputc('"', out) == EOF ? -1 : 0;
+    case VAL_STR_REF: {
+        const uint8_t *p = flat_pool_read(pool, v->u.ref_id, &slen);
+        if (!p) {
+            return -1;
+        }
+        if (fputc('"', out) == EOF) {
+            return -1;
+        }
+        if (json_escape_fprint(out, (const char *)p, slen) != 0) {
+            return -1;
+        }
+        return fputc('"', out) == EOF ? -1 : 0;
+    }
+    case VAL_LIST:
+        return stringify_array_fprint(v, pool, coll, out, depth);
+    case VAL_OBJECT:
+        return stringify_object_fprint(v, pool, coll, out, depth);
     default:
         return -1;
     }
@@ -964,7 +1120,7 @@ int flat_json_fprint_list_io(FILE *out, const FlatValue *v, FlatStringPool *pool
     int len = 0;
     int i;
 
-    if (!v || v->tag != VAL_LIST || !coll) {
+    if (!v || v->tag != VAL_LIST || !coll || !out) {
         return -1;
     }
     if (flat_list_len(coll, v->u.coll_id, &len) != 0) {
@@ -979,16 +1135,14 @@ int flat_json_fprint_list_io(FILE *out, const FlatValue *v, FlatStringPool *pool
             if (flat_list_get(coll, v->u.coll_id, i, &el) != 0) {
                 return -1;
             }
-            if (i > 0) {
-                fputc(',', out);
+            if (i > 0 && fputc(',', out) == EOF) {
+                return -1;
             }
-            fprintf(out, "%.17g", flat_number_as_f64(&el));
+            flat_number_fprint_decimal(out, &el);
         }
         return 0;
     }
     if (flat_json_list_is_homogeneous_strings(coll, v->u.coll_id)) {
-        char buf[4096];
-        size_t pos;
         for (i = 0; i < len; i++) {
             FlatValue el;
             size_t slen = 0;
@@ -1009,39 +1163,30 @@ int flat_json_fprint_list_io(FILE *out, const FlatValue *v, FlatStringPool *pool
             } else {
                 return -1;
             }
-            if (i > 0) {
-                fputc(',', out);
+            if (i > 0 && fputc(',', out) == EOF) {
+                return -1;
             }
-            pos = 0;
-            buf[0] = '\0';
-            append_char(buf, &pos, sizeof buf, '"');
-            json_escape_append(buf, &pos, sizeof buf, sp, slen);
-            append_char(buf, &pos, sizeof buf, '"');
-            fputs(buf, out);
+            if (fputc('"', out) == EOF) {
+                return -1;
+            }
+            if (json_escape_fprint(out, sp, slen) != 0) {
+                return -1;
+            }
+            if (fputc('"', out) == EOF) {
+                return -1;
+            }
         }
         return 0;
     }
-    {
-        char jbuf[16384];
-        if (flat_json_stringify(v, pool, coll, jbuf, sizeof jbuf) != 0) {
-            return -1;
-        }
-        fputs(jbuf, out);
-        return 0;
-    }
+    return stringify_value_fprint(v, pool, coll, out, 0);
 }
 
 int flat_json_fprint_object_io(FILE *out, const FlatValue *v, FlatStringPool *pool,
                                FlatCollectionPool *coll) {
-    char buf[16384];
-    if (!v || v->tag != VAL_OBJECT) {
+    if (!v || v->tag != VAL_OBJECT || !out) {
         return -1;
     }
-    if (flat_json_stringify(v, pool, coll, buf, sizeof buf) != 0) {
-        return -1;
-    }
-    fputs(buf, out);
-    return 0;
+    return stringify_value_fprint(v, pool, coll, out, 0);
 }
 
 int flat_json_fprint_null_io(FILE *out) {

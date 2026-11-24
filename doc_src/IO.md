@@ -43,9 +43,15 @@ Recovered PANIC (handler `#panic.*` / `#panic.any`) does **not** log to stderr b
 | Type | Display |
 |------|---------|
 | STRING | Raw bytes (no surrounding quotes) |
-| NUMBER | `%g` style |
+| NUMBER | decimal (`flat_number_fprint_decimal`) |
 | BOOL | `true` / `false` |
-| LIST / OBJECT | v0.3: debug shape; **planned:** LIST simple comma line, OBJECT `json.stringify` — [IO_COLLECTIONS.md §6](./IO_COLLECTIONS.md#6-output) |
+| NULL | JSON token `null` |
+| **OBJECT** | **`json.stringify`** (keys sorted) — [IO_COLLECTIONS.md §6](./IO_COLLECTIONS.md#6-output) |
+| **LIST** (empty) | empty string (`outln` → blank line) |
+| **LIST** homogeneous NUMBER/STRING | simple comma line (STRING elements quoted/escaped) |
+| **LIST** mixed / nested / BOOL | **`json.stringify(list)`** |
+
+`io.out*` streams OBJECT / non-simple LIST JSON directly to the sink (no fixed-size stringify buffer on that path).
 
 Examples:
 

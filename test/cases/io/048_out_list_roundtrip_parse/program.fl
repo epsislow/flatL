@@ -1,0 +1,12 @@
+#main
+  xs = [1, 0, 2, 0, 0]
+  mem.ref_empty() -> buf
+  io.ctxout(buf)
+  io.outln(xs)
+  io.ctxout(tout)
+  ys = json.parse_list(buf)
+  json.stringify(xs) -> a
+  json.stringify(ys) -> b
+  a == b
+  io.outln('ok')
+  OK

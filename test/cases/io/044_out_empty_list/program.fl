@@ -1,0 +1,9 @@
+#main
+  xs = []
+  io.out('before')
+  io.out(xs)
+  io.outln('after')
+  ys = []
+  io.outln(ys)
+  io.outln('done')
+  OK
