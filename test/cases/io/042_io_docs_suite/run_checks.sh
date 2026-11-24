@@ -15,7 +15,7 @@ printf '%s' "$OUT" | grep -q '....' || {
   echo "missing truncate ellipsis"
   exit 1
 }
-printf '%s' "$OUT" | grep -q '(34 functions)' || {
+printf '%s' "$OUT" | grep -q '(36 functions)' || {
   echo "missing cap functions footer"
   exit 1
 }
