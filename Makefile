@@ -75,6 +75,17 @@ RE_CFLAGS ?= $(shell pkg-config --cflags libpcre2-8 2>/dev/null)
 RE_LIBS ?= $(shell pkg-config --libs libpcre2-8 2>/dev/null || echo -lpcre2-8)
 endif
 endif
+hash ?= 1
+ifeq ($(hash),0)
+CFLAGS += -DFLAT_WITH_HASH=0
+HASH_SRC =
+HASH_CFLAGS =
+else
+HASH_SRC = src/lib/mod_hash.c src/common/flat_hash.c \
+	external/hash/WjCryptLib_Md5.c external/hash/WjCryptLib_Sha1.c \
+	external/hash/WjCryptLib_Sha256.c external/hash/WjCryptLib_Sha512.c
+HASH_CFLAGS = -Iexternal/hash
+endif
 
 # Quiet progress (default). V=1 → classic Make command echo + no step labels.
 V ?= 0
@@ -89,11 +100,12 @@ _mod_path := $(if $(filter 1,$(path)),path,no-path)
 _mod_fs := $(if $(filter 1,$(fs)),fs,no-fs)
 _mod_enc := $(if $(filter 1,$(enc)),enc,no-enc)
 _mod_re := $(if $(filter 1,$(re)),$(if $(filter 1,$(re_compile)),re,re-sys),no-re)
-RECIPE := $(_mod_http),$(_mod_dom),$(_mod_env),$(_mod_path),$(_mod_fs),$(_mod_enc),$(_mod_re)
+_mod_hash := $(if $(filter 1,$(hash)),hash,no-hash)
+RECIPE := $(_mod_http),$(_mod_dom),$(_mod_env),$(_mod_path),$(_mod_fs),$(_mod_enc),$(_mod_re),$(_mod_hash)
 
 # Recurse with the same feature flags + verbosity.
 MAKE_REC = $(MAKE) V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-	env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile)
+	env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile) hash=$(hash)
 
 ifeq ($(V),1)
 step_begin = :
@@ -159,8 +171,9 @@ PLUGIN_COMMON_SRCS = src/lib/native_util.c src/lib/native_parse_rhs.c src/common
 PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MDIM_SRCS = src/lib/plugin_math_mdim_entry.c src/lib/mod_math_mdim.c $(PLUGIN_COMMON_SRCS)
+# flat_rng lives in flvm/flatl (shared process RNG for math.random + hash.randomBytes).
+# Do not link a second copy into the math plugin.
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c src/lib/flat_math_calc.c \
-               src/common/flat_rng.c src/common/flat_time.c \
                $(PLUGIN_COMMON_SRCS)
 PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c src/lib/mod_list_values_to.c \
                $(PLUGIN_COMMON_SRCS)
@@ -215,7 +228,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
@@ -276,7 +289,7 @@ help:
 	@echo ""
 	@echo "Optional modules (pass on the same make line; lowercase):"
 	@echo "  http=0            build without native http / libcurl"
-	@echo "  env=0 path=0 fs=0 enc=0 re=0  omit optional embedded modules"
+	@echo "  env=0 path=0 fs=0 enc=0 re=0 hash=0  omit optional embedded modules"
 	@echo "  make rebuild http=0"
 	@echo "  make flvm http=0   (prefer rebuild when toggling http)"
 	@echo "  dom_compile=1     default: bundle Lexbor from external/lexbor"
@@ -388,9 +401,9 @@ rebuild-native:
 fleditor-wasm-optional:
 	@if command -v emcc >/dev/null 2>&1; then \
 		$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-			env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile) fleditor-wasm-clean; \
+			env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile) hash=$(hash) fleditor-wasm-clean; \
 		$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-			env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile) fleditor-wasm; \
+			env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile) hash=$(hash) fleditor-wasm; \
 	else \
 		if [ "$(V)" = "1" ]; then echo "skipped fleditor-wasm — no emcc on PATH"; \
 		else printf '  %-20s ' "fleditor-wasm"; echo SKIP; fi; \
@@ -409,7 +422,7 @@ ensure-libz-1:
 
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
 	@$(call step_begin,flvm)
-	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -Wl,--export-dynamic $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 	@$(call step_end)
 
 $(BINDIR)/libflat_math_trig.so: $(PLUGIN_TRIG_SRCS) | $(BINDIR)
@@ -459,7 +472,7 @@ $(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
 	@$(call step_begin,flatl)
-	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -Wl,--export-dynamic $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 	@$(call step_end)
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_TOOL_SRC) | $(BINDIR)
@@ -571,7 +584,7 @@ export FLEDITOR_NODE_HINT
 
 fleditor-wasm:
 	$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-		env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile) fleditor-wasm
+		env=$(env) path=$(path) fs=$(fs) enc=$(enc) re=$(re) re_compile=$(re_compile) hash=$(hash) fleditor-wasm
 
 fleditor-rebuild: rebuild
 	@$(if $(filter 1,$(V)),echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R).",:)

@@ -1,0 +1,10 @@
+suite = "hash"
+mods = "hash"
+id = 3
+desc = "hash.digest unknown algo panics"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "hash.digest.algo"

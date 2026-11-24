@@ -1,0 +1,14 @@
+use native hash
+use native math with m
+
+#main
+  m.seed(1)
+  hash.randomBytes(16) -> a
+  str.len(a) == 16
+  m.seed(1)
+  hash.randomBytes(16) -> b
+  a == b
+  hash.randomBytes(1) -> c
+  str.len(c) == 1
+  io.outln('ok')
+  OK

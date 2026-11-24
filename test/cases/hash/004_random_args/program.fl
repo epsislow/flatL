@@ -1,0 +1,5 @@
+use native hash
+
+#main
+  hash.randomBytes(0)
+  OK

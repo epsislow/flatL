@@ -138,6 +138,13 @@ static void register_embedded_re(void) {
 }
 #endif
 
+#if FLAT_WITH_HASH
+static void register_embedded_hash(void) {
+    flat_native_plugin_register(FLAT_NATIVE_HASH_DIGEST, flat_native_hash_digest);
+    flat_native_plugin_register(FLAT_NATIVE_HASH_RANDOM_BYTES, flat_native_hash_random_bytes);
+}
+#endif
+
 #if FLAT_WITH_DOM
 static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_PARSE_HTML, flat_native_dom_parse_html);
@@ -684,6 +691,9 @@ void flat_native_runtime_reset(void) {
 #endif
 #if FLAT_WITH_RE
     register_embedded_re();
+#endif
+#if FLAT_WITH_HASH
+    register_embedded_hash();
 #endif
     register_embedded_vcx();
     register_embedded_executor();

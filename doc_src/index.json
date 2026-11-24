@@ -202,6 +202,11 @@
       "file": "natives/re.md"
     },
     {
+      "id": "hash-native",
+      "label": "Native hash",
+      "file": "natives/hash.md"
+    },
+    {
       "id": "dom-native",
       "label": "Native dom",
       "file": "natives/dom.md"

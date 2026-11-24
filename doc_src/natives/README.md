@@ -37,7 +37,7 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `http`, `dom`, `env`, `path`, `fs`, `enc`, `re`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `http`, `dom`, `env`, `path`, `fs`, `enc`, `re`, `hash`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
@@ -72,6 +72,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `fs` | [fs.md](./fs.md) — exists / mkdir / listDir / remove / isFile / isDir |
 | `enc` | [enc.md](./enc.md) — encode/decode hex, base64, url*, bin/oct/b32 |
 | `re` | [re.md](./re.md) — PCRE2 test/match/find/replace/split |
+| `hash` | [hash.md](./hash.md) — digest (md5/sha*) + randomBytes |
 | `math` | [math.md](./math.md) |
 | `math.trig` | [math.trig.md](./math.trig.md) |
 | `math.stats` | [math.stats.md](./math.stats.md) |

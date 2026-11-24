@@ -1,0 +1,5 @@
+use native hash
+
+#main
+  hash.digest('blake2', 'x')
+  OK
