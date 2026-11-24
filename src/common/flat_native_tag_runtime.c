@@ -208,6 +208,7 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
                                       int n) {
     switch ((FlatNativeId)native_id) {
     case FLAT_NATIVE_MATH_CALC:
+    case FLAT_NATIVE_MATH_RANDOM:
     case FLAT_NATIVE_MATH_SUM2:
     case FLAT_NATIVE_MATH_MIN2:
     case FLAT_NATIVE_MATH_MAX2:

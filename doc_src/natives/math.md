@@ -122,6 +122,39 @@ With **`?`** or **`~`**, behavior matches other natives (silent skip or `#or` br
 
 Implementation: `src/lib/flat_math_calc.c`, handler in `src/lib/mod_math.c`.
 
+## Random (`seed` / `random`)
+
+Shared process RNG (`flat_rng`) — also used later by `hash.randomBytes`. **Not** cryptographic. The VM **auto-seeds** at start; `seed` overrides.
+
+| Call | Returns | Notes |
+|------|---------|--------|
+| `seed(n)` | NULL | Sets RNG state from NUMBER |
+| `random()` | **f64** in `[0, 1)` | Optional tag: only `f32` / `f64` |
+| `random(min, max)` | **u32** in `[min, max]` **inclusive** (default) | Bounds must be whole numbers; `min ≤ max` |
+| `random(min, max ; "i64")` | tagged integer inclusive | Same bounds rules |
+| `random(min, max ; "f64")` | float in half-open `[min, max)` | `min < max` |
+
+**There is no** `random(max)` — use `random(0, max)`.
+
+Typical seed:
+
+```text
+use native math with m
+
+#main
+  m.seed(clock.now_us())
+  m.random(1, 100) -> secret
+  OK
+```
+
+| Panic | When |
+|-------|------|
+| `math.seed.args` | Bad / missing seed |
+| `math.random.args` | Not 0 or 2 args |
+| `math.random.range` | `min > max` / empty float interval |
+| `math.random.bounds` | Non-whole bounds in integer mode |
+| `math.random.tag` | `random()` with a non-float type tag |
+
 ## Two scalars (distinct names)
 
 | Call | Returns |
@@ -161,6 +194,7 @@ Output:
 |------|------|
 | `src/lib/mod_math.c` | Handlers |
 | `src/lib/flat_math_calc.c` | `calc` expression parser |
+| `src/common/flat_rng.c` | Shared RNG for `seed` / `random` |
 | `src/lib/plugin_math_entry.c` | Plugin entry |
 | `include/flat_native.h` | IDs `FLAT_NATIVE_MATH_*` |
 

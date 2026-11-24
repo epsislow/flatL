@@ -1,13 +1,14 @@
 #include "flat_number.h"
 #include "flat_math_calc.h"
-#include "flat_number.h"
 #include "flat_native_mod.h"
 #include "flat_native_tag.h"
 #include "flat_native_util.h"
+#include "flat_rng.h"
 #include "flat_slot_type.h"
 #include "flat_value.h"
 
 #include <math.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -557,4 +558,152 @@ int flat_native_math_calc(FlatNativeCtx *ctx) {
         return 0;
     }
     return flat_value_set_number(ctx->out, result);
+}
+
+static int math_fail(FlatNativeCtx *ctx, const char *why) {
+    if (!ctx || !ctx->io_status) {
+        return -1;
+    }
+    *ctx->io_status = FLAT_IO_ERR;
+    snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", why ? why : "math.random");
+    return -1;
+}
+
+static int math_set_tagged_number(FlatNativeCtx *ctx, double result, const FlatSlotType *ty,
+                                  int has_ty) {
+    FlatValue nv;
+    FlatValue staged;
+    char chk[64];
+    const FlatSchemaCatalog *cat;
+
+    if (!has_ty || !ty) {
+        return flat_value_set_number(ctx->out, result);
+    }
+    flat_value_set_number(&nv, result);
+    staged = nv;
+    cat = ctx->bc ? &ctx->bc->schemas : NULL;
+    if (flat_slot_type_check_value(ty, &nv, ctx->pool, ctx->coll, cat, &staged, chk,
+                                   sizeof chk) != 0) {
+        return math_fail(ctx, "math.random.range");
+    }
+    *ctx->out = staged;
+    return 0;
+}
+
+static int bounds_as_i64(double x, int64_t *out) {
+    if (x != x || x > 9.223372036854775e18 || x < -9.223372036854775e18) {
+        return -1;
+    }
+    if (x != trunc(x)) {
+        return -1;
+    }
+    *out = (int64_t)x;
+    return 0;
+}
+
+int flat_native_math_seed(FlatNativeCtx *ctx) {
+    double n;
+    uint64_t seed;
+
+    if (!ctx || !ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    *ctx->io_status = FLAT_IO_OK;
+    if (number_from_inner(ctx, &n) != 0) {
+        return math_fail(ctx, "math.seed.args");
+    }
+    if (n != n) {
+        return math_fail(ctx, "math.seed.args");
+    }
+    if (n >= 0.0 && n < 18446744073709551616.0 && n == trunc(n)) {
+        seed = (uint64_t)n;
+    } else {
+        memcpy(&seed, &n, sizeof(uint64_t) < sizeof(double) ? sizeof(uint64_t) : sizeof(double));
+    }
+    flat_rng_seed_u64(seed);
+    return flat_value_set_null(ctx->out);
+}
+
+int flat_native_math_random(FlatNativeCtx *ctx) {
+    char inner_buf[512];
+    char *left;
+    char *right;
+    FlatSlotType result_ty;
+    int has_result_ty = 0;
+    int is_float_tag = 0;
+    double result;
+
+    if (!ctx || !ctx->out || !ctx->io_status) {
+        return -1;
+    }
+    ctx->panic_detail[0] = '\0';
+    *ctx->io_status = FLAT_IO_OK;
+    if (flat_native_tag_resolve_type(ctx, FLAT_NATIVE_MATH_RANDOM, &result_ty, &has_result_ty) !=
+        0) {
+        *ctx->io_status = FLAT_IO_ERR;
+        return -1;
+    }
+    if (has_result_ty) {
+        if (!flat_slot_type_is_numeric(&result_ty)) {
+            return math_fail(ctx, "type.tag.not_accepted");
+        }
+        is_float_tag =
+            (result_ty.kind == FLAT_SLOT_TYPE_F32 || result_ty.kind == FLAT_SLOT_TYPE_F64);
+    }
+
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
+    if (flat_native_trim(inner_buf)[0] == '\0') {
+        if (has_result_ty && !is_float_tag) {
+            return math_fail(ctx, "math.random.tag");
+        }
+        result = flat_rng_f64_unit();
+        return math_set_tagged_number(ctx, result, &result_ty, has_result_ty);
+    }
+
+    if (split_two_args(inner_buf, &left, &right) != 0) {
+        return math_fail(ctx, "math.random.args");
+    }
+    {
+        double amin;
+        double amax;
+        if (number_from_expr(ctx, left, &amin) != 0 || number_from_expr(ctx, right, &amax) != 0) {
+            return math_fail(ctx, "math.random.args");
+        }
+        if (amin != amin || amax != amax || amin > amax) {
+            return math_fail(ctx, "math.random.range");
+        }
+
+        if (has_result_ty && is_float_tag) {
+            if (amin == amax) {
+                return math_fail(ctx, "math.random.range");
+            }
+            result = amin + (amax - amin) * flat_rng_f64_unit();
+            return math_set_tagged_number(ctx, result, &result_ty, 1);
+        }
+
+        {
+            int64_t lo;
+            int64_t hi;
+            if (bounds_as_i64(amin, &lo) != 0 || bounds_as_i64(amax, &hi) != 0 || lo > hi) {
+                return math_fail(ctx, "math.random.bounds");
+            }
+            if (lo >= 0) {
+                result = (double)flat_rng_u64_range((uint64_t)lo, (uint64_t)hi);
+            } else if (hi < 0) {
+                uint64_t span = (uint64_t)(hi - lo);
+                result = (double)(lo + (int64_t)flat_rng_u64_range(0, span));
+            } else {
+                uint64_t span = (uint64_t)hi + (uint64_t)(-(lo));
+                result = (double)(lo + (int64_t)flat_rng_u64_range(0, span));
+            }
+            if (!has_result_ty) {
+                FlatSlotType u32ty;
+                flat_slot_type_clear(&u32ty);
+                u32ty.kind = FLAT_SLOT_TYPE_U32;
+                return math_set_tagged_number(ctx, result, &u32ty, 1);
+            }
+            return math_set_tagged_number(ctx, result, &result_ty, 1);
+        }
+    }
 }

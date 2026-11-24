@@ -16,6 +16,7 @@
 #include "flat_value.h"
 #include "flat_csv_runtime.h"
 #include "flat_clock_runtime.h"
+#include "flat_rng.h"
 #if FLAT_WITH_DOM
 #include "flat_dom_runtime.h"
 #endif
@@ -2257,6 +2258,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     flat_native_runtime_reset();
     flat_date_run_begin(flat_date_global_state());
     flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);
+    flat_rng_seed_auto();
     memset(&st, 0, sizeof st);
     st.run_opts = opts;
     st.bc = bc;

@@ -1,0 +1,17 @@
+use native math with m
+
+#main
+  m.seed(42)
+  m.random(1, 100) -> a
+  m.seed(42)
+  m.random(1, 100) -> b
+  a == b
+  a >= 1
+  a <= 100
+  m.random() -> u
+  u >= 0
+  u < 1
+  m.random(0, 0) -> z
+  z == 0
+  io.outln('ok')
+  OK

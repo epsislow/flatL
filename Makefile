@@ -128,6 +128,7 @@ PLUGIN_TRIG_SRCS = src/lib/plugin_math_trig_entry.c src/lib/mod_math_trig.c $(PL
 PLUGIN_STATS_SRCS = src/lib/plugin_math_stats_entry.c src/lib/mod_math_stats.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MDIM_SRCS = src/lib/plugin_math_mdim_entry.c src/lib/mod_math_mdim.c $(PLUGIN_COMMON_SRCS)
 PLUGIN_MATH_SRCS = src/lib/plugin_math_entry.c src/lib/mod_math.c src/lib/flat_math_calc.c \
+               src/common/flat_rng.c src/common/flat_time.c \
                $(PLUGIN_COMMON_SRCS)
 PLUGIN_LIST_SRCS = src/lib/plugin_list_entry.c src/lib/mod_list.c src/lib/mod_list_values_to.c \
                $(PLUGIN_COMMON_SRCS)
@@ -184,7 +185,7 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/flat_slot_type.c src/common/flat_list_typed.c src/common/flat_list_shape.c \
           src/common/flat_schema.c \
           src/common/flat_dynamic_bind.c \
-          src/common/value_ops.c src/common/flat_lit.c src/common/flat_obj_path.c \
+          src/common/value_ops.c src/common/flat_lit.c src/common/flat_rng.c src/common/flat_obj_path.c \
           src/common/flat_vcx.c src/common/flat_executor.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/flat_native_tag_common.c src/common/flat_native_tag_runtime.c \

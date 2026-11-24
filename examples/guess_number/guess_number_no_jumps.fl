@@ -9,8 +9,8 @@ use native math with m
 func:executor #fl_executor.global.scope
 
 #main
-  date.now() -> seed
-  m.calc('seed %% 100 + 1') -> secret
+  m.seed(clock.now_us())
+  m.random(1, 100) -> secret
   score = 1000
   last = 0
   hint = 0
