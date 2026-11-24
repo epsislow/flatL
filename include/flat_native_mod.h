@@ -320,6 +320,12 @@ int flat_native_fs_remove(FlatNativeCtx *ctx);
 int flat_native_enc_encode(FlatNativeCtx *ctx);
 int flat_native_enc_decode(FlatNativeCtx *ctx);
 
+int flat_native_re_test(FlatNativeCtx *ctx);
+int flat_native_re_match(FlatNativeCtx *ctx);
+int flat_native_re_find(FlatNativeCtx *ctx);
+int flat_native_re_replace(FlatNativeCtx *ctx);
+int flat_native_re_split(FlatNativeCtx *ctx);
+
 int flat_native_dom_parse_html(FlatNativeCtx *ctx);
 int flat_native_dom_select(FlatNativeCtx *ctx);
 int flat_native_dom_text(FlatNativeCtx *ctx);

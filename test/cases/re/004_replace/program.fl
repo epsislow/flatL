@@ -1,0 +1,8 @@
+use native re
+
+#main
+  re.replace('a', 'banana', 'o') == 'bonono'
+  re.replace('(\d+)', 'a1b2', 'N') == 'aNbN'
+  re.replace('z', 'abc', 'Q') == 'abc'
+  io.outln('ok')
+  OK

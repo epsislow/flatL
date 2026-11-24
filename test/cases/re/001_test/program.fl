@@ -1,0 +1,9 @@
+use native re
+
+#main
+  re.test('abc', 'xxabcxx') == true
+  re.test('zzz', 'xxabcxx') == false
+  re.test('\d+', 'a12b') == true
+  re.test('^abc', 'xabc') == false
+  io.outln('ok')
+  OK

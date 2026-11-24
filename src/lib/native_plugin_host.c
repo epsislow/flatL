@@ -128,6 +128,16 @@ static void register_embedded_enc(void) {
 }
 #endif
 
+#if FLAT_WITH_RE
+static void register_embedded_re(void) {
+    flat_native_plugin_register(FLAT_NATIVE_RE_TEST, flat_native_re_test);
+    flat_native_plugin_register(FLAT_NATIVE_RE_MATCH, flat_native_re_match);
+    flat_native_plugin_register(FLAT_NATIVE_RE_FIND, flat_native_re_find);
+    flat_native_plugin_register(FLAT_NATIVE_RE_REPLACE, flat_native_re_replace);
+    flat_native_plugin_register(FLAT_NATIVE_RE_SPLIT, flat_native_re_split);
+}
+#endif
+
 #if FLAT_WITH_DOM
 static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_PARSE_HTML, flat_native_dom_parse_html);
@@ -671,6 +681,9 @@ void flat_native_runtime_reset(void) {
 #endif
 #if FLAT_WITH_ENC
     register_embedded_enc();
+#endif
+#if FLAT_WITH_RE
+    register_embedded_re();
 #endif
     register_embedded_vcx();
     register_embedded_executor();

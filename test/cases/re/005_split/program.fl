@@ -1,0 +1,14 @@
+use native re
+use native list
+
+#main
+  re.split(',', 'a,b,c') -> s
+  list.len(s) == 3
+  list.get(s, 0) == 'a'
+  list.get(s, 1) == 'b'
+  list.get(s, 2) == 'c'
+  re.split(',', 'solo') -> s2
+  list.len(s2) == 1
+  list.get(s2, 0) == 'solo'
+  io.outln('ok')
+  OK

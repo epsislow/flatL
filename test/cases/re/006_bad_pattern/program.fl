@@ -1,0 +1,5 @@
+use native re
+
+#main
+  re.test('(', 'x')
+  OK

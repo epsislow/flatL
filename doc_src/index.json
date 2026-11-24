@@ -197,6 +197,11 @@
       "file": "natives/enc.md"
     },
     {
+      "id": "re-native",
+      "label": "Native re",
+      "file": "natives/re.md"
+    },
+    {
       "id": "dom-native",
       "label": "Native dom",
       "file": "natives/dom.md"

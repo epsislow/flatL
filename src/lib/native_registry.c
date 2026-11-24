@@ -346,6 +346,11 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("math", "random", "math.random(min?, max?)"),
     META_SIG("enc", "encode", "enc.encode(scheme, data)"),
     META_SIG("enc", "decode", "enc.decode(scheme, data)"),
+    META_SIG("re", "test", "re.test(pattern, subject)"),
+    META_SIG("re", "match", "re.match(pattern, subject)"),
+    META_SIG("re", "find", "re.find(pattern, subject)"),
+    META_SIG("re", "replace", "re.replace(pattern, subject, replacement)"),
+    META_SIG("re", "split", "re.split(pattern, subject)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -371,6 +376,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_PATH,
         FLAT_NATIVE_MODULE_FS,
         FLAT_NATIVE_MODULE_ENC,
+        FLAT_NATIVE_MODULE_RE,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

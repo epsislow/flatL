@@ -1,0 +1,13 @@
+use native re
+use native list
+
+#main
+  re.match('(\d+)-(\d+)', '12-34') -> m
+  list.get(m, 0) == '12-34'
+  list.get(m, 1) == '12'
+  list.get(m, 2) == '34'
+  re.match('(a)?b', 'b') -> m2
+  list.get(m2, 0) == 'b'
+  list.get(m2, 1) == ''
+  io.outln('ok')
+  OK

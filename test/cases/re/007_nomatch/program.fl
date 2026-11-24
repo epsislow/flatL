@@ -1,0 +1,5 @@
+use native re
+
+#main
+  re.find('zzz', 'abc')
+  OK

@@ -1,0 +1,10 @@
+use native re
+use native list
+
+#main
+  re.find('b+', 'aaabbcc') -> m
+  list.get(m, 0) == 'bb'
+  re.find('(\d+)', 'x42y') -> m2
+  list.get(m2, 1) == '42'
+  io.outln('ok')
+  OK

@@ -20,6 +20,9 @@
 #ifndef FLAT_WITH_ENC
 #define FLAT_WITH_ENC 1
 #endif
+#ifndef FLAT_WITH_RE
+#define FLAT_WITH_RE 1
+#endif
 
 /* 1 if this toolchain binary was built with the named module. */
 int flat_native_mod_is_built(const char *mod);
