@@ -4,13 +4,17 @@ endif
 CFLAGS  ?= -Wall -Wextra -std=c11 -Iinclude -D_GNU_SOURCE
 LDFLAGS ?=
 
-# Optional modules (lowercase). Examples: make rebuild http=0 | dom=0 | dom_compile=1
+# Optional modules (lowercase). Examples: make rebuild http=0 | dom_compile=0 | dom=0
 # Prefer `make rebuild http=0` (clean+build) when toggling — do not mix object caches.
 http ?= 1
-dom ?= 0
-dom_compile ?= 0
+# Default: bundle Lexbor from external/lexbor (already in repo).
+# dom_compile=0 → no DOM unless you also pass dom=1 (system Lexbor).
+# Explicit dom=0 wins even when dom_compile stays at its default 1.
+dom_compile ?= 1
 ifeq ($(dom_compile),1)
-override dom := 1
+dom ?= 1
+else
+dom ?= 0
 endif
 ifeq ($(dom),0)
 CFLAGS += -DFLAT_WITH_DOM=0
@@ -198,9 +202,9 @@ help:
 	@echo "  http=0            build without native http / libcurl"
 	@echo "  make rebuild http=0"
 	@echo "  make flvm http=0   (prefer rebuild when toggling http)"
-	@echo "  dom=1             enable native DOM (system Lexbor)"
-	@echo "  dom_compile=1     bundle/compile Lexbor from external/lexbor"
-	@echo "  make rebuild dom=0 | make rebuild dom_compile=1"
+	@echo "  dom_compile=1     default: bundle Lexbor from external/lexbor"
+	@echo "  dom_compile=0     build without DOM (or dom=1 for system Lexbor)"
+	@echo "  make rebuild | make rebuild dom_compile=0 | make rebuild dom=0"
 	@echo "  flc|flvm|flatl --mods   list modules built into the binary"
 	@echo ""
 	@echo "Test generators (rewrite committed cases under test/cases/):"

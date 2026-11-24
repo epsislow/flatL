@@ -10,6 +10,6 @@ This directory contains the Lexbor v3.0.0 amalgamated source used by FlatL's opt
 - `LICENSE` is the upstream Apache-2.0 license.
 - `version` identifies the upstream release.
 
-The file is compiled only with `dom_compile=1`. It is not part of the default FlatL
-build. To regenerate it, obtain the matching upstream source release and run the
-command above from its root directory.
+The file is compiled by default (`dom_compile=1`). Pass `dom_compile=0` (or `dom=0`)
+to leave it out of the FlatL build. To regenerate it, obtain the matching upstream
+source release and run the command above from its root directory.

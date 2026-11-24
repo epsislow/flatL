@@ -262,33 +262,29 @@ use native list
 
 ## Build
 
-DOM is disabled by default.
+DOM defaults to the bundled Lexbor amalgamation in `external/lexbor/` (`dom_compile=1`).
 
 ```sh
+make rebuild
+```
+
+Disable DOM:
+
+```sh
+make rebuild dom_compile=0
+# or
 make rebuild dom=0
 ```
 
-Use a Lexbor installation visible to the compiler and linker:
+Use a Lexbor installation visible to the compiler and linker (native only):
 
 ```sh
-make rebuild dom=1
+make rebuild dom=1 dom_compile=0
 ```
 
-Or compile the bundled minimal Lexbor amalgamation from `external/lexbor/`:
+`dom_compile=1` defaults `dom` to `1`. The bundled source is generated from Lexbor v3.0.0 and contains the `html` and `selectors` modules plus their dependencies. Explicit `dom=0` still disables DOM even when `dom_compile` remains at its default.
 
-```sh
-make rebuild dom_compile=1
-```
-
-`dom_compile=1` automatically enables `dom`. The bundled source is generated from Lexbor v3.0.0 and contains the `html` and `selectors` modules plus their dependencies. It is compiled only when DOM is enabled. The default FlatL build does not compile or link Lexbor.
-
-For the browser/WASM build, bundled Lexbor is required:
-
-```sh
-make rebuild dom_compile=1
-```
-
-The system-library mode (`dom=1 dom_compile=0`) is for native builds.
+For the browser/WASM build, bundled Lexbor is required whenever DOM is enabled (default rebuild already does that).
 
 ## Resource model and limits
 

@@ -5,12 +5,15 @@ EMCC       ?= emcc
 WASM_DIR   = docs/fleditor_site/wasm
 WASM_JS    = $(WASM_DIR)/flatl.js
 
-# Optional modules (same as top-level Makefile): http=0 env=0 dom=0 dom_compile=1
+# Optional modules (same as top-level Makefile): http=0 env=0 dom_compile=0 | dom=0
 http ?= 1
-dom ?= 0
-dom_compile ?= 0
+# Default matches native Makefile: bundled Lexbor. WASM still requires dom_compile=1
+# when DOM is enabled (no system Lexbor path).
+dom_compile ?= 1
 ifeq ($(dom_compile),1)
-override dom := 1
+dom ?= 1
+else
+dom ?= 0
 endif
 ifeq ($(dom),0)
 WASM_DOM_CFLAGS = -DFLAT_WITH_DOM=0
