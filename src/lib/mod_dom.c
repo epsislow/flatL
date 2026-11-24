@@ -13,12 +13,14 @@
 #include <ctype.h>
 
 #ifdef FLAT_DOM_BUNDLED
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+/* Upstream amalgamation: ptrdiff_t vs unsigned (e.g. end - pos < rep_len). */
+#pragma GCC diagnostic ignored "-Wsign-compare"
 #endif
 #include "../../external/lexbor/lexbor.c"
-#if defined(__GNUC__)
+#if defined(__GNUC__) || defined(__clang__)
 #pragma GCC diagnostic pop
 #endif
 #else

@@ -16,7 +16,10 @@ make test         # compile, then ./bin/run_tests (flc + flvm)
 make test-flatl   # same cases via [flatl] in case.toml (see run_tests --flatl)
 make clean        # remove bin/ and generated min_ok.fb copies
 make rebuild      # clean + all (+ fleditor-wasm if emcc on PATH)
+make V=1 rebuild  # same, but print full compiler / tool command lines
 ```
+
+By default Make is **quiet**: it prints a `recipe:` line (module flags) and one `OK`/`SKIP` line per step. Pass **`V=1`** for classic verbose command echo.
 
 ### Optional modules (`http=0`, `dom_compile=0`)
 

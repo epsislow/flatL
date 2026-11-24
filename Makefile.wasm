@@ -59,6 +59,19 @@ FS_SRC = src/lib/mod_fs.c src/common/flat_fs.c
 endif
 FLAT_PATH_SRC = src/common/flat_path.c
 
+# Quiet progress (same as top-level Makefile). V=1 → full emcc command lines.
+V ?= 0
+ifneq ($(V),1)
+MAKEFLAGS += -s --no-print-directory
+endif
+ifeq ($(V),1)
+step_begin = :
+step_end = :
+else
+step_begin = printf '  %-20s ' "$(1)"
+step_end = echo OK
+endif
+
 WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2 $(WASM_HTTP_CFLAGS) $(WASM_DOM_CFLAGS) $(WASM_ENV_CFLAGS) $(WASM_PATH_CFLAGS) $(WASM_FS_CFLAGS)
 WASM_LDFLAGS = \
   -s MODULARIZE=1 \
@@ -118,13 +131,16 @@ WASM_SRC = src/fleditor_wasm/flat_wasm.c src/fleditor_wasm/flat_wasm_io.c src/co
 .PHONY: fleditor-wasm fleditor-wasm-clean
 
 fleditor-wasm: $(WASM_JS)
-	@echo "OK: $(WASM_JS) $(WASM_DIR)/flatl.wasm"
 
 $(WASM_DIR):
-	mkdir -p $(WASM_DIR)
+	@mkdir -p $(WASM_DIR)
 
 $(WASM_JS): $(WASM_SRC) | $(WASM_DIR)
+	@$(call step_begin,fleditor-wasm)
 	$(EMCC) $(WASM_CFLAGS) $(WASM_SRC) -o $(WASM_JS) $(WASM_LDFLAGS)
+	@$(call step_end)
 
 fleditor-wasm-clean:
+	@$(call step_begin,fleditor-wasm-clean)
 	rm -f $(WASM_DIR)/flatl.js $(WASM_DIR)/flatl.wasm
+	@$(call step_end)

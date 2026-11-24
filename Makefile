@@ -46,6 +46,37 @@ ifeq ($(fs),0)
 CFLAGS += -DFLAT_WITH_FS=0
 endif
 
+# Quiet progress (default). V=1 → classic Make command echo + no step labels.
+V ?= 0
+ifneq ($(V),1)
+MAKEFLAGS += -s --no-print-directory
+endif
+
+_mod_http := $(if $(filter 1,$(http)),http,no-http)
+_mod_dom := $(if $(filter 1,$(dom)),$(if $(filter 1,$(dom_compile)),dom,dom-sys),no-dom)
+_mod_env := $(if $(filter 1,$(env)),env,no-env)
+_mod_path := $(if $(filter 1,$(path)),path,no-path)
+_mod_fs := $(if $(filter 1,$(fs)),fs,no-fs)
+RECIPE := $(_mod_http),$(_mod_dom),$(_mod_env),$(_mod_path),$(_mod_fs)
+
+# Recurse with the same feature flags + verbosity.
+MAKE_REC = $(MAKE) V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
+	env=$(env) path=$(path) fs=$(fs)
+
+ifeq ($(V),1)
+step_begin = :
+step_end = :
+step_skip = :
+announce = :
+done_msg = :
+else
+step_begin = printf '  %-20s ' "$(1)"
+step_end = echo OK
+step_skip = printf '  %-20s ' "$(1)"; echo SKIP
+announce = echo "$(1)"
+done_msg = echo "done: $(1)"
+endif
+
 # MinGW default stack (~1MB) is too small for current flvm/flatl on Windows:
 # STATUS_STACK_OVERFLOW (0xC00000FD) is reported by MSYS2 as exit 127.
 ifeq ($(OS),Windows_NT)
@@ -198,6 +229,10 @@ help:
 	@echo "  make rebuild      clean + all; fleditor-wasm if emcc on PATH"
 	@echo "  make rebuild-native  clean + all only (never runs emcc)"
 	@echo ""
+	@echo "Verbosity:"
+	@echo "  make / make rebuild     quiet progress (recipe + OK/SKIP steps)"
+	@echo "  make V=1 …              show full compiler / tool command lines"
+	@echo ""
 	@echo "Optional modules (pass on the same make line; lowercase):"
 	@echo "  http=0            build without native http / libcurl"
 	@echo "  make rebuild http=0"
@@ -237,8 +272,8 @@ help:
 	@echo "  make fleditor-wasm-multifile-smoke WASM multifile smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-order-flow-smoke   WASM user def (order_flow; needs fleditor-wasm)"
 	@echo ""
-	@echo "Note: if sources unchanged, make skips compile (up to date)."
-	@echo "      Targets still print 'OK: …' so you know nothing failed."
+	@echo "Note: if sources unchanged, make skips that compile step (no line)."
+	@echo "      Failed steps print FAIL (or the compiler error) — use V=1 for full cmds."
 	@echo ""
 	@echo "Test:"
 	@echo "  make test         all + run_tests --categ=default (excludes bench/slow)"
@@ -255,114 +290,148 @@ help:
 
 # Full toolchain binaries + bytecode fixtures (still does not run tests)
 all: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/run_tests$(EXEEXT) $(BINDIR)/port_check$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/fbdump$(EXEEXT) $(BINDIR)/gen_doc_site$(EXEEXT) $(PLUGIN_TARGET) fixtures
-	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/fbdump bin/gen_doc_site bin/run_tests bin/port_check (+ min_ok.fb fixtures)"
+ifeq ($(PLUGIN_TARGET),)
+	@$(call step_skip,plugins)
+endif
+	@$(call done_msg,all)
 
 tools: $(BINDIR)/flvm$(EXEEXT) $(BINDIR)/flc$(EXEEXT) $(BINDIR)/flatl$(EXEEXT) $(BINDIR)/mkfb$(EXEEXT) $(BINDIR)/fbdump$(EXEEXT) $(PLUGIN_TARGET)
-	@echo "OK: bin/flc bin/flvm bin/flatl bin/mkfb bin/fbdump"
+	@$(call done_msg,tools)
 
 flvm: $(BINDIR)/flvm$(EXEEXT)
-	@echo "OK: bin/flvm"
 
 flc: $(BINDIR)/flc$(EXEEXT)
-	@echo "OK: bin/flc"
 
 flatl: $(BINDIR)/flatl$(EXEEXT)
-	@echo "OK: bin/flatl"
 
 mkfb: $(BINDIR)/mkfb$(EXEEXT)
-	@echo "OK: bin/mkfb"
 
 fbdump: $(BINDIR)/fbdump$(EXEEXT)
-	@echo "OK: bin/fbdump"
 
 run_tests: $(BINDIR)/run_tests$(EXEEXT)
-	@echo "OK: bin/run_tests"
 
 io_generate_tests: $(BINDIR)/io_generate_tests$(EXEEXT)
+	@$(call step_begin,io_generate_tests)
 	$(BINDIR)/io_generate_tests$(EXEEXT)
+	@$(call step_end)
 
 json_generate_tests: $(BINDIR)/json_generate_tests$(EXEEXT)
+	@$(call step_begin,json_generate_tests)
 	find test/cases/json -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} +
 	$(BINDIR)/json_generate_tests$(EXEEXT)
+	@$(call step_end)
 
 date_generate_tests:
+	@$(call step_begin,date_generate_tests)
 	python3 scripts/gen_date_tests.py
-	@echo "OK: test/cases/date/ (75 cases)"
+	@$(call step_end)
 
 # Sequential clean→build so `make -j` cannot delete bin/ while compiling.
 rebuild:
-	$(MAKE) clean
-	$(MAKE) all http=$(http) dom=$(dom) dom_compile=$(dom_compile)
-	$(MAKE) fleditor-wasm-optional http=$(http) dom=$(dom) dom_compile=$(dom_compile)
+	@$(call announce,recipe: $(RECIPE))
+	$(MAKE_REC) clean
+	$(MAKE_REC) all
+	$(MAKE_REC) fleditor-wasm-optional
+	@$(call done_msg,rebuild)
 
 rebuild-native:
-	$(MAKE) clean
-	$(MAKE) all http=$(http) dom=$(dom) dom_compile=$(dom_compile)
-	@echo "OK: rebuild-native (bin/* only; run make fleditor-wasm when emcc is on PATH)"
+	@$(call announce,recipe: $(RECIPE))
+	$(MAKE_REC) clean
+	$(MAKE_REC) all
+	@$(call done_msg,rebuild-native)
 
 .PHONY: fleditor-wasm-optional
 fleditor-wasm-optional:
 	@if command -v emcc >/dev/null 2>&1; then \
-		$(MAKE) -f Makefile.wasm fleditor-wasm-clean http=$(http) dom=$(dom) dom_compile=$(dom_compile); \
-		$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http) dom=$(dom) dom_compile=$(dom_compile); \
-		echo "OK: rebuild (bin/* + docs/fleditor_site/wasm/)"; \
+		$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
+			env=$(env) path=$(path) fs=$(fs) fleditor-wasm-clean; \
+		$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
+			env=$(env) path=$(path) fs=$(fs) fleditor-wasm; \
 	else \
-		echo "OK: rebuild (bin/*; skipped fleditor-wasm — no emcc on PATH)"; \
+		if [ "$(V)" = "1" ]; then echo "skipped fleditor-wasm — no emcc on PATH"; \
+		else printf '  %-20s ' "fleditor-wasm"; echo SKIP; fi; \
 	fi
 
 fixtures: $(MIN_OK_FB)
-	@echo "OK: $(MIN_OK_FB)"
 
 # Shim for MSYS2 UCRT64 curl↔zlib DLL name mismatch (safe no-op if already present).
 ensure-libz-1:
 	@zdir="$(or $(MINGW_PREFIX),/ucrt64)/bin"; \
 	if [ -f "$$zdir/zlib1.dll" ] && [ ! -e "$$zdir/libz-1.dll" ]; then \
+		printf '  %-20s ' "libz-1 shim"; \
 		(ln -sf zlib1.dll "$$zdir/libz-1.dll" 2>/dev/null) || cp -f "$$zdir/zlib1.dll" "$$zdir/libz-1.dll"; \
-		echo "OK: $$zdir/libz-1.dll -> zlib1.dll (MSYS2 UCRT64 curl shim)"; \
+		echo OK; \
 	fi
 
 $(BINDIR)/flvm$(EXEEXT): src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
+	@$(call step_begin,flvm)
 	$(CC) $(CFLAGS) -o $@ src/flvm/main.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) -lm
+	@$(call step_end)
 
 $(BINDIR)/libflat_math_trig.so: $(PLUGIN_TRIG_SRCS) | $(BINDIR)
+	@$(call step_begin,plugin-math-trig)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_TRIG_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/libflat_math_stats.so: $(PLUGIN_STATS_SRCS) | $(BINDIR)
+	@$(call step_begin,plugin-math-stats)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_STATS_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/libflat_math_mdim.so: $(PLUGIN_MDIM_SRCS) | $(BINDIR)
+	@$(call step_begin,plugin-math-mdim)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_MDIM_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/libflat_math.so: $(PLUGIN_MATH_SRCS) | $(BINDIR)
+	@$(call step_begin,plugin-math)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_MATH_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/libflat_list.so: $(PLUGIN_LIST_SRCS) | $(BINDIR)
+	@$(call step_begin,plugin-list)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_LIST_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/libflat_obj.so: $(PLUGIN_OBJ_SRCS) | $(BINDIR)
+	@$(call step_begin,plugin-obj)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_OBJ_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/libflat_csv.so: $(PLUGIN_CSV_SRCS) | $(BINDIR)
+	@$(call step_begin,plugin-csv)
 	$(CC) $(CFLAGS) -fPIC -shared -o $@ $(PLUGIN_CSV_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/flc$(EXEEXT): src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(DISASM_SRC) $(PORT_SRC) | $(BINDIR)
+	@$(call step_begin,flc)
 	$(CC) $(CFLAGS) -o $@ src/flc/main.c $(FGIR_SRC) $(FB_SRC) $(DISASM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/fbdump$(EXEEXT): $(FBDUMP_SRCS) | $(BINDIR)
+	@$(call step_begin,fbdump)
 	$(CC) $(CFLAGS) -o $@ $(FBDUMP_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/flatl$(EXEEXT): $(FLATL_SRC) | $(BINDIR) $(ENSURE_LIBZ_1)
+	@$(call step_begin,flatl)
 	$(CC) $(CFLAGS) -o $@ $(FLATL_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) -lm
+	@$(call step_end)
 
 $(BINDIR)/mkfb$(EXEEXT): src/mkfb/main.c $(FB_TOOL_SRC) | $(BINDIR)
+	@$(call step_begin,mkfb)
 	$(CC) $(CFLAGS) -o $@ src/mkfb/main.c $(FB_TOOL_SRC) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/gen_doc_site$(EXEEXT): $(GEN_DOC_SITE_SRCS) | $(BINDIR)
+	@$(call step_begin,gen_doc_site)
 	$(CC) $(CFLAGS) -o $@ $(GEN_DOC_SITE_SRCS) $(LDFLAGS)
+	@$(call step_end)
 
 docs gen_doc_site: $(BINDIR)/gen_doc_site$(EXEEXT)
+	@$(call step_begin,docs)
 	$(BINDIR)/gen_doc_site$(EXEEXT)
-	@echo "OK: docs/doc_site/"
+	@$(call step_end)
 
 RUN_TESTS_SRCS = \
 	src/run_tests/main.c \
@@ -373,10 +442,14 @@ RUN_TESTS_SRCS = \
 	$(PORT_LIB)
 
 $(BINDIR)/run_tests$(EXEEXT): $(RUN_TESTS_SRCS) | $(BINDIR)
+	@$(call step_begin,run_tests)
 	$(CC) $(CFLAGS) -o $@ $(RUN_TESTS_SRCS) $(LDFLAGS) -lm
+	@$(call step_end)
 
 $(BINDIR)/port_check$(EXEEXT): src/port_check/main.c $(STR_SRC) | $(BINDIR)
+	@$(call step_begin,port_check)
 	$(CC) $(CFLAGS) -o $@ src/port_check/main.c $(STR_SRC) $(LDFLAGS)
+	@$(call step_end)
 
 GEN_REPO_SRCS = src/common/repo.c $(PORT_LIB)
 
@@ -384,39 +457,52 @@ GEN_DOC_SITE_SRCS = src/gen_doc_site/main.c src/gen_doc_site/index_json.c src/ge
                       src/gen_doc_site/fs_util.c $(GEN_REPO_SRCS)
 
 $(BINDIR)/io_generate_tests$(EXEEXT): src/io_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
+	@$(call step_begin,io_generate_tests.bin)
 	$(CC) $(CFLAGS) -o $@ src/io_generate_tests/main.c $(GEN_REPO_SRCS) $(LDFLAGS)
+	@$(call step_end)
 
 $(BINDIR)/json_generate_tests$(EXEEXT): src/json_generate_tests/main.c $(GEN_REPO_SRCS) | $(BINDIR)
+	@$(call step_begin,json_generate_tests.bin)
 	$(CC) $(CFLAGS) -o $@ src/json_generate_tests/main.c $(GEN_REPO_SRCS) $(LDFLAGS)
+	@$(call step_end)
 
 $(BINDIR):
-	mkdir -p $(BINDIR)
+	@mkdir -p $(BINDIR)
 
 test/cases/flvm/001_min_ok/min_ok.fb: $(BINDIR)/mkfb$(EXEEXT)
+	@$(call step_begin,fixture-min_ok)
 	$(BINDIR)/mkfb$(EXEEXT) --min-ok -o $@
+	@$(call step_end)
 
 examples/min_ok.fb: $(BINDIR)/mkfb$(EXEEXT)
+	@$(call step_begin,fixture-examples)
 	$(BINDIR)/mkfb$(EXEEXT) --min-ok -o $@
+	@$(call step_end)
 
 test: all
+	@$(call announce,test: categ=default)
 	./$(BINDIR)/run_tests$(EXEEXT) --categ=default
-	@echo "OK: make test finished"
+	@$(call done_msg,test)
 
 test-all: all
+	@$(call announce,test: categ=all)
 	./$(BINDIR)/run_tests$(EXEEXT) --categ=all
-	@echo "OK: make test-all finished"
+	@$(call done_msg,test-all)
 
 test-bench: all
+	@$(call announce,test: categ=bench)
 	./$(BINDIR)/run_tests$(EXEEXT) --categ=bench
-	@echo "OK: make test-bench finished"
+	@$(call done_msg,test-bench)
 
 test-perf: all
+	@$(call announce,test: categ=perf)
 	./$(BINDIR)/run_tests$(EXEEXT) --each --categ=perf
-	@echo "OK: make test-perf finished"
+	@$(call done_msg,test-perf)
 
 test-flatl: all
+	@$(call announce,test: flatl categ=default)
 	./$(BINDIR)/run_tests$(EXEEXT) --flatl --categ=default
-	@echo "OK: make test-flatl finished"
+	@$(call done_msg,test-flatl)
 
 # Fleditor needs a Linux Node (not a WSL shim to Windows node.exe — breaks on UNC paths).
 # Override: make fleditor-serve NODE=/path/to/linux/node
@@ -440,10 +526,11 @@ endef
 export FLEDITOR_NODE_HINT
 
 fleditor-wasm:
-	$(MAKE) -f Makefile.wasm fleditor-wasm http=$(http) dom=$(dom) dom_compile=$(dom_compile)
+	$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
+		env=$(env) path=$(path) fs=$(fs) fleditor-wasm
 
 fleditor-rebuild: rebuild
-	@echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R)."
+	@$(if $(filter 1,$(V)),echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R).",:)
 
 fleditor-node-check:
 	@echo "=== uname ==="
@@ -461,69 +548,104 @@ fleditor-node-check:
 	  { read -r w; if [ -n "$$w" ]; then echo "$$w"; cmd //c "node --version"; else echo "(not found)"; fi; }
 	@echo "OK: make fleditor-serve-forced (Linux node, else Windows node.exe + wslpath)"
 
+# Long-running servers: keep script output visible (no step_begin/end wrapper).
 fleditor-serve:
 	sh "$(CURDIR)/scripts/fleditor_run_serve.sh" $(FLEDITOR_PORT)
 
 fleditor-stop:
+	@$(call step_begin,fleditor-stop)
 	sh "$(CURDIR)/scripts/fleditor_stop.sh" $(FLEDITOR_PORT)
+	@$(call step_end)
 
 fleditor-serve-forced: fleditor-stop
 	sh "$(CURDIR)/scripts/fleditor_run_serve.sh" $(FLEDITOR_PORT)
 
 fleditor-smoke:
+	@$(call step_begin,fleditor-smoke)
 	$(NODE) test/fleditor/serve_smoke.js
+	@$(call step_end)
 
 fleditor-layout-smoke:
+	@$(call step_begin,fleditor-layout-smoke)
 	$(NODE) test/fleditor/layout_smoke.mjs
+	@$(call step_end)
 
 fleditor-theme-smoke:
+	@$(call step_begin,fleditor-theme-smoke)
 	$(NODE) test/fleditor/theme_smoke.mjs
+	@$(call step_end)
 
 fleditor-project-smoke:
+	@$(call step_begin,fleditor-project-smoke)
 	$(NODE) test/fleditor/project_smoke.mjs
+	@$(call step_end)
 
 fleditor-hex-smoke:
+	@$(call step_begin,fleditor-hex-smoke)
 	$(NODE) test/fleditor/hex_roundtrip.mjs
 	$(NODE) test/fleditor/hex_project_smoke.mjs
 	$(NODE) test/fleditor/hex_grid.mjs
+	@$(call step_end)
 
 fleditor-csv-smoke:
+	@$(call step_begin,fleditor-csv-smoke)
 	$(NODE) test/fleditor/csv_parse.mjs
 	$(NODE) test/fleditor/text_format.mjs
 	$(NODE) test/fleditor/csv_roundtrip.mjs
 	$(NODE) test/fleditor/csv_selection_stats.mjs
 	$(NODE) test/fleditor/csv_vm_parity.mjs
 	$(NODE) test/fleditor/csv_writer_encoding_bytes.mjs
+	@$(call step_end)
 
 fleditor-jsonl-smoke:
+	@$(call step_begin,fleditor-jsonl-smoke)
 	$(NODE) test/fleditor/jsonl_parse.mjs
+	@$(call step_end)
 
 fleditor-jsonl-adv-filter-smoke:
+	@$(call step_begin,fleditor-jsonl-adv-filter)
 	$(NODE) test/fleditor/jsonl_adv_filter.mjs
+	@$(call step_end)
 
 fleditor-examples-smoke:
+	@$(call step_begin,fleditor-examples-smoke)
 	$(NODE) test/fleditor/examples_smoke.mjs
+	@$(call step_end)
 
 fleditor-block-map-smoke:
+	@$(call step_begin,fleditor-block-map-smoke)
 	$(NODE) test/fleditor/block_analyzer.mjs
 	$(NODE) test/fleditor/local_blocks.mjs
+	@$(call step_end)
 
 fleditor-wasm-csv-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-csv-smoke)
 	$(NODE) test/fleditor/wasm_csv_smoke.mjs
 	$(NODE) test/fleditor/wasm_csv_reader_smoke.mjs
+	@$(call step_end)
 
 fleditor-wasm-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-smoke)
 	$(NODE) test/fleditor/wasm_smoke.mjs
+	@$(call step_end)
 
 fleditor-wasm-multifile-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-multifile)
 	$(NODE) test/fleditor/wasm_multifile_smoke.mjs
+	@$(call step_end)
 
 fleditor-wasm-order-flow-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-order-flow)
 	$(NODE) test/fleditor/wasm_order_flow_smoke.mjs
+	@$(call step_end)
 
 fleditor-wasm-var-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-var-smoke)
 	$(NODE) test/fleditor/wasm_var_smoke.mjs
+	@$(call step_end)
 
 clean:
+	@$(call step_begin,clean)
 	rm -rf $(BINDIR)
 	rm -f $(MIN_OK_FB)
+	@$(call step_end)
