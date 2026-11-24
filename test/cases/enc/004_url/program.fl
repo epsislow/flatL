@@ -1,0 +1,9 @@
+use native enc
+
+#main
+  enc.encode('urlform', 'a b/c') == 'a+b%2Fc'
+  enc.decode('urlform', 'a+b%2Fc') == 'a b/c'
+  enc.encode('urlcomp', 'a b/c') == 'a%20b%2Fc'
+  enc.decode('urlcomp', 'a%20b%2Fc') == 'a b/c'
+  io.outln('ok')
+  OK

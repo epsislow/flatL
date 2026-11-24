@@ -192,6 +192,11 @@
       "file": "natives/fs.md"
     },
     {
+      "id": "enc-native",
+      "label": "Native enc",
+      "file": "natives/enc.md"
+    },
+    {
       "id": "dom-native",
       "label": "Native dom",
       "file": "natives/dom.md"

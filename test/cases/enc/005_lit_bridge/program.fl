@@ -1,0 +1,9 @@
+use native enc
+
+#main
+  buf = ^414243^hex
+  enc.encode('hex', buf) == '414243'
+  enc.decode('hex', '4869') == 'Hi'
+  enc.encode('b64', ^4869^hex) == 'SGk='
+  io.outln('ok')
+  OK

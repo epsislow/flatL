@@ -1,0 +1,11 @@
+use native enc
+
+#main
+  enc.encode('hex', 'ABC') -> h
+  h == '414243'
+  enc.decode('hex', h) -> raw
+  raw == 'ABC'
+  enc.encode('hex', '') == ''
+  enc.decode('hex', '') == ''
+  io.outln('ok')
+  OK

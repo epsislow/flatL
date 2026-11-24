@@ -1,0 +1,5 @@
+use native enc
+
+#main
+  enc.decode('hex', 'zz')
+  OK

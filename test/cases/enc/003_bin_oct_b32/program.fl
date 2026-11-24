@@ -1,0 +1,11 @@
+use native enc
+
+#main
+  enc.encode('bin', 'ABC') == '010000010100001001000011'
+  enc.decode('bin', '010000010100001001000011') == 'ABC'
+  enc.encode('oct', 'ABC') == '101102103'
+  enc.decode('oct', '101102103') == 'ABC'
+  enc.encode('b32', 'ABC') == '85146==='
+  enc.decode('b32', '85146===') == 'ABC'
+  io.outln('ok')
+  OK

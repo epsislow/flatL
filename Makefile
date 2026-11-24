@@ -45,6 +45,10 @@ fs ?= 1
 ifeq ($(fs),0)
 CFLAGS += -DFLAT_WITH_FS=0
 endif
+enc ?= 1
+ifeq ($(enc),0)
+CFLAGS += -DFLAT_WITH_ENC=0
+endif
 
 # Quiet progress (default). V=1 → classic Make command echo + no step labels.
 V ?= 0
@@ -57,11 +61,12 @@ _mod_dom := $(if $(filter 1,$(dom)),$(if $(filter 1,$(dom_compile)),dom,dom-sys)
 _mod_env := $(if $(filter 1,$(env)),env,no-env)
 _mod_path := $(if $(filter 1,$(path)),path,no-path)
 _mod_fs := $(if $(filter 1,$(fs)),fs,no-fs)
-RECIPE := $(_mod_http),$(_mod_dom),$(_mod_env),$(_mod_path),$(_mod_fs)
+_mod_enc := $(if $(filter 1,$(enc)),enc,no-enc)
+RECIPE := $(_mod_http),$(_mod_dom),$(_mod_env),$(_mod_path),$(_mod_fs),$(_mod_enc)
 
 # Recurse with the same feature flags + verbosity.
 MAKE_REC = $(MAKE) V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-	env=$(env) path=$(path) fs=$(fs)
+	env=$(env) path=$(path) fs=$(fs) enc=$(enc)
 
 ifeq ($(V),1)
 step_begin = :
@@ -142,7 +147,7 @@ HTTP_CFLAGS =
 HTTP_LIBS =
 ENSURE_LIBZ_1 =
 else
-HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c src/common/flat_enc.c
+HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 # MSYS2 UCRT64: libcurl PE imports libz-1.dll; mingw zlib package ships zlib1.dll.
@@ -169,14 +174,21 @@ FS_SRC =
 else
 FS_SRC = src/lib/mod_fs.c src/common/flat_fs.c
 endif
+ifeq ($(enc),0)
+ENC_SRC =
+else
+ENC_SRC = src/lib/mod_enc.c
+endif
 # flat_path always linked (file.sep + path/fs); mod_path optional
 FLAT_PATH_SRC = src/common/flat_path.c
+# flat_enc always linked (http.basic/form + optional enc); mod_enc optional
+FLAT_ENC_SRC = src/common/flat_enc.c
 NATIVE_MODS_SRC = src/lib/native_mods.c
 NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_parse_rhs.c \
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(FLAT_PATH_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
 VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
@@ -237,6 +249,7 @@ help:
 	@echo ""
 	@echo "Optional modules (pass on the same make line; lowercase):"
 	@echo "  http=0            build without native http / libcurl"
+	@echo "  env=0 path=0 fs=0 enc=0  omit optional embedded modules"
 	@echo "  make rebuild http=0"
 	@echo "  make flvm http=0   (prefer rebuild when toggling http)"
 	@echo "  dom_compile=1     default: bundle Lexbor from external/lexbor"
@@ -346,9 +359,9 @@ rebuild-native:
 fleditor-wasm-optional:
 	@if command -v emcc >/dev/null 2>&1; then \
 		$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-			env=$(env) path=$(path) fs=$(fs) fleditor-wasm-clean; \
+			env=$(env) path=$(path) fs=$(fs) enc=$(enc) fleditor-wasm-clean; \
 		$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-			env=$(env) path=$(path) fs=$(fs) fleditor-wasm; \
+			env=$(env) path=$(path) fs=$(fs) enc=$(enc) fleditor-wasm; \
 	else \
 		if [ "$(V)" = "1" ]; then echo "skipped fleditor-wasm — no emcc on PATH"; \
 		else printf '  %-20s ' "fleditor-wasm"; echo SKIP; fi; \
@@ -529,7 +542,7 @@ export FLEDITOR_NODE_HINT
 
 fleditor-wasm:
 	$(MAKE) -f Makefile.wasm V=$(V) http=$(http) dom=$(dom) dom_compile=$(dom_compile) \
-		env=$(env) path=$(path) fs=$(fs) fleditor-wasm
+		env=$(env) path=$(path) fs=$(fs) enc=$(enc) fleditor-wasm
 
 fleditor-rebuild: rebuild
 	@$(if $(filter 1,$(V)),echo "Tip: hard-refresh the browser after compiler changes (Ctrl+Shift+R).",:)

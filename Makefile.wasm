@@ -31,7 +31,7 @@ WASM_HTTP_CFLAGS = -DFLAT_WITH_HTTP=0
 HTTP_SRC =
 else
 WASM_HTTP_CFLAGS =
-HTTP_SRC = src/lib/mod_http.c src/http/flat_http_fetch.c src/common/flat_enc.c
+HTTP_SRC = src/lib/mod_http.c src/http/flat_http_fetch.c
 endif
 env ?= 1
 ifeq ($(env),0)
@@ -57,7 +57,16 @@ else
 WASM_FS_CFLAGS =
 FS_SRC = src/lib/mod_fs.c src/common/flat_fs.c
 endif
+enc ?= 1
+ifeq ($(enc),0)
+WASM_ENC_CFLAGS = -DFLAT_WITH_ENC=0
+ENC_SRC =
+else
+WASM_ENC_CFLAGS =
+ENC_SRC = src/lib/mod_enc.c
+endif
 FLAT_PATH_SRC = src/common/flat_path.c
+FLAT_ENC_SRC = src/common/flat_enc.c
 
 # Quiet progress (same as top-level Makefile). V=1 → full emcc command lines.
 V ?= 0
@@ -72,7 +81,7 @@ step_begin = printf '  %-20s ' "$(1)"
 step_end = echo OK
 endif
 
-WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2 $(WASM_HTTP_CFLAGS) $(WASM_DOM_CFLAGS) $(WASM_ENV_CFLAGS) $(WASM_PATH_CFLAGS) $(WASM_FS_CFLAGS)
+WASM_CFLAGS = -Wall -Wextra -std=c11 -Iinclude -DFLAT_WASM_BUILD -D_GNU_SOURCE -O2 $(WASM_HTTP_CFLAGS) $(WASM_DOM_CFLAGS) $(WASM_ENV_CFLAGS) $(WASM_PATH_CFLAGS) $(WASM_FS_CFLAGS) $(WASM_ENC_CFLAGS)
 WASM_LDFLAGS = \
   -s MODULARIZE=1 \
   -s EXPORT_NAME=FlatLModule \
@@ -102,7 +111,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c \
-                src/lib/mod_file.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(FLAT_PATH_SRC) src/lib/native_mods.c \
+                src/lib/mod_file.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) src/lib/native_mods.c \
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
 VM_SRC = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \

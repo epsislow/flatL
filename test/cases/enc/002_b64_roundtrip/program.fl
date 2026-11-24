@@ -1,0 +1,12 @@
+use native enc
+
+#main
+  enc.encode('base64', 'ABC') -> b
+  b == 'QUJD'
+  enc.decode('b64', b) == 'ABC'
+  enc.encode('b64', 'ABC') == 'QUJD'
+  enc.encode('base64url', ^fbff^hex) -> u
+  u == '-_8'
+  enc.decode('base64url', u) == ^fbff^hex
+  io.outln('ok')
+  OK

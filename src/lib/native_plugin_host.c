@@ -121,6 +121,13 @@ static void register_embedded_fs(void) {
 }
 #endif
 
+#if FLAT_WITH_ENC
+static void register_embedded_enc(void) {
+    flat_native_plugin_register(FLAT_NATIVE_ENC_ENCODE, flat_native_enc_encode);
+    flat_native_plugin_register(FLAT_NATIVE_ENC_DECODE, flat_native_enc_decode);
+}
+#endif
+
 #if FLAT_WITH_DOM
 static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_PARSE_HTML, flat_native_dom_parse_html);
@@ -661,6 +668,9 @@ void flat_native_runtime_reset(void) {
 #endif
 #if FLAT_WITH_FS
     register_embedded_fs();
+#endif
+#if FLAT_WITH_ENC
+    register_embedded_enc();
 #endif
     register_embedded_vcx();
     register_embedded_executor();
