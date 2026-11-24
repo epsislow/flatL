@@ -466,6 +466,13 @@ static int list_clone_append(FlatCollectionPool *pool, FlatStringPool *str_pool,
     if (extra) {
         cow_pin_ephemeral(extra, pool, str_pool);
     }
+    if (src->len + (extra ? 1 : 0) > FLAT_LIST_MAX_ELEMS) {
+        cow_unpin_ephemeral(&src_pin, pool, str_pool);
+        if (extra) {
+            cow_unpin_ephemeral(extra, pool, str_pool);
+        }
+        return -1;
+    }
     if (flat_list_empty(pool, str_pool, out_id) != 0) {
         cow_unpin_ephemeral(&src_pin, pool, str_pool);
         if (extra) {

@@ -136,17 +136,17 @@ Allocates pool copy. Replaced by natives (e.g. `file.read`) later — not for pr
 |----------|-------|---------|
 | `FLAT_INLINE_STR_MAX` | 127 | Max INLINE string bytes |
 | `FLAT_MAX_VARS` | 32768 | Max **distinct bind names** per one VCX context (`var_slots` / `create` / `createAuto` ceiling) |
-| `FLAT_POOL_MAX_SLOTS` | 1024 | Max pool entries (owned + views) |
+| `FLAT_POOL_MAX_SLOTS` | 4096 | Max live STRING REF slots (owned + views) |
 | `FLAT_POOL_MAX_CHUNK` | 16 MiB | Max single allocation |
 | `FLAT_POOL_MAX_TOTAL` | 64 MiB | Max sum of owned bytes |
 | `FLAT_VAR_NAME_MAX` | 63 | Identifier length |
-| `FLAT_COLL_MAX_LISTS` | 256 | Max LIST values in pool |
+| `FLAT_COLL_MAX_LISTS` | 2048 | Max LIST values in pool |
 | `FLAT_COLL_MAX_OBJECTS` | 256 | Max OBJECT values in pool |
 | `FLAT_LIST_MAX_ELEMS` | 1024 | Max elements per LIST |
 | `FLAT_OBJ_MAX_KEYS` | 128 | Max keys per OBJECT |
 | `FLAT_OBJ_KEY_MAX` | 127 | Max key string bytes |
 
-Overflow → assign/alloc fails silently in VM today; future: compile-time or panic.
+Overflow → **PANIC** with a stable reason (`pool.full`, `list.full`, `list.elems`, `object.full`, `assign.alloc`, …). Prefix the line with **`?`** / **`~`** for silent skip or `#or` (same as other natives).
 
 **VCX vs pools:** each context has its own name table (capacity `vars_max`); STRING REF, LIST, and OBJECT limits above are **per VM run** (shared by all contexts). See [natives/vcx.md](./natives/vcx.md) § *VCX capacity vs value payload* and [natives/mem.md](./natives/mem.md) § *Names vs payload*.
 
@@ -154,7 +154,7 @@ Overflow → assign/alloc fails silently in VM today; future: compile-time or pa
 
 ## 5. Collection memory (`bindCount`, `free`)
 
-LIST and OBJECT slots in the VM collection pool use **reference counting** (**`bindCount`**) per slot id. The limit **`FLAT_COLL_MAX_LISTS` / `FLAT_COLL_MAX_OBJECTS` (256)** applies to **live** values (**`bindCount > 0`**), not total ids ever allocated — freed slots may be **reused**.
+LIST and OBJECT slots in the VM collection pool use **reference counting** (**`bindCount`**) per slot id. The limits **`FLAT_COLL_MAX_LISTS` (2048)** / **`FLAT_COLL_MAX_OBJECTS` (256)** apply to **live** values (**`bindCount > 0`**), not total ids ever allocated — freed slots may be **reused**.
 
 | Mechanism | Behavior |
 |-----------|----------|
@@ -163,7 +163,7 @@ LIST and OBJECT slots in the VM collection pool use **reference counting** (**`b
 | **Nested values** | A LIST/OBJECT that stores another LIST/OBJECT/REF in an element or field increments that slot’s **`bindCount`**. |
 | **COW natives** (`list.push`, …) | New slot for the result; old bindings unchanged until reassigned or **`free`**. |
 
-**STRING REF** pool: slice views and parent pins follow §2; full **`bindCount`** alignment for REF is in progress.
+**STRING REF** pool uses the same retain/release model (`flat_pool_retain` / `flat_pool_release` via assign / `free` / nested binds). Alias (`b = a`) increments the slot; the last release reaps it. Pool-view slices pin the parent while the view lives.
 
 **Compile:** **`free(ghost)`** when **`ghost`** was never assigned in that block → **compile error**.
 

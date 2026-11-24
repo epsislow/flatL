@@ -118,6 +118,7 @@ int flat_native_list_empty(FlatNativeCtx *ctx) {
     }
     *ctx->io_status = FLAT_IO_OK;
     if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.full");
         *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
@@ -147,6 +148,7 @@ int flat_native_list_pack(FlatNativeCtx *ctx) {
     }
     if (count == 0) {
         if (flat_list_empty(ctx->coll, ctx->pool, &id) != 0) {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.full");
             *ctx->io_status = FLAT_IO_ERR;
             return -1;
         }
@@ -207,7 +209,16 @@ int flat_native_list_push(FlatNativeCtx *ctx) {
         goto out;
     }
     if (flat_list_push_copy(ctx->coll, ctx->pool, list_v.u.coll_id, &item, &new_id) != 0) {
+        int cur_len = 0;
         *ctx->io_status = FLAT_IO_ERR;
+        if (flat_list_len(ctx->coll, list_v.u.coll_id, &cur_len) == 0 &&
+            cur_len >= FLAT_LIST_MAX_ELEMS) {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.elems");
+        } else if (flat_coll_live_list_count(ctx->coll) >= FLAT_COLL_MAX_LISTS) {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.full");
+        } else {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "list.push");
+        }
         goto out;
     }
     if (flat_value_set_list(ctx->out, new_id) != 0) {

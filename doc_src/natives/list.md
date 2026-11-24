@@ -23,7 +23,7 @@ Native calls on the **right-hand side** of **`=`** use the same handlers as **`-
 
 Mutators (**`push`**, **`prepend`**, **`insert`**, **`set`**, **`remove_at`**, **`slice`**, **`splice`**) return a **new** LIST. Older bindings keep the previous list until you reassign them or use the **`free(var)`** keyword.
 
-**Memory:** LIST slots use **`bindCount`** and slot reuse (see [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §5). Reassigning **`xs = …`** releases the old list handle implicitly.
+**Memory:** LIST slots use **`bindCount`** and slot reuse (see [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §5–6). Reassigning **`xs = …`** releases the old list handle implicitly. Overflow → **PANIC** **`list.elems`** (per-list element cap) or **`list.full`** (live LIST slot cap).
 
 ## Line modifiers
 
@@ -33,9 +33,9 @@ Recoverable errors → **PANIC** **`list.<fn>`** by default; **`?`** / **`~`** p
 
 | Call | Returns | Panic (no modifier) |
 |------|---------|---------------------|
-| `empty()` | LIST | **`list.empty`** — allocation failure |
-| `pack(v1, v2, …)` | LIST | **`list.pack`** — bad args or &gt;1024 elements |
-| `push(list, val)` | LIST | **`list.push`** — bad types / unknown list |
+| `empty()` | LIST | **`list.full`** — live LIST pool exhausted |
+| `pack(v1, v2, …)` | LIST | **`list.pack`** / **`list.full`** — bad args, &gt;1024 elements, or pool full |
+| `push(list, val)` | LIST | **`list.elems`** / **`list.full`** / **`list.push`** — element cap, pool full, or bad types |
 | `prepend(list, val)` | LIST | **`list.prepend`** — bad types / unknown list |
 | `insert(list, index, val)` | LIST | **`list.insert`** — bad index or types |
 | `set(list, index, val)` | LIST | **`list.set`** — bad index or types |

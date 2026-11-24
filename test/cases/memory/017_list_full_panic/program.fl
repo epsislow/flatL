@@ -1,0 +1,20 @@
+use native list with L
+
+#main
+  L.pack() -> a
+  L.pack() -> b
+  for(1024, i, '#fa')
+  for(1021, i, '#fb')
+  L.pack() -> last
+  L.pack() -> boom
+  FAIL
+
+#fa
+  L.pack() -> e
+  L.push(a, e) -> a
+  next
+
+#fb
+  L.pack() -> e
+  L.push(b, e) -> b
+  next

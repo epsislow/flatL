@@ -631,7 +631,13 @@ int flat_value_parse_assign_rhs_typed(const char *rhs_in, FlatValue *out, FlatSt
     trim(rhs);
     colon = list_rhs_type_suffix(rhs);
 
-    if (parse_ref_call(rhs, out, pool) == 0) {
+    if (strncmp(rhs, "__ref__(", 8) == 0) {
+        if (parse_ref_call(rhs, out, pool) != 0) {
+            if (panic && panic_sz > 0) {
+                snprintf(panic, panic_sz, "pool.full");
+            }
+            return -1;
+        }
         return 0;
     }
     /* Blob literal ^…^hex[:tN] — parse before list `:suffix` logic; set panic why. */
@@ -664,7 +670,7 @@ int flat_value_parse_assign_rhs_typed(const char *rhs_in, FlatValue *out, FlatSt
             uint32_t id;
             if (!pool || flat_pool_alloc_copy(pool, bytes, blen, &id) != 0) {
                 free(bytes);
-                snprintf(panic, panic_sz, "lit.hex.memory");
+                snprintf(panic, panic_sz, "pool.full");
                 return -1;
             }
             free(bytes);
@@ -689,6 +695,17 @@ int flat_value_parse_assign_rhs_typed(const char *rhs_in, FlatValue *out, FlatSt
         p = rhs;
     }
     if (flat_value_parse_at(&p, out, pool, coll, vars, var_count, var_names) != 0) {
+        if (panic && panic_sz > 0 && panic[0] == '\0') {
+            if (pool && flat_pool_live_slot_count(pool) >= FLAT_POOL_MAX_SLOTS) {
+                snprintf(panic, panic_sz, "pool.full");
+            } else if (coll && flat_coll_live_list_count(coll) >= FLAT_COLL_MAX_LISTS) {
+                snprintf(panic, panic_sz, "list.full");
+            } else if (coll && flat_coll_live_object_count(coll) >= FLAT_COLL_MAX_OBJECTS) {
+                snprintf(panic, panic_sz, "object.full");
+            } else {
+                snprintf(panic, panic_sz, "assign.parse");
+            }
+        }
         return -1;
     }
     p = skip_ws(p);

@@ -1013,9 +1013,14 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
                 goto done;
             }
             memset(&seed, 0, sizeof seed);
-            if (flat_value_parse_assign_rhs("{}", &seed, st->pool, st->coll, vals, st->var_count,
-                                            names) != 0) {
-                rc = 0;
+            if (flat_value_parse_assign_rhs_typed(
+                    "{}", &seed, st->pool, st->coll, vals, st->var_count, names,
+                    bc ? &bc->schemas : NULL, NULL, NULL, st->panic_reason,
+                    sizeof st->panic_reason) != 0) {
+                if (st->panic_reason[0] == '\0') {
+                    snprintf(st->panic_reason, sizeof st->panic_reason, "object.full");
+                }
+                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
                 goto done;
             }
             if (set_var_value(st, root_name, &seed, &root_ty, 1, lhs_dynamic,
@@ -1037,11 +1042,10 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         if (flat_value_parse_assign_rhs_typed(rhs, &v, st->pool, st->coll, vals, st->var_count,
                                             names, bc ? &bc->schemas : NULL, NULL, NULL,
                                             st->panic_reason, sizeof st->panic_reason) != 0) {
-            if (st->panic_reason[0] != '\0') {
-                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
-            } else {
-                rc = 0;
+            if (st->panic_reason[0] == '\0') {
+                snprintf(st->panic_reason, sizeof st->panic_reason, "assign.alloc");
             }
+            rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
             goto done;
         }
         if (root_vi >= 0) {
@@ -1192,11 +1196,11 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         if (flat_value_parse_assign_rhs_typed(rhs, &v, st->pool, st->coll, vals, st->var_count,
                                             names, bc ? &bc->schemas : NULL, &lit_ty, &has_lit,
                                             st->panic_reason, sizeof st->panic_reason) != 0) {
-            if (st->panic_reason[0] != '\0') {
-                rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
-            } else {
-                rc = 0;
+            /* Overflow / alloc failure must not continue as a silent no-op bind. */
+            if (st->panic_reason[0] == '\0') {
+                snprintf(st->panic_reason, sizeof st->panic_reason, "assign.alloc");
             }
+            rc = vm_jump_panic_any(st, bc, ip, st->panic_reason, trace);
             goto done;
         }
         if (has_lit && lhs_has_ty &&

@@ -23,7 +23,12 @@ static int make_string_value(FlatNativeCtx *ctx, const char *data, size_t len, F
     uint32_t ref;
     if (!ctx || !out || (!data && len)) return -1;
     if (len <= FLAT_INLINE_STR_MAX) return flat_value_set_str_inline(out, data ? data : "", len);
-    if (flat_pool_alloc_copy(ctx->pool, data, len, &ref) != 0) return -1;
+    if (flat_pool_alloc_copy(ctx->pool, data, len, &ref) != 0) {
+        if (ctx) {
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
+        }
+        return -1;
+    }
     return flat_value_set_str_ref(out, ref);
 }
 static int value_string(FlatNativeCtx *ctx, const FlatValue *v, char **out, size_t *len) {
@@ -359,7 +364,7 @@ int flat_native_http_request_body(FlatNativeCtx *ctx) {
         if (parse_value(ctx, x, &v) != 0 || num_arg(&v, &id) != 0 || !flat_http_request_live(ctx->http, id))
             return http_fail(ctx, "http.requestBody.id");
         s = &ctx->http->requests[id];
-        return http_out_body_bytes(ctx, s->body, s->body_len, "http.requestBody.memory");
+        return http_out_body_bytes(ctx, s->body, s->body_len, "pool.full");
     }
     if (argc != 2 || parse_value(ctx, x, &a[0]) != 0 || parse_value(ctx, y, &a[1]) != 0 ||
         num_arg(&a[0], &id) != 0 || !flat_http_request_live(ctx->http, id) ||
@@ -381,7 +386,7 @@ int flat_native_http_response_body(FlatNativeCtx *ctx) {
     FlatHttpRequestSlot *s = resolve(ctx, "http.responseBody.id", &id);
     if (!s) return -1;
     if (!s->sent) return http_fail(ctx, "http.responseBody.not_sent");
-    return http_out_body_bytes(ctx, s->response.body, s->response.body_len, "http.responseBody.memory");
+    return http_out_body_bytes(ctx, s->response.body, s->response.body_len, "pool.full");
 }
 int flat_native_http_timeout(FlatNativeCtx *ctx){FlatValue a[2];uint32_t id;double ms;if(get_args(ctx,a,2)!=0||num_arg(&a[0],&id)!=0||!flat_http_request_live(ctx->http,id)||a[1].tag!=VAL_NUMBER)return http_fail(ctx,"http.timeout.args");ms=flat_number_as_f64(&a[1]);if(ms<1||ms>600000)return http_fail(ctx,"http.timeout.range");ctx->http->requests[id].timeout_ms=(long)ms;return http_ok(ctx);}
 int flat_native_http_send(FlatNativeCtx *ctx){
@@ -409,7 +414,7 @@ int flat_native_http_send(FlatNativeCtx *ctx){
     return http_ok(ctx);
 }
 int flat_native_http_status(FlatNativeCtx *ctx){uint32_t id;FlatHttpRequestSlot *s=resolve(ctx,"http.status.id",&id);if(!s||!s->sent)return http_fail(ctx,"http.status.not_sent");http_ok(ctx);return flat_value_set_number(ctx->out,(double)s->response.status);}
-int flat_native_http_error(FlatNativeCtx *ctx){uint32_t id;FlatHttpRequestSlot *s=resolve(ctx,"http.error.id",&id);uint32_t ref;size_t n;if(!s||!s->sent)return http_fail(ctx,"http.error.not_sent");n=strlen(s->response.error);if(n<=FLAT_INLINE_STR_MAX){http_ok(ctx);return flat_value_set_str_inline(ctx->out,s->response.error,n);}if(flat_pool_alloc_copy(ctx->pool,s->response.error,n,&ref)!=0)return http_fail(ctx,"http.error.memory");http_ok(ctx);return flat_value_set_str_ref(ctx->out,ref);}
+int flat_native_http_error(FlatNativeCtx *ctx){uint32_t id;FlatHttpRequestSlot *s=resolve(ctx,"http.error.id",&id);uint32_t ref;size_t n;if(!s||!s->sent)return http_fail(ctx,"http.error.not_sent");n=strlen(s->response.error);if(n<=FLAT_INLINE_STR_MAX){http_ok(ctx);return flat_value_set_str_inline(ctx->out,s->response.error,n);}if(flat_pool_alloc_copy(ctx->pool,s->response.error,n,&ref)!=0)return http_fail(ctx,"pool.full");http_ok(ctx);return flat_value_set_str_ref(ctx->out,ref);}
 int flat_native_http_error_code(FlatNativeCtx *ctx){uint32_t id;FlatHttpRequestSlot *s=resolve(ctx,"http.errorCode.id",&id);if(!s||!s->sent)return http_fail(ctx,"http.errorCode.not_sent");http_ok(ctx);return flat_value_set_number(ctx->out,(double)s->response.error_code);}
 int flat_native_http_close(FlatNativeCtx *ctx){
     uint32_t id;

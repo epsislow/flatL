@@ -1,0 +1,11 @@
+use native list with L
+
+#main
+  L.pack() -> xs
+  for(1024, i, '#fill')
+  L.push(xs, 0) -> xs
+  FAIL
+
+#fill
+  L.push(xs, i) -> xs
+  next

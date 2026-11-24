@@ -1,0 +1,33 @@
+use native list with L
+
+#main
+  L.pack() -> a
+  L.pack() -> b
+  L.pack() -> c
+  L.pack() -> d
+  for(1024, i, '#fa')
+  for(1024, i, '#fb')
+  for(1024, i, '#fc')
+  for(1024, i, '#fd')
+  mem.ref_empty() -> boom
+  FAIL
+
+#fa
+  mem.ref_empty() -> r
+  L.push(a, r) -> a
+  next
+
+#fb
+  mem.ref_empty() -> r
+  L.push(b, r) -> b
+  next
+
+#fc
+  mem.ref_empty() -> r
+  L.push(c, r) -> c
+  next
+
+#fd
+  mem.ref_empty() -> r
+  L.push(d, r) -> d
+  next

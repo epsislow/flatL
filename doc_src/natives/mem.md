@@ -7,7 +7,7 @@ Runtime memory introspection for tests and debugging. **Always available** in `f
 | Kind | In source | Pool slot? | `mem` counters |
 |------|-----------|------------|----------------|
 | **STRING** (inline) | Short literals (≤127 bytes), many `io` results | No | `str_used` only |
-| **STRING REF** | Long literals, slices, some builtins | Yes (≤1024 live slots) | `strref_used`, `strref_max`, `strref_avail` |
+| **STRING REF** | Long literals, slices, some builtins | Yes (≤4096 live slots) | `strref_used`, `strref_max`, `strref_avail` |
 
 Inline tags **BOOL**, **NUMBER**, **NULL** are counted separately (`bool_used`, `num_used`, `null_used`) with **no** `*_max` / `*_avail`.
 
@@ -171,20 +171,20 @@ Argument lists must be empty `()` unless noted above.
 | STRING REF **pool** (shared, all contexts) | `mem.strref_used()`, `mem.strref_max()`, `mem.strref_avail()` |
 | LIST / OBJECT **live** values (shared) | `mem.list_*`, `mem.object_*` |
 
-Full ceilings: [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §5 (`FLAT_POOL_MAX_TOTAL` **64 MiB** owned string data, **1024** REF slots, **256** live lists/objects, **1024** list elements each, …). See also [`vcx.md`](./vcx.md) § *VCX capacity vs value payload*.
+Full ceilings: [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) §4–5 (`FLAT_POOL_MAX_TOTAL` **64 MiB** owned string data, **4096** REF slots, **2048** live lists / **256** objects, **1024** list elements each, …). See also [`vcx.md`](./vcx.md) § *VCX capacity vs value payload*.
 
 ### LIST / OBJECT pools
 
 | Call | Max constant |
 |------|----------------|
-| `list_max()`, `list_used()`, `list_avail()` | 256 live lists |
+| `list_max()`, `list_used()`, `list_avail()` | 2048 live lists |
 | `object_max()`, `object_used()`, `object_avail()` | 256 live objects |
 
 ### STRING REF pool
 
 | Call | Max constant |
 |------|----------------|
-| `strref_max()`, `strref_used()`, `strref_avail()` | 1024 live REF slots |
+| `strref_max()`, `strref_used()`, `strref_avail()` | 4096 live REF slots |
 
 ### Inline live values (variables + nested list/object elements)
 
@@ -200,5 +200,6 @@ Counters update incrementally on assign, `free`, and collection mutations — th
 ## Notes
 
 - **`list_used`** counts live LIST **slots**, not element count. Copy-on-write: `L.push(xs, v) -> ys` typically bumps `list_used` until `free(ys)`.
-- When the STRING REF pool is full, assignment of a new REF may **fail silently** (same as pre-`mem` behavior); short literals still use inline STRING.
+- When the STRING REF pool is full, `mem.ref_empty` / `mem.ref_from` / long REF assign → **PANIC** **`pool.full`** (use **`?`** / **`~`** to soft-fail). Short literals still use inline STRING.
+- LIST element cap → **`list.elems`**; list/object slot caps → **`list.full`** / **`object.full`**.
 - See [LANGUAGE_TYPES.md](../LANGUAGE_TYPES.md) for retain/release and `free(var)`.

@@ -201,6 +201,7 @@ int flat_native_file_read(FlatNativeCtx *ctx) {
         uint32_t rid;
         if (flat_pool_alloc_copy(ctx->pool, buf, len, &rid) != 0) {
             free(buf);
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
             return -1;
         }
         free(buf);

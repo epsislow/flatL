@@ -1,0 +1,13 @@
+#main
+  a = __ref__('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+  b = a
+  mem.strref_used() -> u1
+  free(a)
+  mem.strref_used() -> u2
+  io.outln(b)
+  free(b)
+  mem.strref_used() -> u3
+  io.outln(u1)
+  io.outln(u2)
+  io.outln(u3)
+  OK

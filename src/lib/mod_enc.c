@@ -124,7 +124,7 @@ static int out_bytes(FlatNativeCtx *ctx, const void *data, size_t len) {
         return flat_value_set_str_inline(ctx->out, data ? (const char *)data : "", len);
     }
     if (flat_pool_alloc_copy(ctx->pool, data ? data : "", len, &ref) != 0) {
-        return enc_fail(ctx, "enc.memory");
+        return enc_fail(ctx, "pool.full");
     }
     enc_ok(ctx);
     return flat_value_set_str_ref(ctx->out, ref);

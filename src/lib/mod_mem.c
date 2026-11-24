@@ -486,6 +486,8 @@ int flat_native_mem_ref_empty(FlatNativeCtx *ctx) {
         return -1;
     }
     if (flat_pool_alloc_empty(ctx->pool, &id) != 0) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
+        *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
     *ctx->io_status = FLAT_IO_OK;
@@ -518,10 +520,14 @@ int flat_native_mem_ref_from(FlatNativeCtx *ctx) {
     if (blen == 0) {
         if (flat_pool_alloc_empty(ctx->pool, &id) != 0) {
             free(bytes);
+            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
+            *ctx->io_status = FLAT_IO_ERR;
             return -1;
         }
     } else if (flat_pool_alloc_copy(ctx->pool, bytes, blen, &id) != 0) {
         free(bytes);
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
+        *ctx->io_status = FLAT_IO_ERR;
         return -1;
     }
     free(bytes);
