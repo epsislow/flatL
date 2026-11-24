@@ -21,11 +21,57 @@ static char *trim(char *s) {
     return s;
 }
 
+/* TOML basic escapes inside "..." (our case.toml loader is not a full TOML parser). */
+static void unescape_toml_basic(char *s) {
+    char *r;
+    char *w;
+    if (!s) {
+        return;
+    }
+    for (r = s, w = s; *r; r++) {
+        if (r[0] == '\\' && r[1] != '\0') {
+            if (r[1] == '"' || r[1] == '\\' || r[1] == '\'') {
+                *w++ = r[1];
+                r++;
+                continue;
+            }
+            if (r[1] == 'n') {
+                *w++ = '\n';
+                r++;
+                continue;
+            }
+            if (r[1] == 't') {
+                *w++ = '\t';
+                r++;
+                continue;
+            }
+            if (r[1] == 'r') {
+                *w++ = '\r';
+                r++;
+                continue;
+            }
+        }
+        *w++ = *r;
+    }
+    *w = '\0';
+}
+
 static void strip_quotes(char *s) {
     size_t n = strlen(s);
-    if (n >= 2 && ((s[0] == '"' && s[n - 1] == '"') || (s[0] == '\'' && s[n - 1] == '\''))) {
-        s[n - 1] = '\0';
-        memmove(s, s + 1, n - 1);
+    int dq;
+    int sq;
+    if (!s || n < 2) {
+        return;
+    }
+    dq = (s[0] == '"' && s[n - 1] == '"');
+    sq = (s[0] == '\'' && s[n - 1] == '\'');
+    if (!dq && !sq) {
+        return;
+    }
+    s[n - 1] = '\0';
+    memmove(s, s + 1, n - 1);
+    if (dq) {
+        unescape_toml_basic(s);
     }
 }
 
@@ -609,31 +655,52 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         double exec_ms = 0.0;
 
         expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
-        /* Optional Node-based cases: resolve node/node.exe (incl. Windows Program Files). */
-        if (strncmp(cmd, "node ", 5) == 0 || strncmp(cmd, "node.exe ", 9) == 0) {
-            char node_bin[FLAT_PORT_PATH_MAX];
-            char rewritten[FLAT_CASE_MAX_CMD];
-            const char *rest = (strncmp(cmd, "node.exe ", 9) == 0) ? cmd + 9 : cmd + 5;
-            if (flat_port_resolve_node(node_bin, sizeof node_bin) != 0) {
-                snprintf(err, (size_t)err_size, "skip: node not on PATH");
-                timing_finish(timing, t_case, measure);
-                return -2;
+        {
+            /* Detect before unwrap; rewrite after prepare_shell so we don't break sh -c '...'. */
+            int need_node = (strncmp(cmd, "node ", 5) == 0 || strncmp(cmd, "node.exe ", 9) == 0 ||
+                             strstr(cmd, " node ") != NULL || strstr(cmd, " node.exe ") != NULL);
+            int need_py = (strncmp(cmd, "python3 ", 8) == 0 || strncmp(cmd, "python ", 7) == 0 ||
+                           strstr(cmd, " python3 ") != NULL || strstr(cmd, " python ") != NULL ||
+                           strstr(cmd, "&& python3 ") != NULL || strstr(cmd, "&& python ") != NULL);
+            inject_http_mock(cmd, sizeof cmd, c);
+            inject_case_env(cmd, sizeof cmd, c);
+            if (inject) {
+                inject_tool_time(cmd, sizeof cmd);
             }
-            /* Quote path: "Program Files" etc. must stay one argv for sh. */
-            if (snprintf(rewritten, sizeof rewritten, "'%s' %s", node_bin, rest) >=
-                (int)sizeof rewritten) {
-                snprintf(err, (size_t)err_size, "node cmd too long");
-                timing_finish(timing, t_case, measure);
-                return -1;
+            flat_port_prepare_shell_cmd(cmd, sizeof cmd);
+            if (need_node) {
+                char bin[FLAT_PORT_PATH_MAX];
+                char quoted[FLAT_PORT_PATH_MAX + 4];
+                if (flat_port_resolve_node(bin, sizeof bin) != 0) {
+                    snprintf(err, (size_t)err_size, "skip: node not on PATH");
+                    timing_finish(timing, t_case, measure);
+                    return -2;
+                }
+                if (snprintf(quoted, sizeof quoted, "'%s' ", bin) >= (int)sizeof quoted) {
+                    snprintf(err, (size_t)err_size, "node path too long");
+                    timing_finish(timing, t_case, measure);
+                    return -1;
+                }
+                replace_token(cmd, sizeof cmd, "node.exe ", quoted);
+                replace_token(cmd, sizeof cmd, "node ", quoted);
             }
-            snprintf(cmd, sizeof cmd, "%s", rewritten);
+            if (need_py) {
+                char bin[FLAT_PORT_PATH_MAX];
+                char quoted[FLAT_PORT_PATH_MAX + 4];
+                if (flat_port_resolve_python(bin, sizeof bin) != 0) {
+                    snprintf(err, (size_t)err_size, "skip: python3 not on PATH");
+                    timing_finish(timing, t_case, measure);
+                    return -2;
+                }
+                if (snprintf(quoted, sizeof quoted, "'%s' ", bin) >= (int)sizeof quoted) {
+                    snprintf(err, (size_t)err_size, "python path too long");
+                    timing_finish(timing, t_case, measure);
+                    return -1;
+                }
+                replace_token(cmd, sizeof cmd, "python3 ", quoted);
+                replace_token(cmd, sizeof cmd, "python ", quoted);
+            }
         }
-        inject_http_mock(cmd, sizeof cmd, c);
-        inject_case_env(cmd, sizeof cmd, c);
-        if (inject) {
-            inject_tool_time(cmd, sizeof cmd);
-        }
-        flat_port_prepare_shell_cmd(cmd, sizeof cmd);
         t_prep_done = flat_time_monotonic_ms();
         if (timing && measure) {
             timing->prep_ms = t_prep_done - t_case;

@@ -29,5 +29,7 @@ void flat_port_stdio_setup(void);
  * Writes a slash-normalized path suitable for sh (quote it if it contains spaces).
  * Returns 0 on success, -1 if not found. */
 int flat_port_resolve_node(char *out, size_t out_size);
+/* Resolve python3/python from PATH (same rules as node). Returns 0 / -1. */
+int flat_port_resolve_python(char *out, size_t out_size);
 
 #endif

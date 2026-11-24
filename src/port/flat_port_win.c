@@ -480,30 +480,41 @@ static void replace_token(char *cmd, size_t cap, const char *from, const char *t
 
 /*
  * Turn Windows path backslashes into '/' for sh.
- * Outside quotes: all '\' → '/'.
- * Inside single quotes: keep printf escapes (\n \t \r \\ \') but convert path
- * separators. Drive paths like D:\foo and segments like \flatL must become /,
- * otherwise sh -c 'D:\w\...\flatL\bin\flc' collapses to D:w...binflc (exit 127).
+ * Outside quotes: always '\' → '/' (so D:\msys64\tmp does not become …64 + TAB + mp).
+ * Inside quotes: keep printf/shell escapes; convert other '\' (path segments).
  */
 static void win_paths_to_posix_slashes_outside_quotes(char *cmd) {
     int in_sq = 0;
+    int in_dq = 0;
     char *p;
     for (p = cmd; *p; p++) {
-        if (*p == '\'') {
+        if (!in_dq && *p == '\'') {
             in_sq = !in_sq;
+            continue;
+        }
+        if (!in_sq && *p == '"') {
+            in_dq = !in_dq;
             continue;
         }
         if (*p != '\\') {
             continue;
         }
-        if (!in_sq) {
+        if (in_sq) {
+            if (p[1] == 'n' || p[1] == 't' || p[1] == 'r' || p[1] == '\\' || p[1] == '\'') {
+                continue;
+            }
             *p = '/';
             continue;
         }
-        /* Inside '...': preserve only common printf / shell escapes. */
-        if (p[1] == 'n' || p[1] == 't' || p[1] == 'r' || p[1] == '\\' || p[1] == '\'') {
+        if (in_dq) {
+            if (p[1] == 'n' || p[1] == 't' || p[1] == 'r' || p[1] == '\\' || p[1] == '"' ||
+                p[1] == '$' || p[1] == '`') {
+                continue;
+            }
+            *p = '/';
             continue;
         }
+        /* Outside quotes: path separator. */
         *p = '/';
     }
 }
@@ -534,41 +545,50 @@ static void unwrap_redundant_sh_c(char *cmd, size_t cmd_cap) {
 }
 
 /*
- * printf '' | REST  →  REST </dev/null
+ * printf ''|""|\"\" | REST  →  REST </dev/null
  * Empty stdin via pipe+printf is the common case.toml pattern; env/dom already
  * use </dev/null. Redirect avoids the pipe and matches what works on MSYS2.
  */
 static void rewrite_empty_printf_pipe(char *cmd, size_t cmd_cap) {
-    static const char needle[] = "printf '' | ";
+    static const char *const needles[] = {
+        "printf '' | ",
+        "printf \"\" | ",
+        "printf \\\"\\\" | ",
+    };
     static const char suffix[] = " </dev/null";
-    char *pos;
-    char *rest;
-    size_t before;
-    size_t rest_len;
-    size_t need;
+    size_t ni;
 
     if (!cmd || cmd_cap < sizeof suffix) {
         return;
     }
-    pos = strstr(cmd, needle);
-    if (!pos) {
-        return;
-    }
-    if (pos != cmd) {
-        char prev = pos[-1];
-        if (prev != ' ' && prev != '\t' && prev != ';') {
+    for (ni = 0; ni < sizeof needles / sizeof needles[0]; ni++) {
+        const char *needle = needles[ni];
+        size_t nlen = strlen(needle);
+        char *pos = strstr(cmd, needle);
+        char *rest;
+        size_t before;
+        size_t rest_len;
+        size_t need;
+        if (!pos) {
+            continue;
+        }
+        if (pos != cmd) {
+            char prev = pos[-1];
+            if (prev != ' ' && prev != '\t' && prev != ';') {
+                continue;
+            }
+        }
+        rest = pos + nlen;
+        before = (size_t)(pos - cmd);
+        rest_len = strlen(rest);
+        need = before + rest_len + (sizeof suffix - 1) + 1;
+        if (need > cmd_cap) {
             return;
         }
-    }
-    rest = pos + (sizeof needle - 1);
-    before = (size_t)(pos - cmd);
-    rest_len = strlen(rest);
-    need = before + rest_len + (sizeof suffix - 1) + 1;
-    if (need > cmd_cap) {
+        memmove(pos, rest, rest_len + 1);
+        memcpy(cmd + before + rest_len, suffix, sizeof suffix);
         return;
     }
-    memmove(pos, rest, rest_len + 1);
-    memcpy(cmd + before + rest_len, suffix, sizeof suffix);
 }
 
 void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
@@ -595,24 +615,24 @@ void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap) {
     replace_token(cmd, cmd_cap, "/bin/flatl ", "/bin/flatl.exe ");
 }
 
-static int node_from_dir(const char *dir, char *out, size_t out_size) {
+static int tool_from_dir(const char *dir, const char *const *names, size_t nnames, char *out,
+                         size_t out_size) {
     char cand[FLAT_PORT_PATH_MAX];
     char *p;
     size_t n;
-    static const char *const names[] = {"node.exe", "node"};
     size_t i;
 
-    if (!dir || !dir[0] || !out || out_size == 0) {
+    if (!dir || !dir[0] || !names || nnames == 0 || !out || out_size == 0) {
         return -1;
     }
     n = strlen(dir);
     while (n > 0 && (dir[n - 1] == '\\' || dir[n - 1] == '/' || dir[n - 1] == '"')) {
         n--;
     }
-    if (n == 0 || n + 12 >= sizeof cand) {
+    if (n == 0 || n + 24 >= sizeof cand) {
         return -1;
     }
-    for (i = 0; i < sizeof names / sizeof names[0]; i++) {
+    for (i = 0; i < nnames; i++) {
         if (snprintf(cand, sizeof cand, "%.*s/%s", (int)n, dir, names[i]) >= (int)sizeof cand) {
             continue;
         }
@@ -632,7 +652,8 @@ static int node_from_dir(const char *dir, char *out, size_t out_size) {
 }
 
 /* Walk a PATH-like list (sep ':' and/or ';'). Does not invent install dirs. */
-static int node_from_path_list(const char *path_list, char *out, size_t out_size) {
+static int tool_from_path_list(const char *path_list, const char *const *names, size_t nnames,
+                               char *out, size_t out_size) {
     char buf[32768];
     char *p;
     char *start;
@@ -656,7 +677,7 @@ static int node_from_path_list(const char *path_list, char *out, size_t out_size
                 }
             }
             *p = '\0';
-            if (start[0] && node_from_dir(start, out, out_size) == 0) {
+            if (start[0] && tool_from_dir(start, names, nnames, out, out_size) == 0) {
                 return 0;
             }
             if (is_end) {
@@ -679,23 +700,24 @@ static int read_win_path_env(HKEY root, const char *subkey, char *buf, DWORD buf
     return 0;
 }
 
-int flat_port_resolve_node(char *out, size_t out_size) {
+static int resolve_tool_from_path(const char *const *names, size_t nnames, char *out,
+                                  size_t out_size) {
     char winpath[32768];
     const char *env;
 
-    if (!out || out_size == 0) {
+    if (!out || out_size == 0 || !names || nnames == 0) {
         return -1;
     }
     out[0] = '\0';
 
     env = getenv("PATH");
-    if (env && node_from_path_list(env, out, out_size) == 0) {
+    if (env && tool_from_path_list(env, names, nnames, out, out_size) == 0) {
         return 0;
     }
     /* MSYS login shells often use a minimal PATH; still honour the real Windows Path. */
     winpath[0] = '\0';
     if (read_win_path_env(HKEY_CURRENT_USER, "Environment", winpath, (DWORD)sizeof winpath) == 0) {
-        if (node_from_path_list(winpath, out, out_size) == 0) {
+        if (tool_from_path_list(winpath, names, nnames, out, out_size) == 0) {
             return 0;
         }
     }
@@ -703,11 +725,22 @@ int flat_port_resolve_node(char *out, size_t out_size) {
     if (read_win_path_env(HKEY_LOCAL_MACHINE,
                           "SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment",
                           winpath, (DWORD)sizeof winpath) == 0) {
-        if (node_from_path_list(winpath, out, out_size) == 0) {
+        if (tool_from_path_list(winpath, names, nnames, out, out_size) == 0) {
             return 0;
         }
     }
     return -1;
+}
+
+int flat_port_resolve_node(char *out, size_t out_size) {
+    static const char *const names[] = {"node.exe", "node"};
+    return resolve_tool_from_path(names, sizeof names / sizeof names[0], out, out_size);
+}
+
+int flat_port_resolve_python(char *out, size_t out_size) {
+    /* Prefer python3 name; on Windows installs the binary is usually python.exe. */
+    static const char *const names[] = {"python3.exe", "python3", "python.exe", "python"};
+    return resolve_tool_from_path(names, sizeof names / sizeof names[0], out, out_size);
 }
 
 int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx) {
