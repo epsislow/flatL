@@ -1,4 +1,5 @@
 #include "flat_list_typed.h"
+#include "flat_lit.h"
 #include "flat_number.h"
 #include "flat_obj_path.h"
 #include "flat_schema.h"
@@ -498,6 +499,33 @@ static int flat_value_parse_at(const char **p, FlatValue *out, FlatStringPool *p
     if (*s == '{') {
         return parse_object_literal(p, out, pool, coll, vars, var_count, var_names);
     }
+    if (*s == '^') {
+        unsigned char *bytes = NULL;
+        size_t blen = 0;
+        char why[64];
+        if (flat_lit_parse_blob_at(p, &bytes, &blen, why, sizeof why) != 0) {
+            free(bytes);
+            return -1;
+        }
+        if (blen == 0) {
+            free(bytes);
+            return flat_value_set_str_inline(out, "", 0);
+        }
+        if (blen <= FLAT_INLINE_STR_MAX) {
+            int ok = flat_value_set_str_inline(out, (const char *)bytes, blen);
+            free(bytes);
+            return ok;
+        }
+        {
+            uint32_t id;
+            if (!pool || flat_pool_alloc_copy(pool, bytes, blen, &id) != 0) {
+                free(bytes);
+                return -1;
+            }
+            free(bytes);
+            return flat_value_set_str_ref(out, id);
+        }
+    }
     if (*s == '\'' || *s == '"') {
         return parse_quoted_string_at(p, out, pool);
     }
@@ -605,6 +633,43 @@ int flat_value_parse_assign_rhs_typed(const char *rhs_in, FlatValue *out, FlatSt
 
     if (parse_ref_call(rhs, out, pool) == 0) {
         return 0;
+    }
+    /* Blob literal ^…^hex[:tN] — parse before list `:suffix` logic; set panic why. */
+    if (rhs[0] == '^') {
+        unsigned char *bytes = NULL;
+        size_t blen = 0;
+        char why[64];
+        const char *bp = rhs;
+        if (flat_lit_parse_blob_at(&bp, &bytes, &blen, why, sizeof why) != 0) {
+            snprintf(panic, panic_sz, "%s", why[0] ? why : "lit.hex");
+            free(bytes);
+            return -1;
+        }
+        bp = skip_ws(bp);
+        if (*bp != '\0') {
+            snprintf(panic, panic_sz, "lit.hex.trailing");
+            free(bytes);
+            return -1;
+        }
+        if (blen == 0) {
+            free(bytes);
+            return flat_value_set_str_inline(out, "", 0);
+        }
+        if (blen <= FLAT_INLINE_STR_MAX) {
+            int ok = flat_value_set_str_inline(out, (const char *)bytes, blen);
+            free(bytes);
+            return ok;
+        }
+        {
+            uint32_t id;
+            if (!pool || flat_pool_alloc_copy(pool, bytes, blen, &id) != 0) {
+                free(bytes);
+                snprintf(panic, panic_sz, "lit.hex.memory");
+                return -1;
+            }
+            free(bytes);
+            return flat_value_set_str_ref(out, id);
+        }
     }
     if (strchr(rhs, '(') &&
         (strncmp(rhs, "__list__", 8) == 0 || strncmp(rhs, "__list_push__", 13) == 0 ||

@@ -1,0 +1,9 @@
+#main
+  a = ^414243^hex
+  a == 'ABC'
+  b:t3 = ^a0 49 c0^hex
+  c:t3 = ^A049C0^hex:t3
+  empty = ^^hex
+  empty == ''
+  io.outln(a)
+  OK

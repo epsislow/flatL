@@ -9,6 +9,7 @@
 #include "flat_native.h"
 #include "flat_native_tag.h"
 #include "flat_native_use.h"
+#include "flat_lit.h"
 #include "flat_number.h"
 #include "flat_slot_type.h"
 #include "flat_schema.h"
@@ -583,6 +584,20 @@ static int emit_block_code(EmitBuf *code, const FgirProgram *prog, int bi,
             }
             if (flat_bind_validate_lhs(bind, g_compile_schemas, err, err_size) != 0) {
                 return -1;
+            }
+            {
+                const char *rv = value;
+                while (*rv == ' ' || *rv == '\t') {
+                    rv++;
+                }
+                if (*rv == '^') {
+                    char lit_why[64];
+                    if (flat_lit_validate_blob_rhs(value, lit_why, sizeof lit_why) != 0) {
+                        snprintf(err, err_size, "%s: %s",
+                                 lit_why[0] ? lit_why : "lit.hex", ins->text);
+                        return -1;
+                    }
+                }
             }
             if (tlen + 1 > sizeof payload) {
                 snprintf(err, err_size, "assign too long");

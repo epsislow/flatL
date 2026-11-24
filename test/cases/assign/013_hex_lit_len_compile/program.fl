@@ -1,0 +1,3 @@
+#main
+  bad = ^a0 49 c0^hex:t2
+  OK

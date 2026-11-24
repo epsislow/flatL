@@ -17,7 +17,7 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 |------|-------------------|--------|
 | **BOOL** | `ok = true`, `ok = false` | `VAL_BOOL` |
 | **NUMBER** | `n = 42`, `n = -3.5` | `VAL_NUMBER` (AM-NUM: whole/decimal with explicit storage metadata) |
-| **STRING** | `'hello'`, `"path"`, long data via ref | `VAL_STR_INLINE` or `VAL_STR_REF` |
+| **STRING** | `'hello'`, `"path"`, `^414243^hex`, long data via ref | `VAL_STR_INLINE` or `VAL_STR_REF` |
 | **LIST** | `[1, 'a', { x: 1 }]`, `__list__()` | `VAL_LIST` (pool id) |
 | **NULL** | literal **`null`**, `json.parse('null')`, `json.parse('')` | **`VAL_NULL`** (not `VAL_EMPTY`; guards `x == null`) |
 | **OBJECT** | `{ qty: 3, name: 'x' }`, `obj.empty()` (optional native) | `VAL_OBJECT` (pool id) |
@@ -46,6 +46,30 @@ The language exposes five logical value kinds. There is **no separate BLOB type*
 | **REF** | Literal >127 bytes (auto-promote), `__ref__(...)`, future `file.read`, natives | Pool limits below |
 
 Program text always uses **string** syntax; INLINE vs REF is internal.
+
+### Hex blob literals (`^…^hex`)
+
+Static **binary** STRING literals (core language — not `enc`):
+
+```text
+buf:t3 = ^a0 49 c0^hex
+buf:t3 = ^A049C0^hex:t3
+raw = ^deadbeef^hex
+empty = ^^hex
+```
+
+| Rule | Detail |
+|------|--------|
+| Form | `^` *payload* `^hex` optional `:t` / `:tN` |
+| Payload | Hex digits `0-9a-fA-F`; **spaces and tabs ignored**; no newlines; **no escapes** |
+| Empty | `^^hex` → empty STRING |
+| Odd digit count | **Compile** error `lit.hex.odd` |
+| `:tN` on literal | **Compile** check: decoded byte length ≤ N → else `lit.hex.len` |
+| LHS `:tN` | Still enforced at assign (`type.assign.string.len`) |
+| Phase 1 | **`hex` only**; `bin` / `oct` → later (`lit.codec.later`) |
+| Runtime decode | Use **`enc.decode`** (module) — not `^/var^…` |
+
+`math.calc` still uses `^` for **power** inside its expression STRING; that is unrelated to blob literals on FlatL lines.
 
 ### String pool
 

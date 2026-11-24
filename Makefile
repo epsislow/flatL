@@ -119,6 +119,7 @@ PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
                 $(BINDIR)/libflat_obj.so $(BINDIR)/libflat_csv.so
 PLUGIN_COMMON_SRCS = src/lib/native_util.c src/lib/native_parse_rhs.c src/common/flat_native_tag_common.c \
                src/common/flat_native_tag_runtime.c src/common/value_parse.c src/common/value_ops.c \
+               src/common/flat_lit.c \
                src/common/value_json.c src/common/flat_number.c src/common/value_pool.c \
                src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
                src/common/flat_obj_path.c src/common/flat_schema.c src/common/flat_slot_type.c \
@@ -183,7 +184,7 @@ VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/flat_slot_type.c src/common/flat_list_typed.c src/common/flat_list_shape.c \
           src/common/flat_schema.c \
           src/common/flat_dynamic_bind.c \
-          src/common/value_ops.c src/common/flat_obj_path.c \
+          src/common/value_ops.c src/common/flat_lit.c src/common/flat_obj_path.c \
           src/common/flat_vcx.c src/common/flat_executor.c \
           src/common/value_parse.c src/common/value_format.c src/common/value_io.c \
           src/common/flat_native_tag_common.c src/common/flat_native_tag_runtime.c \
@@ -194,7 +195,7 @@ FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
                src/common/flat_func_tag.c src/common/flat_assign.c src/common/flat_slot_type.c \
                src/common/flat_list_typed.c src/common/flat_list_shape.c src/common/flat_schema.c \
-               src/common/flat_number.c \
+               src/common/flat_number.c src/common/flat_lit.c \
                src/common/value_pool.c \
                src/common/value_collection.c src/common/value_live.c \
                src/common/line_label.c src/common/flat_jump_block.c \
