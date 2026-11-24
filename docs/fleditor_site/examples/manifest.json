@@ -22,6 +22,8 @@
     "test1_csv_utf8_commadel.csv",
     "test1_csv_utf16le.csv",
     "test1_csv_utf16be.csv",
-    "jsonl_sample.jsonl"
+    "jsonl_sample.jsonl",
+    "bytes/binary_file_roundtrip.fl",
+    "bytes/binary_random_record.fl"
   ]
 }

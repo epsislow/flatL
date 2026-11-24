@@ -1,0 +1,12 @@
+use native bytes
+#main
+  a = bytes.write(-128; 's8')
+  b = bytes.write(127; 's8')
+  bytes.read(a, 0; 's8') == -128
+  bytes.read(b, 0; 's8') == 127
+  c = bytes.write(-32768; 's16')
+  d = bytes.write(32767; 's16')
+  bytes.read(c, 0; 's16') == -32768
+  bytes.read(d, 0; 's16') == 32767
+  io.outln('ok')
+  OK

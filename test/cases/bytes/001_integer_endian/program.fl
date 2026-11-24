@@ -1,0 +1,12 @@
+use native bytes
+use native enc
+#main
+  be = bytes.write(4660; 'u16 be')
+  le = bytes.write(4660; 'u16')
+  bytes.len(be) == 2
+  enc.encode('hex', be) == '1234'
+  enc.encode('hex', le) == '3412'
+  bytes.read(be, 0; 'u16 be') == 4660
+  bytes.read(le, 0; 'u16 le') == 4660
+  io.outln('ok')
+  OK

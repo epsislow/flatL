@@ -207,6 +207,11 @@
       "file": "natives/hash.md"
     },
     {
+      "id": "bytes-native",
+      "label": "Native bytes",
+      "file": "natives/bytes.md"
+    },
+    {
       "id": "dom-native",
       "label": "Native dom",
       "file": "natives/dom.md"

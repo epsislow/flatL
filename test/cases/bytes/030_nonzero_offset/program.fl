@@ -1,0 +1,8 @@
+use native bytes
+#main
+  prefix = bytes.write('HDR'; 't3')
+  number = bytes.write(305419896; 'u32 be')
+  data = bytes.concat(prefix, number)
+  bytes.read(data, 3; 'u32 be') == 305419896
+  io.outln('ok')
+  OK

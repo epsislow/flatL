@@ -13,6 +13,8 @@ Curated `.fl` samples shipped with the browser playground. Paths in the editor p
 | `order_flow.fl` + `blocks/executor.fl` | User `def`, executors, `math`/`str`, guards + `#or` (v0.4) |
 | `guess_number/guess_number.fl` | stdin loop, relational guards (`<`/`>`), `math.calc`, score |
 | `csv_reader/grid_row_build.fl` | `csv.next` + `L.push` → `t16[][]`, `call` + `str.to_num`, fără `getCells` |
+| `bytes/binary_file_roundtrip.fl` | `bytes.read` / `bytes.write`, endianness, binary file write/read |
+| `bytes/binary_random_record.fl` | `hash.randomBytes`, fixed-width fields and binary records |
 
 **Reset project** reloads `main.fl` plus all files listed in `manifest.json`.
 

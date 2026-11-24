@@ -204,6 +204,24 @@ static int tag_policy_from_num(uint16_t native_id, const char tokens[][FLAT_TAG_
     return -1;
 }
 
+static int tag_policy_bytes(const char tokens[][FLAT_TAG_TOKEN_LEN], int n) {
+    int i, type_n = 0, endian_n = 0;
+    FlatSlotType type;
+    memset(&type, 0, sizeof type);
+    if (n < 1 || n > 2) return -1;
+    for (i = 0; i < n; ++i) {
+        if (strcmp(tokens[i], "le") == 0 || strcmp(tokens[i], "be") == 0) endian_n++;
+        else {
+            if (type_n++ != 0 || flat_slot_type_parse_spec(tokens[i], &type, NULL, NULL, 0) != 0 ||
+                (!flat_slot_type_is_numeric(&type) && type.kind != FLAT_SLOT_TYPE_TN)) return -1;
+        }
+    }
+    if (type_n != 1 || endian_n > 1 || (endian_n && n != 2)) return -1;
+    if (endian_n && (type.kind == FLAT_SLOT_TYPE_TN || type.kind == FLAT_SLOT_TYPE_U8 ||
+                     type.kind == FLAT_SLOT_TYPE_S8)) return -1;
+    return 0;
+}
+
 static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FLAT_TAG_TOKEN_LEN],
                                       int n) {
     switch ((FlatNativeId)native_id) {
@@ -221,6 +239,9 @@ static int validate_tokens_for_native(uint16_t native_id, const char tokens[][FL
         return tag_policy_from_num(native_id, tokens, n);
     case FLAT_NATIVE_LIST_VALUES_TO:
         return tag_policy_values_to(tokens, n);
+    case FLAT_NATIVE_BYTES_READ:
+    case FLAT_NATIVE_BYTES_WRITE:
+        return tag_policy_bytes(tokens, n);
     default:
         if (flat_native_id_is_mdim(native_id)) {
             return tag_policy_mdim(tokens, n);

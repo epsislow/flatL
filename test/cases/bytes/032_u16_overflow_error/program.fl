@@ -1,0 +1,4 @@
+use native bytes
+#main
+  bytes.write(65536; 'u16')
+  OK

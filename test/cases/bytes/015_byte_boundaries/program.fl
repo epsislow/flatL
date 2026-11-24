@@ -1,0 +1,11 @@
+use native bytes
+use native enc
+#main
+  a = bytes.write(0; 'u8')
+  b = bytes.write(255; 'u8')
+  enc.encode('hex', a) == '00'
+  enc.encode('hex', b) == 'ff'
+  bytes.read(a, 0; 'u8') == 0
+  bytes.read(b, 0; 'u8') == 255
+  io.outln('ok')
+  OK

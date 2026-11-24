@@ -1,0 +1,10 @@
+suite = "bytes"
+mods = "bytes"
+id = 31
+desc = "read rejects negative offset"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "bytes.read.offset"

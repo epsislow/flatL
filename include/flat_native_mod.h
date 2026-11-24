@@ -329,6 +329,12 @@ int flat_native_re_split(FlatNativeCtx *ctx);
 int flat_native_hash_digest(FlatNativeCtx *ctx);
 int flat_native_hash_random_bytes(FlatNativeCtx *ctx);
 
+int flat_native_bytes_read(FlatNativeCtx *ctx);
+int flat_native_bytes_write(FlatNativeCtx *ctx);
+int flat_native_bytes_concat(FlatNativeCtx *ctx);
+int flat_native_bytes_slice(FlatNativeCtx *ctx);
+int flat_native_bytes_len(FlatNativeCtx *ctx);
+
 int flat_native_dom_parse_html(FlatNativeCtx *ctx);
 int flat_native_dom_select(FlatNativeCtx *ctx);
 int flat_native_dom_text(FlatNativeCtx *ctx);

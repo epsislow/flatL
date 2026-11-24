@@ -1,0 +1,10 @@
+suite = "bytes"
+mods = "bytes"
+id = 29
+desc = "f64 IEEE-754 known byte vector"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "ok"

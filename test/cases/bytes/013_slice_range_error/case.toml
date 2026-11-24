@@ -1,0 +1,11 @@
+suite = "bytes"
+mods = "bytes"
+id = 13
+desc = "slice rejects out-of-range segment"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "bytes.slice.range"

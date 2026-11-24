@@ -1,0 +1,8 @@
+use native bytes
+use native enc
+#main
+  raw = bytes.write(1.0; 'f64 be')
+  enc.encode('hex', raw) == '3ff0000000000000'
+  bytes.read(raw, 0; 'f64 be') == 1.0
+  io.outln('ok')
+  OK

@@ -1,0 +1,19 @@
+use native bytes
+#main
+  magic = bytes.write('FLAT'; 't4')
+  version = bytes.write(1; 'u16 le')
+  size = bytes.write(123456; 'u32 be')
+  header = bytes.concat(version, size)
+  payload = bytes.concat(magic, header)
+  fp = file.createCtx('bytes-test.bin')
+  file.writeBytes(fp, payload)
+  file.close(fp)
+  fp = file.readCtx('bytes-test.bin')
+  disk = file.read(fp)
+  file.close(fp)
+  bytes.len(disk) == 10
+  bytes.read(disk, 0; 't4') == 'FLAT'
+  bytes.read(disk, 4; 'u16 le') == 1
+  bytes.read(disk, 6; 'u32 be') == 123456
+  io.outln('ok')
+  OK

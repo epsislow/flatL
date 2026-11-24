@@ -353,6 +353,11 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("re", "split", "re.split(pattern, subject)"),
     META_SIG("hash", "digest", "hash.digest(algo, data)"),
     META_SIG("hash", "randomBytes", "hash.randomBytes(n)"),
+    META_SIG("bytes", "read", "bytes.read(data, offset ; format)"),
+    META_SIG("bytes", "write", "bytes.write(value ; format)"),
+    META_SIG("bytes", "concat", "bytes.concat(a, b)"),
+    META_SIG("bytes", "slice", "bytes.slice(data, offset, length)"),
+    META_SIG("bytes", "len", "bytes.len(data)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -380,6 +385,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_ENC,
         FLAT_NATIVE_MODULE_RE,
         FLAT_NATIVE_MODULE_HASH,
+        FLAT_NATIVE_MODULE_BYTES,
         FLAT_NATIVE_MODULE_MEM,
         FLAT_NATIVE_MODULE_FILE,
         FLAT_NATIVE_MODULE_MATH_TRIG,

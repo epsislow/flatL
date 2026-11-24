@@ -1,0 +1,10 @@
+use native bytes
+#main
+  a = bytes.write(0.1; 'f32')
+  b = bytes.read(a, 0; 'f32')
+  b > 0.09
+  b < 0.11
+  c = bytes.write(0.1; 'f64')
+  bytes.read(c, 0; 'f64') == 0.1
+  io.outln('ok')
+  OK

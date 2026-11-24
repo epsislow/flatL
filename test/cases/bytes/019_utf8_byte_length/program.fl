@@ -1,0 +1,7 @@
+use native bytes
+#main
+  text = bytes.write('é'; 't2')
+  bytes.len(text) == 2
+  bytes.read(text, 0; 't2') == 'é'
+  io.outln('ok')
+  OK

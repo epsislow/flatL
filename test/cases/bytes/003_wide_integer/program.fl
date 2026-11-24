@@ -1,0 +1,11 @@
+use native bytes
+#main
+  source:u64 = 18446744073709551615:u64
+  raw = bytes.write(source; 'u64 be')
+  got = bytes.read(raw, 0; 'u64 be')
+  got == source
+  signed:s64 = -9223372036854775808:s64
+  raw2 = bytes.write(signed; 's64 le')
+  bytes.read(raw2, 0; 's64 le') == signed
+  io.outln('ok')
+  OK

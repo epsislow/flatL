@@ -1,0 +1,11 @@
+suite = "bytes"
+mods = "bytes"
+id = 1
+desc = "integer write/read with BE and default/explicit LE"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "ok"

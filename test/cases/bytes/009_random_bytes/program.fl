@@ -1,0 +1,9 @@
+use native bytes
+use native hash
+#main
+  random = hash.randomBytes(32)
+  bytes.len(random) == 32
+  bytes.slice(random, 0, 16) -> first
+  bytes.len(first) == 16
+  io.outln('ok')
+  OK

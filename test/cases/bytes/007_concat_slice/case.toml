@@ -1,0 +1,11 @@
+suite = "bytes"
+mods = "bytes"
+id = 7
+desc = "concat, slice and len preserve raw bytes"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "ok"

@@ -1,0 +1,10 @@
+suite = "bytes"
+mods = "bytes"
+id = 26
+desc = "s8 rejects negative overflow"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "bytes.write.range"

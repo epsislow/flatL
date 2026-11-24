@@ -1,0 +1,29 @@
+-- Binary file roundtrip: write a compact header and read its fields back.
+use native bytes
+
+#main
+  magic = bytes.write('FLAT'; 't4')
+  version = bytes.write(1; 'u16 le')
+  payload_size = bytes.write(3; 'u32 be')
+  payload = bytes.write('ABC'; 't3')
+  first = bytes.concat(magic, version)
+  second = bytes.concat(payload_size, payload)
+  file_data = bytes.concat(first, second)
+
+  fp = file.createCtx('sample.bin')
+  file.writeBytes(fp, file_data)
+  file.close(fp)
+
+  fp = file.readCtx('sample.bin')
+  loaded = file.read(fp)
+  file.close(fp)
+
+  read_magic = bytes.read(loaded, 0; 't4')
+  read_version = bytes.read(loaded, 4; 'u16')
+  read_size = bytes.read(loaded, 6; 'u32 be')
+  read_payload = bytes.slice(loaded, 10, read_size)
+
+  io.outln(read_magic)
+  io.outln(read_version)
+  io.outln(read_payload)
+  OK

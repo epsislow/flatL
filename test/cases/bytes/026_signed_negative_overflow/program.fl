@@ -1,0 +1,4 @@
+use native bytes
+#main
+  bytes.write(-129; 's8')
+  OK

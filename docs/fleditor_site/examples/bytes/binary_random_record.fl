@@ -1,0 +1,28 @@
+-- Binary record using random bytes, fixed-width strings and numeric fields.
+use native bytes
+use native hash
+
+#main
+  magic = bytes.write('RND1'; 't4')
+  nonce = hash.randomBytes(16)
+  record_id = bytes.write(20261124; 'u32 be')
+  label = bytes.write('FlatL'; 't5')
+  first = bytes.concat(magic, record_id)
+  second = bytes.concat(nonce, label)
+  record = bytes.concat(first, second)
+
+  fp = file.createCtx('random-record.bin')
+  file.writeBytes(fp, record)
+  file.close(fp)
+
+  fp = file.readCtx('random-record.bin')
+  loaded = file.read(fp)
+  file.close(fp)
+
+  read_magic = bytes.read(loaded, 0; 't4')
+  read_id = bytes.read(loaded, 4; 'u32 be')
+  read_label = bytes.read(loaded, 24; 't5')
+  io.outln(read_magic)
+  io.outln(read_id)
+  io.outln(read_label)
+  OK

@@ -1,0 +1,7 @@
+use native bytes
+#main
+  raw = bytes.write(123.125; 'f64 le')
+  value = bytes.read(raw, 0; 'f64 le')
+  value == 123.125
+  io.outln('ok')
+  OK

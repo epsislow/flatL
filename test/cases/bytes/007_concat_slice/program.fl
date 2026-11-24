@@ -1,0 +1,10 @@
+use native bytes
+#main
+  a = bytes.write(4660; 'u16 be')
+  b = bytes.write('AB'; 't2')
+  joined = bytes.concat(a, b)
+  bytes.len(joined) == 4
+  bytes.slice(joined, 0, 2) == a
+  bytes.slice(joined, 2, 2) == b
+  io.outln('ok')
+  OK

@@ -1,0 +1,10 @@
+use native bytes
+use native enc
+#main
+  known = bytes.write(1.0; 'f32 be')
+  enc.encode('hex', known) == '3f800000'
+  raw = bytes.write(1.5; 'f32 be')
+  value = bytes.read(raw, 0; 'f32 be')
+  value == 1.5
+  io.outln('ok')
+  OK

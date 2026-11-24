@@ -1,0 +1,9 @@
+use native bytes
+#main
+  empty = bytes.slice('ABC', 1, 0)
+  bytes.len(empty) == 0
+  joined = bytes.concat(empty, 'A')
+  bytes.len(joined) == 1
+  bytes.read(joined, 0; 't1') == 'A'
+  io.outln('ok')
+  OK

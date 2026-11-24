@@ -1,0 +1,11 @@
+suite = "bytes"
+mods = "bytes"
+id = 11
+desc = "write rejects integer overflow"
+kind = "pipeline"
+
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb </dev/null"
+expect_exit = 1
+stderr_contains = "bytes.write.range"

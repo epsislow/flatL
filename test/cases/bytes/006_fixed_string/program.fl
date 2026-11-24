@@ -1,0 +1,7 @@
+use native bytes
+#main
+  raw = bytes.write('FlatL'; 't5')
+  bytes.len(raw) == 5
+  bytes.read(raw, 0; 't5') == 'FlatL'
+  io.outln('ok')
+  OK

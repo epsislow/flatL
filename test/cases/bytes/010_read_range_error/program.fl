@@ -1,0 +1,5 @@
+use native bytes
+#main
+  data = bytes.write(1; 'u16')
+  bytes.read(data, 1; 'u16')
+  OK

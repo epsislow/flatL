@@ -1,0 +1,4 @@
+use native bytes
+#main
+  bytes.read('ABC', -1; 'u8')
+  OK
