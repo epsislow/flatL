@@ -1,0 +1,14 @@
+use native dom
+use native list
+use native obj
+
+#main
+  html = '<form id="empty"></form>'
+  dom.parseHtml(html) -> page
+  dom.select(page, '#empty') -> forms
+  list.get(forms, 0) -> form
+  dom.formFields(form) -> fields
+  obj.len(fields) == 0
+  dom.close(page)
+  io.outln('dom-empty-form-ok')
+  OK

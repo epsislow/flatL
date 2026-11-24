@@ -1,0 +1,10 @@
+suite = "dom"
+mods = "dom"
+id = 7
+desc = "empty selector results and missing attributes"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "dom-empty-results-ok"

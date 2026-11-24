@@ -1,0 +1,19 @@
+use native dom
+use native list
+
+#main
+  part_a = '0123456789012345678901234567890123456789'
+  part_b = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmn'
+  expected = str.concat(part_a, part_b)
+  html_a = '<div data-long="'
+  html_b = '">' 
+  html_c = '</div>'
+  html = str.concat(html_a, expected, html_b, expected, html_c)
+  dom.parseHtml(html) -> page
+  dom.select(page, 'div') -> nodes
+  list.get(nodes, 0) -> node
+  dom.text(node) == expected
+  dom.attr(node, 'data-long') == expected
+  dom.close(page)
+  io.outln('dom-long-values-ok')
+  OK

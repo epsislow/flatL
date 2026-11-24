@@ -1,0 +1,23 @@
+use native dom
+use native list
+
+#main
+  html_a = '<main id="root"><section class="group"><p class="item">A &amp; B '
+  html_b = '<b>bold</b></p><p class="item">Second</p></section>'
+  html_c = '<aside><p class="item">Third</p></aside></main>'
+  html = str.concat(html_a, html_b, html_c)
+  dom.parseHtml(html) -> page
+  dom.select(page, '#root > section.group p.item') -> items
+  list.len(items) == 2
+  list.get(items, 0) -> first
+  dom.text(first) -> first_text
+  first_text == 'A & B bold'
+  dom.select(page, 'section, aside') -> groups
+  list.len(groups) == 2
+  dom.select(page, 'p.item:nth-child(2)') -> second
+  list.len(second) == 1
+  list.get(second, 0) -> second_node
+  dom.text(second_node) == 'Second'
+  dom.close(page)
+  io.outln('dom-css-features-ok')
+  OK

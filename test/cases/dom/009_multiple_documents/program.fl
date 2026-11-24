@@ -1,0 +1,15 @@
+use native dom
+use native list
+
+#main
+  dom.parseHtml('<p>first</p>') -> page_a
+  dom.parseHtml('<p>second</p>') -> page_b
+  dom.select(page_a, 'p') -> nodes_a
+  dom.select(page_b, 'p') -> nodes_b
+  list.get(nodes_a, 0) -> node_a
+  list.get(nodes_b, 0) -> node_b
+  dom.close(page_a)
+  dom.text(node_b) == 'second'
+  dom.close(page_b)
+  io.outln('dom-multiple-documents-ok')
+  OK

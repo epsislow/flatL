@@ -1,6 +1,122 @@
-# Native `dom`
+# Native module `dom`
 
-Optional HTML5 DOM support backed by [Lexbor](https://github.com/lexbor/lexbor).
+**HTML5 parser, DOM access, and CSS selectors** backed by [Lexbor](https://github.com/lexbor/lexbor). **Optional** — declare before use:
+
+```flat
+use native dom
+use native list
+use native obj
+```
+
+DOM is disabled by default. It is enabled at build time; see [Build](#build).
+
+## API overview
+
+| Call | Returns | Panic / failure |
+|------|---------|-----------------|
+| `parseHtml(html)` | NUMBER document handle | `dom.parseHtml` |
+| `select(page, cssSelector)` | LIST of NUMBER node handles | `dom.select` |
+| `text(node)` | STRING | `dom.text` |
+| `attr(node, name)` | STRING (missing attribute → `""`) | `dom.attr` |
+| `formFields(form)` | OBJECT | `dom.formFields` |
+| `close(page)` | BOOL (`true`) | `dom.close` |
+
+Document and node handles are numeric resources. A document owns every node handle obtained from it; `close(page)` invalidates all of them.
+
+## Functions
+
+### `parseHtml(html) -> page`
+
+Parses an HTML string using the HTML5 parsing algorithm and returns a document handle (`NUMBER`).
+
+```flat
+html = '<main><p>Hello</p></main>'
+dom.parseHtml(html) -> page
+```
+
+The parser performs HTML5 error recovery for malformed markup. The input limit is 16 MiB.
+
+### `select(page, cssSelector) -> nodes`
+
+Finds matching elements using a CSS selector and returns a `LIST` of numeric node handles. The document root itself is not included. An unmatched selector returns an empty list.
+
+```flat
+dom.select(page, 'main p') -> paragraphs
+list.len(paragraphs) -> count
+```
+
+CSS selectors can use the supported Lexbor selector syntax, including combinators, attribute selectors, selector groups, and pseudo-classes.
+
+### `text(node) -> value`
+
+Returns the text content of a node, including text from descendants. HTML character references are decoded by the HTML parser.
+
+```flat
+list.get(paragraphs, 0) -> paragraph
+dom.text(paragraph) -> value
+```
+
+### `attr(node, name) -> value`
+
+Returns an element attribute as a string. A missing attribute returns an empty string. The node must refer to an element.
+
+```flat
+dom.select(page, 'a') -> links
+list.get(links, 0) -> link
+dom.attr(link, 'href') -> href
+```
+
+### `formFields(form) -> fields`
+
+Extracts successful form controls inside the supplied element into an `OBJECT`, keyed by each control's `name`:
+
+- Includes named `input`, `textarea`, and `select` controls.
+- Excludes disabled controls, unnamed controls, unchecked checkboxes/radio buttons, and submit/button/reset/image inputs.
+- Checked checkboxes and radio buttons are included; when their `value` attribute is absent, their value is `"on"`.
+- A single `select` returns its selected option (or its first enabled option when none is explicitly selected). If an option has no `value` attribute, its text content is used.
+- A `multiple` select returns a `LIST` of selected values. No selected options produces an empty list.
+- Repeated field names are represented as a `LIST`, preserving document order.
+- A disabled `fieldset` and its descendants are excluded.
+
+```flat
+use native list
+use native obj
+
+dom.select(page, 'form#login') -> forms
+list.get(forms, 0) -> form
+dom.formFields(form) -> fields
+obj.get(fields, '"username"') -> username
+obj.get(fields, '"tag"') -> tags
+```
+
+`formFields` accepts an element handle as its container; normally this is a `form` element selected from the document. It extracts values only; it does not submit the form.
+
+### `close(page)`
+
+Destroys the document and invalidates every node handle obtained from it. Node handles are not independently closable. Returns `true` on success.
+
+```flat
+dom.close(page)
+```
+
+## Complete example
+
+```flat
+use native dom
+use native list
+
+#main
+  html = '<html><body><a class="item" href="/one">First</a><a class="item" href="/two">Second</a></body></html>'
+  dom.parseHtml(html) -> page
+  dom.select(page, 'a.item') -> links
+  list.get(links, 0) -> first
+  dom.text(first) -> label
+  dom.attr(first, 'href') -> href
+  io.outln(label)
+  io.outln(href)
+  dom.close(page)
+  OK
+```
 
 ## Build
 
@@ -32,105 +148,10 @@ make rebuild dom_compile=1
 
 The system-library mode (`dom=1 dom_compile=0`) is for native builds.
 
-## API
-
-Declare the optional module in the source file header:
-
-```flat
-use native dom
-use native list
-```
-
-### `dom.parseHtml(html) -> page`
-
-Parses an HTML string using the HTML5 parsing algorithm and returns a document handle (`NUMBER`).
-
-```flat
-dom.parseHtml('<main><p>Hello</p></main>') -> page
-```
-
-### `dom.select(page, cssSelector) -> nodes`
-
-Finds matching nodes using a CSS selector and returns a `LIST` of numeric node handles. The root document itself is not included in the result.
-
-```flat
-dom.select(page, 'main p') -> paragraphs
-list.len(paragraphs) -> count
-```
-
-### `dom.text(node) -> value`
-
-Returns the text content of a node, including descendant text.
-
-```flat
-list.get(paragraphs, 0) -> paragraph
-dom.text(paragraph) -> value
-```
-
-### `dom.attr(node, name) -> value`
-
-Returns an element attribute as a string. A missing attribute returns an empty string.
-
-```flat
-dom.select(page, 'a') -> links
-list.get(links, 0) -> link
-dom.attr(link, 'href') -> href
-```
-
-### `dom.formFields(form) -> fields`
-
-Extracts successful form controls into an `OBJECT`, keyed by each control's `name`:
-
-- Includes named `input`, `textarea`, and `select` controls.
-- Excludes disabled controls, unnamed controls, unchecked checkboxes/radio buttons, and submit/button/reset/image inputs.
-- Checked checkboxes and radio buttons are included; when their `value` attribute is absent, their value is `"on"`.
-- A single `select` returns its selected option (or its first enabled option when none is explicitly selected). A `multiple` select returns a `LIST` of selected values.
-- Repeated field names are represented as a `LIST`, preserving document order.
-
-```flat
-use native list
-use native obj
-
-dom.select(page, 'form#login') -> forms
-list.get(forms, 0) -> form
-dom.formFields(form) -> fields
-obj.get(fields, '"username"') -> username
-obj.get(fields, '"tag"') -> tags
-```
-
-`formFields` accepts an element handle as its container; normally this is a `form` element selected from the document.
-
-### `dom.close(page)`
-
-Destroys the document and invalidates every node handle obtained from it. Node handles are not independently closable.
-
-```flat
-dom.close(page)
-```
-
-## Complete example
-
-```flat
-use native dom
-use native list
-
-#main
-  html = '<html><body><a class="item" href="/one">First</a><a class="item" href="/two">Second</a></body></html>'
-  dom.parseHtml(html) -> page
-  dom.select(page, 'a.item') -> links
-  list.get(links, 0) -> first
-  dom.text(first) -> label
-  dom.attr(first, 'href') -> href
-  io.outln(label)
-  io.outln(href)
-  dom.close(page)
-  OK
-```
-
 ## Resource model and limits
 
-- A document handle and node handles are numeric resource IDs scoped to the current VM run.
-- A document owns its complete Lexbor tree and all node handles created from it.
+- A document handle identifies an open document. A node handle identifies a node within one document.
+- Node handles are scoped to their owning document; passing a document handle where an element is expected is rejected.
 - Closing a document invalidates its node handles. Reused document slots receive a new token, so old handles do not become valid again.
 - Up to 64 documents may be open simultaneously.
 - A document may expose up to 100,000 distinct node handles.
@@ -145,8 +166,8 @@ The suite is `test/cases/dom/`. Run it with:
 bin/run_tests dom -v
 ```
 
-Current cases cover parsing and CSS selection, text and attribute access, form field extraction, document close validation, invalid selectors, and stale node handles after document reuse. Cases declare `mods = "dom"` so they are skipped when DOM is not built.
+The suite covers HTML parsing and recovery, CSS selector groups/combinators/pseudo-classes, text and attribute access (including long values and missing attributes), empty results, form control rules and repeated names, multiple document lifetimes, invalid selectors, invalid handle types, document close validation, and stale node handles after document reuse. Cases declare `mods = "dom"` so they are skipped when DOM is not built.
 
 ## Current scope
 
-This initial version supports HTML parsing, CSS selection, text extraction, attribute access, and document cleanup. XML parsing, XPath, and HTML serialization are not part of this version.
+This version supports HTML parsing, CSS selection, text extraction, attribute access, form field extraction, and document cleanup. XML parsing, XPath, HTML serialization, and form submission are not part of this version.

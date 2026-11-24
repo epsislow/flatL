@@ -1,0 +1,15 @@
+use native dom
+use native list
+
+#main
+  html = '<div><a id="present" href="/x">link</a></div>'
+  dom.parseHtml(html) -> page
+  dom.select(page, 'article.missing') -> none
+  list.len(none) == 0
+  dom.select(page, 'a') -> links
+  list.get(links, 0) -> link
+  dom.attr(link, 'href') == '/x'
+  dom.attr(link, 'title') == ''
+  dom.close(page)
+  io.outln('dom-empty-results-ok')
+  OK

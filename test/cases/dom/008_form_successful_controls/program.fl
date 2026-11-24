@@ -1,0 +1,30 @@
+use native dom
+use native list
+use native obj
+
+#main
+  html_a = '<form><input name="hidden" type="hidden" value="secret"><input name="default_check" type="checkbox" checked>'
+  html_b = '<input name="unchecked" type="checkbox"><input name="disabled" value="x" disabled><input value="unnamed">'
+  html_c = '<input name="send" type="submit" value="go"><input name="choice" type="radio" value="a">'
+  html_d = '<input name="choice" type="radio" value="b" checked><select name="fallback">'
+  html_e = '<option disabled value="x">X</option><option value="y">Y</option></select>'
+  html_f = '<select name="empty_multi" multiple><option value="a">A</option></select>'
+  html_g = '<fieldset disabled><input name="fieldset_disabled" value="x"></fieldset></form>'
+  html = str.concat(html_a, html_b, html_c, html_d, html_e, html_f, html_g)
+  dom.parseHtml(html) -> page
+  dom.select(page, 'form') -> forms
+  list.get(forms, 0) -> form
+  dom.formFields(form) -> fields
+  obj.get(fields, '"hidden"') == 'secret'
+  obj.get(fields, '"default_check"') == 'on'
+  obj.has(fields, '"unchecked"') == false
+  obj.has(fields, '"disabled"') == false
+  obj.has(fields, '"send"') == false
+  obj.has(fields, '"fieldset_disabled"') == false
+  obj.get(fields, '"choice"') == 'b'
+  obj.get(fields, '"fallback"') == 'y'
+  obj.get(fields, '"empty_multi"') -> empty_multi
+  list.len(empty_multi) == 0
+  dom.close(page)
+  io.outln('dom-form-controls-ok')
+  OK

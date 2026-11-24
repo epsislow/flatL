@@ -1,0 +1,6 @@
+use native dom
+
+#main
+  dom.parseHtml('<p>hello</p>') -> page
+  dom.attr(page, 'id') -> value
+  OK
