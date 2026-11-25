@@ -1,5 +1,5 @@
 use native env
 
 #main
-  env.get('FLAT_ENV_DOES_NOT_EXIST') -> p
+  io.outln(env.get('FLAT_ENV_DOES_NOT_EXIST'))
   OK

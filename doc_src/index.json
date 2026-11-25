@@ -42,6 +42,16 @@
       "file": "TOOLCHAIN.md"
     },
     {
+      "id": "runtime-logging",
+      "label": "Runtime logging",
+      "file": "RUNTIME_LOGGING.md"
+    },
+    {
+      "id": "task-runtime-audit",
+      "label": "Task runtime — initial audit",
+      "file": "TASK_RUNTIME_AUDIT.md"
+    },
+    {
       "id": "user-functions",
       "label": "User functions",
       "file": "USER_FUNCTIONS.md"

@@ -1,5 +1,5 @@
 use native env
 
 #main
-  env.has() -> p
+  io.outln(env.has())
   OK

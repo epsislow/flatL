@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 4
+desc = "runtime log flags are accepted and buffered mode is bounded"
+kind = "exec"
+
+cmd = "{root}/bin/flvm --show-tasks-log --show-channel-log --log-buffer-size 1024 {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 0

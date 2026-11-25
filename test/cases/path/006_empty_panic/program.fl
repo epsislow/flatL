@@ -1,6 +1,5 @@
 use native path
 
 #main
-  path.normalize('') -> p
-  io.outln(p)
+  io.outln(path.normalize(''))
   OK

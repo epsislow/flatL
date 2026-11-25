@@ -248,7 +248,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
                 src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(BYTES_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
-VM_SRC  = src/common/flat_time.c src/common/vm.c src/common/flat_func_tag.c \
+VM_SRC  = src/common/flat_time.c src/common/flat_runtime_log.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \

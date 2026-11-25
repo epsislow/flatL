@@ -1,0 +1,12 @@
+suite = "flvm"
+id = 6
+desc = "runtime logger filters categories and bounds buffered output"
+kind = "exec"
+
+cmd = "gcc -std=c11 -I{root}/include -o {tmp}/runtime_log_test {root}/test/cases/flvm/006_runtime_log_api/log_test.c {root}/src/common/flat_runtime_log.c && {tmp}/runtime_log_test"
+expect_exit = 0
+stdout_contains = "taskId: 3"
+stdout_contains_2 = "chanId: 21"
+stdout_contains_3 = "log: dropped, count: 1"
+stdout_contains_4 = "runtime-log-test-ok"
+stdout_must_not_contain = "filtered-event"

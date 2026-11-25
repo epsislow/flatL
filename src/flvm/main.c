@@ -5,6 +5,7 @@
 #include "flat_native_mods.h"
 #include "flat_native_plugin.h"
 #include "flat_time.h"
+#include "flat_runtime_log.h"
 #include "vm.h"
 
 #include <stdio.h>
@@ -19,13 +20,18 @@ static int usage(const char *prog) {
     fprintf(stderr, "Usage: %s --version\n", prog);
     fprintf(stderr, "       %s --mods\n", prog);
     fprintf(stderr,
-            "       %s [--trace] [--trace-vars] [--max-steps N] [--time] [--env KEY=VAL]...\n"
+            "       %s [--trace] [--trace-vars] [--max-steps N] [--time]\n"
+            "           [--show-tasks-log] [--show-channel-log] [--log-buffer-size N]\n"
+            "           [--env KEY=VAL]...\n"
             "           program.fb [-- arg...]\n",
             prog);
     fprintf(stderr, "\n  --trace       log each opcode to stderr\n");
     fprintf(stderr, "  --trace-vars  log opcode + variable snapshot to stderr\n");
     fprintf(stderr, "  --mods        list native modules built into this binary (one per line)\n");
     fprintf(stderr, "  --time        print load/run timings on stderr (flvm: time_ms …)\n");
+    fprintf(stderr, "  --show-tasks-log    enable task runtime event output on stdout\n");
+    fprintf(stderr, "  --show-channel-log  enable Channel event output on stdout\n");
+    fprintf(stderr, "  --log-buffer-size N buffer log output up to N bytes (default: live)\n");
     fprintf(stderr, "  FLAT_TIME=1   same as --time when flag omitted\n");
     fprintf(stderr, "  --env KEY=VAL override / set env var for env.get / env.has (repeatable)\n");
     fprintf(stderr, "  --path-sep S  path separator override: / or \\ (file.sep / path.*)\n");
@@ -53,6 +59,9 @@ int main(int argc, char **argv) {
     FlatVmOptions opts = {0};
     const char *fb_path = NULL;
     int report_time = 0;
+    uint32_t log_categories = 0;
+    size_t log_buffer_size = 0;
+    int log_buffer_size_set = 0;
     int rc;
     int i;
     double t0 = 0.0;
@@ -85,6 +94,27 @@ int main(int argc, char **argv) {
         }
         if (strcmp(argv[i], "--time") == 0) {
             report_time = 1;
+            continue;
+        }
+        if (strcmp(argv[i], "--show-tasks-log") == 0) {
+            log_categories |= FLAT_RUNTIME_LOG_TASKS;
+            continue;
+        }
+        if (strcmp(argv[i], "--show-channel-log") == 0) {
+            log_categories |= FLAT_RUNTIME_LOG_CHANNELS;
+            continue;
+        }
+        if (strcmp(argv[i], "--log-buffer-size") == 0) {
+            char *end = NULL;
+            unsigned long long parsed;
+            if (i + 1 >= argc || argv[i + 1][0] == '-') return usage(argv[0]);
+            parsed = strtoull(argv[++i], &end, 10);
+            if (!end || *end != '\0' || parsed < 256u || parsed > (16u * 1024u * 1024u)) {
+                fprintf(stderr, "flvm: invalid --log-buffer-size (expected 256..16777216 bytes)\n");
+                return 2;
+            }
+            log_buffer_size = (size_t)parsed;
+            log_buffer_size_set = 1;
             continue;
         }
         if (strcmp(argv[i], "--env") == 0) {
@@ -158,6 +188,14 @@ int main(int argc, char **argv) {
         return usage(argv[0]);
     }
 
+    if (flat_runtime_log_configure(&(FlatRuntimeLogConfig){
+            .categories = log_categories,
+            .buffer_size = log_buffer_size_set ? log_buffer_size : 0u,
+        }) != 0) {
+        fprintf(stderr, "flvm: unable to initialize runtime log buffer\n");
+        return 2;
+    }
+
     flat_native_runtime_set_search_dir_from_argv0(argv[0]);
 
     if (report_time) {
@@ -165,6 +203,7 @@ int main(int argc, char **argv) {
     }
 
     if (flat_fb_load_file(fb_path, &bc) != 0) {
+        flat_runtime_log_shutdown();
         if (report_time) {
             double t_end = flat_time_monotonic_ms();
             flvm_print_time(0.0, 0.0, 1, t_end - t0);
@@ -176,6 +215,7 @@ int main(int argc, char **argv) {
     }
 
     rc = flat_vm_run_opts(&bc, &opts);
+    flat_runtime_log_shutdown();
 
     if (report_time) {
         t_run = flat_time_monotonic_ms();

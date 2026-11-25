@@ -1,0 +1,8 @@
+suite = "flvm"
+id = 5
+desc = "runtime log buffer rejects sizes below minimum"
+kind = "exec"
+
+cmd = "{root}/bin/flvm --show-tasks-log --log-buffer-size 128 {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 2
+stderr_contains = "invalid --log-buffer-size"
