@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 7
+desc = "executor contexts own independent VM bindings and frame stacks"
+kind = "exec"
+cmd = "gcc -std=c11 -ffunction-sections -fdata-sections -I{root}/include -Wl,--gc-sections -o {tmp}/executor_context_test {root}/test/cases/flvm/007_executor_context_isolation/executor_context_test.c {root}/src/common/flat_executor.c && {tmp}/executor_context_test"
+expect_exit = 0
+stdout_contains = "executor-context-isolation-ok"

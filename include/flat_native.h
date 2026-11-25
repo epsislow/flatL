@@ -378,6 +378,7 @@ typedef enum {
 #define FLAT_NATIVE_MODULE_CSV "csv"
 
 struct FlatVcxRuntime;
+struct FlatExecutorContext;
 struct FlatCsvRuntime;
 struct FlatClockRuntime;
 struct FlatHttpRuntime;
@@ -410,6 +411,7 @@ typedef struct {
     struct FlatClockRuntime *clock; /* stopwatch resources */
     struct FlatHttpRuntime *http; /* synchronous HTTP request resources */
     struct FlatDomRuntime *dom; /* HTML DOM resources */
+    struct FlatExecutorContext *executor; /* per-VM executor state */
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

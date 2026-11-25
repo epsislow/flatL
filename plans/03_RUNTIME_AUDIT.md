@@ -12,12 +12,14 @@ Modelul este potrivit pentru invocarea VM one-shot actuală, dar nu este încă 
 
 ## 2. Executor
 
-`src/common/flat_executor.c` folosește stare globală:
+În baza 252, `src/common/flat_executor.c` folosea stare globală:
 
 - `g_bind` / `g_bind_ok` — binding-ul VM pentru operațiile native executor;
 - `g_frames` / `g_frame_sp` — stack-ul de frame-uri executor.
 
-`flat_executor_reset_session()` resetează această stare, iar `flat_executor_bind_vm()` înlocuiește binding-ul curent. Două contexte independente nu pot avea stack-uri executor coexistente. Refactorul trebuie să mute binding-ul și frame stack-ul într-un context explicit per VM/task. Panic drain trebuie să opereze doar pe contextul task-ului care a eșuat.
+În etapa 253, aceste globale au fost eliminate și mutate în `FlatExecutorContext`, deținut de `VmState`. Contextul este transmis explicit prin `FlatNativeCtx` către operațiile native executor, iar panic drain/unwind pentru frame-urile executorului primește același context. Acest sub-pas este acoperit de testele `func` și `fmod`.
+
+Aceasta nu finalizează F0.3: bookkeeping-ul VM call-instruction și starea activă VCX rămân globale și trebuie refactorizate separat.
 
 ## 3. Bookkeeping VM call instruction
 

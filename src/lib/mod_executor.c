@@ -17,23 +17,6 @@ static int exec_fail(FlatNativeCtx *ctx, const char *reason) {
     return -1;
 }
 
-static void exec_bind_vm(FlatNativeCtx *ctx) {
-    FlatVcxRuntime *rt = ctx && ctx->vcx ? ctx->vcx : flat_vcx_runtime_active();
-
-    if (!ctx || !rt || !ctx->bc) {
-        flat_executor_bind_vm(NULL);
-        return;
-    }
-    flat_executor_bind_vm(&(FlatExecutorVmBind){
-        .vcx = rt,
-        .coll = ctx->coll,
-        .pool = ctx->pool,
-        .files = ctx->file_tbl,
-        .live = ctx->mem_live,
-        .bc = ctx->bc,
-    });
-}
-
 int flat_native_executor_unique_begin(FlatNativeCtx *ctx) {
     char panic[64];
 
@@ -41,9 +24,9 @@ int flat_native_executor_unique_begin(FlatNativeCtx *ctx) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
-    exec_bind_vm(ctx);
+    if (!ctx->executor) return exec_fail(ctx, "executor.context");
     panic[0] = '\0';
-    if (flat_executor_unique_begin(ctx->out, panic, sizeof panic) != 0) {
+    if (flat_executor_unique_begin(ctx->executor, ctx->out, panic, sizeof panic) != 0) {
         return exec_fail(ctx, panic[0] ? panic : "executor.begin");
     }
     *ctx->io_status = FLAT_IO_OK;
@@ -57,9 +40,9 @@ int flat_native_executor_unique_end(FlatNativeCtx *ctx) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
-    exec_bind_vm(ctx);
+    if (!ctx->executor) return exec_fail(ctx, "executor.context");
     panic[0] = '\0';
-    if (flat_executor_unique_end(panic, sizeof panic) != 0) {
+    if (flat_executor_unique_end(ctx->executor, panic, sizeof panic) != 0) {
         return exec_fail(ctx, panic[0] ? panic : "executor.end");
     }
     *ctx->io_status = FLAT_IO_OK;
@@ -73,9 +56,9 @@ int flat_native_executor_global_begin(FlatNativeCtx *ctx) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
-    exec_bind_vm(ctx);
+    if (!ctx->executor) return exec_fail(ctx, "executor.context");
     panic[0] = '\0';
-    if (flat_executor_global_begin(ctx->out, panic, sizeof panic) != 0) {
+    if (flat_executor_global_begin(ctx->executor, ctx->out, panic, sizeof panic) != 0) {
         return exec_fail(ctx, panic[0] ? panic : "executor.begin");
     }
     *ctx->io_status = FLAT_IO_OK;
@@ -89,9 +72,9 @@ int flat_native_executor_global_end(FlatNativeCtx *ctx) {
         return -1;
     }
     ctx->panic_detail[0] = '\0';
-    exec_bind_vm(ctx);
+    if (!ctx->executor) return exec_fail(ctx, "executor.context");
     panic[0] = '\0';
-    if (flat_executor_global_end(panic, sizeof panic) != 0) {
+    if (flat_executor_global_end(ctx->executor, panic, sizeof panic) != 0) {
         return exec_fail(ctx, panic[0] ? panic : "executor.end");
     }
     *ctx->io_status = FLAT_IO_OK;

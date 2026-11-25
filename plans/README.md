@@ -20,4 +20,6 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 6. Nu introduce Python-based tests sau runner separat.
 7. Nu implementa worker threads înainte ca starea VM/executor/native runtime să fie izolată per execuție.
 
-**Baseline al acestui set de documente:** arhiva `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
+**Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
+
+**Ultima actualizare de implementare:** arhiva 253. Citește `04_IMPLEMENTATION_STATUS.md` pentru starea exactă și testele rulate.

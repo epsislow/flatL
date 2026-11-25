@@ -53,3 +53,12 @@ The current executor drain is therefore coupled to the global executor context. 
 ## Initial implementation decision
 
 The first foundation change adds an opt-in central runtime logger and documents the global-state constraints. It deliberately does not introduce task scheduling, Channel operations, `.any` panic resolution changes, or worker threads. Those require the per-task execution-context refactor and dedicated semantic tests.
+
+
+## F0.3 progress — executor context (archive 253)
+
+The executor's VM binding and frame stack have been moved from file-static globals into `FlatExecutorContext`, owned by `VmState`. The context is passed through `FlatNativeCtx` to executor native operations. Executor panic drain/unwind now receives the owning context explicitly.
+
+The following global state is **not yet refactored**: VM call-instruction bookkeeping (`g_vm_call_instr`, `g_instr_stack`, `g_instr_push_call_sp`, `g_last_call_function_sp`) and VCX active runtime / call-instruction resolver (`g_vcx_active`, `g_call_instr_resolver`). Consequently, this step does not make the VM reentrant, task-safe, or thread-safe.
+
+Validation on archive 253: `make all -j2` PASS; `bin/run_tests flvm -v` 7/7 PASS (including independent executor-context test); `bin/run_tests func -v` 37/37 PASS; `bin/run_tests fmod -v` 18/18 PASS. The full suite was not run.

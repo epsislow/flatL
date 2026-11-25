@@ -29,11 +29,13 @@ Implementarea se face în straturi: mai întâi un runtime cooperativ izolat, ap
 
 ### F0.3 — Execution context refactor
 
-- Mutarea binding-ului executorului și frame stack-ului din globale în context explicit per execuție/task.
-- Mutarea bookkeeping-ului call instruction în contextul execuției.
-- VCX active runtime/resolver scoped la context, nu la un singur global activ.
-- Panic drain și cleanup strict scoped la contextul task-ului.
-- Teste de regresie pentru nested calls, unique/global executor și panic unwind.
+**Status în arhiva 253: în lucru.** Prima sub-etapă (executor context per VM) este implementată și testată; call-instruction bookkeeping și VCX active/resolver rămân globale.
+
+- [x] Mutarea binding-ului executorului și frame stack-ului din globale în context explicit per execuție/task.
+- [ ] Mutarea bookkeeping-ului call instruction în contextul execuției.
+- [ ] VCX active runtime/resolver scoped la context, nu la un singur global activ.
+- [~] Panic drain pentru frame-urile executorului este scoped; call-instruction drain încă depinde de bookkeeping-ul global.
+- [x] Testele existente pentru nested calls, unique/global executor și panic unwind trec (`func`, `fmod`).
 
 **Criteriu de ieșire F0:** contextul de execuție poate fi creat/curățat independent fără să afecteze alt context; logger-ul poate fi activat fără impact când este dezactivat. F0 nu livrează încă `task.spawn`, scheduler sau Channel.
 

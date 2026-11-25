@@ -98,6 +98,7 @@ typedef struct {
     uint32_t *jump_block_entry_count;
     const FlatVmOptions *run_opts;
     FlatVcxRuntime *vcx;
+    FlatExecutorContext executor;
     FlatCsvRuntime *csv;
     FlatClockRuntime clock;
 #if FLAT_WITH_HTTP
@@ -334,7 +335,7 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
     fault_ip = *ip;
 
     if (st && st->vcx && bc) {
-        flat_executor_bind_vm(&(FlatExecutorVmBind){
+        flat_executor_context_bind_vm(&st->executor, &(FlatExecutorVmBind){
             .vcx = st->vcx,
             .coll = st->coll,
             .pool = st->pool,
@@ -346,7 +347,7 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
         for (ci = 0; ci < st->call_sp && ci < VM_MAX_CALL; ci++) {
             instr_stack[ci] = st->calls[ci].func_instr_ctx;
         }
-        flat_executor_panic_drain_calls(bc, instr_stack, st->call_sp, exec_panic, sizeof exec_panic);
+        flat_executor_panic_drain_calls(&st->executor, bc, instr_stack, st->call_sp, exec_panic, sizeof exec_panic);
         while (st->call_sp > 0 && st->calls[st->call_sp - 1].func_instr_ctx != 0u) {
             st->call_sp--;
         }
@@ -1147,6 +1148,7 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.io_ctx = st->io_ctx;
             ctx.file_tbl = &st->files;
             ctx.vcx = st->vcx;
+            ctx.executor = &st->executor;
             ctx.csv = st->csv;
             ctx.clock = &st->clock;
 #if FLAT_WITH_HTTP
@@ -1469,8 +1471,7 @@ static void vm_teardown(VmState *st, int rc) {
         flat_vcx_set_call_instr_resolver(NULL);
         flat_vm_instr_stack_clear();
     }
-    flat_executor_bind_vm(NULL);
-    flat_executor_reset_session();
+    flat_executor_context_reset(&st->executor);
     if (st->csv) {
         flat_csv_runtime_destroy(st->csv);
         st->csv = NULL;
@@ -2143,6 +2144,7 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.io_ctx = st->io_ctx;
     ctx.file_tbl = &st->files;
     ctx.vcx = st->vcx;
+    ctx.executor = &st->executor;
     ctx.csv = st->csv;
     ctx.clock = &st->clock;
 #if FLAT_WITH_HTTP
@@ -2290,8 +2292,8 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
     flat_vcx_runtime_set_active(st.vcx);
     g_vm_call_instr = &st;
     flat_vcx_set_call_instr_resolver(vm_resolve_call_instr_ctx);
-    flat_executor_reset_session();
-    flat_executor_bind_vm(&(FlatExecutorVmBind){
+    flat_executor_context_reset(&st.executor);
+    flat_executor_context_bind_vm(&st.executor, &(FlatExecutorVmBind){
         .vcx = st.vcx,
         .coll = st.coll,
         .pool = st.pool,
