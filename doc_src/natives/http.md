@@ -6,6 +6,8 @@
 use native http
 ```
 
+**Availability:** native ✅ · WASM **partial** (Fetch + Asyncify + browser **CORS**). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 Native builds use libcurl; the browser/WASM build uses the browser Fetch API through the Emscripten Asyncify bridge.
 
 **CORS (fleditor / WASM only):** `http.send` uses the page’s `fetch()`. The browser compares the fleditor origin (e.g. `http://127.0.0.1:8765`) with the request URL. Cross-origin calls need the target server to allow that origin (`Access-Control-Allow-Origin`). The same URL usually works with `bin/flvm` (libcurl has no CORS). Demo examples use CORS-friendly public APIs. There is no `http.allowCORS` on the native API — optional fleditor **Settings → HTTP → Cross-origin requests** only gates whether Fetch may *attempt* cross-origin URLs (it never bypasses browser CORS).

@@ -82,6 +82,44 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `vcx` | [vcx.md](./vcx.md) |
 | `executor` | [executor.md](./executor.md) |
 | `csv` | [csv.md](./csv.md) |
+| `bytes` | [bytes.md](./bytes.md) — binary buffer read/write/slice |
+
+## WASM availability
+
+**Default FlEditor build** (`make fleditor-wasm` / `make rebuild` with `emcc`): same optional flags as native (`http=0`, `fs=0`, …). Inspect the linked set with **`flat_wasm_mods()`** (playground) or compare to **`bin/flvm --mods`**.
+
+| Status | Meaning |
+|--------|---------|
+| **✅** | Same API surface; differences are host wiring only (if any) |
+| **partial** | API present, but host semantics differ (sandbox, CORS, Settings map, …) |
+| **❌** | Not linked / not offered on that host |
+
+| Module | Native (`flvm`) | WASM (FlEditor) | Note |
+|--------|-----------------|-----------------|------|
+| `io` | ✅ | partial | stdout/stderr → xterm pane; redirects/`ctx*` OK — [io.md](./io.md), [IO_CONTEXTS.md](../IO_CONTEXTS.md) |
+| `json` | ✅ | ✅ | |
+| `str` | ✅ | ✅ | |
+| `date` | ✅ | ✅ | |
+| `clock` | ✅ | ✅ | |
+| `mem` | ✅ | ✅ | |
+| `file` | ✅ | partial | FlEditor: project **MEMFS** (`/fleditor`), not host disk — [file.md](./file.md) |
+| `http` | ✅ | partial | native **libcurl**; WASM **Fetch + Asyncify** + **CORS** — [http.md](./http.md) |
+| `dom` | ✅ | ✅ | WASM requires **bundled** Lexbor (`dom_compile=1`) — [dom.md](./dom.md) |
+| `env` | ✅ | partial | WASM: **Settings → Env** / Program args only (no OS `getenv`) — [env.md](./env.md) |
+| `path` | ✅ | ✅ | pure strings; sep via `file.sep` / Settings → Path — [path.md](./path.md) |
+| `fs` | ✅ | partial | native OS FS; WASM **MEMFS** sandbox — [fs.md](./fs.md) |
+| `enc` | ✅ | ✅ | [enc.md](./enc.md) |
+| `re` | ✅ | ✅ | WASM: bundled PCRE2 (`re_compile=1`) — [re.md](./re.md) |
+| `hash` | ✅ | ✅ | same C in `external/hash/` — [hash.md](./hash.md) |
+| `bytes` | ✅ | ✅ | [bytes.md](./bytes.md) |
+| `math` / `math.trig` / `math.stats` / `math.mdim` | ✅ | ✅ | Linux plugins `.so`; embedded in WASM — [math.md](./math.md) |
+| `list` / `obj` | ✅ | ✅ | |
+| `vcx` / `executor` | ✅ | ✅ | |
+| `csv` | ✅ | ✅ | |
+
+**Not shipped yet** (out of this matrix): `net` / `ws`, `ui.*`, full async **task** — see [native-modules-roadmap](../../.cursor/plans/native-modules-roadmap.plan.md).
+
+Build toggles and `mods=` test skips: [TOOLCHAIN.md](../TOOLCHAIN.md#optional-modules-http0).
 
 ## Native handlers: parsing call arguments
 

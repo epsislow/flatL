@@ -8,6 +8,8 @@ use native re
 
 Backend: **PCRE2 8-bit**, **no JIT**. Default build bundles sources from `external/pcre2/` (`re_compile=1`). System library: `make … re=1 re_compile=0` (`pkg-config libpcre2-8` on Linux / MSYS2 UCRT64). Disable: `re=0`.
 
+**Availability:** native ✅ · WASM ✅ (bundled PCRE2 required — `re_compile=1`). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 Recoverable failures → **PANIC** **`re.<fn>…`** unless **`?`** / **`~`** ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).
 
 ## Limits (Re1)

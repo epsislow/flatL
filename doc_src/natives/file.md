@@ -2,6 +2,8 @@
 
 **File handles** and byte/line I/O. **Core** — always linked into `flvm` / `flatl` (like **`io`** / **`mem`**). An open file is a **NUMBER** resource id (the slot index for that open file, same idea as a **VCX** context id from **`vcx.create`**). You may bind **`fp:u32`** or another numeric type; invalid or closed ids panic on use. Stream I/O: [io.md](./io.md).
 
+**Availability:** native ✅ · WASM **partial** — FlEditor paths resolve in project **MEMFS** (`/fleditor`), not the host OS disk. Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 Paths are STRING (inline or REF). Tests often use **`cd {tmp}`** in `case.toml` so relative paths resolve next to the compiled `.fb`.
 
 Recoverable failures use **PANIC** with reason **`file.<fn>`** (or **`io.eof`** on EOF reads) unless the line has **`?`** / **`~`** ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).

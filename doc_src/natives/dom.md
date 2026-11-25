@@ -284,6 +284,8 @@ make rebuild dom=1 dom_compile=0
 
 `dom_compile=1` defaults `dom` to `1`. The bundled source is generated from Lexbor v3.0.0 and contains the `html` and `selectors` modules plus their dependencies. Explicit `dom=0` still disables DOM even when `dom_compile` remains at its default.
 
+**Availability:** native ✅ · WASM ✅ (bundled Lexbor only — `dom_compile=1`). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 For the browser/WASM build, bundled Lexbor is required whenever DOM is enabled (default rebuild already does that).
 
 ## Resource model and limits

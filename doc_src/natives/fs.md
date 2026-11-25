@@ -6,6 +6,8 @@ Directory / path **existence** helpers on the host filesystem. **Optional** — 
 use native fs
 ```
 
+**Availability:** native ✅ · WASM **partial** (MEMFS sandbox). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 | Host | Backing store |
 |------|----------------|
 | `flvm` / `flatl` (native) | Real OS filesystem (relative to process cwd) |

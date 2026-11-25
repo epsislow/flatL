@@ -6,6 +6,8 @@ Encode / decode **binary STRING** payloads with a named scheme. **Optional** —
 use native enc
 ```
 
+**Availability:** native ✅ · WASM ✅ (same C). Toggle: `enc=0`. Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 Input and output are **STRING** (binary-safe, same contract as `file.read` / `writeBytes`). Typed slots (`tN`) work as usual. Compile-time blob literals (`^…^hex|bin|oct|b32|b64`) stay in core and do **not** require this module; use `enc.decode` / `enc.encode` for runtime data.
 
 `http.basic` / form encoding continue to use the shared C helper (`flat_enc`) and do **not** need `use native enc`.

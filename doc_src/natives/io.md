@@ -20,6 +20,8 @@ Implementation: `src/lib/mod_io.c`, registry `src/lib/native_registry.c`.
 
 **`io.outcls()`** — no arguments. Effect depends on the active **`ctxout`** target ([IO_CONTEXTS.md](../IO_CONTEXTS.md)): **`tout`** / terminal → ANSI clear screen; **STRING REF** → empty body (same `ref_id`); **inline** STRING snapshot → empty; **`file`** handle → truncate to 0 bytes at position 0. Invalid / unsupported target → **`io.context`**. Default **`tout`** when no redirect matches direct `io.out*`.
 
+**Availability:** native ✅ · WASM **partial** (stdout/stderr → xterm; `ctx*` redirects OK). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 **Fleditor / WASM:** terminal clear uses the same ANSI bytes; stdout in the editor is the xterm pane (see [FLEDITOR.md](../FLEDITOR.md)). Non-terminal sinks are unchanged in WASM builds.
 
 Formatting: [IO.md §2](../IO.md#2-output-ioout).

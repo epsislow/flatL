@@ -8,6 +8,8 @@ use native math with m
 
 Does **not** load `math.trig`, `math.stats`, or `math.mdim`; each optional module needs its own `use native` line. For **rectangular numeric arrays** (matrix add, `matmul`, …), see [math_mdim.md](./math_mdim.md).
 
+**Availability:** native ✅ · WASM ✅ (`math*` embedded in WASM; plugins `.so` on Linux). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 ## Syntax
 
 | Form | Example |

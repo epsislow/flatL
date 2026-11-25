@@ -6,6 +6,8 @@
 use native list with L
 ```
 
+**Availability:** native ✅ · WASM ✅ (embedded; Linux may use `libflat_list.so`). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 List literals **`[]`** and **`[1, 2, 3]`** in source remain the primary way to write lists; this module adds runtime helpers (replacing bootstrap **`__list_*__`** over time).
 
 ## Syntax

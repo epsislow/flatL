@@ -10,6 +10,8 @@ use native bytes
 
 The module is embedded by default. Disable it with `make rebuild bytes=0` (and `bytes=0` for WASM builds).
 
+**Availability:** native ✅ · WASM ✅. Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 ## Functions overview
 
 | Function | Signature | Returns | Description |

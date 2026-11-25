@@ -69,7 +69,7 @@ bin/flc --mods
 bin/flatl --mods
 ```
 
-Output is one module id per line (lowercase).
+Output is one module id per line (lowercase). For **native vs FlEditor/WASM** (✅ / partial / ❌) see the matrix in [natives/README.md § WASM availability](./natives/README.md#wasm-availability).
 
 ### Test skips via `mods=`
 

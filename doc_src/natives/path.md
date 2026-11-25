@@ -8,6 +8,8 @@ use native path
 
 The **effective separator** for join/normalize output is **not** taken from `path.*` — use core **`file.sep()`** (always available). Override with `flvm --path-sep /` or `\` / FlEditor **Settings → Path**. See [file.md](./file.md).
 
+**Availability:** native ✅ · WASM ✅ (pure strings; no disk). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 Parsing accepts **both** `/` and `\` as separators; emitted paths use the effective sep.
 
 Recoverable failures → **PANIC** **`path.<fn>…`** unless **`?`** / **`~`** ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).

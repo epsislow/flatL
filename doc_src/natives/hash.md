@@ -12,6 +12,8 @@ Input data is **STRING** (binary-safe, same contract as `enc` / `file.read`). Di
 
 Build toggle: `make … hash=0` → `-DFLAT_WITH_HASH=0`. Primitives live in `external/hash/` (WjCryptLib public-domain subset); SHA-384 via FlatL wrapper on SHA-512.
 
+**Availability:** native ✅ · WASM ✅ (same C in `external/hash/`). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 Recoverable failures → **PANIC** **`hash.<fn>…`** unless **`?`** / **`~`**.
 
 ## Functions

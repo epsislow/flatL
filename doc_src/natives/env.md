@@ -6,6 +6,8 @@ Read **environment variables** and **program argv**. **Optional** — declare be
 use native env
 ```
 
+**Availability:** native ✅ · WASM **partial** (Settings map / Program args only). Matrix: [README.md § WASM](./README.md#wasm-availability).
+
 Values are **STRING** only. There is **no** `env.set` in the language: configure the host (`--env`, process env, `case.toml` `[env]`, or FlEditor **Settings → Env**).
 
 | Host | How `env.get` / `env.has` see values |
