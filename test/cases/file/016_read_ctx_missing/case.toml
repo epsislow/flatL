@@ -1,0 +1,9 @@
+suite = "file"
+id = 16
+desc = "file.readCtx missing path panics file.readCtx.open"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 1
+stderr_contains = "file.readCtx.open"

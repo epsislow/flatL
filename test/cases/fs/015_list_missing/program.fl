@@ -1,0 +1,5 @@
+use native fs
+
+#main
+  xs = fs.listDir('no_such_dir_015')
+  OK

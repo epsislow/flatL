@@ -1,0 +1,4 @@
+#main
+  fp = file.createCtx('wb_args.bin')
+  file.writeBytes(fp, 42)
+  OK

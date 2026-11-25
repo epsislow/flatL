@@ -1,0 +1,9 @@
+suite = "file"
+id = 17
+desc = "file.readln bad handle panics file.readln.id"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "file.readln.id"

@@ -1,0 +1,3 @@
+#main
+  str.len(42) -> n
+  OK

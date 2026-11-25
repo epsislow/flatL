@@ -1,0 +1,3 @@
+#main
+  mem.ref_from(missing_name) -> r
+  OK

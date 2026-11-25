@@ -1,0 +1,3 @@
+#main
+  io.inln(42) -> s
+  OK

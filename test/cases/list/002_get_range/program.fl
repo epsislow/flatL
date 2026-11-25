@@ -1,0 +1,6 @@
+use native list with L
+
+#main
+  xs = [1, 2]
+  L.get(xs, 9) -> v
+  OK

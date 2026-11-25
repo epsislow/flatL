@@ -1,0 +1,5 @@
+use native fs
+
+#main
+  fs.exists(42) -> x
+  OK

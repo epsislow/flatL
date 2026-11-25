@@ -6,17 +6,19 @@
 
 Paths are STRING (inline or REF). Tests often use **`cd {tmp}`** in `case.toml` so relative paths resolve next to the compiled `.fb`.
 
-Recoverable failures use **PANIC** with reason **`file.<fn>`** (or **`io.eof`** on EOF reads) unless the line has **`?`** / **`~`** ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).
+Recoverable failures use **PANIC** with reason **`file.<fn>.…`** (or **`io.eof`** / **`pool.full`**) unless the line has **`?`** / **`~`** ([SPECIFICATION.md](../SPECIFICATION.md) §1.2.2).
+
+Common suffixes: **`.path`** (path not STRING), **`.open`** (host open failed), **`.id`** (bad/closed handle), **`.args`** (arity/type), **`.range`** (negative / non-integer length), **`.io`** (stdio seek/write/flush), **`.memory`** (alloc), **`.busy`** (CSV still holds the handle).
 
 ## Opening
 
 | Call | Mode | Panic (no modifier) |
 |------|------|---------------------|
-| `file.readCtx(path)` | Read existing file | **`file.readCtx`** — missing path, open error |
-| `file.createCtx(path)` | Create / truncate (`w+`) | **`file.createCtx`** |
-| `file.writeCtx(path)` | Read/write existing, seek to 0 | **`file.writeCtx`** |
-| `file.appendCtx(path)` | Read/write, seek to EOF | **`file.appendCtx`** |
-| `file.readWriteCtx(path)` | Read/write existing | **`file.readWriteCtx`** |
+| `file.readCtx(path)` | Read existing file | **`file.readCtx.path`** / **`file.readCtx.open`** |
+| `file.createCtx(path)` | Create / truncate (`w+`) | **`file.createCtx.path`** / **`file.createCtx.open`** |
+| `file.writeCtx(path)` | Read/write existing, seek to 0 | **`file.writeCtx.path`** / **`file.writeCtx.open`** |
+| `file.appendCtx(path)` | Read/write, seek to EOF | **`file.appendCtx.path`** / **`file.appendCtx.open`** |
+| `file.readWriteCtx(path)` | Read/write existing | **`file.readWriteCtx.path`** / **`file.readWriteCtx.open`** |
 
 Returns a **NUMBER** file id bound to a variable or `->` target.
 
@@ -24,19 +26,20 @@ Returns a **NUMBER** file id bound to a variable or `->` target.
 
 | Call | Result | Panic (no modifier) |
 |------|--------|---------------------|
-| `file.readln(fp)` | One line (strip `\n`) | **`file.readln`** / **`io.eof`** at EOF |
-| `file.writeln(fp, data)` | Write **data** + `\n` | **`file.writeln`** — bad handle / write error |
-| `file.read(fp)` | Rest of file as STRING REF | **`file.read`** |
-| `file.read(fp, n)` | Up to **n** bytes as STRING REF | **`file.read`** |
-| `file.write(fp, data)` | Write at current position | **`file.write`** |
-| `file.writeBytes(fp, data)` | Raw STRING bytes | **`file.writeBytes`** |
-| `file.flush(fp)` | Flush stdio buffer | **`file.flush`** |
-| `file.pos(fp)` | Current byte offset (NUMBER) | **`file.pos`** — invalid handle |
-| `file.size(fp)` | File size in bytes (NUMBER) | **`file.size`** |
-| `file.setpos(fp, n)` | Seek: **`n >= 0`** absolute from start; **`n < 0`** from EOF (e.g. `-3` = 3 bytes before end) | **`file.setpos`** |
-| `file.setposrel(fp, delta)` | Seek relative to current position (`SEEK_CUR`) | **`file.setposrel`** |
-| `file.truncate(fp, len)` | Set file size to **`len`** bytes (non-negative whole byte count); read-only handle invalid | **`file.truncate`** |
-| `file.iseof(fp)` | BOOL after reads | **`file.iseof`** |
+| `file.readln(fp)` | One line (strip `\n`) | **`file.readln.id`** / **`io.eof`** at EOF |
+| `file.writeln(fp, data)` | Write **data** + `\n` | **`file.writeln.id`** / **`.args`** / **`.io`** |
+| `file.read(fp)` | Rest of file as STRING REF | **`file.read.id`** / **`.io`** / **`pool.full`** |
+| `file.read(fp, n)` | Up to **n** bytes as STRING REF | **`file.read.args`** / **`.range`** / **`.id`** / **`pool.full`** |
+| `file.write(fp, data)` | Write at current position | **`file.write.id`** / **`.args`** / **`.io`** |
+| `file.writeBytes(fp, data)` | Raw STRING bytes | **`file.writeBytes.id`** / **`.args`** (non-STRING) / **`.io`** |
+| `file.flush(fp)` | Flush stdio buffer | **`file.flush.id`** / **`.io`** |
+| `file.pos(fp)` | Current byte offset (NUMBER) | **`file.pos.id`** / **`.io`** |
+| `file.size(fp)` | File size in bytes (NUMBER) | **`file.size.id`** / **`.io`** |
+| `file.setpos(fp, n)` | Seek: **`n >= 0`** absolute from start; **`n < 0`** from EOF (e.g. `-3` = 3 bytes before end) | **`file.setpos.id`** / **`.args`** / **`.io`** |
+| `file.setposrel(fp, delta)` | Seek relative to current position (`SEEK_CUR`) | **`file.setposrel.id`** / **`.args`** / **`.io`** |
+| `file.truncate(fp, len)` | Set file size to **`len`** bytes (non-negative whole byte count); read-only handle invalid | **`file.truncate.id`** / **`.args`** / **`.range`** / **`.io`** |
+| `file.iseof(fp)` | BOOL after reads | **`file.iseof.id`** |
+| `file.close(fp)` | Close handle; revert active **`io.ctx*`** if needed | **`file.close.id`** / **`file.close.busy`** / **`.io`** |
 
 ### Seeking
 
@@ -51,7 +54,6 @@ Returns a **NUMBER** file id bound to a variable or `->` target.
 - **`file.createCtx(path)`** still truncates on **open** (`w+`). **`io.outcls()`** with **`io.ctxout(fp)`** also truncates to **0** on the active output sink ([IO_CONTEXTS.md](../IO_CONTEXTS.md)).
 
 Binary reads/writes use the current position; combine **`setpos`** / **`setposrel`** with **`file.read(fp, n)`** and **`file.writeBytes`** for opaque blobs.
-| `file.close(fp)` | Close handle; revert active **`io.ctx*`** if needed | **`file.close`** |
 
 All open handles are closed on VM exit.
 

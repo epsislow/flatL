@@ -1,0 +1,5 @@
+use native obj with O
+
+#main
+  O.get(42, 'k') -> v
+  OK

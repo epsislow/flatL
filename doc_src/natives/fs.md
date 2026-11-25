@@ -25,12 +25,12 @@ Build toggle: `make … fs=0`.
 
 | Call | Returns | Panic (no modifier) |
 |------|---------|---------------------|
-| `fs.exists(path)` | BOOL | **`fs.exists.empty`** / **`fs.exists.args`** — missing path → `false` |
-| `fs.isFile(path)` | BOOL | **`fs.isFile.empty`** / **`fs.isFile.args`** — missing / not file → `false` |
-| `fs.isDir(path)` | BOOL | **`fs.isDir.empty`** / **`fs.isDir.args`** — missing / not dir → `false` |
-| `fs.mkdir(path)` | (null) | **`fs.mkdir`**, **`fs.mkdir.exists`** if a non-dir already exists; idempotent if already a dir |
-| `fs.listDir(path)` | LIST of STRING | **`fs.listDir`** if not a directory; **`fs.listDir.limit`** above 512 entries; names sorted, no `.` / `..`; maximum 512 entries per call |
-| `fs.remove(path)` | (null) | **`fs.remove.missing`**, **`fs.remove.not_empty`** (non-empty dir), **`fs.remove`** |
+| `fs.exists(path)` | BOOL | **`fs.exists.args`** / **`.empty`** — missing path on disk → `false` (no panic) |
+| `fs.isFile(path)` | BOOL | **`fs.isFile.args`** / **`.empty`** — missing / not file → `false` |
+| `fs.isDir(path)` | BOOL | **`fs.isDir.args`** / **`.empty`** — missing / not dir → `false` |
+| `fs.mkdir(path)` | (null) | **`fs.mkdir.args`** / **`.empty`** / **`fs.mkdir.exists`** / **`fs.mkdir`**; idempotent if already a dir |
+| `fs.listDir(path)` | LIST of STRING | **`fs.listDir.args`** / **`.empty`** / **`.missing`** / **`.not_dir`** / **`.limit`** (&gt;512) / **`pool.full`** / **`list.full`**; names sorted, no `.` / `..` |
+| `fs.remove(path)` | (null) | **`fs.remove.args`** / **`.empty`** / **`.missing`** / **`.not_empty`** / **`fs.remove`** |
 
 `mkdir` creates **one** level (parent must exist). `remove` deletes a **file** or an **empty** directory (no recursive tree wipe).
 

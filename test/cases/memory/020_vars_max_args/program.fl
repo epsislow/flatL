@@ -1,0 +1,3 @@
+#main
+  mem.vars_max(1) -> n
+  OK

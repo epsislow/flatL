@@ -134,6 +134,16 @@ static int parse_path_arg(FlatNativeCtx *ctx, const char *expr, FlatObjPathSegs 
     return 0;
 }
 
+static int obj_fail(FlatNativeCtx *ctx, const char *why) {
+    if (ctx && ctx->io_status) {
+        *ctx->io_status = FLAT_IO_ERR;
+    }
+    if (ctx && why) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", why);
+    }
+    return -1;
+}
+
 static int io_err(FlatNativeCtx *ctx) {
     if (ctx->io_status) {
         *ctx->io_status = FLAT_IO_ERR;
@@ -151,14 +161,14 @@ static int io_ok(FlatNativeCtx *ctx) {
 int flat_native_obj_empty(FlatNativeCtx *ctx) {
     uint32_t id;
     if (!ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.empty");
     }
     if (ctx->inner && ctx->inner[0] != '\0') {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.empty.args");
     }
     io_ok(ctx);
     if (flat_obj_empty(ctx->coll, ctx->pool, &id) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.full");
     }
     return flat_value_set_object(ctx->out, id);
 }
@@ -172,27 +182,30 @@ int flat_native_obj_get(FlatNativeCtx *ctx) {
     int rc = -1;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.get");
     }
     memset(&obj_v, 0, sizeof obj_v);
     ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &obj_e, &key_e) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.get.args");
     }
     io_ok(ctx);
-    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 || parse_path_arg(ctx, key_e, &path, "get") != 0) {
+    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0) {
+        obj_fail(ctx, "obj.get.type");
+        goto out;
+    }
+    if (parse_path_arg(ctx, key_e, &path, "get") != 0) {
+        io_err(ctx);
         goto out;
     }
     if (flat_obj_get_path(ctx->coll, obj_v.u.coll_id, &path, ctx->out) != 0) {
         flat_path_reason(FLAT_PATH_MISSING, "get", ctx->panic_detail, sizeof ctx->panic_detail);
+        io_err(ctx);
         goto out;
     }
     rc = 0;
 out:
-    if (rc != 0) {
-        io_err(ctx);
-    }
     flat_native_parse_rhs_release(ctx, &obj_v);
     return rc;
 }
@@ -209,18 +222,25 @@ int flat_native_obj_set(FlatNativeCtx *ctx) {
     int rc;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.set");
     }
     ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_three_args(inner_buf, &obj_e, &key_e, &val_e) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.set.args");
     }
     io_ok(ctx);
     memset(&obj_v, 0, sizeof obj_v);
-    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 || parse_path_arg(ctx, key_e, &path, "set") != 0 ||
+    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0) {
+        flat_native_parse_rhs_release(ctx, &obj_v);
+        return obj_fail(ctx, "obj.set.type");
+    }
+    if (parse_path_arg(ctx, key_e, &path, "set") != 0 ||
         flat_native_parse_expr(ctx, val_e, &val) != 0) {
         flat_native_parse_rhs_release(ctx, &obj_v);
+        if (ctx->panic_detail[0] == '\0') {
+            return obj_fail(ctx, "obj.set.args");
+        }
         return io_err(ctx);
     }
     if (is_simple_ident(obj_e) && ctx->var_names && ctx->var_slot_types && ctx->var_has_slot_type) {
@@ -257,7 +277,7 @@ int flat_native_obj_set(FlatNativeCtx *ctx) {
         return io_err(ctx);
     }
     if (rc != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.full");
     }
     return flat_value_set_object(ctx->out, new_id);
 }
@@ -271,22 +291,26 @@ int flat_native_obj_has(FlatNativeCtx *ctx) {
     int has = 0;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.has");
     }
     ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &obj_e, &key_e) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.has.args");
     }
     io_ok(ctx);
     memset(&obj_v, 0, sizeof obj_v);
-    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 || parse_path_arg(ctx, key_e, &path, "has") != 0) {
+    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0) {
+        flat_native_parse_rhs_release(ctx, &obj_v);
+        return obj_fail(ctx, "obj.has.type");
+    }
+    if (parse_path_arg(ctx, key_e, &path, "has") != 0) {
         flat_native_parse_rhs_release(ctx, &obj_v);
         return io_err(ctx);
     }
     if (flat_obj_has_path(ctx->coll, obj_v.u.coll_id, &path, &has) != 0) {
         flat_native_parse_rhs_release(ctx, &obj_v);
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.has");
     }
     flat_native_parse_rhs_release(ctx, &obj_v);
     return flat_value_set_bool(ctx->out, has ? 1 : 0);
@@ -297,14 +321,14 @@ int flat_native_obj_len(FlatNativeCtx *ctx) {
     int len;
 
     if (!ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.len");
     }
     io_ok(ctx);
     if (parse_obj_arg(ctx, ctx->inner, &obj_v) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.len.type");
     }
     if (flat_obj_len(ctx->coll, obj_v.u.coll_id, &len) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.len");
     }
     return flat_value_set_number(ctx->out, (double)len);
 }
@@ -319,17 +343,20 @@ int flat_native_obj_remove(FlatNativeCtx *ctx) {
     int rc;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.remove");
     }
     ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &obj_e, &key_e) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.remove.args");
     }
     io_ok(ctx);
     memset(&obj_v, 0, sizeof obj_v);
-    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0 ||
-        parse_path_arg(ctx, key_e, &path, "remove") != 0) {
+    if (parse_obj_arg(ctx, obj_e, &obj_v) != 0) {
+        flat_native_parse_rhs_release(ctx, &obj_v);
+        return obj_fail(ctx, "obj.remove.type");
+    }
+    if (parse_path_arg(ctx, key_e, &path, "remove") != 0) {
         flat_native_parse_rhs_release(ctx, &obj_v);
         return io_err(ctx);
     }
@@ -340,7 +367,7 @@ int flat_native_obj_remove(FlatNativeCtx *ctx) {
         return io_err(ctx);
     }
     if (rc != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.full");
     }
     return flat_value_set_object(ctx->out, new_id);
 }
@@ -355,16 +382,16 @@ int flat_native_obj_set2(FlatNativeCtx *ctx) {
     int i;
 
     if (!ctx->inner || !ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.set2");
     }
     ctx->panic_detail[0] = '\0';
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
     if (split_two_args(inner_buf, &path_e, &val_e) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.set2.args");
     }
     io_ok(ctx);
     if (flat_native_parse_expr(ctx, val_e, &val) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.set2.args");
     }
     {
         const char *rp = path_e;
@@ -452,16 +479,16 @@ int flat_native_obj_keys(FlatNativeCtx *ctx) {
     uint32_t list_id;
 
     if (!ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.keys");
     }
     io_ok(ctx);
     memset(&obj_v, 0, sizeof obj_v);
     if (parse_obj_arg(ctx, ctx->inner, &obj_v) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.keys.type");
     }
     if (build_key_value_lists(ctx, obj_v.u.coll_id, 1, &list_id) != 0) {
         flat_native_parse_rhs_release(ctx, &obj_v);
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.keys");
     }
     flat_native_parse_rhs_release(ctx, &obj_v);
     return flat_value_set_list(ctx->out, list_id);
@@ -472,16 +499,16 @@ int flat_native_obj_values(FlatNativeCtx *ctx) {
     uint32_t list_id;
 
     if (!ctx->out || !ctx->io_status || !ctx->coll) {
-        return -1;
+        return obj_fail(ctx, "obj.values");
     }
     io_ok(ctx);
     memset(&obj_v, 0, sizeof obj_v);
     if (parse_obj_arg(ctx, ctx->inner, &obj_v) != 0) {
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.values.type");
     }
     if (build_key_value_lists(ctx, obj_v.u.coll_id, 0, &list_id) != 0) {
         flat_native_parse_rhs_release(ctx, &obj_v);
-        return io_err(ctx);
+        return obj_fail(ctx, "obj.values");
     }
     flat_native_parse_rhs_release(ctx, &obj_v);
     return flat_value_set_list(ctx->out, list_id);

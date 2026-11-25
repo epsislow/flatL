@@ -1,0 +1,9 @@
+suite = "file"
+id = 19
+desc = "file.truncate negative len panics file.truncate.range"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "cd {tmp} && {root}/bin/flvm out.fb"
+expect_exit = 1
+stderr_contains = "file.truncate.range"

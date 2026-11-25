@@ -19,6 +19,7 @@ static int fs_ok(FlatNativeCtx *ctx) {
     return 0;
 }
 
+/* 0 ok; -1 bad type/parse; -2 malloc */
 static int value_string(FlatNativeCtx *ctx, const FlatValue *v, char **out, size_t *len) {
     const uint8_t *p;
     size_t n;
@@ -33,7 +34,7 @@ static int value_string(FlatNativeCtx *ctx, const FlatValue *v, char **out, size
         return -1;
     }
     *out = (char *)malloc(n + 1);
-    if (!*out) return -1;
+    if (!*out) return -2;
     memcpy(*out, p, n);
     (*out)[n] = '\0';
     *len = n;
@@ -41,19 +42,29 @@ static int value_string(FlatNativeCtx *ctx, const FlatValue *v, char **out, size
 }
 
 static int unary_path(FlatNativeCtx *ctx, char **out, size_t *len, const char *arg_why,
-                      const char *empty_why) {
+                      const char *empty_why, const char *mem_why) {
     FlatValue v;
+    int vs;
     memset(&v, 0, sizeof v);
     *out = NULL;
     *len = 0;
     if (!ctx || !ctx->inner) return fs_fail(ctx, arg_why);
-    if (flat_native_parse_rhs(ctx, ctx->inner, &v) != 0 || value_string(ctx, &v, out, len) != 0) {
-        free(*out);
-        *out = NULL;
+    if (flat_native_parse_rhs(ctx, ctx->inner, &v) != 0) {
         flat_native_parse_rhs_release(ctx, &v);
         return fs_fail(ctx, arg_why);
     }
+    vs = value_string(ctx, &v, out, len);
     flat_native_parse_rhs_release(ctx, &v);
+    if (vs == -2) {
+        free(*out);
+        *out = NULL;
+        return fs_fail(ctx, mem_why);
+    }
+    if (vs != 0) {
+        free(*out);
+        *out = NULL;
+        return fs_fail(ctx, arg_why);
+    }
     if (!*out || !*len) {
         free(*out);
         *out = NULL;
@@ -66,7 +77,8 @@ int flat_native_fs_exists(FlatNativeCtx *ctx) {
     char *p = NULL;
     size_t len = 0;
     int yes;
-    if (unary_path(ctx, &p, &len, "fs.exists.args", "fs.exists.empty") != 0) return -1;
+    if (unary_path(ctx, &p, &len, "fs.exists.args", "fs.exists.empty", "fs.exists.memory") != 0)
+        return -1;
     yes = flat_fs_exists(p);
     free(p);
     fs_ok(ctx);
@@ -77,7 +89,8 @@ int flat_native_fs_is_file(FlatNativeCtx *ctx) {
     char *p = NULL;
     size_t len = 0;
     int yes;
-    if (unary_path(ctx, &p, &len, "fs.isFile.args", "fs.isFile.empty") != 0) return -1;
+    if (unary_path(ctx, &p, &len, "fs.isFile.args", "fs.isFile.empty", "fs.isFile.memory") != 0)
+        return -1;
     yes = flat_fs_is_file(p);
     free(p);
     fs_ok(ctx);
@@ -88,7 +101,8 @@ int flat_native_fs_is_dir(FlatNativeCtx *ctx) {
     char *p = NULL;
     size_t len = 0;
     int yes;
-    if (unary_path(ctx, &p, &len, "fs.isDir.args", "fs.isDir.empty") != 0) return -1;
+    if (unary_path(ctx, &p, &len, "fs.isDir.args", "fs.isDir.empty", "fs.isDir.memory") != 0)
+        return -1;
     yes = flat_fs_is_dir(p);
     free(p);
     fs_ok(ctx);
@@ -99,7 +113,8 @@ int flat_native_fs_mkdir(FlatNativeCtx *ctx) {
     char *p = NULL;
     size_t len = 0;
     const char *why = NULL;
-    if (unary_path(ctx, &p, &len, "fs.mkdir.args", "fs.mkdir.empty") != 0) return -1;
+    if (unary_path(ctx, &p, &len, "fs.mkdir.args", "fs.mkdir.empty", "fs.mkdir.memory") != 0)
+        return -1;
     if (flat_fs_mkdir(p, &why) != 0) {
         free(p);
         return fs_fail(ctx, why ? why : "fs.mkdir");
@@ -114,7 +129,8 @@ int flat_native_fs_remove(FlatNativeCtx *ctx) {
     char *p = NULL;
     size_t len = 0;
     const char *why = NULL;
-    if (unary_path(ctx, &p, &len, "fs.remove.args", "fs.remove.empty") != 0) return -1;
+    if (unary_path(ctx, &p, &len, "fs.remove.args", "fs.remove.empty", "fs.remove.memory") != 0)
+        return -1;
     if (flat_fs_remove(p, &why) != 0) {
         free(p);
         return fs_fail(ctx, why ? why : "fs.remove");
@@ -133,7 +149,9 @@ int flat_native_fs_list_dir(FlatNativeCtx *ctx) {
     const char *why = NULL;
     FlatValue *items = NULL;
     uint32_t list_id;
-    if (unary_path(ctx, &p, &len, "fs.listDir.args", "fs.listDir.empty") != 0) return -1;
+    if (unary_path(ctx, &p, &len, "fs.listDir.args", "fs.listDir.empty", "fs.listDir.memory") !=
+        0)
+        return -1;
     if (flat_fs_list_dir(p, names, FLAT_FS_LIST_MAX, &n, &why) != 0) {
         free(p);
         return fs_fail(ctx, why ? why : "fs.listDir");
@@ -141,7 +159,7 @@ int flat_native_fs_list_dir(FlatNativeCtx *ctx) {
     free(p);
     if (n == 0) {
         if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0)
-            return fs_fail(ctx, "fs.listDir.memory");
+            return fs_fail(ctx, "list.full");
         fs_ok(ctx);
         return flat_value_set_list(ctx->out, list_id);
     }
@@ -156,8 +174,11 @@ int flat_native_fs_list_dir(FlatNativeCtx *ctx) {
             }
         } else {
             uint32_t ref;
-            if (flat_pool_alloc_copy(ctx->pool, names[i], sl, &ref) != 0 ||
-                flat_value_set_str_ref(&items[i], ref) != 0) {
+            if (flat_pool_alloc_copy(ctx->pool, names[i], sl, &ref) != 0) {
+                free(items);
+                return fs_fail(ctx, "pool.full");
+            }
+            if (flat_value_set_str_ref(&items[i], ref) != 0) {
                 free(items);
                 return fs_fail(ctx, "fs.listDir.memory");
             }
@@ -165,7 +186,7 @@ int flat_native_fs_list_dir(FlatNativeCtx *ctx) {
     }
     if (flat_list_build(ctx->coll, ctx->pool, items, n, &list_id) != 0) {
         free(items);
-        return fs_fail(ctx, "fs.listDir.memory");
+        return fs_fail(ctx, "list.full");
     }
     free(items);
     fs_ok(ctx);

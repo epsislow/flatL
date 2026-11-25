@@ -52,15 +52,15 @@ Prints **`42`** — **`sentinel`** was not updated.
 
 | Call | Returns | Panic (no modifier) |
 |------|---------|---------------------|
-| `empty()` | OBJECT | **`obj.empty`** — pool / allocation failure |
-| `get(obj, pathString)` | any | **`obj.get.missing`**, **`obj.path.syntax`**, **`obj.get.arg`** — see sub-reasons below |
-| `set(obj, pathString, val)` | OBJECT | **`obj.set.path`**, **`obj.set.arg`**, pool errors |
-| `has(obj, pathString)` | BOOL | **`obj.has.arg`** — missing path → **`false`** |
-| `len(obj)` | NUMBER | **`obj.len`** — bad types or unknown object |
-| `remove(obj, pathString)` | OBJECT | **`obj.remove.path`** — missing leaf → copy, no panic |
-| `keys(obj)` | LIST | **`obj.keys`** — root object only (no path) |
-| `values(obj)` | LIST | **`obj.values`** — root object only |
-| `set2(pathExpr, val)` | OBJECT | **`obj.set2.root`**, **`obj.set2.path`** — COW on OBJECT root; with **T3**, paths on **`var:<schema>`** enforce schema fields (same panics as assign) |
+| `empty()` | OBJECT | **`obj.empty.args`** / **`obj.full`** |
+| `get(obj, pathString)` | any | **`obj.get.type`** / **`.args`** / **`obj.get.missing`** / **`obj.path.syntax`** / **`obj.get.arg`** |
+| `set(obj, pathString, val)` | OBJECT | **`obj.set.type`** / **`.args`** / **`obj.set.path`** / **`obj.set.arg`** / **`obj.full`** |
+| `has(obj, pathString)` | BOOL | **`obj.has.type`** / **`.args`** / **`obj.has.arg`** — missing path → **`false`** |
+| `len(obj)` | NUMBER | **`obj.len.type`** |
+| `remove(obj, pathString)` | OBJECT | **`obj.remove.type`** / **`.args`** / **`obj.remove.path`** — missing leaf → copy, no panic |
+| `keys(obj)` | LIST | **`obj.keys.type`** |
+| `values(obj)` | LIST | **`obj.values.type`** |
+| `set2(pathExpr, val)` | OBJECT | **`obj.set2.args`** / **`obj.set2.root`** / **`obj.set2.path`** |
 
 ### Path argument (STRING) — `get` / `set` / `has` / `remove`
 
@@ -177,11 +177,13 @@ Plugin: **`bin/libflat_obj.so`** (module id **`obj`**). Search path: [natives/RE
 |------------|----------------|
 | `obj.path.syntax` | Path STRING gol / invalid |
 | `obj.get.arg` / `obj.set.arg` / `obj.has.arg` | Arg path not STRING |
+| `obj.get.type` / `obj.len.type` / … | Root operand not OBJECT |
 | `obj.get.missing` | Missing segment on **`get`** (without `?`/`~`) |
 | `obj.path.type` | `.` on LIST, `[` on OBJECT, etc. |
 | `obj.set.path` | Wrong type on **`set`** / **`set2`** write |
 | `obj.set2.root` | **`set2`** primary not OBJECT |
 | `obj.remove.path` | Wrong type on **`remove`** path |
+| `obj.full` | OBJECT / LIST pool exhausted on COW |
 
 With **`?`** / **`~`**, missing **`get`** behaves like before (silent / `#or`).
 

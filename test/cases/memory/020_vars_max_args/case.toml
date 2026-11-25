@@ -1,0 +1,9 @@
+suite = "memory"
+id = 20
+desc = "mem.vars_max with args panics mem.vars_max.args"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "mem.vars_max.args"

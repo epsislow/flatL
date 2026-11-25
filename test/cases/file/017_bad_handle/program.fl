@@ -1,0 +1,3 @@
+#main
+  file.readln(99999) -> line
+  OK

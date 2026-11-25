@@ -49,7 +49,7 @@ See [SPECIFICATION.md](../SPECIFICATION.md) §1.2.2. On **recoverable** failure 
 
 | Modifier | Effect |
 |----------|--------|
-| *(none)* | **PANIC** — reason **`str.<fn>`** (e.g. `str.to_num`) |
+| *(none)* | **PANIC** — reason **`str.<fn>`** or **`str.<fn>.…`** (`.type` / `.args` / `.range` / `.sep` / `.size` / …) |
 | **`?`** | No bind; next line runs |
 | **`~`** | No bind; **`#or.*`** for that line |
 
@@ -64,11 +64,11 @@ No stdin.
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
 | `from_num(x, decimals, group?)` | NUMBER, zecimale 0–15, grup mii opțional | STRING | **`str.from_num`**, **`str.from_num.group`**, **`type.tag.not_accepted`** |
-| `to_num(s)` | 1 STRING | NUMBER | **`str.to_num`** — invalid number text |
-| `to_bool(s)` | 1 STRING | BOOL | **`str.to_bool`** — token not in BOOL table |
-| `to_date(s)` | 1 STRING | STRING `YYYY-MM-DD` | **`str.to_date`** — not ISO day or `DD.MM.YYYY` |
-| `to_time(s)` | 1 STRING | STRING `HH:mm:ss` | **`str.to_time`** — not `HH:mm` / `HH:mm:ss` |
-| `to_datetime(s)` | 1 STRING | STRING (naive or `…Z`) | **`str.to_datetime`** — unrecognised datetime text |
+| `to_num(s)` | 1 STRING | NUMBER | **`str.to_num.type`** / **`str.to_num`** (invalid text) |
+| `to_bool(s)` | 1 STRING | BOOL | **`str.to_bool.type`** / **`str.to_bool`** |
+| `to_date(s)` | 1 STRING | STRING `YYYY-MM-DD` | **`str.to_date.type`** / **`str.to_date`** |
+| `to_time(s)` | 1 STRING | STRING `HH:mm:ss` | **`str.to_time.type`** / **`str.to_time`** |
+| `to_datetime(s)` | 1 STRING | STRING (naive or `…Z`) | **`str.to_datetime.type`** / **`str.to_datetime`** |
 
 #### `from_num` (NUMBER → STRING)
 
@@ -106,8 +106,8 @@ Single token after trim, ASCII case-insensitive:
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `len(s)` | 1 STRING | NUMBER | **`str.len`** — arg not STRING |
-| `repeat(s, n)` | STRING, non-negative **whole** NUMBER | STRING | **`str.repeat`** — bad types, negative/non-integer **`n`**, or product &gt; **`FLAT_POOL_MAX_CHUNK`** |
+| `len(s)` | 1 STRING | NUMBER | **`str.len.type`** |
+| `repeat(s, n)` | STRING, non-negative **whole** NUMBER | STRING | **`str.repeat.type`** / **`.args`** / **`.size`** / **`pool.full`** |
 
 ```text
 #main
@@ -120,8 +120,8 @@ Single token after trim, ASCII case-insensitive:
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `concat(s1, s2, …)` | 1–32 STRINGs | STRING | **`str.concat`** — wrong types, &gt;32 parts, or total &gt; **`FLAT_POOL_MAX_CHUNK`** |
-| `slice(s, start, end)` | STRING, int, int | STRING | **`str.slice`** — bad types or indices outside **`0 … len(s)`** |
+| `concat(s1, s2, …)` | 1–32 STRINGs | STRING | **`str.concat.type`** / **`.args`** / **`.size`** / **`pool.full`** |
+| `slice(s, start, end)` | STRING, int, int | STRING | **`str.slice.type`** / **`.args`** / **`.range`** |
 
 **`str.slice`** replaces the removed VM helper **`__slice__(s, start, len)`**. Migration:
 
@@ -181,8 +181,8 @@ Non-ASCII code points are copied unchanged.
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `split(s, sep)` | 2 STRINGs | LIST | **`str.split`** — bad types, empty **`sep`**, or &gt;1024 parts |
-| `join(sep, list)` | STRING, LIST | STRING | **`str.join`** — bad types, non-STRING element, or output too large |
+| `split(s, sep)` | 2 STRINGs | LIST | **`str.split.type`** / **`.args`** / **`.sep`** / **`list.elems`** |
+| `join(sep, list)` | STRING, LIST | STRING | **`str.join.type`** / **`.elem`** / **`.size`** / **`pool.full`** |
 
 Requires optional **`list`** only if you bind the LIST for further work; **`split`** returns a LIST without a `use native list` line when you only pass it to **`join`** in one expression chain — but typical style declares **`list`**:
 

@@ -1,0 +1,5 @@
+use native obj with O
+
+#main
+  O.len('nope') -> n
+  OK

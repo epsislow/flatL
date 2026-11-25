@@ -21,12 +21,25 @@
 #include <stdlib.h>
 #include <string.h>
 
-static int mem_out_num(FlatNativeCtx *ctx, double n) {
+static int mem_fail(FlatNativeCtx *ctx, const char *why) {
+    if (ctx && ctx->io_status) {
+        *ctx->io_status = FLAT_IO_ERR;
+    }
+    if (ctx && why) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", why);
+    }
+    return -1;
+}
+
+static int mem_out_num(FlatNativeCtx *ctx, double n, const char *fn) {
+    char why[64];
+
     if (!ctx || !ctx->out || !ctx->io_status) {
-        return -1;
+        return mem_fail(ctx, fn);
     }
     if (ctx->inner && ctx->inner[0] != '\0') {
-        return -1;
+        snprintf(why, sizeof why, "%s.args", fn);
+        return mem_fail(ctx, why);
     }
     *ctx->io_status = FLAT_IO_OK;
     return flat_value_set_number(ctx->out, n);
@@ -38,91 +51,92 @@ static int avail_nonneg(int max, int used) {
 }
 
 int flat_native_mem_vars_max(FlatNativeCtx *ctx) {
-    return mem_out_num(ctx, (double)ctx->vars_max);
+    return mem_out_num(ctx, (double)ctx->vars_max, "mem.vars_max");
 }
 
 int flat_native_mem_vars_used(FlatNativeCtx *ctx) {
-    return mem_out_num(ctx, (double)ctx->var_count);
+    return mem_out_num(ctx, (double)ctx->var_count, "mem.vars_used");
 }
 
 int flat_native_mem_vars_avail(FlatNativeCtx *ctx) {
-    return mem_out_num(ctx, (double)avail_nonneg((int)ctx->vars_max, ctx->var_count));
+    return mem_out_num(ctx, (double)avail_nonneg((int)ctx->vars_max, ctx->var_count),
+                       "mem.vars_avail");
 }
 
 int flat_native_mem_list_max(FlatNativeCtx *ctx) {
-    return mem_out_num(ctx, (double)FLAT_COLL_MAX_LISTS);
+    return mem_out_num(ctx, (double)FLAT_COLL_MAX_LISTS, "mem.list_max");
 }
 
 int flat_native_mem_list_used(FlatNativeCtx *ctx) {
     if (!ctx->coll) {
-        return -1;
+        return mem_fail(ctx, "mem.list_used");
     }
-    return mem_out_num(ctx, (double)flat_coll_live_list_count(ctx->coll));
+    return mem_out_num(ctx, (double)flat_coll_live_list_count(ctx->coll), "mem.list_used");
 }
 
 int flat_native_mem_list_avail(FlatNativeCtx *ctx) {
     int used = ctx->coll ? flat_coll_live_list_count(ctx->coll) : 0;
-    return mem_out_num(ctx, (double)avail_nonneg(FLAT_COLL_MAX_LISTS, used));
+    return mem_out_num(ctx, (double)avail_nonneg(FLAT_COLL_MAX_LISTS, used), "mem.list_avail");
 }
 
 int flat_native_mem_object_max(FlatNativeCtx *ctx) {
-    return mem_out_num(ctx, (double)FLAT_COLL_MAX_OBJECTS);
+    return mem_out_num(ctx, (double)FLAT_COLL_MAX_OBJECTS, "mem.object_max");
 }
 
 int flat_native_mem_object_used(FlatNativeCtx *ctx) {
     if (!ctx->coll) {
-        return -1;
+        return mem_fail(ctx, "mem.object_used");
     }
-    return mem_out_num(ctx, (double)flat_coll_live_object_count(ctx->coll));
+    return mem_out_num(ctx, (double)flat_coll_live_object_count(ctx->coll), "mem.object_used");
 }
 
 int flat_native_mem_object_avail(FlatNativeCtx *ctx) {
     int used = ctx->coll ? flat_coll_live_object_count(ctx->coll) : 0;
-    return mem_out_num(ctx, (double)avail_nonneg(FLAT_COLL_MAX_OBJECTS, used));
+    return mem_out_num(ctx, (double)avail_nonneg(FLAT_COLL_MAX_OBJECTS, used), "mem.object_avail");
 }
 
 int flat_native_mem_strref_max(FlatNativeCtx *ctx) {
-    return mem_out_num(ctx, (double)FLAT_POOL_MAX_SLOTS);
+    return mem_out_num(ctx, (double)FLAT_POOL_MAX_SLOTS, "mem.strref_max");
 }
 
 int flat_native_mem_strref_used(FlatNativeCtx *ctx) {
     if (!ctx->pool) {
-        return -1;
+        return mem_fail(ctx, "mem.strref_used");
     }
-    return mem_out_num(ctx, (double)flat_pool_live_slot_count(ctx->pool));
+    return mem_out_num(ctx, (double)flat_pool_live_slot_count(ctx->pool), "mem.strref_used");
 }
 
 int flat_native_mem_strref_avail(FlatNativeCtx *ctx) {
     int used = ctx->pool ? flat_pool_live_slot_count(ctx->pool) : 0;
-    return mem_out_num(ctx, (double)avail_nonneg(FLAT_POOL_MAX_SLOTS, used));
+    return mem_out_num(ctx, (double)avail_nonneg(FLAT_POOL_MAX_SLOTS, used), "mem.strref_avail");
 }
 
 int flat_native_mem_str_used(FlatNativeCtx *ctx) {
     if (!ctx->mem_live) {
-        return -1;
+        return mem_fail(ctx, "mem.str_used");
     }
-    return mem_out_num(ctx, (double)ctx->mem_live->str_used);
+    return mem_out_num(ctx, (double)ctx->mem_live->str_used, "mem.str_used");
 }
 
 int flat_native_mem_bool_used(FlatNativeCtx *ctx) {
     if (!ctx->mem_live) {
-        return -1;
+        return mem_fail(ctx, "mem.bool_used");
     }
-    return mem_out_num(ctx, (double)ctx->mem_live->bool_used);
+    return mem_out_num(ctx, (double)ctx->mem_live->bool_used, "mem.bool_used");
 }
 
 int flat_native_mem_num_used(FlatNativeCtx *ctx) {
     if (!ctx->mem_live) {
-        return -1;
+        return mem_fail(ctx, "mem.num_used");
     }
-    return mem_out_num(ctx, (double)ctx->mem_live->num_used);
+    return mem_out_num(ctx, (double)ctx->mem_live->num_used, "mem.num_used");
 }
 
 int flat_native_mem_null_used(FlatNativeCtx *ctx) {
     if (!ctx->mem_live) {
-        return -1;
+        return mem_fail(ctx, "mem.null_used");
     }
-    return mem_out_num(ctx, (double)ctx->mem_live->null_used);
+    return mem_out_num(ctx, (double)ctx->mem_live->null_used, "mem.null_used");
 }
 
 static const char *mem_logical_type_name(FlatValueTag tag) {
@@ -152,16 +166,12 @@ int flat_native_mem_type_of(FlatNativeCtx *ctx) {
     const char *kind;
 
     if (!ctx->out || !ctx->io_status || !ctx->inner || ctx->inner[0] == '\0') {
-        if (ctx->io_status) {
-            *ctx->io_status = FLAT_IO_ERR;
-        }
-        return -1;
+        return mem_fail(ctx, "mem.type_of.args");
     }
     if (flat_native_eval_call(ctx, ctx->inner, &src) != 0 &&
         flat_value_parse_assign_rhs(ctx->inner, &src, ctx->pool, ctx->coll, ctx->vars,
                                     ctx->var_count, ctx->var_names) != 0) {
-        *ctx->io_status = FLAT_IO_ERR;
-        return -1;
+        return mem_fail(ctx, "mem.type_of.args");
     }
     kind = mem_logical_type_name(src.tag);
     *ctx->io_status = FLAT_IO_OK;
@@ -169,13 +179,7 @@ int flat_native_mem_type_of(FlatNativeCtx *ctx) {
 }
 
 static int mem_slot_arg_err(FlatNativeCtx *ctx, const char *code) {
-    if (ctx->io_status) {
-        *ctx->io_status = FLAT_IO_ERR;
-    }
-    if (code && code[0] != '\0') {
-        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", code);
-    }
-    return -1;
+    return mem_fail(ctx, code);
 }
 
 static int mem_resolve_slot_lvalue(FlatNativeCtx *ctx, const char *native_name, int *root_vi,
@@ -218,7 +222,7 @@ int flat_native_mem_slot_type(FlatNativeCtx *ctx) {
     char spec[128];
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return mem_fail(ctx, "mem.slot_type");
     }
     ctx->panic_detail[0] = '\0';
     if (mem_resolve_slot_lvalue(ctx, "mem.slot_type", &root_vi, &contract, &has_contract) != 0) {
@@ -241,7 +245,7 @@ int flat_native_mem_slot_frozen(FlatNativeCtx *ctx) {
     int frozen = 0;
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return mem_fail(ctx, "mem.slot_frozen");
     }
     ctx->panic_detail[0] = '\0';
     (void)contract;
@@ -263,7 +267,7 @@ int flat_native_mem_slot_const(FlatNativeCtx *ctx) {
     int is_const = 0;
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return mem_fail(ctx, "mem.slot_const");
     }
     ctx->panic_detail[0] = '\0';
     (void)contract;
@@ -453,7 +457,7 @@ int flat_native_mem_info_res_id(FlatNativeCtx *ctx) {
     const char *kind = "unknown";
 
     if (!ctx || !ctx->out || !ctx->io_status) {
-        return -1;
+        return mem_fail(ctx, "mem.infoResId");
     }
     ctx->panic_detail[0] = '\0';
     if (!ctx->inner || ctx->inner[0] == '\0') {
@@ -480,15 +484,13 @@ int flat_native_mem_ref_empty(FlatNativeCtx *ctx) {
     uint32_t id;
 
     if (!ctx->out || !ctx->io_status || !ctx->pool) {
-        return -1;
+        return mem_fail(ctx, "mem.ref_empty");
     }
     if (ctx->inner && ctx->inner[0] != '\0') {
-        return -1;
+        return mem_fail(ctx, "mem.ref_empty.args");
     }
     if (flat_pool_alloc_empty(ctx->pool, &id) != 0) {
-        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
-        *ctx->io_status = FLAT_IO_ERR;
-        return -1;
+        return mem_fail(ctx, "pool.full");
     }
     *ctx->io_status = FLAT_IO_OK;
     return flat_value_set_str_ref(ctx->out, id);
@@ -502,33 +504,29 @@ int flat_native_mem_ref_from(FlatNativeCtx *ctx) {
     uint32_t id;
 
     if (!ctx->out || !ctx->io_status || !ctx->pool || !ctx->inner) {
-        return -1;
+        return mem_fail(ctx, "mem.ref_from");
     }
     if (flat_native_eval_call(ctx, ctx->inner, &src) != 0 &&
         flat_value_parse_assign_rhs(ctx->inner, &src, ctx->pool, ctx->coll, ctx->vars,
                                     ctx->var_count, ctx->var_names) != 0) {
-        return -1;
+        return mem_fail(ctx, "mem.ref_from.args");
     }
     mem = flat_open_memstream(&bytes, &blen);
     if (!mem) {
-        return -1;
+        return mem_fail(ctx, "mem.ref_from.memory");
     }
     flat_value_fprint_io(mem, &src, ctx->pool, ctx->coll);
     if (flat_close_memstream(mem) != 0) {
-        return -1;
+        return mem_fail(ctx, "mem.ref_from.memory");
     }
     if (blen == 0) {
         if (flat_pool_alloc_empty(ctx->pool, &id) != 0) {
             free(bytes);
-            snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
-            *ctx->io_status = FLAT_IO_ERR;
-            return -1;
+            return mem_fail(ctx, "pool.full");
         }
     } else if (flat_pool_alloc_copy(ctx->pool, bytes, blen, &id) != 0) {
         free(bytes);
-        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "pool.full");
-        *ctx->io_status = FLAT_IO_ERR;
-        return -1;
+        return mem_fail(ctx, "pool.full");
     }
     free(bytes);
     *ctx->io_status = FLAT_IO_OK;

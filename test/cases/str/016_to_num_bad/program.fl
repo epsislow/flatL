@@ -1,0 +1,3 @@
+#main
+  str.to_num('not-a-number') -> n
+  OK

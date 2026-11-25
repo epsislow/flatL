@@ -1,0 +1,3 @@
+#main
+  str.split('a,b', '') -> xs
+  OK

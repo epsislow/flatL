@@ -1,0 +1,5 @@
+use native list with L
+
+#main
+  L.push(1, 2) -> xs
+  OK

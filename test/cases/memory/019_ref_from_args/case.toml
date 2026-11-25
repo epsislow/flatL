@@ -1,0 +1,9 @@
+suite = "memory"
+id = 19
+desc = "mem.ref_from bad expr panics mem.ref_from.args"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 1
+stderr_contains = "mem.ref_from.args"

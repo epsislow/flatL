@@ -18,11 +18,18 @@ static int io_ok(FlatNativeCtx *ctx) {
     return 0;
 }
 
-static int io_err(FlatNativeCtx *ctx) {
-    if (ctx->io_status) {
+static int date_fail(FlatNativeCtx *ctx, const char *why) {
+    if (ctx && ctx->io_status) {
         *ctx->io_status = FLAT_IO_ERR;
     }
+    if (ctx && why) {
+        snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", why);
+    }
     return -1;
+}
+
+static int io_err(FlatNativeCtx *ctx) {
+    return date_fail(ctx, NULL);
 }
 
 static int split_two_args(char *inner, char **left, char **right) {
@@ -471,14 +478,14 @@ int flat_native_str_to_date(FlatNativeCtx *ctx) {
     char token[512];
     char out[32];
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "str.to_date");
     }
     io_ok(ctx);
     if (string_from_inner(ctx, token, sizeof token) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "str.to_date.type");
     }
     if (flat_date_str_to_date(flat_native_trim(token), out, sizeof out) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "str.to_date");
     }
     return emit_string(ctx, out);
 }
@@ -487,14 +494,14 @@ int flat_native_str_to_time(FlatNativeCtx *ctx) {
     char token[512];
     char out[32];
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "str.to_time");
     }
     io_ok(ctx);
     if (string_from_inner(ctx, token, sizeof token) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "str.to_time.type");
     }
     if (flat_date_str_to_time(flat_native_trim(token), out, sizeof out) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "str.to_time");
     }
     return emit_string(ctx, out);
 }
@@ -503,14 +510,14 @@ int flat_native_str_to_datetime(FlatNativeCtx *ctx) {
     char token[512];
     char out[64];
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "str.to_datetime");
     }
     io_ok(ctx);
     if (string_from_inner(ctx, token, sizeof token) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "str.to_datetime.type");
     }
     if (flat_date_str_to_datetime(flat_native_trim(token), out, sizeof out) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "str.to_datetime");
     }
     return emit_string(ctx, out);
 }

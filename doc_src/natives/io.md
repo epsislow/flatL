@@ -13,9 +13,9 @@ Implementation: `src/lib/mod_io.c`, registry `src/lib/native_registry.c`.
 
 | Call | Behavior | Panic (no modifier) |
 |------|----------|---------------------|
-| `io.out(expr)` | Print value, no newline | **`io.out`** — bad expr / I/O context error |
-| `io.outln(expr)` | Print value + `\n` | **`io.outln`** — bad expr / context |
-| `io.outvar(name)` | Print variable value + `\n` | **`io.outvar`** — unknown variable |
+| `io.out(expr)` | Print value, no newline | **`io.out.args`** — bad expr; context → **`io.context`** / **`io.ctx_stale`** |
+| `io.outln(expr)` | Print value + `\n` | **`io.outln.args`** / context reasons |
+| `io.outvar(name)` | Print variable value + `\n` | **`io.outvar.args`** — unknown variable |
 | `io.outcls()` | Clear **`ctxout`** sink (see below) | **`io.outcls`**, **`io.context`**, **`io.ctx_stale`** |
 
 **`io.outcls()`** — no arguments. Effect depends on the active **`ctxout`** target ([IO_CONTEXTS.md](../IO_CONTEXTS.md)): **`tout`** / terminal → ANSI clear screen; **STRING REF** → empty body (same `ref_id`); **inline** STRING snapshot → empty; **`file`** handle → truncate to 0 bytes at position 0. Invalid / unsupported target → **`io.context`**. Default **`tout`** when no redirect matches direct `io.out*`.
@@ -30,8 +30,8 @@ Formatting: [IO.md §2](../IO.md#2-output-ioout).
 
 | Call | Behavior | Panic (no modifier) |
 |------|----------|---------------------|
-| `io.err(expr)` | Print on **ctxerr** (default **terr**), no `\n` | **`io.err`** — bad expr / context |
-| `io.errln(expr)` | Print on **ctxerr** + `\n` | **`io.errln`** — bad expr / context |
+| `io.err(expr)` | Print on **ctxerr** (default **terr**), no `\n` | **`io.err.args`** / context reasons |
+| `io.errln(expr)` | Print on **ctxerr** + `\n` | **`io.errln.args`** / context reasons |
 
 Separate from host **`flvm --trace`** on stderr. See [IO.md §1](../IO.md#1-streams).
 
@@ -41,13 +41,13 @@ Optional **prompt**: one STRING argument written to **stdout** before the read.
 
 | Call | Reads | Returns | Panic (no modifier) |
 |------|--------|---------|---------------------|
-| `io.in(prompt?)` | One character | STRING (len 1) | **`io.in`** — cancel → `io.user_cancel`; EOF → `io.eof`; context → `io.context` |
-| `io.inln(prompt?)` | One line (no `\n` in value) | STRING | **`io.inln`** — same cancel/EOF/context reasons |
-| `io.in_num(prompt?)` | One line + parse | NUMBER | **`io.in_num`** — cancel/EOF/context, or parse fail → `io.parse` |
-| `io.in_bool(prompt?)` | One line + parse | BOOL | **`io.in_bool`** — cancel/EOF/context, or parse fail → `io.parse` |
-| `io.in_list(prompt?)` | One line + parse | LIST | **`io.in_list`** — cancel/EOF/context, or parse fail → `io.parse` |
-| `io.in_object(prompt?)` | One line + parse | OBJECT | **`io.in_object`** — cancel/EOF/context, or parse fail → `io.parse` |
-| `io.in_bools(prompt?)` | One line + parse | LIST of BOOL | **`io.in_bools`** — cancel/EOF/context, or parse fail → `io.parse` |
+| `io.in(prompt?)` | One character | STRING (len 1) | **`io.in.args`** (bad prompt); cancel → **`io.user_cancel`**; EOF → **`io.eof`**; context → **`io.context`** |
+| `io.inln(prompt?)` | One line (no `\n` in value) | STRING | **`io.inln.args`** / cancel/EOF/context; long line → **`pool.full`** |
+| `io.in_num(prompt?)` | One line + parse | NUMBER | **`io.in_num.args`** / cancel/EOF/context, or **`io.parse`** |
+| `io.in_bool(prompt?)` | One line + parse | BOOL | **`io.in_bool.args`** / cancel/EOF/context, or **`io.parse`** |
+| `io.in_list(prompt?)` | One line + parse | LIST | **`io.in_list.args`** / cancel/EOF/context, or **`io.parse`** |
+| `io.in_object(prompt?)` | One line + parse | OBJECT | **`io.in_object.args`** / cancel/EOF/context, or **`io.parse`** |
+| `io.in_bools(prompt?)` | One line + parse | LIST of BOOL | **`io.in_bools.args`** / cancel/EOF/context, or **`io.parse`** |
 
 Parsing for NUMBER/BOOL: [str.md](./str.md). JSON-shaped lines: [json.md](./json.md), [IO_COLLECTIONS.md](../IO_COLLECTIONS.md).
 
@@ -73,7 +73,7 @@ Tokens **`tin`** / **`tout`** / **`terr`** reset to the terminal. Details: [IO_C
 
 | Call | Behavior | Panic (no modifier) |
 |------|----------|---------------------|
-| `io.docs(query)` | Print API hints to **stdout** (signatures only; no type-check) | **`io.docs`** — rare allocation / internal errors |
+| `io.docs(query)` | Print API hints to **stdout** (signatures only; no type-check) | **`io.docs.args`** / **`io.docs`** |
 
 Query shapes and listing limits: [IO.md §2.1](../IO.md#21-introspection-iodocs).
 

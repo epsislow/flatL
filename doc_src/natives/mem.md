@@ -15,10 +15,10 @@ Inline tags **BOOL**, **NUMBER**, **NULL** are counted separately (`bool_used`, 
 
 ### STRING REF helpers
 
-| Call | Returns | Notes |
-|------|---------|--------|
-| `ref_empty()` | STRING REF | Zero-length pool slot; use with **`io.ctxout`** / **`io.ctxerr`** |
-| `ref_from(s)` | STRING REF | Copy of string content (inline or REF) |
+| Call | Returns | Notes / Panic |
+|------|---------|----------------|
+| `ref_empty()` | STRING REF | Zero-length pool slot; use with **`io.ctxout`** / **`io.ctxerr`**. Extra args → **`mem.ref_empty.args`**; pool → **`pool.full`** |
+| `ref_from(s)` | STRING REF | Copy of value print as STRING REF. Bad expr → **`mem.ref_from.args`**; alloc → **`mem.ref_from.memory`** / **`pool.full`** |
 | `type_of(v)` | STRING | Logical type name of value **`v`** (see below) |
 
 Prefer these over test-only **`__ref__('…')`** for capture buffers.
@@ -27,7 +27,7 @@ Prefer these over test-only **`__ref__('…')`** for capture buffers.
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `type_of(v)` | Any expression / variable | STRING | **`mem.type_of`** — missing/invalid argument expression |
+| `type_of(v)` | Any expression / variable | STRING | **`mem.type_of.args`** — missing/invalid argument expression |
 
 Returns the **logical** type (not VM storage detail). Inline STRING and STRING REF both report **`string`**.
 
@@ -147,7 +147,7 @@ Path introspection walks **schema** only (read-only): missing nested values do *
 
 ### Introspection (NUMBER)
 
-Argument lists must be empty `()` unless noted above.
+Argument lists must be empty `()`. Extra arguments → **`mem.<fn>.args`** (e.g. **`mem.vars_max.args`**).
 
 ### Variables (runtime storage)
 

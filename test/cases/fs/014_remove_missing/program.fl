@@ -1,0 +1,5 @@
+use native fs
+
+#main
+  fs.remove('no_such_fs_014.txt')
+  OK

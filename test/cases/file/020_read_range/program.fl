@@ -1,0 +1,6 @@
+#main
+  fp = file.createCtx('read_neg.dat')
+  file.write(fp, 'abc')
+  file.setpos(fp, 0)
+  file.read(fp, -1) -> chunk
+  OK

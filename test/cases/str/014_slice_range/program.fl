@@ -1,0 +1,3 @@
+#main
+  str.slice('hi', 0, 9) -> s
+  OK

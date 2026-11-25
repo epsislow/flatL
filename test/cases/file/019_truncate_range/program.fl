@@ -1,0 +1,5 @@
+#main
+  fp = file.createCtx('trunc_bad.dat')
+  file.write(fp, 'x')
+  file.truncate(fp, -1)
+  OK

@@ -147,7 +147,11 @@ int flat_fs_list_dir(const char *path, char names[][FLAT_FS_NAME_MAX], int max, 
         return -1;
     }
     if (!flat_fs_is_dir(path)) {
-        set_why(why, "fs.listDir");
+        if (flat_fs_kind(path) == FLAT_FS_KIND_MISSING) {
+            set_why(why, "fs.listDir.missing");
+        } else {
+            set_why(why, "fs.listDir.not_dir");
+        }
         return -1;
     }
 #if defined(_WIN32) && !defined(FLAT_WASM_BUILD)

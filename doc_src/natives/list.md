@@ -33,25 +33,27 @@ Recoverable errors → **PANIC** **`list.<fn>`** by default; **`?`** / **`~`** p
 
 ## Functions
 
+Common suffixes: **`.args`** (arity/type of non-list args), **`.type`** (operand not LIST), **`.range`** (index OOB), plus **`list.elems`** / **`list.full`**.
+
 | Call | Returns | Panic (no modifier) |
 |------|---------|---------------------|
-| `empty()` | LIST | **`list.full`** — live LIST pool exhausted |
-| `pack(v1, v2, …)` | LIST | **`list.pack`** / **`list.full`** — bad args, &gt;1024 elements, or pool full |
-| `push(list, val)` | LIST | **`list.elems`** / **`list.full`** / **`list.push`** — element cap, pool full, or bad types |
-| `prepend(list, val)` | LIST | **`list.prepend`** — bad types / unknown list |
-| `insert(list, index, val)` | LIST | **`list.insert`** — bad index or types |
-| `set(list, index, val)` | LIST | **`list.set`** — bad index or types |
-| `get(list, index)` | any | **`list.get`** — out-of-range or bad types |
-| `len(list)` | NUMBER | **`list.len`** — bad types / unknown list |
-| `index_of(list, val)` | NUMBER | **`list.index_of`** — bad types (success may return **−1**) |
-| `contains(list, val)` | BOOL | **`list.contains`** — bad types |
-| `remove_at(list, index)` | LIST | **`list.remove_at`** — bad index or types |
-| `slice(list, start, end)` | LIST | **`list.slice`** — bad range or types |
-| `splice(list, start, count)` | LIST | **`list.splice`** — bad range or types |
-| `range(stop)` | LIST | **`list.range`** — bad numeric args or overflow |
-| `range(start, stop)` | LIST | **`list.range`** — same |
-| `range(start, stop, step)` | LIST | **`list.range`** — same (**`step == 0`** fails) |
-| `repeat(n, value)` | LIST | **`list.repeat`** — bad **`n`** or types |
+| `empty()` | LIST | **`list.empty.args`** / **`list.full`** |
+| `pack(v1, v2, …)` | LIST | **`list.pack.args`** / **`list.full`** / **`list.elems`** |
+| `push(list, val)` | LIST | **`list.push.type`** / **`.args`** / **`list.elems`** / **`list.full`** |
+| `prepend(list, val)` | LIST | **`list.prepend.type`** / **`.args`** / **`list.elems`** / **`list.full`** |
+| `insert(list, index, val)` | LIST | **`list.insert.type`** / **`.args`** / **`.range`** / **`list.elems`** / **`list.full`** |
+| `set(list, index, val)` | LIST | **`list.set.type`** / **`.args`** / **`.range`** / **`list.full`** |
+| `get(list, index)` | any | **`list.get.type`** / **`.args`** / **`.range`** |
+| `len(list)` | NUMBER | **`list.len.type`** |
+| `index_of(list, val)` | NUMBER | **`list.index_of.type`** / **`.args`** (success may return **−1**) |
+| `contains(list, val)` | BOOL | **`list.contains.type`** / **`.args`** |
+| `remove_at(list, index)` | LIST | **`list.remove_at.type`** / **`.args`** / **`.range`** |
+| `slice(list, start, end)` | LIST | **`list.slice.type`** / **`.args`** / **`list.full`** |
+| `splice(list, start, count)` | LIST | **`list.splice.type`** / **`.args`** / **`list.full`** |
+| `range(stop)` | LIST | **`list.range.args`** / **`list.elems`** / **`list.full`** |
+| `range(start, stop)` | LIST | same |
+| `range(start, stop, step)` | LIST | **`list.range.step`** when **`step == 0`**; else same |
+| `repeat(n, value)` | LIST | **`list.repeat.args`** / **`list.elems`** / **`list.full`** |
 | `is_rect(list)` | BOOL | **`list.shape`** — bad operand; walk/stamp § AM-RECT-MD |
 | `dims(list)` | LIST | **`type.list.not_rect`** dacă !rect; else lungimi pe axe |
 | `rank(list)` | NUMBER | 0 dacă !rect; altfel 1=vector, 2=matrix, … |
