@@ -2235,3 +2235,51 @@ body.fleditor-resize-active * {
     gap: 0.25rem 0.45rem;
   }
 }
+
+
+/* Project management */
+.fleditor-project-modal {
+  width: min(680px, calc(100vw - 24px));
+  max-width: 680px;
+  max-height: min(88vh, 900px);
+  padding: 0;
+  border: 1px solid var(--fl-border);
+  border-radius: 12px;
+  color: var(--fl-text);
+  background: var(--fl-surface);
+}
+.fleditor-project-modal::backdrop { background: rgba(0,0,0,.58); }
+.fleditor-project-shell { display: flex; flex-direction: column; max-height: min(88vh, 900px); }
+.fleditor-project-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--fl-border);
+}
+.fleditor-project-head h2 { margin: 0; font-size: 1.05rem; }
+.fleditor-project-section { padding: 14px 16px; border-bottom: 1px solid var(--fl-border); }
+.fleditor-project-section:last-child { border-bottom: 0; }
+.fleditor-project-section h3 { margin: 0 0 5px; font-size: .95rem; }
+.fleditor-project-hint { margin: 0 0 10px; color: var(--fl-text-muted); font-size: .82rem; line-height: 1.4; }
+.fleditor-project-select-actions, .fleditor-project-actions {
+  display: flex; align-items: center; gap: 8px; margin-top: 9px; flex-wrap: wrap;
+}
+.fleditor-project-count { margin-left: auto; color: var(--fl-text-muted); font-size: .78rem; }
+.fleditor-project-file-list {
+  max-height: 190px; overflow: auto; border: 1px solid var(--fl-border);
+  border-radius: 7px; padding: 6px; margin-top: 8px;
+}
+.fleditor-project-file-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 2px 5px; font-size: .84rem; }
+.fleditor-project-file-row input { flex: 0 0 auto; }
+.fleditor-project-file-row label { overflow-wrap: anywhere; cursor: pointer; }
+.fleditor-project-field { display: flex; flex-direction: column; gap: 5px; font-size: .82rem; }
+.fleditor-project-select {
+  min-height: 36px; width: 100%; padding: 5px 8px; color: inherit;
+  background: var(--fl-bg); border: 1px solid var(--border, #555); border-radius: 6px;
+}
+.fleditor-project-section--danger { background: rgba(190, 60, 60, .045); }
+.fleditor-project-actions .fleditor-io-btn { min-height: 36px; }
+@media (max-width: 600px) {
+  .fleditor-project-modal { width: calc(100vw - 16px); max-height: 92vh; }
+  .fleditor-project-shell { max-height: 92vh; }
+  .fleditor-project-section { padding: 12px; }
+  .fleditor-project-actions--wrap > button { flex: 1 1 42%; }
+}

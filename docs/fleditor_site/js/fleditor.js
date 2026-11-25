@@ -1,8 +1,9 @@
-/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTextFormat, FleditorCsvParse, FleditorCsvGrid, FleditorJsonlParse, FleditorJsonlAdvFilter, FleditorJsonlUi, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
+/* global FlatLModule, CodeMirror, Terminal, FleditorProject, FleditorProjectArchive, FleditorLayout, FleditorHex, FleditorHexGrid, FleditorTextFormat, FleditorCsvParse, FleditorCsvGrid, FleditorJsonlParse, FleditorJsonlAdvFilter, FleditorJsonlUi, FleditorTheme, FleditorSettings, FleditorBlockAnalyzer, FleditorCodeMap */
 (function () {
   'use strict';
 
   const P = FleditorProject;
+  const PA = FleditorProjectArchive;
   const L = FleditorLayout;
   const H = FleditorHex;
   const G = FleditorHexGrid;
@@ -137,7 +138,7 @@
   const dockRestoreTerminal = document.getElementById('dockRestoreTerminal');
   const dockRestoreFbViewer = document.getElementById('dockRestoreFbViewer');
   const dockResetLayoutBtn = document.getElementById('dockResetLayoutBtn');
-  const resetProjectBtn = document.getElementById('resetProjectBtn');
+  const projectManageBtn = document.getElementById('projectManageBtn');
   const editorEmptyOverlay = document.getElementById('editorEmptyOverlay');
 
   let wasmModule = null;
@@ -222,6 +223,10 @@
   let resetProjectDialog = null;
   let resetProjectConfirmBtn = null;
   let resetProjectCancelBtn = null;
+  let projectManageDialog = null;
+  let projectConfirmDialog = null;
+  let projectConfirmResolve = null;
+  let projectExportSelection = new Set();
 
   let promptDialog = null;
   let promptForm = null;
@@ -3587,6 +3592,338 @@
     });
   }
 
+
+  function prepareProjectManagement() {
+    if (dirty && hasOpenFile()) {
+      flushEditorToProject();
+      persistProject();
+      setDirty(false);
+    }
+  }
+
+  function updateProjectExportCount() {
+    const count = document.getElementById('projectExportCount');
+    const button = document.getElementById('projectExportBtn');
+    const total = project ? P.listFilePaths(project).length : 0;
+    const selected = projectExportSelection.size;
+    if (count) count.textContent = selected + ' / ' + total + ' selected';
+    if (button) button.disabled = selected === 0;
+  }
+
+  function renderProjectExportSelection() {
+    const host = document.getElementById('projectExportFileList');
+    if (!host || !project) return;
+    host.textContent = '';
+    const paths = P.listFilePaths(project);
+    projectExportSelection = new Set(paths);
+    const tree = P.buildTree(project);
+    let rowIndex = 0;
+
+    function appendNodes(nodes, depth) {
+      nodes.forEach(function (node) {
+        const row = document.createElement('div');
+        row.className = 'fleditor-project-file-row';
+        row.style.paddingLeft = (5 + depth * 16) + 'px';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = 'projectExportCheck' + (++rowIndex);
+        if (node.kind === 'file') {
+          input.checked = projectExportSelection.has(node.path);
+          input.addEventListener('change', function () {
+            if (input.checked) projectExportSelection.add(node.path);
+            else projectExportSelection.delete(node.path);
+            updateProjectExportCount();
+          });
+        } else {
+          const descendants = P.filesUnderFolder(project, node.path);
+          input.checked = descendants.length > 0 && descendants.every(p => projectExportSelection.has(p));
+          input.indeterminate = descendants.some(p => projectExportSelection.has(p)) && !input.checked;
+          input.addEventListener('change', function () {
+            descendants.forEach(function (path) {
+              if (input.checked) projectExportSelection.add(path);
+              else projectExportSelection.delete(path);
+            });
+            renderProjectExportSelectionPreservingState();
+          });
+        }
+        const label = document.createElement('label');
+        label.htmlFor = input.id;
+        label.textContent = (node.kind === 'dir' ? '📁 ' : '📄 ') + node.name;
+        row.appendChild(input);
+        row.appendChild(label);
+        host.appendChild(row);
+        if (node.kind === 'dir') appendNodes(node.children || [], depth + 1);
+      });
+    }
+    appendNodes(tree, 0);
+    updateProjectExportCount();
+  }
+
+  function renderProjectExportSelectionPreservingState() {
+    const host = document.getElementById('projectExportFileList');
+    if (!host || !project) return;
+    const paths = P.listFilePaths(project);
+    const tree = P.buildTree(project);
+    host.textContent = '';
+    let rowIndex = 0;
+    function appendNodes(nodes, depth) {
+      nodes.forEach(function (node) {
+        const row = document.createElement('div');
+        row.className = 'fleditor-project-file-row';
+        row.style.paddingLeft = (5 + depth * 16) + 'px';
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.id = 'projectExportCheck' + (++rowIndex);
+        if (node.kind === 'file') {
+          input.checked = projectExportSelection.has(node.path);
+          input.addEventListener('change', function () {
+            if (input.checked) projectExportSelection.add(node.path);
+            else projectExportSelection.delete(node.path);
+            updateProjectExportCount();
+          });
+        } else {
+          const descendants = P.filesUnderFolder(project, node.path);
+          input.checked = descendants.length > 0 && descendants.every(p => projectExportSelection.has(p));
+          input.indeterminate = descendants.some(p => projectExportSelection.has(p)) && !input.checked;
+          input.addEventListener('change', function () {
+            descendants.forEach(p => input.checked ? projectExportSelection.add(p) : projectExportSelection.delete(p));
+            renderProjectExportSelectionPreservingState();
+          });
+        }
+        const label = document.createElement('label');
+        label.htmlFor = input.id;
+        label.textContent = (node.kind === 'dir' ? '📁 ' : '📄 ') + node.name;
+        row.appendChild(input);
+        row.appendChild(label);
+        host.appendChild(row);
+        if (node.kind === 'dir') appendNodes(node.children || [], depth + 1);
+      });
+    }
+    appendNodes(tree, 0);
+    updateProjectExportCount();
+  }
+
+  function downloadProjectZip(entries) {
+    const bytes = PA.createZip(entries);
+    const blob = new Blob([bytes], { type: 'application/zip' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'flatl-project.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+  }
+
+  function projectValueToArchiveBytes(value) {
+    const payload = P.projectValueToMemfsPayload(value);
+    if (payload instanceof Uint8Array) return new Uint8Array(payload);
+    if (payload instanceof ArrayBuffer) return new Uint8Array(payload);
+    return new TextEncoder().encode(String(payload == null ? '' : payload));
+  }
+
+  function askProjectConfirm(title, message, confirmLabel) {
+    const dialog = projectConfirmDialog;
+    if (!dialog) return Promise.resolve(false);
+    document.getElementById('projectConfirmTitle').textContent = title;
+    document.getElementById('projectConfirmMessage').textContent = message;
+    document.getElementById('projectConfirmOk').textContent = confirmLabel || 'Continue';
+    dialog.showModal();
+    return new Promise(function (resolve) { projectConfirmResolve = resolve; });
+  }
+
+  function initProjectConfirm() {
+    projectConfirmDialog = document.getElementById('projectConfirmModal');
+    if (!projectConfirmDialog) return;
+    document.getElementById('projectConfirmOk').addEventListener('click', function () {
+      projectConfirmDialog.close();
+      const resolve = projectConfirmResolve;
+      projectConfirmResolve = null;
+      if (resolve) resolve(true);
+    });
+    document.getElementById('projectConfirmCancel').addEventListener('click', function () {
+      projectConfirmDialog.close();
+      const resolve = projectConfirmResolve;
+      projectConfirmResolve = null;
+      if (resolve) resolve(false);
+    });
+    projectConfirmDialog.addEventListener('cancel', function (event) {
+      event.preventDefault();
+      projectConfirmDialog.close();
+      const resolve = projectConfirmResolve;
+      projectConfirmResolve = null;
+      if (resolve) resolve(false);
+    });
+  }
+
+  function applyImportedProjectEntries(entries, mode) {
+    const imported = {};
+    const dirs = new Set();
+    for (const entry of entries) {
+      const path = PA.safePath(entry.path);
+      if (!path) throw new Error('Unsafe or empty project path: ' + entry.path);
+      imported[path] = P.bytesToProjectValue(entry.bytes, path);
+      const parts = path.split('/');
+      parts.pop();
+      let acc = '';
+      for (const part of parts) {
+        acc = acc ? acc + '/' + part : part;
+        dirs.add(acc);
+      }
+    }
+    const paths = Object.keys(imported);
+    if (mode === 'replace') {
+      project.files = imported;
+      project.dirs = Array.from(dirs);
+    } else {
+      for (const path of paths) project.files[path] = imported[path];
+      const existingDirs = new Set((project.dirs || []).map(P.normalizePath));
+      dirs.forEach(d => existingDirs.add(d));
+      project.dirs = Array.from(existingDirs).filter(Boolean);
+    }
+    const allPaths = P.listFilePaths(project);
+    if (!allPaths.length) {
+      project.files[P.DEFAULT_MAIN] = '#main\n  OK\n';
+      project.openPath = P.DEFAULT_MAIN;
+    } else if (mode === 'replace') {
+      const preferred = allPaths.find(p => p === P.DEFAULT_MAIN) || allPaths.find(p => /\.fl$/i.test(p)) || allPaths[0];
+      project.openPath = preferred;
+    } else if (!project.files[project.openPath]) {
+      project.openPath = allPaths.find(p => /\.fl$/i.test(p)) || allPaths[0];
+    }
+    persistProject();
+    const openPath = project.openPath;
+    if (openPath && project.files[openPath] != null) loadFileIntoEditor(openPath);
+    else enterEmptyEditorState();
+    renderFileTree();
+    updateEditorEmptyState();
+  }
+
+  async function handleZipImport(file) {
+    if (!file) return;
+    try {
+      const entries = await PA.readZip(await file.arrayBuffer());
+      if (!entries.length) throw new Error('The ZIP archive contains no files.');
+      const mode = document.getElementById('projectZipImportMode').value || 'replace';
+      const conflicts = mode === 'merge' ? entries.filter(e => Object.prototype.hasOwnProperty.call(project.files, e.path)).length : 0;
+      const message = mode === 'replace'
+        ? 'Replace the current project with ' + entries.length + ' files from this ZIP? The current project will be replaced.'
+        : 'Merge ' + entries.length + ' files into the current project?' + (conflicts ? ' ' + conflicts + ' existing file(s) will be overwritten.' : '');
+      const ok = await askProjectConfirm(mode === 'replace' ? 'Replace project' : 'Merge project', message, mode === 'replace' ? 'Replace' : 'Merge');
+      if (!ok) return;
+      applyImportedProjectEntries(entries, mode);
+      projectManageDialog.close();
+      setStatus('project imported');
+    } catch (error) {
+      showAlert(error && error.message ? error.message : String(error), 'Import project');
+    }
+  }
+
+  async function handleLooseFileImport(fileList, keepRelativePaths) {
+    const files = Array.from(fileList || []);
+    if (!files.length) return;
+    try {
+      const entries = [];
+      let total = 0;
+      for (const file of files) {
+        const rawPath = keepRelativePaths && file.webkitRelativePath ? file.webkitRelativePath : file.name;
+        const path = PA.safePath(rawPath);
+        if (!path || path.split('/').some(part => part === '__MACOSX' || part === '.DS_Store')) continue;
+        if (file.size > 50 * 1024 * 1024 || (total += file.size) > 100 * 1024 * 1024) {
+          throw new Error('Import exceeds the size limit (100 MB total; 50 MB per file).');
+        }
+        entries.push({ path, bytes: new Uint8Array(await file.arrayBuffer()) });
+      }
+      if (!entries.length) throw new Error('No supported files were selected.');
+      const conflicts = entries.filter(e => Object.prototype.hasOwnProperty.call(project.files, e.path)).length;
+      const ok = await askProjectConfirm('Add files to project',
+        'Add ' + entries.length + ' file(s) to the current project?' + (conflicts ? ' ' + conflicts + ' existing file(s) will be overwritten.' : ''),
+        'Add files');
+      if (!ok) return;
+      applyImportedProjectEntries(entries, 'merge');
+      projectManageDialog.close();
+      setStatus('files imported');
+    } catch (error) {
+      showAlert(error && error.message ? error.message : String(error), 'Import files');
+    }
+  }
+
+  function initProjectManagement() {
+    projectManageDialog = document.getElementById('projectManageModal');
+    if (!projectManageDialog) return;
+    initProjectConfirm();
+    const close = document.getElementById('projectManageClose');
+    const exportAll = document.getElementById('projectExportAllBtn');
+    const exportNone = document.getElementById('projectExportNoneBtn');
+    const exportBtn = document.getElementById('projectExportBtn');
+    const zipInput = document.getElementById('projectZipInput');
+    const filesInput = document.getElementById('projectFilesInput');
+    const folderInput = document.getElementById('projectFolderInput');
+    close.addEventListener('click', () => projectManageDialog.close());
+    projectManageDialog.addEventListener('cancel', e => { e.preventDefault(); projectManageDialog.close(); });
+    exportAll.addEventListener('click', function () {
+      projectExportSelection = new Set(P.listFilePaths(project));
+      renderProjectExportSelectionPreservingState();
+    });
+    exportNone.addEventListener('click', function () {
+      projectExportSelection.clear();
+      renderProjectExportSelectionPreservingState();
+    });
+    exportBtn.addEventListener('click', function () {
+      try {
+        const entries = P.listFilePaths(project)
+          .filter(path => projectExportSelection.has(path))
+          .map(path => ({ path, bytes: projectValueToArchiveBytes(project.files[path]) }));
+        if (!entries.length) return;
+        downloadProjectZip(entries);
+        setStatus('project exported');
+      } catch (error) {
+        showAlert(error && error.message ? error.message : String(error), 'Export project');
+      }
+    });
+    document.getElementById('projectImportZipBtn').addEventListener('click', function () {
+      projectManageDialog.close();
+      zipInput.value = '';
+      zipInput.click();
+    });
+    document.getElementById('projectImportFilesBtn').addEventListener('click', function () {
+      projectManageDialog.close();
+      filesInput.value = '';
+      filesInput.click();
+    });
+    document.getElementById('projectImportFolderBtn').addEventListener('click', function () {
+      projectManageDialog.close();
+      folderInput.value = '';
+      folderInput.click();
+    });
+    zipInput.addEventListener('change', function () { handleZipImport(zipInput.files && zipInput.files[0]); });
+    filesInput.addEventListener('change', function () { handleLooseFileImport(filesInput.files, false); });
+    folderInput.addEventListener('change', function () { handleLooseFileImport(folderInput.files, true); });
+    document.getElementById('projectEmptyBtn').addEventListener('click', async function () {
+      const ok = await askProjectConfirm('Empty project', 'Remove all project files and start with a blank main.fl? This cannot be undone.', 'Empty project');
+      if (!ok) return;
+      project.files = { [P.DEFAULT_MAIN]: '#main\n  OK\n' };
+      project.dirs = [];
+      project.openPath = P.DEFAULT_MAIN;
+      persistProject();
+      loadFileIntoEditor(P.DEFAULT_MAIN);
+      renderFileTree();
+      projectManageDialog.close();
+      setStatus('project emptied');
+    });
+    document.getElementById('projectRestoreBtn').addEventListener('click', function () {
+      projectManageDialog.close();
+      onResetProjectClick();
+    });
+  }
+
+  function openProjectManagement() {
+    prepareProjectManagement();
+    renderProjectExportSelection();
+    projectManageDialog.showModal();
+  }
+
   let newFileModalResolve = null;
 
   function initNewFileModal() {
@@ -5981,8 +6318,9 @@
     });
     newFileBtn.addEventListener('click', onNewFile);
     newFolderBtn.addEventListener('click', onNewFolder);
-    if (resetProjectBtn) {
-      resetProjectBtn.addEventListener('click', onResetProjectClick);
+    initProjectManagement();
+    if (projectManageBtn) {
+      projectManageBtn.addEventListener('click', openProjectManagement);
     }
     loadWasm().then((m) => {
       wasmModule = m;

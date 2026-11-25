@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="ext/codemirror.min.css">
   <link rel="stylesheet" href="ext/xterm.css">
-  <link rel="stylesheet" href="css/fleditor.css?v=28">
+  <link rel="stylesheet" href="css/fleditor.css?v=29">
   <link rel="stylesheet" href="css/fleditor-cm.css">
   <link rel="stylesheet" href="css/fleditor-settings.css?v=2">
 </head>
@@ -25,7 +25,7 @@
         <div class="fleditor-panel-label">
           <span class="fleditor-panel-label-text">Project</span>
           <div class="fleditor-panel-label-actions">
-            <button type="button" id="resetProjectBtn" class="fleditor-panel-icon" title="Reset project" aria-label="Reset project">⟲</button>
+            <button type="button" id="projectManageBtn" class="fleditor-panel-icon" title="Project settings" aria-label="Project settings">⋮</button>
             <button type="button" id="projectPanelToggle" class="fleditor-panel-toggle" title="Minimize project" aria-label="Minimize project">[−]</button>
           </div>
         </div>
@@ -259,6 +259,62 @@
       <div class="fleditor-io-actions">
         <button type="button" id="resetProjectConfirmBtn" class="fleditor-io-btn fleditor-io-btn--primary">Reset</button>
         <button type="button" id="resetProjectCancelBtn" class="fleditor-io-btn">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+  <dialog id="projectManageModal" class="fleditor-project-modal" aria-labelledby="projectManageTitle">
+    <div class="fleditor-project-shell">
+      <header class="fleditor-project-head">
+        <h2 id="projectManageTitle">Project settings</h2>
+        <button type="button" id="projectManageClose" class="fleditor-panel-icon" aria-label="Close">×</button>
+      </header>
+      <section class="fleditor-project-section">
+        <h3>Export project</h3>
+        <p class="fleditor-project-hint">Choose the files to include in the ZIP archive.</p>
+        <div class="fleditor-project-select-actions">
+          <button type="button" id="projectExportAllBtn" class="fleditor-io-btn">Select all</button>
+          <button type="button" id="projectExportNoneBtn" class="fleditor-io-btn">Clear</button>
+          <span id="projectExportCount" class="fleditor-project-count"></span>
+        </div>
+        <div id="projectExportFileList" class="fleditor-project-file-list"></div>
+        <div class="fleditor-project-actions">
+          <button type="button" id="projectExportBtn" class="fleditor-io-btn fleditor-io-btn--primary">Export selected ZIP</button>
+        </div>
+      </section>
+      <section class="fleditor-project-section">
+        <h3>Import project</h3>
+        <p class="fleditor-project-hint">Import a ZIP archive (Replace by default), or add individual files and folders to this project.</p>
+        <label class="fleditor-project-field">ZIP import mode
+          <select id="projectZipImportMode" class="fleditor-project-select">
+            <option value="replace" selected>Replace project</option>
+            <option value="merge">Merge into project</option>
+          </select>
+        </label>
+        <div class="fleditor-project-actions fleditor-project-actions--wrap">
+          <button type="button" id="projectImportZipBtn" class="fleditor-io-btn">Import ZIP…</button>
+          <button type="button" id="projectImportFilesBtn" class="fleditor-io-btn">Import files…</button>
+          <button type="button" id="projectImportFolderBtn" class="fleditor-io-btn">Import folder…</button>
+        </div>
+        <input type="file" id="projectZipInput" accept=".zip,application/zip" hidden>
+        <input type="file" id="projectFilesInput" multiple hidden>
+        <input type="file" id="projectFolderInput" webkitdirectory directory multiple hidden>
+      </section>
+      <section class="fleditor-project-section fleditor-project-section--danger">
+        <h3>Project data</h3>
+        <div class="fleditor-project-actions fleditor-project-actions--wrap">
+          <button type="button" id="projectEmptyBtn" class="fleditor-io-btn fleditor-io-btn--danger">Empty project</button>
+          <button type="button" id="projectRestoreBtn" class="fleditor-io-btn">Restore starter project</button>
+        </div>
+      </section>
+    </div>
+  </dialog>
+  <dialog id="projectConfirmModal" class="fleditor-io-modal" aria-labelledby="projectConfirmTitle">
+    <div class="fleditor-io-form">
+      <h2 id="projectConfirmTitle" class="fleditor-io-title">Confirm project change</h2>
+      <p id="projectConfirmMessage" class="fleditor-io-hint"></p>
+      <div class="fleditor-io-actions">
+        <button type="button" id="projectConfirmOk" class="fleditor-io-btn fleditor-io-btn--danger">Continue</button>
+        <button type="button" id="projectConfirmCancel" class="fleditor-io-btn">Cancel</button>
       </div>
     </div>
   </dialog>
@@ -617,12 +673,13 @@
   <script src="js/fleditor-jsonl-adv-filter.js?v=3"></script>
   <script src="js/fleditor-jsonl-ui.js?v=5"></script>
   <script src="js/fleditor-project.js?v=7"></script>
+  <script src="js/fleditor-project-archive.js?v=1"></script>
   <script src="js/fleditor-layout.js?v=2"></script>
   <script src="js/fleditor-version.js"></script>
   <script src="js/fleditor-theme.js"></script>
   <script src="js/fleditor-settings.js"></script>
   <script src="js/fleditor-block-analyzer.js?v=4"></script>
   <script src="js/fleditor-code-map.js?v=14"></script>
-  <script src="js/fleditor.js?v=84"></script>
+  <script src="js/fleditor.js?v=85"></script>
 </body>
 </html>

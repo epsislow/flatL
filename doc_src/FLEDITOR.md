@@ -397,3 +397,17 @@ The panel indicates whether the project source files used by the last successful
 The viewer title includes the compiled entry-point filename. Its metadata sections are independent collapsible panels, initially closed; **Code** is expanded by default. The block directory is shown as a table (label, ID, instruction pointer, and native-unit index), and unlabeled blocks are displayed as `(anonymous)`. FNAT lists global optional native declarations. FNUN groups native declarations by native unit and shows the blocks assigned to each unit. A native unit is a declaration set associated with blocks, not a module or a code block.
 
 FFUN displays each user function separately, including its parameter and return counts, available type metadata, return names, implementation/executor blocks, and tag metadata when present. The binary FFUN table does not retain parameter names, so parameters are identified by index. The VCX seed is an initial capacity hint for a unique executor, not a hard capacity limit; zero represents the default seed for a unique executor or no child VCX for a global executor. The **Code** section groups instructions into per-block tables. Clicking a mapped instruction still opens the corresponding source file and line while the viewer is Connected.
+
+
+## Project management: import and export
+
+The Project panel keeps its file-tree controls compact. Use the **⋮** action in the Project heading to open **Project settings**.
+
+- **Export project** creates a ZIP archive. Select individual files or use a folder checkbox to select/deselect all files below that folder. Select all / Clear controls are also available. Binary project files are written as their original bytes; text files are encoded using their project text encoding.
+- **Import ZIP** accepts standard ZIP archives using STORE or DEFLATE compression. **Replace project** is the default and replaces the current project after confirmation. **Merge into project** adds archive files and overwrites same-path files after confirmation.
+- **Import files** adds selected files to the current project. **Import folder** adds a directory tree, preserving relative paths when the browser provides them. Existing paths are overwritten only after confirmation.
+- **Empty project** removes project contents and creates a blank `main.fl`. **Restore starter project** restores the default `main.fl` and bundled examples.
+
+ZIP import rejects unsafe paths, encrypted archives, ZIP64 archives, unsupported compression methods, corrupt CRC values, and oversized archives. Current limits are 10,000 entries, 50 MiB per file, and 100 MiB total uncompressed data. ZIP export writes uncompressed entries for broad compatibility; imported ZIPs may use STORE or DEFLATE.
+
+Project import/export works with the existing Project model in `localStorage`; it does not introduce a second project storage format.
