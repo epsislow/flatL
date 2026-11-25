@@ -152,6 +152,7 @@ static void register_embedded_bytes(void) {
     flat_native_plugin_register(FLAT_NATIVE_BYTES_CONCAT, flat_native_bytes_concat);
     flat_native_plugin_register(FLAT_NATIVE_BYTES_SLICE, flat_native_bytes_slice);
     flat_native_plugin_register(FLAT_NATIVE_BYTES_LEN, flat_native_bytes_len);
+    flat_native_plugin_register(FLAT_NATIVE_BYTES_WRITESTR, flat_native_bytes_writestr);
 }
 #endif
 

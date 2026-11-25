@@ -358,6 +358,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("bytes", "concat", "bytes.concat(a, b)"),
     META_SIG("bytes", "slice", "bytes.slice(data, offset, length)"),
     META_SIG("bytes", "len", "bytes.len(data)"),
+    META_SIG("bytes", "writeStr", "bytes.writeStr(data)"),
 };
 
 int flat_native_is_core_module(const char *mod) {

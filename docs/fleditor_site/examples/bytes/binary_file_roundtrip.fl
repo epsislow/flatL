@@ -5,7 +5,7 @@ use native bytes
   magic = bytes.write('FLAT'; 't4')
   version = bytes.write(1; 'u16 le')
   payload_size = bytes.write(3; 'u32 be')
-  payload = bytes.write('ABC'; 't3')
+  payload = bytes.writeStr('ABC')
   first = bytes.concat(magic, version)
   second = bytes.concat(payload_size, payload)
   file_data = bytes.concat(first, second)

@@ -203,3 +203,22 @@ int flat_native_bytes_len(FlatNativeCtx *ctx) {
     if (!ctx || !ctx->inner || parse_value(ctx, ctx->inner, &v) != 0 || get_bytes(ctx, &v, &p, &n) != 0) { flat_native_parse_rhs_release(ctx, &v); return bytes_fail(ctx, "bytes.len.args"); }
     rc = flat_value_set_number(ctx->out, (double)n); bytes_ok(ctx); flat_native_parse_rhs_release(ctx, &v); return rc;
 }
+
+int flat_native_bytes_writestr(FlatNativeCtx *ctx) {
+    FlatValue v;
+    const uint8_t *p;
+    size_t n;
+    int rc;
+
+    memset(&v, 0, sizeof v);
+    if (!ctx || !ctx->inner || !ctx->out) {
+        return bytes_fail(ctx, "bytes.writeStr");
+    }
+    if (parse_value(ctx, ctx->inner, &v) != 0 || get_bytes(ctx, &v, &p, &n) != 0) {
+        flat_native_parse_rhs_release(ctx, &v);
+        return bytes_fail(ctx, "bytes.writeStr.args");
+    }
+    rc = out_bytes(ctx, p, n);
+    flat_native_parse_rhs_release(ctx, &v);
+    return rc;
+}

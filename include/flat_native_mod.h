@@ -334,6 +334,7 @@ int flat_native_bytes_write(FlatNativeCtx *ctx);
 int flat_native_bytes_concat(FlatNativeCtx *ctx);
 int flat_native_bytes_slice(FlatNativeCtx *ctx);
 int flat_native_bytes_len(FlatNativeCtx *ctx);
+int flat_native_bytes_writestr(FlatNativeCtx *ctx);
 
 int flat_native_dom_parse_html(FlatNativeCtx *ctx);
 int flat_native_dom_select(FlatNativeCtx *ctx);

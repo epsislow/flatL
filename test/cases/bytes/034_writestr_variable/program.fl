@@ -1,0 +1,21 @@
+use native bytes
+
+#main
+  objS = '{"myobj":33,"test":true}'
+  n = str.len(objS)
+  magic = bytes.write('FLAT'; 't4')
+  version = bytes.write(1; 'u16 le')
+  payload_size = bytes.write(n; 'u32 be')
+  payload = bytes.writeStr(objS)
+  hdr = bytes.concat(magic, version)
+  body = bytes.concat(payload_size, payload)
+  file_data = bytes.concat(hdr, body)
+  bytes.len(file_data) == 10 + n
+  read_magic = bytes.read(file_data, 0; 't4')
+  read_size = bytes.read(file_data, 6; 'u32 be')
+  read_payload = bytes.slice(file_data, 10, read_size)
+  read_magic == 'FLAT'
+  read_size == n
+  read_payload == objS
+  io.outln('ok')
+  OK

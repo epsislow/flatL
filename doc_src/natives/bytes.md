@@ -21,6 +21,7 @@ The module is embedded by default. Disable it with `make rebuild bytes=0` (and `
 | `bytes.concat` | `bytes.concat(a, b)` | STRING | Concatenate two byte buffers |
 | `bytes.slice` | `bytes.slice(data, offset, length)` | STRING | Extract a byte range |
 | `bytes.len` | `bytes.len(data)` | NUMBER | Return buffer length in bytes |
+| `bytes.writeStr` | `bytes.writeStr(data)` | STRING | Copy a STRING’s bytes as a buffer (variable length; no `;` tag) |
 
 ## Binary formats
 
@@ -75,6 +76,27 @@ use native bytes
 ```
 
 The function panics with `bytes.write.args` for invalid arguments/formats, `bytes.write.range` for an out-of-range or incompatible numeric value, and `bytes.write.length` when a `tX` string does not contain exactly X bytes.
+
+## `bytes.writeStr(data)`
+
+Copies the **byte contents** of a STRING into a new buffer. The output length is **`bytes.len(data)`** — no fixed `tN` tag and no runtime tag assembly (`'t' + str.from_num(...)`).
+
+Use this for variable-length payloads (JSON, text blobs). Keep **`bytes.write(...; 'tN')`** for fixed-width fields in file/protocol headers.
+
+| Panic (no modifier) | When |
+|---------------------|------|
+| **`bytes.writeStr.args`** | Argument is not a STRING (or parse error) |
+| **`bytes.size`** | Length &gt; 16 MiB |
+| **`bytes.memory`** | Pool allocation failed |
+
+```flat
+use native bytes
+
+#main
+  payload = bytes.writeStr(json_body)
+  payload_size = bytes.write(bytes.len(json_body); 'u32 be')
+  OK
+```
 
 ## `bytes.concat(a, b)`
 
@@ -133,7 +155,7 @@ use native bytes
   magic = bytes.write('FLAT'; 't4')
   version = bytes.write(1; 'u16 le')
   payload_size = bytes.write(3; 'u32 be')
-  payload = bytes.write('ABC'; 't3')
+  payload = bytes.writeStr('ABC')
   first = bytes.concat(magic, version)
   second = bytes.concat(payload_size, payload)
   file_data = bytes.concat(first, second)
