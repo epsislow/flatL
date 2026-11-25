@@ -172,6 +172,37 @@ static int eval_io_arg(FlatNativeCtx *ctx, FlatValue *out) {
     return -1;
 }
 
+static int io_inner_is_empty(FlatNativeCtx *ctx) {
+    char inner_buf[4096];
+
+    if (!ctx || !ctx->inner) {
+        return 1;
+    }
+    snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner);
+    flat_native_trim(inner_buf);
+    return inner_buf[0] == '\0';
+}
+
+static int io_emit_out_newline(FlatNativeCtx *ctx) {
+    static const char nl = '\n';
+
+    if (!ctx->io_status) {
+        return io_fail(ctx, "io.outln");
+    }
+    if (ctx->io_ctx) {
+        flat_io_ctx_bind_vars(ctx->io_ctx, ctx->vars, ctx->var_count, ctx->vcx);
+        return flat_io_ctx_write_raw(ctx->io_ctx, ctx, 1, &nl, 1);
+    }
+#ifdef FLAT_WASM_BUILD
+    flat_wasm_io_write_stdout("\n", 1);
+#else
+    fputc('\n', stdout);
+    fflush(stdout);
+#endif
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
 static int io_prompt_from_value(FlatNativeCtx *ctx, const FlatValue *v, char *prompt,
                                 size_t prompt_sz) {
     if (v->tag == VAL_STR_INLINE) {
@@ -397,6 +428,9 @@ int flat_native_io_outln(FlatNativeCtx *ctx) {
 
     if (!ctx->io_status) {
         return io_fail(ctx, "io.outln");
+    }
+    if (io_inner_is_empty(ctx)) {
+        return io_emit_out_newline(ctx);
     }
     if (eval_io_arg(ctx, &v) != 0) {
         return io_fail(ctx, "io.outln.args");

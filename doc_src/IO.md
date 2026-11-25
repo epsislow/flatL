@@ -32,7 +32,7 @@ Recovered PANIC (handler `#panic.*` / `#panic.any`) does **not** log to stderr b
 | Call | Behavior |
 |------|----------|
 | `io.out(expr)` | Print value, no newline |
-| `io.outln(expr)` | Print value + `\n` |
+| `io.outln(expr?)` | Print value + `\n`; bare **`io.outln()`** → newline only |
 | `io.outvar(name)` | Print variable + `\n` |
 | `io.outcls()` | Clear **`ctxout`** sink (terminal / ref / file — [IO_CONTEXTS.md](./IO_CONTEXTS.md)); on **`tout`**, ANSI clear in terminal and Fleditor xterm |
 | `io.err(expr)` | Print on **ctxerr** (no `\n`) |

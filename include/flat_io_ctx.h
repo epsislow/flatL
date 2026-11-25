@@ -20,6 +20,8 @@ int flat_io_ctx_set_err(FlatIOContext *io, FlatNativeCtx *ctx, FlatIoStatus *st)
 
 int flat_io_ctx_write(FlatIOContext *io, FlatNativeCtx *ctx, int stream, const FlatValue *v,
                       int with_nl);
+int flat_io_ctx_write_raw(FlatIOContext *io, FlatNativeCtx *ctx, int stream, const void *data,
+                          size_t len);
 int flat_io_ctx_clear_out(FlatIOContext *io, FlatNativeCtx *ctx);
 int flat_io_ctx_read_line(FlatIOContext *io, FlatNativeCtx *ctx, char *buf, size_t buf_size,
                           int allow_empty, int input_kind, FlatIoStatus *st);

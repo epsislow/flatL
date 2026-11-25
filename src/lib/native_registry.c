@@ -19,7 +19,7 @@ typedef struct {
     { (m), (f), m "." f, (s) }
 
 static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
-    META_SIG("io", "outln", "io.outln(expr)"),
+    META_SIG("io", "outln", "io.outln(expr?)"),
     META_SIG("io", "out", "io.out(expr)"),
     META_SIG("io", "outvar", "io.outvar(name)"),
     META_SIG("io", "in", "io.in(prompt?)"),

@@ -14,7 +14,7 @@ Implementation: `src/lib/mod_io.c`, registry `src/lib/native_registry.c`.
 | Call | Behavior | Panic (no modifier) |
 |------|----------|---------------------|
 | `io.out(expr)` | Print value, no newline | **`io.out.args`** — bad expr; context → **`io.context`** / **`io.ctx_stale`** |
-| `io.outln(expr)` | Print value + `\n` | **`io.outln.args`** / context reasons |
+| `io.outln(expr?)` | Print value + `\n`; **`io.outln()`** writes only `\n` | **`io.outln.args`** (bad expr) / context reasons |
 | `io.outvar(name)` | Print variable value + `\n` | **`io.outvar.args`** — unknown variable |
 | `io.outcls()` | Clear **`ctxout`** sink (see below) | **`io.outcls`**, **`io.context`**, **`io.ctx_stale`** |
 

@@ -334,6 +334,23 @@ int flat_io_ctx_write(FlatIOContext *io, FlatNativeCtx *ctx, int stream, const F
     return 0;
 }
 
+int flat_io_ctx_write_raw(FlatIOContext *io, FlatNativeCtx *ctx, int stream, const void *data,
+                          size_t len) {
+    IoEndpoint *ep;
+    FlatIoStatus st = FLAT_IO_OK;
+
+    if (!io || !ctx || !ctx->io_status) {
+        return -1;
+    }
+    ep = stream == 2 ? &io->err : &io->out;
+    if (write_bytes_to_ep(io, ctx, ep, data, len, &st) != 0) {
+        *ctx->io_status = st;
+        return st == FLAT_IO_OK ? -1 : 0;
+    }
+    *ctx->io_status = FLAT_IO_OK;
+    return 0;
+}
+
 static int ep_bind_from_value(FlatIOContext *io, FlatNativeCtx *ctx, IoEndpoint *ep,
                               const FlatValue *v, int allow_in, int allow_out, int allow_err,
                               FlatIoStatus *st) {

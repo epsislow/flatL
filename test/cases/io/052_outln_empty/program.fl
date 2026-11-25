@@ -1,0 +1,6 @@
+#main
+  io.out('^')
+  io.outln()
+  io.out('^')
+  io.outln('ok')
+  OK
