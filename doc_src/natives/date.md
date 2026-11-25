@@ -28,7 +28,7 @@ See [SPECIFICATION.md](../SPECIFICATION.md) §1.2.2. On recoverable failure (inv
 
 | Modifier | Effect |
 |----------|--------|
-| *(none)* | **PANIC** — reason **`date.<fn>`** (e.g. `date.format`) |
+| *(none)* | **PANIC** — reason **`date.<fn>`** or **`date.<fn>.…`** (`.args` / `.type` / `.src` / `.fmt` / `.range` / …) |
 | **`?`** | No bind; next line runs |
 | **`~`** | No bind; **`#or.*`** for that line |
 
@@ -51,8 +51,8 @@ Token **`Z`** in a format string returns **UTC − local** offset in minutes (sa
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `format(src)` | STRING or NUMBER (sec/ms) | STRING | **`date.format`** — invalid `src` |
-| `format(src, fmt)` | + format pattern | STRING | **`date.format`** — invalid `src` |
+| `format(src)` | STRING or NUMBER (sec/ms) | STRING | **`date.format.args`** / **`.src`** |
+| `format(src, fmt)` | + format pattern | STRING | **`date.format.args`** / **`.src`** / **`.fmt`** |
 
 Default format when the second argument is omitted: **`YYYY-MM-DD`**.
 
@@ -76,8 +76,8 @@ Format tokens (longest match; **`U`** = UTC component):
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `parse_auto(s)` | STRING or NUMBER | NUMBER (sec UTC) | **`date.parse_auto`** |
-| `parse(s, fmt)` | STRING + strict pattern | NUMBER (sec UTC) | **`date.parse`** |
+| `parse_auto(s)` | STRING or NUMBER | NUMBER (sec UTC) | **`date.parse_auto.args`** / **`.type`** / **`date.parse_auto`** |
+| `parse(s, fmt)` | STRING + strict pattern | NUMBER (sec UTC) | **`date.parse.args`** / **`.fmt`** / **`.empty`** / **`date.parse`** |
 
 **`parse_auto`** accepts **`now`**, **`+2d`**, **`+2d+3h`**, ISO day/datetime, **`Z` / `±HH:MM`**, and numeric **sec** or **ms** (large magnitudes treated as ms). Anchored day + suffix: **`2026-09-30-20s`**.
 
@@ -94,25 +94,25 @@ Format tokens (longest match; **`U`** = UTC component):
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `add(base, mod)` | STRING or NUMBER, modifier (`+2d`, …) | Same kind as `base` | **`date.add`** |
-| `cmp(a, b)` | STRING or NUMBER | **−1**, **0**, **1** | **`date.cmp`** |
+| `add(base, mod)` | STRING or NUMBER, modifier (`+2d`, …) | Same kind as `base` | **`date.add.args`** / **`.base`** / **`.mod`** |
+| `cmp(a, b)` | STRING or NUMBER | **−1**, **0**, **1** | **`date.cmp.args`** / **`.src`** |
 
 ### Seconds and time-of-day
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `to_seconds(x)` | STRING or NUMBER | NUMBER (sec) | **`date.to_seconds`** |
-| `from_seconds(n)` | NUMBER | STRING ISO **`…Z`** | **`date.from_seconds`** |
-| `to_ms(x)` | STRING or NUMBER | NUMBER (ms) | **`date.to_ms`** |
-| `from_ms(n)` | NUMBER | STRING ISO **`…Z`** | **`date.from_ms`** |
-| `time_to_sec(t)` | STRING `HH:mm` / `HH:mm:ss` | NUMBER (0…86399) | **`date.time_to_sec`** |
-| `sec_to_time(n)` | NUMBER (0…86399) | STRING `HH:mm:ss` | **`date.sec_to_time`** |
+| `to_seconds(x)` | STRING or NUMBER | NUMBER (sec) | **`date.to_seconds.args`** / **`date.to_seconds`** |
+| `from_seconds(n)` | NUMBER | STRING ISO **`…Z`** | **`date.from_seconds.args`** / **`date.from_seconds`** |
+| `to_ms(x)` | STRING or NUMBER | NUMBER (ms) | **`date.to_ms.args`** / **`date.to_ms`** |
+| `from_ms(n)` | NUMBER | STRING ISO **`…Z`** | **`date.from_ms.args`** / **`date.from_ms`** |
+| `time_to_sec(t)` | STRING `HH:mm` / `HH:mm:ss` | NUMBER (0…86399) | **`date.time_to_sec.type`** / **`date.time_to_sec`** |
+| `sec_to_time(n)` | NUMBER (0…86399) | STRING `HH:mm:ss` | **`date.sec_to_time.args`** / **`.range`** |
 
 ### Run configuration
 
 | Call | Args | Returns | Panic (no modifier) |
 |------|------|---------|---------------------|
-| `run_offset(offset)` | STRING `±HH:MM` or **`Z`** | — (no bind) | **`date.run_offset`** — invalid offset |
+| `run_offset(offset)` | STRING `±HH:MM` or **`Z`** | — (no bind) | **`date.run_offset.type`** / **`date.run_offset`** |
 
 ## Who does what
 
@@ -133,4 +133,4 @@ Format tokens (longest match; **`U`** = UTC component):
 
 ## Tests
 
-**`test/cases/date/`** — 75 cases (001–075). Regenerate scaffold: **`python3 scripts/gen_date_tests.py`**. See [test/README.md](../../test/README.md).
+**`test/cases/date/`** — format/parse/add/cmp/epoch + panic sub-reasons (`.src` / `.empty` / `.range` / `.type` / `.args` / `.mod`). See [test/README.md](../../test/README.md).

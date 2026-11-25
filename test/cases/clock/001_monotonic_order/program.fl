@@ -1,6 +1,9 @@
+use native math
+
 #main
   ms_a = clock.now()
   ms_b = clock.now()
-  elapsed_ms = ms_b - ms_a
+  elapsed_ms = math.calc('ms_b - ms_a')
+  elapsed_ms >= 0
   io.outln('clock.now ok')
   OK

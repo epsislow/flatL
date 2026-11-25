@@ -1,0 +1,4 @@
+#main
+  sw = clock.create()
+  clock.lapLast(sw)
+  OK

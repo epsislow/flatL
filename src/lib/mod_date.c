@@ -28,10 +28,6 @@ static int date_fail(FlatNativeCtx *ctx, const char *why) {
     return -1;
 }
 
-static int io_err(FlatNativeCtx *ctx) {
-    return date_fail(ctx, NULL);
-}
-
 static int split_two_args(char *inner, char **left, char **right) {
     int depth = 0;
     char quote = 0;
@@ -113,7 +109,7 @@ int flat_native_date_format(FlatNativeCtx *ctx) {
     FlatDateRunState *st = flat_date_global_state();
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.format");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
@@ -123,11 +119,11 @@ int flat_native_date_format(FlatNativeCtx *ctx) {
     }
     memset(&src, 0, sizeof src);
     if (flat_native_parse_rhs(ctx, a, &src) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.format.args");
     }
     if (flat_date_value_to_utc_sec(&src, ctx->pool, &sec, st) != 0) {
         flat_native_parse_rhs_release(ctx, &src);
-        return io_err(ctx);
+        return date_fail(ctx, "date.format.src");
     }
     {
         const char *pattern = "YYYY-MM-DD";
@@ -138,13 +134,13 @@ int flat_native_date_format(FlatNativeCtx *ctx) {
             if (flat_native_parse_expr(ctx, b, &vf) != 0 ||
                 string_from_value(&vf, ctx->pool, fmtbuf, sizeof fmtbuf) != 0) {
                 flat_native_parse_rhs_release(ctx, &src);
-                return io_err(ctx);
+                return date_fail(ctx, "date.format.fmt");
             }
             pattern = fmtbuf;
         }
         if (flat_date_format(sec, pattern, out, sizeof out, st) != 0) {
             flat_native_parse_rhs_release(ctx, &src);
-            return io_err(ctx);
+            return date_fail(ctx, "date.format.fmt");
         }
     }
     flat_native_parse_rhs_release(ctx, &src);
@@ -158,30 +154,30 @@ int flat_native_date_parse_auto(FlatNativeCtx *ctx) {
     FlatDateRunState *st = flat_date_global_state();
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.parse_auto");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.parse_auto.args");
     }
     if (v.tag == VAL_NUMBER) {
         if (flat_date_value_to_utc_sec(&v, ctx->pool, &sec, st) != 0) {
-            return io_err(ctx);
+            return date_fail(ctx, "date.parse_auto");
         }
         return flat_value_set_number(ctx->out, (double)sec);
     }
     if (v.tag == VAL_STR_INLINE || v.tag == VAL_STR_REF) {
         char token[512];
         if (string_from_value(&v, ctx->pool, token, sizeof token) != 0) {
-            return io_err(ctx);
+            return date_fail(ctx, "date.parse_auto.args");
         }
         if (flat_date_parse_auto(flat_native_trim(token), &sec, st) != 0) {
-            return io_err(ctx);
+            return date_fail(ctx, "date.parse_auto");
         }
         return flat_value_set_number(ctx->out, (double)sec);
     }
-    return io_err(ctx);
+    return date_fail(ctx, "date.parse_auto.type");
 }
 
 int flat_native_date_parse(FlatNativeCtx *ctx) {
@@ -194,12 +190,12 @@ int flat_native_date_parse(FlatNativeCtx *ctx) {
     FlatDateRunState *st = flat_date_global_state();
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.parse");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (split_two_args(inner_buf, &s, &fmt) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.parse.args");
     }
     {
         FlatValue vs;
@@ -207,23 +203,23 @@ int flat_native_date_parse(FlatNativeCtx *ctx) {
         if (flat_native_parse_rhs(ctx, s, &vs) != 0 ||
             string_from_value(&vs, ctx->pool, stok, sizeof stok) != 0) {
             flat_native_parse_rhs_release(ctx, &vs);
-            return io_err(ctx);
+            return date_fail(ctx, "date.parse.args");
         }
         {
             FlatValue vf;
             if (flat_native_parse_expr(ctx, fmt, &vf) != 0 ||
                 string_from_value(&vf, ctx->pool, ftok, sizeof ftok) != 0) {
                 flat_native_parse_rhs_release(ctx, &vs);
-                return io_err(ctx);
+                return date_fail(ctx, "date.parse.fmt");
             }
         }
         flat_native_parse_rhs_release(ctx, &vs);
     }
     if (ftok[0] == '\0') {
-        return io_err(ctx);
+        return date_fail(ctx, "date.parse.empty");
     }
     if (flat_date_parse_strict(stok, ftok, &sec, st) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.parse");
     }
     return flat_value_set_number(ctx->out, (double)sec);
 }
@@ -231,7 +227,7 @@ int flat_native_date_parse(FlatNativeCtx *ctx) {
 int flat_native_date_now(FlatNativeCtx *ctx) {
     FlatDateRunState *st = flat_date_global_state();
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.now");
     }
     io_ok(ctx);
     return flat_value_set_number(ctx->out, (double)flat_date_now_sec(st));
@@ -241,11 +237,11 @@ int flat_native_date_today(FlatNativeCtx *ctx) {
     char out[32];
     FlatDateRunState *st = flat_date_global_state();
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.today");
     }
     io_ok(ctx);
     if (flat_date_today_string(out, sizeof out, st) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.today");
     }
     return emit_string(ctx, out);
 }
@@ -260,20 +256,20 @@ int flat_native_date_add(FlatNativeCtx *ctx) {
     FlatDateRunState *st = flat_date_global_state();
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.add");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (split_two_args(inner_buf, &base, &mod) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.add.args");
     }
     memset(&vb, 0, sizeof vb);
     if (flat_native_parse_rhs(ctx, base, &vb) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.add.args");
     }
     if (flat_date_value_to_utc_sec(&vb, ctx->pool, &sec, st) != 0) {
         flat_native_parse_rhs_release(ctx, &vb);
-        return io_err(ctx);
+        return date_fail(ctx, "date.add.base");
     }
     {
         FlatValue vm;
@@ -281,11 +277,11 @@ int flat_native_date_add(FlatNativeCtx *ctx) {
         if (flat_native_parse_expr(ctx, mod, &vm) != 0 ||
             string_from_value(&vm, ctx->pool, modtok, sizeof modtok) != 0) {
             flat_native_parse_rhs_release(ctx, &vb);
-            return io_err(ctx);
+            return date_fail(ctx, "date.add.mod");
         }
         if (flat_date_add_modifier(sec, modtok, &sec) != 0) {
             flat_native_parse_rhs_release(ctx, &vb);
-            return io_err(ctx);
+            return date_fail(ctx, "date.add.mod");
         }
     }
     flat_native_parse_rhs_release(ctx, &vb);
@@ -293,7 +289,7 @@ int flat_native_date_add(FlatNativeCtx *ctx) {
         return flat_value_set_number(ctx->out, (double)sec);
     }
     if (flat_date_iso_z_from_sec(sec, out, sizeof out) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.add");
     }
     return emit_string(ctx, out);
 }
@@ -309,27 +305,27 @@ int flat_native_date_cmp(FlatNativeCtx *ctx) {
     FlatDateRunState *st = flat_date_global_state();
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.cmp");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (split_two_args(inner_buf, &a, &b) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.cmp.args");
     }
     memset(&va, 0, sizeof va);
     memset(&vb, 0, sizeof vb);
     if (flat_native_parse_rhs(ctx, a, &va) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.cmp.args");
     }
     if (flat_native_parse_rhs(ctx, b, &vb) != 0) {
         flat_native_parse_rhs_release(ctx, &va);
-        return io_err(ctx);
+        return date_fail(ctx, "date.cmp.args");
     }
     if (flat_date_value_to_utc_sec(&va, ctx->pool, &sa, st) != 0 ||
         flat_date_value_to_utc_sec(&vb, ctx->pool, &sb, st) != 0) {
         flat_native_parse_rhs_release(ctx, &va);
         flat_native_parse_rhs_release(ctx, &vb);
-        return io_err(ctx);
+        return date_fail(ctx, "date.cmp.src");
     }
     flat_native_parse_rhs_release(ctx, &va);
     flat_native_parse_rhs_release(ctx, &vb);
@@ -349,15 +345,15 @@ int flat_native_date_to_seconds(FlatNativeCtx *ctx) {
     FlatDateRunState *st = flat_date_global_state();
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.to_seconds");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.to_seconds.args");
     }
     if (flat_date_value_to_utc_sec(&v, ctx->pool, &sec, st) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.to_seconds");
     }
     return flat_value_set_number(ctx->out, (double)sec);
 }
@@ -369,22 +365,30 @@ int flat_native_date_from_seconds(FlatNativeCtx *ctx) {
     int64_t sec;
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.from_seconds");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.from_seconds.args");
     }
     sec = (int64_t)flat_number_as_f64(&v);
     if (flat_date_iso_z_from_sec(sec, out, sizeof out) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.from_seconds");
     }
     return emit_string(ctx, out);
 }
 
 int flat_native_date_to_ms(FlatNativeCtx *ctx) {
     if (flat_native_date_to_seconds(ctx) != 0) {
+        if (ctx && ctx->panic_detail[0] != '\0') {
+            /* remap to_seconds.* → to_ms.* when detail is ours */
+            if (strncmp(ctx->panic_detail, "date.to_seconds", 15) == 0) {
+                char rest[48];
+                snprintf(rest, sizeof rest, "%s", ctx->panic_detail + 15);
+                snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "date.to_ms%s", rest);
+            }
+        }
         return -1;
     }
     if (ctx->out->tag == VAL_NUMBER) {
@@ -400,16 +404,16 @@ int flat_native_date_from_ms(FlatNativeCtx *ctx) {
     char out[64];
     int64_t sec;
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.from_ms");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.from_ms.args");
     }
     sec = (int64_t)(flat_number_as_f64(&v) / 1000.0);
     if (flat_date_iso_z_from_sec(sec, out, sizeof out) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.from_ms");
     }
     return emit_string(ctx, out);
 }
@@ -418,14 +422,14 @@ int flat_native_date_time_to_sec(FlatNativeCtx *ctx) {
     char token[64];
     int sec;
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.time_to_sec");
     }
     io_ok(ctx);
     if (string_from_inner(ctx, token, sizeof token) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.time_to_sec.type");
     }
     if (flat_date_time_to_sec(flat_native_trim(token), &sec) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.time_to_sec");
     }
     return flat_value_set_number(ctx->out, (double)sec);
 }
@@ -437,16 +441,16 @@ int flat_native_date_sec_to_time(FlatNativeCtx *ctx) {
     int sec;
 
     if (!ctx->out || !ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.sec_to_time");
     }
     io_ok(ctx);
     snprintf(inner_buf, sizeof inner_buf, "%s", ctx->inner ? ctx->inner : "");
     if (flat_native_parse_expr(ctx, flat_native_trim(inner_buf), &v) != 0 || v.tag != VAL_NUMBER) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.sec_to_time.args");
     }
     sec = (int)flat_number_as_f64(&v);
     if (flat_date_sec_to_time(sec, out, sizeof out) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.sec_to_time.range");
     }
     return emit_string(ctx, out);
 }
@@ -455,11 +459,11 @@ int flat_native_date_run_offset(FlatNativeCtx *ctx) {
     char token[64];
     FlatDateRunState *st = flat_date_global_state();
     if (!ctx->io_status) {
-        return -1;
+        return date_fail(ctx, "date.run_offset");
     }
     io_ok(ctx);
     if (string_from_inner(ctx, token, sizeof token) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.run_offset.type");
     }
     flat_native_trim(token);
     if (token[0] == '\0' || strcmp(token, "Z") == 0 || strcmp(token, "+00:00") == 0) {
@@ -468,7 +472,7 @@ int flat_native_date_run_offset(FlatNativeCtx *ctx) {
         return 0;
     }
     if (flat_date_parse_offset_hhmm(token, &st->run_offset_min) != 0) {
-        return io_err(ctx);
+        return date_fail(ctx, "date.run_offset");
     }
     st->has_run_offset = 1;
     return 0;
@@ -525,9 +529,15 @@ int flat_native_str_to_datetime(FlatNativeCtx *ctx) {
 
 /* Monotonic performance clock. Values are elapsed units from an unspecified
  * origin; callers should compare differences, never interpret them as dates. */
+static int clock_sw_fail(FlatNativeCtx *ctx, const char *why) {
+    if (ctx && ctx->io_status) *ctx->io_status = FLAT_IO_ERR;
+    if (ctx && why) snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", why);
+    return -1;
+}
+
 int flat_native_clock_now(FlatNativeCtx *ctx) {
     if (!ctx || !ctx->out || !ctx->io_status) {
-        return -1;
+        return clock_sw_fail(ctx, "clock.now");
     }
     io_ok(ctx);
     return flat_value_set_number(ctx->out, flat_time_monotonic_ms());
@@ -535,7 +545,7 @@ int flat_native_clock_now(FlatNativeCtx *ctx) {
 
 int flat_native_clock_now_us(FlatNativeCtx *ctx) {
     if (!ctx || !ctx->out || !ctx->io_status) {
-        return -1;
+        return clock_sw_fail(ctx, "clock.now_us");
     }
     io_ok(ctx);
     return flat_value_set_number(ctx->out, flat_time_monotonic_ms() * 1000.0);
@@ -544,12 +554,6 @@ int flat_native_clock_now_us(FlatNativeCtx *ctx) {
 /* Stopwatch resources share the VM's monotonic clock and are owned by one VM run. */
 int flat_clock_stopwatch_live(const FlatClockRuntime *rt, uint32_t id) {
     return rt && id >= 1u && id <= FLAT_CLOCK_MAX_STOPWATCHES && rt->sw[id].live;
-}
-
-static int clock_sw_fail(FlatNativeCtx *ctx, const char *why) {
-    if (ctx && ctx->io_status) *ctx->io_status = FLAT_IO_ERR;
-    if (ctx && why) snprintf(ctx->panic_detail, sizeof ctx->panic_detail, "%s", why);
-    return -1;
 }
 
 static int clock_sw_out_num(FlatNativeCtx *ctx, double n) {

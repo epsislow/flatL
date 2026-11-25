@@ -1,0 +1,6 @@
+#main
+  sw = clock.create()
+  clock.start(sw)
+  clock.lap(sw)
+  clock.lapGet(sw, 5)
+  OK

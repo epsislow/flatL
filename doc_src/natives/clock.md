@@ -6,24 +6,24 @@ Unlike [`date`](./date.md), which represents calendar time and Unix timestamps, 
 
 ## Functions
 
-| Call | Args | Returns | Meaning |
-|------|------|---------|---------|
-| `clock.now()` | — | NUMBER (milliseconds) | Monotonic time in milliseconds, including fractional milliseconds |
-| `clock.now_us()` | — | NUMBER (microseconds) | Monotonic time in microseconds |
-| `clock.create()` | — | NUMBER (resource ID) | Creates an independent stopwatch (`sw`) |
-| `clock.start(id)` | NUMBER id | — | Starts or resumes a stopwatch |
-| `clock.stop(id)` | NUMBER id | — | Stops it and preserves accumulated elapsed time |
-| `clock.reset(id)` | NUMBER id | — | Resets elapsed time and lap history; leaves it stopped |
-| `clock.elapsed(id)` | NUMBER id | NUMBER (milliseconds) | Returns accumulated time, including the current interval when running |
-| `clock.running(id)` | NUMBER id | BOOL | Whether the stopwatch is running |
-| `clock.lap(id)` | NUMBER id | NUMBER (milliseconds) | Records a lap and returns its duration |
-| `clock.lapCount(id)` | NUMBER id | NUMBER | Number of recorded laps |
-| `clock.lapLast(id)` | NUMBER id | NUMBER (milliseconds) | Duration of the most recently recorded lap |
-| `clock.lapGet(id, index)` | NUMBER id, NUMBER index | NUMBER (milliseconds) | Cumulative elapsed time at a lap; indexes are zero-based |
-| `clock.lapClear(id)` | NUMBER id | — | Clears lap history without changing elapsed time or running state |
-| `clock.close(id)` | NUMBER id | — | Releases the stopwatch resource |
+| Call | Args | Returns | Panic (no modifier) |
+|------|------|---------|---------------------|
+| `clock.now()` | — | NUMBER (ms, fractional OK) | **`clock.now`** (internal only) |
+| `clock.now_us()` | — | NUMBER (µs) | **`clock.now_us`** (internal only) |
+| `clock.create()` | — | NUMBER (resource ID) | **`clock.create`** / **`.limit`** (max 64 live) |
+| `clock.start(id)` | NUMBER id | — | **`clock.start.id`** |
+| `clock.stop(id)` | NUMBER id | — | **`clock.stop.id`** |
+| `clock.reset(id)` | NUMBER id | — | **`clock.reset.id`** |
+| `clock.elapsed(id)` | NUMBER id | NUMBER (ms) | **`clock.elapsed.id`** |
+| `clock.running(id)` | NUMBER id | BOOL | **`clock.running.id`** |
+| `clock.lap(id)` | NUMBER id | NUMBER (ms) | **`clock.lap.id`** / **`.stopped`** / **`.limit`** |
+| `clock.lapCount(id)` | NUMBER id | NUMBER | **`clock.lapCount.id`** |
+| `clock.lapLast(id)` | NUMBER id | NUMBER (ms) | **`clock.lapLast.id`** / **`.empty`** |
+| `clock.lapGet(id, index)` | NUMBER id, NUMBER index | NUMBER (ms) | **`clock.lapGet.arg`** / **`.id`** / **`.index`** |
+| `clock.lapClear(id)` | NUMBER id | — | **`clock.lapClear.id`** |
+| `clock.close(id)` | NUMBER id | — | **`clock.close.id`** |
 
-All stopwatch elapsed and lap values use milliseconds and may contain fractional values.
+All stopwatch elapsed and lap values use milliseconds and may contain fractional values. Closed or invalid IDs panic with **`clock.<fn>.id`**.
 
 ## Stopwatch example
 
@@ -106,9 +106,9 @@ Lap indexes are zero-based: `0` is the first lap, `1` the second, and so on. `la
 - `clock.lap(id)` requires a running stopwatch. It records the cumulative elapsed time and returns the duration since the previous lap.
 - `clock.lapClear(id)` clears only the lap history. It does not reset elapsed time or change the running state; the next lap duration is measured from the moment `lapClear()` was called.
 - `clock.close(id)` releases the resource. It may be called while running; the stopwatch is discarded without needing a prior `stop()`.
-- A closed or otherwise invalid ID causes the relevant `clock` operation to fail with a resource error. `mem.infoResId(id, 'clock')` returns `unknown` after close and `sw` while the stopwatch is live.
+- A closed or otherwise invalid ID panics with **`clock.<fn>.id`** (e.g. **`clock.elapsed.id`**). `mem.infoResId(id, 'clock')` returns `unknown` after close and `sw` while the stopwatch is live.
 - Stopwatch IDs belong to the current VM execution. All remaining stopwatch resources are discarded when that execution ends.
-- A stopwatch can store up to 256 lap records. `clock.lap()` fails if this limit is reached; `clock.lapClear()` allows recording again.
+- A stopwatch can store up to 256 lap records. `clock.lap()` panics with **`clock.lap.limit`** if this limit is reached; `clock.lapClear()` allows recording again. Lap on a stopped watch → **`clock.lap.stopped`**.
 - The runtime supports up to 64 simultaneously live stopwatches per VM execution.
 
 ## Measuring durations directly
@@ -116,28 +116,35 @@ Lap indexes are zero-based: `0` is the first lap, `1` the second, and so on. `la
 The stopwatch API is optional. For a one-off measurement, subtract two readings:
 
 ```text
+use native math
+
 #main
   start = clock.now()
 
   -- Code to measure
   doSomething()
 
-  elapsed = clock.now() - start
-  io.outln('Elapsed: ' + elapsed + ' ms')
+  end = clock.now()
+  elapsed = math.calc('end - start')
+  io.outln(elapsed)
 ```
 
 For finer reporting, use microseconds:
 
 ```text
+use native math
+
 #main
   start = clock.now_us()
 
   -- Code to measure
   doSomething()
 
-  elapsed = clock.now_us() - start
-  io.outln('Elapsed: ' + elapsed + ' us')
+  end = clock.now_us()
+  elapsed = math.calc('end - start')
+  io.outln(elapsed)
 ```
+
 
 ## Important behavior
 
@@ -176,4 +183,4 @@ Do not use `date.now()` to measure short operations: it has second-level granula
 
 ## Tests
 
-**`test/cases/clock/`** — monotonic readings, unit consistency, stopwatch lifecycle, lap recording, resource identification, and closed-ID validation.
+**`test/cases/clock/`** — monotonic readings, unit consistency, stopwatch lifecycle, lap recording, closed-ID (**`clock.elapsed.id`**), lap-on-stopped (**`.stopped`**), empty **`lapLast`**, and out-of-range **`lapGet`**.
