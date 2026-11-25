@@ -1,0 +1,15 @@
+suite = "env"
+mods = "env"
+id = 12
+desc = "--env override wins over process environment"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "FLAT_ENV_OVER=from_process {root}/bin/flvm --env FLAT_ENV_OVER=from_cli {tmp}/out.fb </dev/null"
+expect_exit = 0
+stdout_contains = "from_cli"
+
+[flatl]
+crun = "FLAT_ENV_OVER=from_process {root}/bin/flatl crun --env FLAT_ENV_OVER=from_cli -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "from_cli"

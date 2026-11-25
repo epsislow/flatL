@@ -277,6 +277,8 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
         }
         return 1;
     }
+    /* Belt-and-suspenders: even if JS skipped applyEnvToWasm, never getenv. */
+    flat_env_set_use_process(0);
 #ifdef FLAT_WASM_BUILD
     /* So file.readCtx('out.txt') matches project files under /fleditor/out.txt */
     (void)chdir("/fleditor");

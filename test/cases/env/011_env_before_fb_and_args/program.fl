@@ -1,0 +1,9 @@
+use native env
+use native list
+
+#main
+  io.outln(env.get('FLAT_ENV_MIX'))
+  io.outln(env.argc())
+  xs = env.args()
+  io.outln(list.get(xs, 0))
+  OK

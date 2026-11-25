@@ -282,7 +282,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-multifile-smoke fleditor-rebuild ensure-libz-1
+.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-env-smoke fleditor-wasm-multifile-smoke fleditor-rebuild ensure-libz-1
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -345,6 +345,7 @@ help:
 	@echo "  make fleditor-examples-smoke       examples picker smoke (Node)"
 	@echo "  make fleditor-block-map-smoke      Code Map analyzer smoke (Node)"
 	@echo "  make fleditor-wasm-smoke           WASM smoke (needs fleditor-wasm)"
+	@echo "  make fleditor-wasm-env-smoke       WASM env/args contract smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-multifile-smoke WASM multifile smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-order-flow-smoke   WASM user def (order_flow; needs fleditor-wasm)"
 	@echo ""
@@ -708,6 +709,11 @@ fleditor-wasm-csv-smoke: fleditor-wasm
 fleditor-wasm-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-smoke)
 	$(NODE) test/fleditor/wasm_smoke.mjs
+	@$(call step_end)
+
+fleditor-wasm-env-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-env-smoke)
+	$(NODE) test/fleditor/wasm_env_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-multifile-smoke: fleditor-wasm

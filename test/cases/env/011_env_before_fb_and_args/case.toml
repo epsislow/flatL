@@ -1,0 +1,19 @@
+suite = "env"
+mods = "env"
+id = 11
+desc = "--env before program.fb and args after --"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm --env FLAT_ENV_MIX=from_cli {tmp}/out.fb -- onlyarg </dev/null"
+expect_exit = 0
+stdout_contains = "from_cli"
+stdout_contains_2 = "1"
+stdout_contains_3 = "onlyarg"
+
+[flatl]
+crun = "{root}/bin/flatl crun --env FLAT_ENV_MIX=from_cli -o {tmp}/out.fb {src} -- onlyarg"
+expect_exit = 0
+stdout_contains = "from_cli"
+stdout_contains_2 = "1"
+stdout_contains_3 = "onlyarg"

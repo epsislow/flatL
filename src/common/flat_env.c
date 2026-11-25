@@ -13,7 +13,12 @@ typedef struct {
     size_t argc;
 } FlatEnvState;
 
+/* WASM must never fall back to host getenv (Node/browser process env). */
+#ifdef FLAT_WASM_BUILD
+static FlatEnvState g_env = {0, {0}, {0}, 0, {0}, 0};
+#else
 static FlatEnvState g_env = {1, {0}, {0}, 0, {0}, 0};
+#endif
 
 static char *dup_str(const char *s) {
     size_t n;

@@ -1101,6 +1101,7 @@
     getHttpPrefs,
     getEnvPrefs,
     getPathPrefs,
+    splitProgramArgs,
     applyEnvToWasm,
     applyPathToWasm,
     applyThemeFromStorage,

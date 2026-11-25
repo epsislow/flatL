@@ -1,0 +1,19 @@
+suite = "env"
+mods = "env"
+id = 10
+desc = "env.args keeps spaces inside quoted CLI tokens"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb -- 'hello world' 'a b' </dev/null"
+expect_exit = 0
+stdout_contains = "2"
+stdout_contains_2 = "hello world"
+stdout_contains_3 = "a b"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src} -- 'hello world' 'a b'"
+expect_exit = 0
+stdout_contains = "2"
+stdout_contains_2 = "hello world"
+stdout_contains_3 = "a b"

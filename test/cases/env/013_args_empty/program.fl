@@ -1,0 +1,7 @@
+use native env
+
+#main
+  io.outln(env.argc())
+  xs = env.args()
+  io.outln(xs)
+  OK

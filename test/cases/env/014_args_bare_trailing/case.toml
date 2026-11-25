@@ -1,0 +1,19 @@
+suite = "env"
+mods = "env"
+id = 14
+desc = "flvm accepts bare trailing tokens as env.args (flatl requires --)"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb alpha beta </dev/null"
+expect_exit = 0
+stdout_contains = "2"
+stdout_contains_2 = "alpha"
+stdout_contains_3 = "beta"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src} -- alpha beta"
+expect_exit = 0
+stdout_contains = "2"
+stdout_contains_2 = "alpha"
+stdout_contains_3 = "beta"

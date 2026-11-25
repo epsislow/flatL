@@ -80,9 +80,23 @@ use native list
 ```bash
 bin/flvm out.fb -- input.txt --flag
 bin/flatl crun program.fl -- input.txt --flag
+# flvm also accepts bare trailing tokens (no --); flatl requires -- (because of -o etc.)
+bin/flvm out.fb input.txt --flag
 ```
 
 `env.args` is **not** the list of environment variable names — it is the program’s positional argv.
+
+### Contract (native ↔ FlEditor)
+
+| Rule | Detail |
+|------|--------|
+| `--env KEY=VAL` | Before the program path; repeatable; **overrides** process env for that key |
+| Program args | Prefer **`--` then args** on both `flvm` and `flatl`; `flvm` also accepts bare trailing tokens |
+| Native process env | `env.get` may read OS `getenv` when no override |
+| **WASM / FlEditor** | **Never** reads OS/process env — only Settings→Env map + Program args injected at Run (`flat_wasm_env_*`) |
+| Quoting (FlEditor) | Program args field: space-separated; `"…"` / `'…'` keep spaces (`splitProgramArgs`) |
+
+Smoke: `make fleditor-wasm-env-smoke`. Cases: `test/cases/env/010`–`014`.
 
 ## Test runner `[env]`
 
