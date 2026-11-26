@@ -1,8 +1,7 @@
 use native dom
 
 #main
-  html = '<html><body><main id="app">scheduler teardown</main></body></html>'
-  dom.parseHtml(html) -> page
+  dom.parseHtml('<html><body><main id="app">scheduler teardown</main></body></html>') -> page
   value = 1
   value = 2
   OK

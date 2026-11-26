@@ -481,3 +481,34 @@ The request-only cancellation contract is partially implemented by archive 303: 
 - Cancellation commit order remains VM cancellation/cleanup, outgoing wait metadata removal, Channel transaction rollback/reference release, terminal CANCELLED publication, then dependent wakeup. Completion/failure wins if already reached.
 - This is a pre-worker implementation of the request/safe-point protocol. A dedicated worker cleanup queue, DRAIN/CANCEL pool lifecycle, shutdown request, join, and pthread worker creation remain future work.
 - `flvm[40]` covers idempotent requests for CREATED/RUNNABLE/WAITING/RUNNING, terminal-result preservation, unknown IDs, and a DOM gate held across a running VM step to prove that the request returns without touching the VM and cleanup occurs after the safe point.
+
+
+## 24. Cooperative runtime shutdown lifecycle (archive 304)
+
+- `FlatRuntime` has lifecycle states `RUNNING`, `DRAINING`, `CANCELLING`, and `STOPPED`, distinct from task states.
+- `flat_runtime_shutdown_request(runtime, DRAIN)` closes task admission (`task.create`, `task.start`, native `task.spawn`, and direct `flat_runtime_run`) but lets already-started tasks continue. CREATED tasks are not auto-started or implicitly cancelled; the host remains responsible for their records.
+- DRAIN is `BLOCKED` when no runnable/owned work remains but unresolved WAITING tasks remain. It is not successful shutdown.
+- `flat_runtime_shutdown_request(runtime, CANCEL)` escalates and requests cancellation for every nonterminal task, including CREATED. DRAIN cannot downgrade CANCELLING. A DRAIN-complete runtime with remaining CREATED records may be escalated to CANCEL.
+- Shutdown status is cooperative and host-driven in archive 304. `flat_runtime_schedule()` executes work/cleanup; `flat_runtime_shutdown_status()` reports IN_PROGRESS/BLOCKED/COMPLETE. This API is not a pthread join.
+- Runtime destruction after a shutdown request requires STOPPED and still requires explicit task/Channel destruction and host-side lifetime exclusion.
+- Do not claim worker-pool readiness: background worker creation, condition-variable loops, startup rollback, shutdown wakeup and actual join are not implemented in archive 304.
+
+## 25. Runtime-owned pthread worker pool (archive 305)
+
+- `flat_runtime_workers_start(runtime, count, quantum)` creates a fixed pool (1–256 workers). All requested threads are created behind a startup barrier; no VM quantum begins until every thread was created successfully. Partial startup failure wakes and joins every thread already created and leaves no background thread alive.
+- Workers share the existing scheduler/dispatch protocol. Each worker calls the internal scheduler for at most one VM quantum, then returns to the pool loop. `flat_vm_step()` and native handlers remain outside `scheduler_mutex`; task claim, state publication, cancellation ownership and dispatch-token release remain protected by the scheduler mutex.
+- `flat_runtime_schedule()` remains the exclusive host-driven mode and is rejected while a worker pool is active. Multiple internal worker scheduler turns may overlap; the `schedule_active` counter is a count, not a single-driver boolean.
+- Workers block on the ready-queue condition variable without consuming a task while idle. Queue publication signals work; request-only cancellation and shutdown broadcast a wake epoch. Workers capture the epoch before attempting a quantum so a cancellation/shutdown wake cannot be lost between the state check and condition wait.
+- DRAIN/CANCEL semantics from archive 304 remain authoritative. Workers exit only after lifecycle reaches STOPPED (or startup rollback requests stop). `flat_runtime_workers_join()` is a separate host operation and is rejected until STOPPED and all scheduler turns have returned. Runtime destruction is rejected until every worker is joined.
+- Before worker creation, every registered VM manifest is preflighted: permitted optional plugins are loaded, and any unsupported/unknown module rejects pool startup. New tasks created while worker mode is active are preflighted before registry publication. Capability metadata is then frozen. `flat_native_invoke()` also rejects modules whose effective policy is neither THREAD_SAFE nor SERIALIZED as defense in depth. The worker-mode guard is process-wide, so it also applies to native calls made by other runtimes while a pool is active. The worker-mode guard is process-wide, so it also applies to native calls made by other runtimes while a pool is active.
+- `task` and `channel` built-ins are promoted from UNSUPPORTED to SERIALIZED after scheduler registry/wait-graph operations and Channel state are protected by runtime/Channel mutexes. Their module gates provide conservative process-wide serialization. `dom` remains PENDING and therefore SERIALIZED. Legacy/unknown plugins remain UNSUPPORTED unless they declare a capability.
+- The runtime worker API is portable through `FlatThread`, but archive 305 validation is POSIX/Linux only. Single-threaded Emscripten rejects worker creation through its `FlatThread` stub; the cooperative scheduler remains available.
+- Host lifetime rule remains: no new API call may begin concurrently with `flat_runtime_destroy()`. Worker join protects worker lifetime, not arbitrary external API entry.
+
+
+## 26. Worker wait-graph and Channel cancellation audit (archive 307)
+
+- Wait-graph cancellation is validated under the real worker pool with a four-task chain `A -> B -> C -> D`. A reverse edge `D -> A` must be rejected; cancelling B removes its outgoing edge and wakes A, while C remains dependent on D and completes after D.
+- A Channel waiter may be in `WAITING` before worker startup. A request-only cancellation followed by worker-mode CANCEL must complete VM cleanup, abort the transaction owner, release the waiter's Channel reference, and permit task/Channel/runtime destruction after join.
+- Cancellation remains request-only for external callers. VM teardown, transaction abort and wait-edge removal remain scheduler/worker-owned. No external caller may free a VM or Channel resource still owned by a worker.
+- Archive 307 adds regression coverage only; it does not change lock ordering, wait graph representation, scheduler dispatch or cancellation semantics. The focused tests do not constitute a general concurrency certification.

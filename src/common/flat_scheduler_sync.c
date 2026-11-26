@@ -84,6 +84,47 @@ int flat_ready_queue_pop(FlatReadyQueue *queue, uint64_t *out_task_id) {
     return rc;
 }
 
+uint64_t flat_ready_queue_wake_epoch(FlatReadyQueue *queue) {
+    uint64_t epoch = 0;
+    if (!queue || !queue->initialized || flat_mutex_lock(&queue->mutex) != 0) return 0;
+    epoch = queue->wake_epoch;
+    (void)flat_mutex_unlock(&queue->mutex);
+    return epoch;
+}
+
+int flat_ready_queue_wait_since(FlatReadyQueue *queue, uint64_t observed_epoch) {
+    int rc;
+    if (!queue || !queue->initialized) return -1;
+    if (flat_mutex_lock(&queue->mutex) != 0) return -1;
+    while (queue->count == 0 && !queue->closed &&
+           queue->wake_epoch == observed_epoch) {
+        if (flat_cond_wait(&queue->available, &queue->mutex) != 0) {
+            (void)flat_mutex_unlock(&queue->mutex);
+            return -1;
+        }
+    }
+    if (queue->count > 0) rc = 1;
+    else if (queue->closed) rc = 0;
+    else rc = 2;
+    (void)flat_mutex_unlock(&queue->mutex);
+    return rc;
+}
+
+int flat_ready_queue_wait(FlatReadyQueue *queue) {
+    uint64_t epoch = flat_ready_queue_wake_epoch(queue);
+    return flat_ready_queue_wait_since(queue, epoch);
+}
+
+int flat_ready_queue_wake_all(FlatReadyQueue *queue) {
+    int rc;
+    if (!queue || !queue->initialized) return -1;
+    if (flat_mutex_lock(&queue->mutex) != 0) return -1;
+    queue->wake_epoch++;
+    rc = flat_cond_broadcast(&queue->available);
+    (void)flat_mutex_unlock(&queue->mutex);
+    return rc;
+}
+
 int flat_ready_queue_try_pop(FlatReadyQueue *queue, uint64_t *out_task_id) {
     if (!queue || !queue->initialized || !out_task_id) return -1;
     if (flat_mutex_lock(&queue->mutex) != 0) return -1;

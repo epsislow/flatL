@@ -1,8 +1,8 @@
 # FlatL v2.0 — Cancellation Request and Worker Shutdown Specification
 
-**Checkpoint:** archive 296  
+**Checkpoint:** archive 304  
 **Baseline:** archive 295 (`lexbor-independent-context-concurrency`)  
-**Status:** architecture contract for the future worker pool; no asynchronous cancellation API, pthread worker pool, or shutdown implementation is added by this archive.
+**Status:** request-only cancellation is implemented (archive 303), and cooperative DRAIN/CANCEL admission/status is implemented (archive 304). No pthread worker pool, worker condition loop, or actual join is implemented yet.
 
 This document separates the cooperative cancellation API that exists today from the request/cleanup protocol required by a multi-worker runtime. The names and exact C signatures below are proposed API shapes; the behavioral rules are the design baseline. Any change to these rules must be recorded in `01_DECISIONS.md` and `02_ROADMAP.md` before implementation.
 
@@ -122,7 +122,7 @@ CANCEL is cooperative, not forceful. It must not use `pthread_cancel()`, termina
 
 ### 3.4 Worker join and runtime destruction
 
-The API shape is proposed as two phases:
+The future threaded API shape is expected to have two phases:
 
 ```c
 int flat_runtime_shutdown_request(FlatRuntime *runtime,
@@ -198,7 +198,7 @@ The following tests are future requirements. They are not claimed as implemented
 
 ## 6. Current implementation versus this specification
 
-Implemented today (archive 303):
+Implemented today (archives 303–304):
 
 - Cooperative `flat_runtime_task_cancel()` for CREATED/RUNNABLE/WAITING tasks.
 - Request-only `flat_runtime_task_cancel_request()` with idempotent publication and return values 0 (accepted), 1 (already terminal), -1 (invalid/unknown).
@@ -209,12 +209,26 @@ Implemented today (archive 303):
 - Wakeup of tasks waiting on a cancelled target.
 - Runtime destruction guards while tasks/Channels/active runs remain.
 - Only one thread may drive `flat_runtime_schedule()`; the request-only cancellation API and synchronized task-state queries may be called by other host threads while the runtime remains alive.
+- Cooperative shutdown lifecycle (`RUNNING`/`DRAINING`/`CANCELLING`/`STOPPED`), admission closure, DRAIN blocked status, CANCEL escalation, and status/lifecycle queries (archive 304).
 
-Still not implemented after archive 303:
+Still not implemented after archive 304:
 
 - A dedicated worker-owned cancellation cleanup queue; the current single scheduler scans the task registry for pending requests.
-- Pool lifecycle states, DRAIN/CANCEL shutdown, shutdown request API, or worker join.
-- Worker condition-variable wait loop and pthread worker creation.
+- Worker pool lifecycle backed by actual pthread workers, worker condition-variable loop, shutdown wakeup/broadcast, startup rollback, or actual worker join. Archive 304 provides the cooperative lifecycle/admission state machine and status query only.
 - Complete-VM multi-worker concurrency.
 
 Archive 296 is specification and regression-baseline work only. It does not claim worker-mode cancellation or shutdown is implemented.
+
+
+## 7. Archive 304 cooperative shutdown implementation
+
+The public API now includes `flat_runtime_shutdown_request(runtime, mode)`, `flat_runtime_shutdown_status(runtime)`, and `flat_runtime_lifecycle(runtime)`. The status values are `IN_PROGRESS`, `BLOCKED`, and `COMPLETE`; lifecycle values are `RUNNING`, `DRAINING`, `CANCELLING`, and `STOPPED`.
+
+DRAIN rejects new host task creation/start, native `task.spawn`, and new direct runtime runs. It does not auto-start or cancel CREATED tasks. Started tasks continue through host-driven `flat_runtime_schedule()`. If the scheduler is quiescent with unresolved WAITING tasks, status is BLOCKED. CANCEL escalates DRAIN and publishes request-only cancellation for all nonterminal tasks, including CREATED. DRAIN cannot downgrade CANCELLING. A DRAIN-complete runtime with remaining CREATED records may still be escalated to CANCEL so those records can be cleaned cooperatively.
+
+This is intentionally not a worker join: there are no worker threads in archive 304. The host still drives `flat_runtime_schedule()` and checks status. Actual worker creation, condition-variable wakeups, startup rollback, shutdown broadcasts, and join remain the next milestone. `flvm[41]` covers the cooperative state machine.
+
+
+## 8. Archive 305 worker implementation update
+
+The runtime now exposes `flat_runtime_workers_start()` and `flat_runtime_workers_join()`. Workers share the existing ready queue and scheduler mutex, run one quantum per turn, and exit after lifecycle STOPPED. The startup barrier prevents execution before all threads are created; partial startup failure wakes and joins already-created threads. Join rejects a blocked DRAIN and requires zero active scheduler turns. Runtime destruction rejects unjoined workers. See `17_RUNTIME_WORKER_POOL.md` for the implementation and validation boundary.

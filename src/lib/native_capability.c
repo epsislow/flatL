@@ -38,13 +38,14 @@ static ModuleCapability g_modules[] = {
     {"vcx", FLAT_NATIVE_THREAD_CAP_THREAD_SAFE, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
     {"executor", FLAT_NATIVE_THREAD_CAP_THREAD_SAFE, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
     {"csv", FLAT_NATIVE_THREAD_CAP_THREAD_SAFE, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
-    {"task", FLAT_NATIVE_THREAD_CAP_UNSUPPORTED, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
-    {"channel", FLAT_NATIVE_THREAD_CAP_UNSUPPORTED, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
+    {"task", FLAT_NATIVE_THREAD_CAP_SERIALIZED, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
+    {"channel", FLAT_NATIVE_THREAD_CAP_SERIALIZED, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
     {NULL, FLAT_NATIVE_THREAD_CAP_UNKNOWN, FLAT_NATIVE_THREAD_CAP_UNKNOWN, 0, FLAT_MUTEX_INITIALIZER},
 };
 
 static atomic_flag g_capability_lock = ATOMIC_FLAG_INIT;
 static atomic_int g_capabilities_frozen = ATOMIC_VAR_INIT(0);
+static atomic_uint g_worker_mode_users = ATOMIC_VAR_INIT(0);
 
 static void capability_lock(void) {
     while (atomic_flag_test_and_set_explicit(&g_capability_lock, memory_order_acquire)) {
@@ -111,6 +112,26 @@ int flat_native_module_capabilities_freeze(void) {
 
 int flat_native_module_capabilities_is_frozen(void) {
     return atomic_load_explicit(&g_capabilities_frozen, memory_order_acquire) != 0;
+}
+
+int flat_native_worker_mode_enter(void) {
+    if (!flat_native_module_capabilities_is_frozen()) return -1;
+    atomic_fetch_add_explicit(&g_worker_mode_users, 1, memory_order_acq_rel);
+    return 0;
+}
+
+int flat_native_worker_mode_leave(void) {
+    unsigned current = atomic_load_explicit(&g_worker_mode_users, memory_order_acquire);
+    while (current != 0) {
+        if (atomic_compare_exchange_weak_explicit(&g_worker_mode_users, &current, current - 1,
+                                                  memory_order_acq_rel, memory_order_acquire))
+            return 0;
+    }
+    return -1;
+}
+
+int flat_native_worker_mode_is_active(void) {
+    return atomic_load_explicit(&g_worker_mode_users, memory_order_acquire) != 0;
 }
 
 int flat_native_module_gate_enter(const char *module) {

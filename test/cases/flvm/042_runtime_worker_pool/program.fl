@@ -1,0 +1,4 @@
+#main
+  LET value = 1
+  LET other = 2
+  OK

@@ -2,6 +2,10 @@
 #include "flat_host_config.h"
 #include "flat_vm_internal.h"
 #include "flat_task_native.h"
+#include "flat_native.h"
+#include "flat_native_plugin.h"
+#include "flat_native_capability.h"
+#include "flat_http_transport.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -78,6 +82,53 @@ FlatVm *flat_vm_create_at_label(const FlatBytecode *bc, const FlatVmOptions *opt
                                 const char *entry_label) {
     if (!entry_label || !entry_label[0]) return NULL;
     return flat_vm_create_internal(bc, opts, entry_label);
+}
+
+int flat_vm_worker_preflight(FlatVm *vm, char *err, size_t err_size) {
+    FlatNativeRuntimeContext context;
+    int i;
+    if (err && err_size) err[0] = '\0';
+    if (!vm) {
+        if (err && err_size) snprintf(err, err_size, "invalid VM worker preflight");
+        return -1;
+    }
+    context.manifest = vm->bytecode.optional_natives;
+    context.manifest_count = vm->bytecode.optional_native_count;
+    for (i = 0; i < context.manifest_count; ++i) {
+        char module[FGIR_NATIVE_MODULE_LEN];
+        int id;
+        int found = 0;
+        for (id = 0; id < FLAT_NATIVE_COUNT; ++id) {
+            if (flat_native_module_for_id((uint16_t)id, module, sizeof module) == 0 &&
+                strcmp(module, context.manifest[i].module) == 0) {
+                if (flat_native_runtime_prepare(&context, (uint16_t)id, err, err_size) != 0)
+                    return -1;
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            if (err && err_size) snprintf(err, err_size, "unknown native module %s in VM manifest",
+                                          context.manifest[i].module);
+            return -1;
+        }
+        {
+            FlatNativeThreadCapability policy =
+                flat_native_module_worker_policy(context.manifest[i].module);
+            if (policy != FLAT_NATIVE_THREAD_CAP_THREAD_SAFE &&
+                policy != FLAT_NATIVE_THREAD_CAP_SERIALIZED) {
+                if (err && err_size)
+                    snprintf(err, err_size, "native module %s is unsupported in worker mode",
+                             context.manifest[i].module);
+                return -1;
+            }
+        }
+        if (strcmp(context.manifest[i].module, "http") == 0 && flat_http_prepare() != 0) {
+            if (err && err_size) snprintf(err, err_size, "HTTP transport initialization failed");
+            return -1;
+        }
+    }
+    return 0;
 }
 
 int flat_vm_set_task_bridge(FlatVm *vm, const FlatTaskNativeBridge *bridge) {

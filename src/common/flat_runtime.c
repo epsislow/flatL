@@ -7,11 +7,19 @@
 #include "flat_number.h"
 #include "flat_sync.h"
 #include "flat_scheduler_sync.h"
+#include "flat_native_plugin.h"
 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
+
+typedef struct FlatRuntimeWorker {
+    FlatThread thread;
+    struct FlatRuntime *runtime;
+    uint64_t quantum;
+    int started;
+} FlatRuntimeWorker;
 
 typedef struct FlatTaskRecord {
     FlatTaskId id;
@@ -31,7 +39,17 @@ struct FlatRuntime {
     FlatMutex scheduler_mutex;
     FlatReadyQueue ready_queue;
     unsigned active_runs;
-    int schedule_active;
+    unsigned schedule_active;
+    FlatRuntimeWorker *workers;
+    size_t worker_count;
+    int workers_started;
+    int worker_launch;
+    int worker_starting;
+    int workers_joined;
+    int worker_mode_entered;
+    int worker_start_failed;
+    int worker_stop;
+    int worker_error;
     FlatTaskRecord *tasks;
     FlatChannel *channels;
     size_t channel_count;
@@ -40,8 +58,13 @@ struct FlatRuntime {
     size_t task_count;
     FlatTaskId next_task_id;
     FlatTaskId last_scheduled_id;
+    FlatRuntimeLifecycle lifecycle;
 };
 
+static int runtime_schedule_internal(FlatRuntime *runtime, uint64_t quantum,
+                                     uint64_t max_quanta, uint64_t *out_quanta,
+                                     int worker_mode);
+static void *runtime_worker_main(void *opaque);
 static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode *bc,
                                         const FlatVmOptions *opts, const char *entry_label,
                                         FlatTaskState initial_state, const FlatValue *args,
@@ -131,6 +154,33 @@ static void runtime_dispatch_dequeue_locked(FlatRuntime *runtime, FlatTaskRecord
 
 static FlatTaskRecord *runtime_find_task(const FlatRuntime *runtime, FlatTaskId id);
 static int runtime_task_is_terminal(const FlatTaskRecord *task);
+
+/* Caller holds scheduler_mutex. CREATED records are deliberately ignored by
+ * DRAIN, but are included by CANCEL because CANCEL requests their cleanup. */
+static void runtime_refresh_lifecycle_locked(FlatRuntime *runtime) {
+    FlatTaskRecord *task;
+    int runnable = 0, waiting = 0, owned = 0, pending_cancel = 0;
+    if (!runtime || runtime->lifecycle == FLAT_RUNTIME_RUNNING ||
+        runtime->lifecycle == FLAT_RUNTIME_STOPPED || runtime->schedule_active) return;
+    for (task = runtime->tasks; task; task = task->next) {
+        if (task->dispatch.worker_owned || task->cleanup_owned) owned = 1;
+        if (runtime_task_is_terminal(task)) continue;
+        if (runtime->lifecycle == FLAT_RUNTIME_CANCELLING) {
+            pending_cancel = 1;
+            continue;
+        }
+        if (task->state == FLAT_TASK_RUNNABLE || task->state == FLAT_TASK_RUNNING) runnable = 1;
+        else if (task->state == FLAT_TASK_WAITING) waiting = 1;
+        /* CREATED tasks are not part of the accepted DRAIN workload. */
+    }
+    if (owned || runnable || pending_cancel) return;
+    if (runtime->lifecycle == FLAT_RUNTIME_DRAINING && waiting) return;
+    if (runtime->lifecycle != FLAT_RUNTIME_STOPPED) {
+        runtime->lifecycle = FLAT_RUNTIME_STOPPED;
+        /* Wake idle workers so they can observe STOPPED and exit. */
+        (void)flat_ready_queue_wake_all(&runtime->ready_queue);
+    }
+}
 
 static int runtime_has_waiters(const FlatRuntime *runtime, FlatTaskId id) {
     const FlatTaskRecord *task;
@@ -288,6 +338,7 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         return NULL;
     }
     runtime->next_task_id = 1;
+    runtime->lifecycle = FLAT_RUNTIME_RUNNING;
     runtime->next_channel_id = 1;
 
     if (config) {
@@ -318,6 +369,78 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
     return runtime;
 }
 
+int flat_runtime_shutdown_request(FlatRuntime *runtime, FlatRuntimeShutdownMode mode) {
+    FlatTaskRecord *task;
+    if (!runtime || (mode != FLAT_RUNTIME_SHUTDOWN_DRAIN &&
+                     mode != FLAT_RUNTIME_SHUTDOWN_CANCEL)) return -1;
+    runtime_lock(runtime);
+    if (runtime->worker_starting) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    if (runtime->lifecycle == FLAT_RUNTIME_STOPPED && mode == FLAT_RUNTIME_SHUTDOWN_DRAIN) {
+        runtime_unlock(runtime);
+        return 0;
+    }
+    if (mode == FLAT_RUNTIME_SHUTDOWN_CANCEL) {
+        int has_nonterminal = 0;
+        for (task = runtime->tasks; task; task = task->next) {
+            if (!runtime_task_is_terminal(task)) {
+                task->cancel_requested = 1;
+                has_nonterminal = 1;
+            }
+        }
+        runtime->lifecycle = FLAT_RUNTIME_CANCELLING;
+        (void)has_nonterminal;
+    } else if (runtime->lifecycle == FLAT_RUNTIME_RUNNING) {
+        runtime->lifecycle = FLAT_RUNTIME_DRAINING;
+    }
+    runtime_refresh_lifecycle_locked(runtime);
+    (void)flat_ready_queue_wake_all(&runtime->ready_queue);
+    runtime_unlock(runtime);
+    return 0;
+}
+
+FlatRuntimeShutdownStatus flat_runtime_shutdown_status(FlatRuntime *runtime) {
+    FlatTaskRecord *task;
+    int runnable = 0, waiting = 0, owned = 0, pending = 0;
+    FlatRuntimeShutdownStatus status;
+    if (!runtime) return FLAT_RUNTIME_SHUTDOWN_BLOCKED;
+    runtime_lock(runtime);
+    runtime_refresh_lifecycle_locked(runtime);
+    if (runtime->lifecycle == FLAT_RUNTIME_RUNNING) {
+        status = FLAT_RUNTIME_SHUTDOWN_IN_PROGRESS;
+    } else if (runtime->lifecycle == FLAT_RUNTIME_STOPPED) {
+        status = FLAT_RUNTIME_SHUTDOWN_COMPLETE;
+    } else {
+        for (task = runtime->tasks; task; task = task->next) {
+            if (task->dispatch.worker_owned || task->cleanup_owned) owned = 1;
+            if (runtime_task_is_terminal(task)) continue;
+            if (runtime->lifecycle == FLAT_RUNTIME_CANCELLING) pending = 1;
+            else if (task->state == FLAT_TASK_RUNNABLE || task->state == FLAT_TASK_RUNNING) runnable = 1;
+            else if (task->state == FLAT_TASK_WAITING) waiting = 1;
+        }
+        if (owned || runnable || pending || runtime->schedule_active)
+            status = FLAT_RUNTIME_SHUTDOWN_IN_PROGRESS;
+        else if (runtime->lifecycle == FLAT_RUNTIME_DRAINING && waiting)
+            status = FLAT_RUNTIME_SHUTDOWN_BLOCKED;
+        else
+            status = FLAT_RUNTIME_SHUTDOWN_COMPLETE;
+    }
+    runtime_unlock(runtime);
+    return status;
+}
+
+FlatRuntimeLifecycle flat_runtime_lifecycle(FlatRuntime *runtime) {
+    FlatRuntimeLifecycle state;
+    if (!runtime) return (FlatRuntimeLifecycle)0;
+    runtime_lock(runtime);
+    runtime_refresh_lifecycle_locked(runtime);
+    state = runtime->lifecycle;
+    runtime_unlock(runtime);
+    return state;
+}
+
 int flat_runtime_run(FlatRuntime *runtime, const FlatBytecode *bc,
                      const FlatVmOptions *opts) {
     FlatVmOptions run_opts;
@@ -325,6 +448,11 @@ int flat_runtime_run(FlatRuntime *runtime, const FlatBytecode *bc,
     if (!runtime || !bc) return 1;
 
     runtime_lock(runtime);
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING || runtime->worker_starting ||
+        runtime->workers_started) {
+        runtime_unlock(runtime);
+        return 1;
+    }
     runtime->active_runs++;
     runtime_unlock(runtime);
 
@@ -349,6 +477,8 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
     FlatVmOptions task_opts;
     FlatTaskNativeBridge bridge;
     FlatTaskId id;
+    int worker_mode;
+    char preflight_error[256];
     if (!runtime || !bc || !out_id) return -1;
 
     task = (FlatTaskRecord *)calloc(1, sizeof *task);
@@ -370,14 +500,22 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
     }
 
     runtime_lock(runtime);
-    if (runtime->next_task_id == 0) {
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING || runtime->worker_starting ||
+        runtime->next_task_id == 0) {
         runtime_unlock(runtime);
         flat_vm_destroy(task->vm);
         free(task);
         return -1;
     }
+    worker_mode = runtime->workers_started;
     id = runtime->next_task_id++;
     runtime_unlock(runtime);
+    if (worker_mode && flat_vm_worker_preflight(task->vm, preflight_error,
+                                                 sizeof preflight_error) != 0) {
+        flat_vm_destroy(task->vm);
+        free(task);
+        return -1;
+    }
     task->id = id;
     task->state = initial_state;
     flat_task_dispatch_init(&task->dispatch);
@@ -430,6 +568,13 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
         }
     }
     runtime_lock(runtime);
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING || runtime->worker_starting) {
+        runtime_unlock(runtime);
+        runtime_release_task_channel_refs(runtime, id);
+        flat_vm_destroy(task->vm);
+        free(task);
+        return -1;
+    }
     if (initial_state == FLAT_TASK_RUNNABLE &&
         flat_ready_queue_push(&runtime->ready_queue, task->id) != 0) {
         runtime_unlock(runtime);
@@ -659,7 +804,9 @@ int flat_runtime_task_start(FlatRuntime *runtime, FlatTaskId id) {
     if (!runtime || id == 0) return -1;
     runtime_lock(runtime);
     task = runtime_find_task(runtime, id);
-    if (!task || task->cleanup_owned || task->cancel_requested || task->state != FLAT_TASK_CREATED) {
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING || runtime->worker_starting ||
+        !task || task->cleanup_owned || task->cancel_requested ||
+        task->state != FLAT_TASK_CREATED) {
         runtime_unlock(runtime);
         return -1;
     }
@@ -735,6 +882,7 @@ int flat_runtime_task_cancel_request(FlatRuntime *runtime, FlatTaskId id) {
         /* Idempotent publication only. VM teardown is always scheduler-owned. */
         task->cancel_requested = 1;
     }
+    if (rc == 0) (void)flat_ready_queue_wake_all(&runtime->ready_queue);
     runtime_unlock(runtime);
     return rc;
 }
@@ -748,7 +896,7 @@ int flat_runtime_task_cancel(FlatRuntime *runtime, FlatTaskId id) {
 
     runtime_lock(runtime);
     task = runtime_find_task(runtime, id);
-    if (!task || task->cleanup_owned || task->dispatch.worker_owned ||
+    if (!task || runtime->worker_starting || task->cleanup_owned || task->dispatch.worker_owned ||
         (task->state != FLAT_TASK_CREATED &&
          task->state != FLAT_TASK_RUNNABLE &&
          task->state != FLAT_TASK_WAITING)) {
@@ -841,19 +989,22 @@ static int runtime_task_is_terminal(const FlatTaskRecord *task) {
                     task->state == FLAT_TASK_CANCELLED);
 }
 
-int flat_runtime_schedule(FlatRuntime *runtime, uint64_t quantum,
-                          uint64_t max_quanta, uint64_t *out_quanta) {
+static int runtime_schedule_internal(FlatRuntime *runtime, uint64_t quantum,
+                                     uint64_t max_quanta, uint64_t *out_quanta,
+                                     int worker_mode) {
     uint64_t turns = 0;
     int scheduler_error = 0;
     if (out_quanta) *out_quanta = 0;
     if (!runtime || quantum == 0) return -1;
 
     runtime_lock(runtime);
-    if (runtime->schedule_active) {
+    if (runtime->lifecycle == FLAT_RUNTIME_STOPPED ||
+        (worker_mode ? (!runtime->workers_started || runtime->worker_stop) :
+                       (runtime->schedule_active != 0 || runtime->workers_started))) {
         runtime_unlock(runtime);
         return -1;
     }
-    runtime->schedule_active = 1;
+    runtime->schedule_active++;
     runtime->active_runs++;
     runtime_unlock(runtime);
 
@@ -890,7 +1041,8 @@ int flat_runtime_schedule(FlatRuntime *runtime, uint64_t quantum,
             if (rc == 0) {
                 runtime_cancel_commit_locked(runtime, task, &result);
             } else {
-                task->cancel_requested = 0;
+                if (runtime->lifecycle != FLAT_RUNTIME_CANCELLING)
+                    task->cancel_requested = 0;
                 task->cleanup_owned = 0;
                 if (task->state == FLAT_TASK_RUNNABLE)
                     (void)runtime_dispatch_enqueue_locked(runtime, task);
@@ -978,7 +1130,8 @@ int flat_runtime_schedule(FlatRuntime *runtime, uint64_t quantum,
             if (rc == 0) {
                 runtime_cancel_commit_locked(runtime, task, &cancel_result);
             } else {
-                task->cancel_requested = 0;
+                if (runtime->lifecycle != FLAT_RUNTIME_CANCELLING)
+                    task->cancel_requested = 0;
                 task->cleanup_owned = 0;
                 scheduler_error = 1;
             }
@@ -1015,10 +1168,225 @@ int flat_runtime_schedule(FlatRuntime *runtime, uint64_t quantum,
 
     runtime_lock(runtime);
     if (runtime->active_runs > 0) runtime->active_runs--;
-    runtime->schedule_active = 0;
+    if (runtime->schedule_active > 0) runtime->schedule_active--;
+    runtime_refresh_lifecycle_locked(runtime);
     runtime_unlock(runtime);
     if (out_quanta) *out_quanta = turns;
     return scheduler_error ? -1 : 0;
+}
+
+int flat_runtime_schedule(FlatRuntime *runtime, uint64_t quantum,
+                          uint64_t max_quanta, uint64_t *out_quanta) {
+    return runtime_schedule_internal(runtime, quantum, max_quanta, out_quanta, 0);
+}
+
+static void *runtime_worker_main(void *opaque) {
+    FlatRuntimeWorker *worker = (FlatRuntimeWorker *)opaque;
+    FlatRuntime *runtime;
+    if (!worker || !worker->runtime) return NULL;
+    runtime = worker->runtime;
+    /* Startup barrier: no task can execute until every requested worker has
+     * been created successfully. Epoch capture prevents a lost launch/abort wake. */
+    for (;;) {
+        uint64_t epoch = flat_ready_queue_wake_epoch(&runtime->ready_queue);
+        int launch, stop;
+        runtime_lock(runtime);
+        launch = runtime->worker_launch;
+        stop = runtime->worker_stop;
+        runtime_unlock(runtime);
+        if (stop) return NULL;
+        if (launch) break;
+        if (flat_ready_queue_wait_since(&runtime->ready_queue, epoch) < 0) return NULL;
+    }
+    for (;;) {
+        uint64_t quanta = 0;
+        uint64_t wake_epoch = flat_ready_queue_wake_epoch(&runtime->ready_queue);
+        FlatRuntimeLifecycle lifecycle;
+        int wait_rc;
+        runtime_lock(runtime);
+        lifecycle = runtime->lifecycle;
+        if (runtime->worker_stop || lifecycle == FLAT_RUNTIME_STOPPED) {
+            runtime_unlock(runtime);
+            break;
+        }
+        runtime_unlock(runtime);
+
+        if (runtime_schedule_internal(runtime, worker->quantum, 1, &quanta, 1) != 0) {
+            int intentional_stop;
+            runtime_lock(runtime);
+            intentional_stop = runtime->worker_stop ||
+                               runtime->lifecycle == FLAT_RUNTIME_STOPPED;
+            if (!intentional_stop) runtime->worker_error = 1;
+            runtime_unlock(runtime);
+            if (!intentional_stop)
+                (void)flat_runtime_shutdown_request(runtime, FLAT_RUNTIME_SHUTDOWN_CANCEL);
+            break;
+        }
+        if (quanta != 0) continue;
+
+        /* Wait without consuming the queue item. Queue lock is released before
+         * the next scheduler_mutex acquisition, preserving lock order. */
+        wait_rc = flat_ready_queue_wait_since(&runtime->ready_queue, wake_epoch);
+        if (wait_rc < 0) {
+            runtime_lock(runtime);
+            runtime->worker_error = 1;
+            runtime_unlock(runtime);
+            (void)flat_runtime_shutdown_request(runtime, FLAT_RUNTIME_SHUTDOWN_CANCEL);
+            break;
+        }
+        if (wait_rc == 0) break;
+        /* An explicit wake may mean cancellation or STOPPED; re-check state. */
+    }
+    return NULL;
+}
+
+int flat_runtime_workers_start(FlatRuntime *runtime, size_t worker_count,
+                               uint64_t quantum) {
+    size_t i;
+    int worker_mode_entered = 0;
+    if (!runtime || !flat_threads_supported() || worker_count == 0 ||
+        worker_count > 256 || quantum == 0) return -1;
+    runtime_lock(runtime);
+    if (runtime->workers_started || runtime->workers_joined ||
+        runtime->lifecycle != FLAT_RUNTIME_RUNNING || runtime->schedule_active != 0 ||
+        runtime->active_runs != 0) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime->workers = (FlatRuntimeWorker *)calloc(worker_count, sizeof *runtime->workers);
+    if (!runtime->workers) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime->worker_count = worker_count;
+    runtime->workers_started = 1;
+    runtime->worker_launch = 0;
+    runtime->worker_starting = 1;
+    runtime->workers_joined = 0;
+    runtime->worker_mode_entered = 0;
+    runtime->worker_start_failed = 0;
+    runtime->worker_stop = 0;
+    runtime->worker_error = 0;
+    for (i = 0; i < worker_count; ++i) {
+        runtime->workers[i].runtime = runtime;
+        runtime->workers[i].quantum = quantum;
+    }
+    /* Preflight every currently registered VM while task destruction and new
+     * admission are excluded. This loads permitted optional plugins before freeze. */
+    {
+        FlatTaskRecord *task;
+        char preflight_error[256];
+        for (task = runtime->tasks; task; task = task->next) {
+            if (flat_vm_worker_preflight(task->vm, preflight_error,
+                                         sizeof preflight_error) != 0) {
+                free(runtime->workers);
+                runtime->workers = NULL;
+                runtime->worker_count = 0;
+                runtime->workers_started = 0;
+                runtime->worker_starting = 0;
+                runtime_unlock(runtime);
+                return -1;
+            }
+        }
+    }
+    runtime_unlock(runtime);
+
+    /* Freeze plugin/capability metadata before any worker can invoke native code. */
+    if (flat_native_runtime_freeze_worker_capabilities() != 0 ||
+        flat_native_worker_mode_enter() != 0) goto fail;
+    worker_mode_entered = 1;
+    runtime_lock(runtime);
+    runtime->worker_mode_entered = 1;
+    runtime_unlock(runtime);
+    for (i = 0; i < worker_count; ++i) {
+        if (flat_thread_create(&runtime->workers[i].thread, runtime_worker_main,
+                               &runtime->workers[i]) != 0) goto fail;
+        runtime->workers[i].started = 1;
+    }
+    runtime_lock(runtime);
+    runtime->worker_launch = 1;
+    runtime->worker_starting = 0;
+    runtime_unlock(runtime);
+    (void)flat_ready_queue_wake_all(&runtime->ready_queue);
+    return 0;
+
+fail:
+    runtime_lock(runtime);
+    runtime->worker_stop = 1;
+    runtime->worker_launch = 0;
+    runtime_unlock(runtime);
+    (void)flat_ready_queue_wake_all(&runtime->ready_queue);
+    {
+        int join_failed = 0;
+        for (i = 0; i < worker_count; ++i) {
+            if (runtime->workers[i].started) {
+                if (flat_thread_join(&runtime->workers[i].thread) != 0) join_failed = 1;
+                else runtime->workers[i].started = 0;
+            }
+        }
+        if (join_failed) {
+            /* Keep every handle and runtime-owned worker argument alive. The
+             * caller may retry workers_join(); destroy remains rejected. */
+            runtime_lock(runtime);
+            runtime->worker_start_failed = 1;
+            runtime_unlock(runtime);
+            return -1;
+        }
+    }
+    runtime_lock(runtime);
+    free(runtime->workers);
+    runtime->workers = NULL;
+    runtime->worker_count = 0;
+    runtime->workers_started = 0;
+    runtime->worker_launch = 0;
+    runtime->worker_starting = 0;
+    runtime->worker_stop = 0;
+    runtime->worker_mode_entered = 0;
+    runtime->worker_start_failed = 0;
+    runtime_unlock(runtime);
+    if (worker_mode_entered) (void)flat_native_worker_mode_leave();
+    return -1;
+}
+
+int flat_runtime_workers_join(FlatRuntime *runtime) {
+    size_t i;
+    int join_error = 0;
+    int worker_error;
+    int mode_entered;
+    if (!runtime) return -1;
+    runtime_lock(runtime);
+    runtime_refresh_lifecycle_locked(runtime);
+    if (!runtime->workers_started || runtime->workers_joined ||
+        (!runtime->worker_start_failed && runtime->lifecycle != FLAT_RUNTIME_STOPPED &&
+         !runtime->worker_error) || runtime->schedule_active != 0) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime_unlock(runtime);
+    for (i = 0; i < runtime->worker_count; ++i) {
+        if (runtime->workers[i].started) {
+            if (flat_thread_join(&runtime->workers[i].thread) != 0) join_error = 1;
+            else runtime->workers[i].started = 0;
+        }
+    }
+    if (join_error) return -1; /* Preserve failed handles and pool state for retry. */
+
+    runtime_lock(runtime);
+    worker_error = runtime->worker_error;
+    mode_entered = runtime->worker_mode_entered;
+    free(runtime->workers);
+    runtime->workers = NULL;
+    runtime->worker_count = 0;
+    runtime->workers_started = 0;
+    runtime->workers_joined = 1;
+    runtime->worker_launch = 0;
+    runtime->worker_starting = 0;
+    runtime->worker_stop = 0;
+    runtime->worker_mode_entered = 0;
+    runtime->worker_start_failed = 0;
+    runtime_unlock(runtime);
+    if (mode_entered && flat_native_worker_mode_leave() != 0) worker_error = 1;
+    return worker_error ? -1 : 0;
 }
 
 FlatTaskState flat_runtime_task_state(const FlatRuntime *runtime_const, FlatTaskId id) {
@@ -1059,7 +1427,7 @@ int flat_runtime_task_destroy(FlatRuntime *runtime, FlatTaskId id) {
     for (prev = NULL, task = runtime->tasks; task; prev = task, task = task->next) {
         if (task->id == id) break;
     }
-    if (!task || task->cleanup_owned || task->cancel_requested || runtime_has_waiters(runtime, id) ||
+    if (!task || runtime->worker_starting || task->cleanup_owned || task->cancel_requested || runtime_has_waiters(runtime, id) ||
         (task->state != FLAT_TASK_CREATED && task->state != FLAT_TASK_COMPLETED &&
          task->state != FLAT_TASK_FAILED && task->state != FLAT_TASK_CANCELLED) ||
         task->dispatch.worker_owned) {
@@ -1410,7 +1778,11 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
     int busy;
     if (!runtime) return -1;
     runtime_lock(runtime);
-    busy = runtime->active_runs != 0 || runtime->task_count != 0 || runtime->channel_count != 0;
+    runtime_refresh_lifecycle_locked(runtime);
+    busy = runtime->active_runs != 0 || runtime->task_count != 0 || runtime->channel_count != 0 ||
+           runtime->workers_started || runtime->worker_starting || runtime->worker_count != 0 ||
+           (runtime->lifecycle != FLAT_RUNTIME_RUNNING &&
+            runtime->lifecycle != FLAT_RUNTIME_STOPPED);
     runtime_unlock(runtime);
     if (busy) return -1;
 

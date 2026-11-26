@@ -23,6 +23,11 @@ int flat_native_module_set_thread_capability(const char *module,
 /* Freeze capability declarations when a future worker pool starts. */
 int flat_native_module_capabilities_freeze(void);
 int flat_native_module_capabilities_is_frozen(void);
+/* Process-wide worker execution guard. While active, unsupported native modules
+ * are rejected by the dispatcher; serialized modules use their invocation gate. */
+int flat_native_worker_mode_enter(void);
+int flat_native_worker_mode_leave(void);
+int flat_native_worker_mode_is_active(void);
 /* Process-wide invocation gate for one native module. The dispatcher acquires
  * it only for SERIALIZED/PENDING modules; teardown paths such as DOM must use
  * the same gate when they call into the module's dependency directly. */

@@ -2,7 +2,7 @@
 
 **Versiune document:** 1.0 (plan)  
 **Data:** 2026-11-25  
-**Status:** F0, stepping-ul persistent, scheduler-ul cooperativ, wait/cancel, `task.spawn`/`task.wait`, argumentele task, Channels, contention wait/retry și `task.result` sunt implementate. Arhiva 302 conectează ready queue-ul la scheduler și convertește gate-ul Channel la `FlatMutex`; worker pool-ul propriu-zis rămâne neimplementat. Arhivele 284–285 au extins auditul wakeup/destruction; arhiva 286 interzice suspendarea unui task cât timp deține orice tranzacție Channel; arhiva 287 verifică owner multi-Channel și waiter-e independente, corectând și un test cu ID-uri stale; arhiva 288 verifică lanțuri mixte `task.wait` + Channel contention și wakeup-ul diferențiat. Worker pool-ul rămâne blocat de auditul cross-thread.
+**Status (archive 307):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation. This remains a staged concurrency validation effort, not blanket thread-safety certification; HTTP/DOM/plugin lifecycle, startup failure injection and cross-platform validation remain open.
 
 ## Direcția generală
 
@@ -119,14 +119,14 @@ Scop: execuție efectivă simultană pe mai multe thread-uri OS.
 
 Livrabile:
 
-1. [ ] Worker pool pthread și worker loop. Coada MPMC este deja integrată în runtime, dar nu există încă thread-uri worker.
-2. [ ] Finalizarea sincronizării cross-thread pentru pool-urile de handle-uri și lifecycle-ul worker; scheduler mutex, ready queue și Channel mutex sunt deja implementate.
+1. [x] POSIX worker pool pthread and worker loop; fixed-size startup, barrier, partial-start rollback, condition-variable idle wait and join are implemented in archive 305. Windows and Emscripten behavior still require toolchain validation.
+2. [x] Core scheduler/ready-queue/Channel synchronization and worker lifecycle are implemented; remaining module/dependency audits are tracked separately.
 3. [x] Mutex real per Channel prin `FlatMutex` (POSIX pthread / Windows SRWLOCK / Emscripten single-thread no-op).
 4. [x] Ownership logic bazat pe `flat_task_id`, niciodată exclusiv pe `pthread_t`.
-5. Audit și eliminare a stării globale incompatibile cu VM-uri simultane.
-6. Shutdown, task-uri waiting și erori worker.
-7. Stress tests multi-writer, invariants, deadlock și cleanup.
-8. Build/feature behavior documentat pentru platforme fără pthread sau cu limitări WASM.
+5. [x] Principal global-state ownership audit and native worker capability preflight/gates implemented; per-module and dependency validation remains in progress.
+6. [x] DRAIN/CANCEL shutdown, waiting-task blocked status, worker error escalation and join implemented; expanded wait-graph cancellation regression added in archive 307.
+7. [ ] Broader stress matrix for multi-writer, arbitrary wait graphs, simultaneous cancellation, deadlock and cleanup; focused cases 42–44 exist.
+8. [ ] Validate Windows worker execution and actual Emscripten build; single-thread Emscripten worker startup must fail cleanly.
 
 Criterii de acceptare:
 
@@ -560,3 +560,82 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 **Conclusion:** request-only cancellation is now implemented and tested without introducing worker threads. The current single scheduler is the cleanup executor. This provides the ownership/safe-point contract needed by worker mode, but it is not yet a worker pool.
 
 **Next:** implement pool admission/lifecycle and shutdown signaling (`RUNNING`, `DRAINING`, `CANCELLING`, `STOPPED`), including blocked-DRAIN reporting and DRAIN-to-CANCEL escalation. Keep actual pthread worker creation gated on the lifecycle and join tests.
+
+
+## Runtime shutdown lifecycle checkpoint — archive 304
+
+- [x] Add runtime lifecycle states `RUNNING`, `DRAINING`, `CANCELLING`, `STOPPED`.
+- [x] Add `flat_runtime_shutdown_request()` with idempotent DRAIN/CANCEL requests and DRAIN-to-CANCEL escalation; reject downgrade.
+- [x] Close new task creation/start, native `task.spawn`, and direct runtime runs after shutdown begins.
+- [x] Preserve CREATED tasks during DRAIN and allow explicit cleanup; include CREATED in CANCEL.
+- [x] Report quiescent unresolved WAITING tasks as blocked DRAIN.
+- [x] Add lifecycle/status query APIs and guard runtime destruction until requested shutdown reaches STOPPED.
+- [x] Add `flvm[41]` covering DRAIN, blocked wait, escalation, no downgrade, CREATED retention and CANCEL cleanup.
+- [ ] Implement real worker creation, worker condition-variable wait loop, wake/broadcast, partial-start rollback, worker exit and join.
+- [ ] Add timed/interruptible join policy for a blocked DRAIN and prove no worker outlives runtime destruction.
+- [ ] Run complete-VM concurrency and sanitizer stress under multiple workers before enabling worker mode.
+
+**Archive 304 result:** cooperative shutdown state machine implemented; no pthread worker or join. The host drives `flat_runtime_schedule()` and inspects status. See `16_RUNTIME_SHUTDOWN_STATE_MACHINE.md`.
+
+**Next:** implement the worker loop and join against the lifecycle contract, not before.
+
+## Runtime worker-pool checkpoint — archive 305
+
+- [x] Add runtime-owned worker creation and a fixed worker count (1–256).
+- [x] Add an all-workers startup barrier and partial-start rollback with join of every created thread.
+- [x] Run multiple worker scheduler turns concurrently while preserving single-task dispatch ownership and VM execution outside `scheduler_mutex`.
+- [x] Add condition-variable idle wait and wake-epoch handling for queue publication, cancellation and shutdown.
+- [x] Keep host-driven `flat_runtime_schedule()` exclusive and reject it while worker mode is active.
+- [x] Require lifecycle STOPPED and zero active scheduler turns before worker join; require join before runtime destruction.
+- [x] Integrate DRAIN/CANCEL exit and request-only cancellation wakeups.
+- [x] Enforce native module worker capability at dispatch: reject UNSUPPORTED/UNKNOWN while any worker pool is active; retain SERIALIZED gates.
+- [x] Promote built-in `task` and `channel` policies to SERIALIZED based on scheduler/Channel mutex protection.
+- [x] Add `flvm[42]` for four-worker dispatch, 96 tasks, DRAIN/join, CANCEL/join and unsupported-native rejection.
+- [x] Add multi-worker task.wait/Channel contention tests and verify transaction retry/wakeup ordering (`flvm[43]`, archive 306).
+- [ ] Add concurrent HTTP/DOM lifecycle tests in worker mode and validate all dependency initialization constraints.
+- [ ] Add worker startup failure injection and test each partial thread-creation rollback point.
+- [ ] Validate Windows worker implementation and run supported Emscripten build (single-thread worker creation must fail cleanly).
+- [ ] Add timed shutdown/join policy only if a real caller requirement emerges; do not detach workers or destroy runtime while any worker can access it.
+
+**Archive 305 result:** a fixed pthread-backed worker pool is now implemented on the POSIX build and shares the runtime's ready queue, scheduler mutex, dispatch ownership and DRAIN/CANCEL lifecycle. `fl_vm_step()` remains outside the scheduler lock. Worker mode freezes native capability metadata and rejects unsupported native calls at invocation time. See `17_RUNTIME_WORKER_POOL.md`. This is the first real worker-pool implementation, not yet a complete-VM concurrency certification.
+
+
+## Worker concurrency audit checkpoint — archive 306
+
+- [x] Run the existing nested `task.spawn()` / `task.wait()` Channel-native program under the real four-worker pool.
+- [x] Exercise two child tasks contending for the same Channel transaction while the parent waits for both.
+- [x] Verify the transaction-owner priority/retry path completes without duplicate ownership or deadlock in this scenario.
+- [x] Verify a task cannot suspend via `task.wait()` while it owns a Channel transaction.
+- [x] Repeat worker startup, nested task execution, DRAIN, join and runtime teardown 20 times in one process.
+- [x] Add wait-graph chain/cycle and cancellation regression, including a cancelled Channel waiter (`flvm[44]`, archive 307).
+- [ ] Add worker-mode HTTP/DOM lifecycle tests and plugin-load race tests.
+- [ ] Add deterministic worker-creation failure injection and validate every partial-start rollback point.
+- [ ] Validate Windows worker execution and the actual Emscripten build on supported toolchains.
+
+**Archive 306 result:** no runtime synchronization semantics changed. `flvm[43]` reuses `027_channel_native/program.fl` and executes it with four runtime workers; two children contend on one Channel, the parent waits for both, and the transaction-held wait attempt fails as designed. Twenty independent runtime lifecycles pass in one process. This validates this concrete wait/Channel interaction only; it does not certify all wait-graph or native-module concurrency.
+
+**Next:** extend stress coverage to multiple wait-graph chains and cancellation races before changing worker scheduling or lock behavior.
+
+
+## Worker wait-graph/cancellation checkpoint — archive 307
+
+- [x] Exercise a four-task wait chain under the real worker pool and reject a reverse edge that would create a cycle.
+- [x] Cancel a middle waiter and verify its dependent wakes while the remaining chain completes.
+- [x] Cancel a task parked on Channel contention while cancelling its transaction owner; verify task/Channel cleanup and post-join destruction.
+- [x] Repeat the dedicated regression 100 times without TSAN and six times under GCC ThreadSanitizer.
+- [ ] Continue with worker-mode HTTP/DOM lifecycle, plugin preparation/load races and deterministic partial-start failure injection.
+- [ ] Validate Windows worker execution and actual Emscripten linking.
+
+**Archive 307 result:** adds `flvm[44]` and `plans/19_WORKER_WAIT_GRAPH_CANCELLATION_AUDIT.md`; no runtime synchronization behavior changed. `flvm[40-44]` passed individually, `make all -j2` and `make docs` passed. The full 1179-case suite and ASan/UBSan were not run.
+
+
+## Termux test-portability checkpoint — archive 308
+
+- [x] Link `flat_locale.c` in the standalone AM-NUM regression test so `flat_strtod` and `flat_snprintf` resolve.
+- [x] Change the SCHM trailing-garbage regression to insert a byte at the SCHM/JBMX boundary and adjust `jbmx_off`, instead of appending a byte to BPAR.
+- [x] Make `flvm[38]` hold a known task in a DOM native call while testing RUNNING-state API rejection, avoiding dependence on observing a short VM instruction.
+- [x] Increase `flvm[40]`'s blocked-native wait deadline for slower mobile devices.
+- [ ] Re-run all four focused cases on Termux with verbose output; inspect any remaining `flvm[38]` / `[40]` failure diagnostics.
+- [ ] Resume worker-mode HTTP/DOM lifecycle, plugin-load race, and partial worker-start failure testing.
+
+**Archive 308 result:** all four focused cases pass on the available POSIX host; both FLVM test binaries pass five consecutive executions. `make all -j2` and `make docs` pass. No runtime implementation behavior changed. The supplied Termux run is not reproducible in this environment, so device confirmation remains required. See `20_TERMUX_TEST_PORTABILITY.md`.

@@ -1,0 +1,7 @@
+use native channel
+
+#main
+  locked = channel.lock(1)
+  stored = channel.set(1, 'after_wait', 1)
+  unlocked = channel.unlock(1)
+  OK

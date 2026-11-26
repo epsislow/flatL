@@ -880,3 +880,27 @@ test-task-cancel-request:
 test-channel-mutex-concurrency:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/039_channel_mutex_concurrency/channel_mutex_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify cooperative DRAIN/CANCEL admission, blocked-wait detection and escalation.
+.PHONY: test-runtime-shutdown
+test-runtime-shutdown:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/041_runtime_shutdown/runtime_shutdown_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify task.wait and Channel transaction contention under the real worker pool.
+.PHONY: test-worker-task-wait-channel
+test-worker-task-wait-channel:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/043_worker_task_wait_channel/worker_task_wait_channel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify the runtime-owned worker pool, concurrent dispatch, DRAIN/CANCEL exit and join.
+.PHONY: test-runtime-worker-pool
+test-runtime-worker-pool:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/042_runtime_worker_pool/runtime_worker_pool_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify wait-graph chain cancellation and Channel waiter cleanup under workers.
+.PHONY: test-worker-wait-graph-cancel
+test-worker-wait-graph-cancel:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/044_worker_wait_graph_cancel/worker_wait_graph_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

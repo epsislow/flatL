@@ -145,7 +145,7 @@ int main(int argc, char **argv) {
         rc = 9; goto done;
     }
     scheduler_created = 1;
-    for (spin = 0; spin < 5000 &&
+    for (spin = 0; spin < 30000 &&
          flat_runtime_task_state(runtime, running) != FLAT_TASK_RUNNING; ++spin) pause_one_ms();
     if (flat_runtime_task_state(runtime, running) != FLAT_TASK_RUNNING ||
         flat_runtime_task_cancel_request(runtime, running) != 0 ||

@@ -131,6 +131,13 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
 
     if (flat_native_module_for_id(id, module, sizeof module) == 0) {
         policy = flat_native_module_worker_policy(module);
+        if (flat_native_worker_mode_is_active() &&
+            policy != FLAT_NATIVE_THREAD_CAP_THREAD_SAFE &&
+            policy != FLAT_NATIVE_THREAD_CAP_SERIALIZED) {
+            fprintf(stderr, "flvm: native module %s is not permitted while worker execution is active\n",
+                    module);
+            return -1;
+        }
         if (policy == FLAT_NATIVE_THREAD_CAP_SERIALIZED) {
             if (flat_native_module_gate_enter(module) != 0) return -1;
             gated = 1;

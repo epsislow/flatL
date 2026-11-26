@@ -17,6 +17,7 @@ typedef struct TestContext {
     FlatRuntime *runtime;
     FlatTaskId *tasks;
     atomic_int scheduler_done;
+    atomic_int probe_complete;
     atomic_int overlap_rejected;
     atomic_int running_cancel_rejected;
     atomic_int running_destroy_rejected;
@@ -122,7 +123,14 @@ static void *query_main(void *opaque) {
             FlatTaskState state = flat_runtime_task_state(ctx->runtime, ctx->tasks[i]);
             if (state < FLAT_TASK_CREATED || state > FLAT_TASK_CANCELLED) return (void *)1;
             atomic_fetch_add_explicit(&ctx->query_count, 1, memory_order_relaxed);
-            if (state == FLAT_TASK_RUNNING && !overlap_attempted) {
+            if (i == 0 && state == FLAT_TASK_RUNNING && !overlap_attempted) {
+                /* task[0] enters dom.parseHtml immediately and is held by the
+                 * main thread at the serialized DOM gate. This keeps RUNNING
+                 * stable while the negative API checks are performed. */
+                struct timespec hold = {0, 50000000L};
+                (void)nanosleep(&hold, NULL);
+                if (flat_runtime_task_state(ctx->runtime, ctx->tasks[0]) != FLAT_TASK_RUNNING)
+                    return (void *)6;
                 uint64_t ignored = 0;
                 int rc;
                 size_t start_index;
@@ -144,6 +152,7 @@ static void *query_main(void *opaque) {
                     atomic_store_explicit(&ctx->overlap_rejected, 1, memory_order_release);
                 else
                     return (void *)2;
+                atomic_store_explicit(&ctx->probe_complete, 1, memory_order_release);
             }
             if (atomic_load_explicit(&ctx->scheduler_done, memory_order_acquire)) break;
         }
@@ -176,22 +185,43 @@ int main(int argc, char **argv) {
     ctx.runtime = runtime;
     ctx.tasks = tasks;
     atomic_init(&ctx.scheduler_done, 0);
+    atomic_init(&ctx.probe_complete, 0);
     atomic_init(&ctx.overlap_rejected, 0);
     atomic_init(&ctx.running_cancel_rejected, 0);
     atomic_init(&ctx.running_destroy_rejected, 0);
     atomic_init(&ctx.query_count, 0);
 
     for (i = 0; i < TASK_COUNT; ++i) {
-        if (flat_runtime_task_create(runtime, &bc, NULL, &tasks[i]) != 0 ||
+        if (flat_runtime_task_create(runtime, i == 0 ? &dom_bc : &bc, NULL, &tasks[i]) != 0 ||
             (i < INITIALLY_STARTED && flat_runtime_task_start(runtime, tasks[i]) != 0)) {
             rc = 4;
             goto done;
         }
     }
-    if (pthread_create(&query_thread, NULL, query_main, &ctx) != 0) { rc = 5; goto done; }
+    if (flat_native_module_gate_enter("dom") != 0) { rc = 13; goto done; }
+    if (pthread_create(&query_thread, NULL, query_main, &ctx) != 0) {
+        (void)flat_native_module_gate_leave("dom");
+        rc = 5; goto done;
+    }
     query_created = 1;
-    if (pthread_create(&scheduler_thread, NULL, scheduler_main, &ctx) != 0) { rc = 6; goto done; }
+    if (pthread_create(&scheduler_thread, NULL, scheduler_main, &ctx) != 0) {
+        atomic_store_explicit(&ctx.scheduler_done, 1, memory_order_release);
+        (void)flat_native_module_gate_leave("dom");
+        rc = 6; goto done;
+    }
     scheduler_created = 1;
+
+    /* Wait for the query thread to perform all negative API checks while the
+     * first VM is blocked inside DOM. A generous deadline avoids scheduler
+     * timing assumptions on single-core/mobile systems. */
+    {
+        unsigned wait_ms;
+        for (wait_ms = 0; wait_ms < 30000 &&
+             !atomic_load_explicit(&ctx.probe_complete, memory_order_acquire) &&
+             !atomic_load_explicit(&ctx.scheduler_done, memory_order_acquire); ++wait_ms)
+            pause_one_ms();
+    }
+    (void)flat_native_module_gate_leave("dom");
 
     pthread_join(scheduler_thread, NULL);
     scheduler_created = 0;
@@ -202,6 +232,7 @@ int main(int argc, char **argv) {
         !atomic_load_explicit(&ctx.overlap_rejected, memory_order_acquire) ||
         !atomic_load_explicit(&ctx.running_cancel_rejected, memory_order_acquire) ||
         !atomic_load_explicit(&ctx.running_destroy_rejected, memory_order_acquire) ||
+        !atomic_load_explicit(&ctx.probe_complete, memory_order_acquire) ||
         atomic_load_explicit(&ctx.query_count, memory_order_relaxed) == 0) {
         rc = 7;
         goto done;

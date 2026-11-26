@@ -1188,3 +1188,139 @@ No runtime semantics changed and no worker threads were added. Archive 301 only 
 - No pool lifecycle state machine, DRAIN/CANCEL request API, blocked-DRAIN status, worker join or pthread worker loop.
 - No complete-VM multi-worker concurrency guarantee.
 - Runtime destruction still requires the host to prevent concurrent new API entries.
+
+
+## Archive 304 — cooperative runtime shutdown state machine
+
+### Implemented
+
+- Added lifecycle states `FLAT_RUNTIME_RUNNING`, `FLAT_RUNTIME_DRAINING`, `FLAT_RUNTIME_CANCELLING`, and `FLAT_RUNTIME_STOPPED`.
+- Added `flat_runtime_shutdown_request()` for DRAIN/CANCEL, plus lifecycle and shutdown-status queries. Repeated requests are idempotent; DRAIN cannot downgrade CANCELLING; DRAIN-complete runtimes can escalate to CANCEL when CREATED records remain.
+- DRAIN rejects new task creation/start, native `task.spawn`, and new direct `flat_runtime_run()` calls. Existing started tasks remain schedulable. CREATED records are retained and are not auto-started.
+- A quiescent DRAIN with unresolved WAITING tasks reports `FLAT_RUNTIME_SHUTDOWN_BLOCKED`.
+- CANCEL publishes request-only cancellation for every nonterminal task, including CREATED; existing scheduler safe-point cleanup performs VM and Channel cleanup.
+- Runtime destruction after a shutdown request requires STOPPED, in addition to the existing idle/task/Channel constraints.
+- Added `flvm[41]` for DRAIN completion, admission rejection, CREATED retention and post-DRAIN escalation, blocked DRAIN, no downgrade, and CANCEL cleanup.
+- Added `plans/16_RUNTIME_SHUTDOWN_STATE_MACHINE.md`.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `bin/run_tests 'flvm[41]' -v -e` — PASS (1/1).
+- `bin/run_tests 'flvm[40]' -v -e` — PASS (request-only cancellation regression).
+- `bin/run_tests 'flvm[38]' -v -e` — PASS (scheduler mutex/ownership regression).
+- `bin/run_tests 'flvm[39]' -v -e` — PASS (Channel mutex concurrency regression).
+- `make docs` — PASS (50 sections).
+- Focused `flvm[41]` under ThreadSanitizer — PASS.
+- Test discovery reports 1176 cases; full FLVM/default suite — NOT RUN.
+- ASan/UBSan for the new lifecycle test — NOT RUN.
+- POSIX/Linux only.
+
+### Explicit limitations
+
+- This is a cooperative shutdown lifecycle, not a worker pool. The host must call `flat_runtime_schedule()` to advance tasks and cancellation cleanup.
+- No pthread worker creation, condition-variable worker loop, startup rollback, shutdown broadcast, or actual worker join is implemented.
+- No worker-owned cancellation queue exists; the scheduler still scans pending cancellation requests.
+
+### Next
+
+Implement real worker creation/loop/join and convert the host-driven scheduler progress path into worker dispatch while preserving this lifecycle state machine.
+
+
+## Archive 305 — runtime-owned worker pool
+
+### Implemented
+
+- Added `flat_runtime_workers_start(runtime, count, quantum)` and `flat_runtime_workers_join(runtime)` using the cross-platform `FlatThread` abstraction.
+- Added startup barrier: worker threads do not execute tasks until the entire requested pool is created. Partial startup failure broadcasts stop and joins all threads already created.
+- Converted `schedule_active` from a single-driver flag to an active scheduler-turn count for internal worker dispatch. The public host-driven `flat_runtime_schedule()` remains exclusive and is rejected while workers are started.
+- Each worker executes at most one VM quantum per scheduler turn. Multiple workers may own different tasks concurrently; dispatch state and tokens prevent duplicate ownership. `flat_vm_step()` and native handlers remain outside `scheduler_mutex`.
+- Added ready-queue wake epochs and non-consuming wait. Workers capture the epoch before attempting a quantum, preventing lost cancellation/shutdown notifications between state check and condition wait.
+- Integrated DRAIN/CANCEL lifecycle with worker exit. STOPPED broadcasts to idle workers; join requires STOPPED and zero active scheduler turns. Runtime destruction rejects unjoined worker state.
+- Request-only cancellation wakes idle workers. CANCEL includes CREATED tasks; DRAIN preserves CREATED tasks and may remain blocked by unresolved WAITING tasks.
+- Added VM native-manifest preflight before worker startup and before new task publication in worker mode. Permitted optional plugins are loaded before capability freeze; HTTP manifests call `flat_http_prepare()` before workers; unsupported/unknown declarations reject startup/task creation. A process-wide native worker-mode guard also rejects unsupported dispatch as defense in depth; SERIALIZED/PENDING modules retain their process-wide invocation gate. The guard also applies to other runtimes while a pool is active.
+- Promoted built-in `task` and `channel` capabilities from UNSUPPORTED to SERIALIZED after scheduler/wait-graph and Channel state synchronization. `dom` remains PENDING/effectively SERIALIZED; undeclared legacy plugins remain UNSUPPORTED.
+- Added `flvm[42]`: four workers, 96 tasks, DRAIN and join, CANCEL and join, UNSUPPORTED `math` preflight rejection before startup and for new tasks after startup, and pre-join destroy/direct-run/scheduler admission checks.
+- Added `plans/17_RUNTIME_WORKER_POOL.md` and updated decisions, roadmap, README, native capability and Task Runtime documentation.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests 'flvm[41]' -v -e` — PASS.
+- `bin/run_tests 'flvm[42]' -v -e` — PASS.
+- `flvm[38]`, `[39]`, `[40]`, `[41]`, and `[42]` each passed in separately completed runs.
+- 100 consecutive plain executions of the `flvm[42]` test binary — PASS after fixing a worker shutdown race discovered during stress.
+- Five consecutive ThreadSanitizer executions of the earlier worker-pool regression shape — PASS. The final expanded test was not re-run under TSAN: GCC rebuild exceeded the 300-second command limit and the available Clang TSAN runtime failed to link due missing libdispatch/Blocks symbols.
+- A grouped run `flvm[38-42]` timed out after printing PASS for `[38]`, `[39]`, `[40]`; the remaining cases were run separately. No full FLVM/default suite pass is claimed.
+- Windows worker execution was not tested. The single-threaded Emscripten branch was syntax-checked and rejects worker startup before capability freeze; `emcc` is unavailable for an actual WASM link. ASan/UBSan and the full FLVM/default suite were not run.
+
+### Limitations
+
+- Native capability preflight covers each VM's declared optional-native manifest; runtime-generated native calls outside that manifest remain protected only by the dispatcher guard.
+- The worker-mode guard is process-wide, so unsupported native calls from other runtimes are rejected while any pool is active.
+- Worker pool is fixed-size and one-shot per runtime. No resizing, restart, timed join or detached workers.
+- No broad multi-worker task.wait/Channel contention, HTTP, DOM, plugin lifecycle or dependency stress matrix has been completed. This archive is not a blanket complete-VM thread-safety certification.
+- Runtime destruction still requires host-side exclusion of new API entry; workers must be joined first.
+
+
+## Archive 306 — worker task.wait and Channel contention audit
+
+Archive 306 adds `flvm[43]`, which runs the existing `027_channel_native/program.fl` through a four-worker runtime pool. It checks two child tasks contending on a shared Channel transaction, parent `task.wait()` completion, the rule that a task cannot suspend while holding a Channel transaction, and DRAIN/join/teardown. The complete lifecycle is repeated 20 times in one process.
+
+Validation: `make all -j2` PASS; `bin/run_tests 'flvm[43]' -v -e` PASS (20 runtime lifecycles); the dedicated binary also passed all 20 runs under GCC ThreadSanitizer with `halt_on_error=1`. This is a focused scenario and does not establish general wait-graph, cancellation, HTTP/DOM, plugin, Windows or Emscripten thread safety. No runtime behavior changed.
+
+Next validation priorities: multi-chain wait graph under workers, simultaneous cancellation and Channel retry/wakeup, HTTP/DOM worker-mode lifecycle, plugin loading races, and deterministic partial worker-start failure injection.
+
+
+## Archive 307 — worker wait-graph and cancellation audit
+
+### Implemented
+
+- Added `flvm[44]` with a four-task dependency chain `A -> B -> C -> D`; the reverse dependency `D -> A` is rejected as a cycle.
+- The test requests cancellation of middle task B before worker startup, starts four workers, then drains. B becomes CANCELLED, A wakes and completes, and C wakes after D completes. DRAIN reaches STOPPED and workers join, demonstrating no stale wait edge in this scenario.
+- Added a Channel waiter scenario: a waiter is driven into WAITING on a transaction owned by another task, receives request-only cancellation, and then worker-mode CANCEL cleans both waiter and owner. After join, both task records and the Channel can be destroyed.
+- Added `make test-worker-wait-graph-cancel` and `plans/19_WORKER_WAIT_GRAPH_CANCELLATION_AUDIT.md`. Runtime synchronization semantics were not changed.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests 'flvm[40]' -v -e` — PASS.
+- `bin/run_tests 'flvm[41]' -v -e` — PASS.
+- `bin/run_tests 'flvm[42]' -v -e` — PASS.
+- `bin/run_tests 'flvm[43]' -v -e` — PASS.
+- `bin/run_tests 'flvm[44]' -v -e` — PASS.
+- Dedicated test binary: 100 consecutive plain executions — PASS.
+- Dedicated test binary: six consecutive GCC ThreadSanitizer executions with `halt_on_error=1` — PASS, no TSAN report.
+- Test discovery reports 1179 cases; full FLVM/default suite — NOT RUN. ASan/UBSan, Windows and actual Emscripten link — NOT RUN.
+
+### Remaining
+
+- No broad worker-mode HTTP/DOM lifecycle or plugin loading race matrix.
+- No deterministic partial worker-creation failure injection test.
+- No Windows worker execution or actual Emscripten build validation.
+- This audit does not certify arbitrary wait-graph topologies or complete-VM thread safety.
+
+
+## Archive 308 — Termux test portability
+
+### Implemented
+
+- Fixed `types[108]` standalone link inputs by adding `src/common/flat_locale.c` and `_GNU_SOURCE`.
+- Reworked `types[72]` corruption helper to insert a trailing byte inside the SCHM section at the SCHM/JBMX boundary, preserving subsequent offsets and asserting `invalid SCHM section`.
+- Reworked `flvm[38]` to use a controlled DOM gate hold point so the RUNNING-state API checks do not depend on polling a short-lived VM instruction.
+- Increased the `flvm[40]` wait deadline for the blocked DOM call from 5s to 30s.
+- Added `plans/20_TERMUX_TEST_PORTABILITY.md`.
+
+### Validation
+
+- `flvm[38]`, `flvm[40]`, `types[72]`, `types[108]` — PASS individually.
+- Dedicated `flvm[38]` and `flvm[40]` binaries — five consecutive runs each PASS.
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- Full suite and Termux device rerun — NOT RUN.
+
+### Limitations / next
+
+The Termux log supplied exact linker errors for `types[108]` but did not include verbose failure details for `flvm[38]` and `[40]`. Their updated tests pass on this POSIX host; Termux confirmation is still required. After confirmation, resume the archive 307 roadmap: worker-mode HTTP/DOM lifecycle, plugin preparation/load races, and deterministic partial worker-start failure injection.

@@ -388,7 +388,7 @@ A native wait/retry callback may publish `WAITING` before its enclosing `flat_vm
 
 For an unowned task, cancellation/destruction marks an internal `cleanup_owned` guard under the scheduler mutex, then releases that mutex before calling `flat_vm_cancel()` / `flat_vm_destroy()`. VM teardown can acquire serialized native gates (for example, DOM/Lexbor) and must not run while holding the scheduler mutex. The task record remains registered until cleanup completes; other mutating operations and scheduler selection reject/skip it. The synchronous compatibility API remains available, and archive 303 adds the separate request-only cancellation API. Only one thread drives the cooperative scheduler; request publication and task-state queries are synchronized for other host threads. Worker creation and shutdown remain unimplemented.
 
-Only one host thread may drive `flat_runtime_schedule()` at a time. A concurrent second call returns `-1`. Other task registry/state APIs are synchronized while the runtime remains alive. This does not make `flat_runtime_destroy()` safe against concurrent new API entry: the host must retain exclusive lifetime control for destruction. No worker pool or complete-VM thread-safety guarantee is implied by archive 300.
+Only one host thread may drive the public `flat_runtime_schedule()` at a time. A concurrent second call returns `-1`. Archive 305 adds a separate internal multi-worker dispatch path; public host-driven scheduling is rejected while a worker pool is active. Task registry/state APIs are synchronized while the runtime remains alive. This does not make `flat_runtime_destroy()` safe against concurrent new API entry: the host must retain exclusive lifetime control for destruction.
 
 
 ## 13. Request-only cancellation (archive 303)
@@ -396,3 +396,29 @@ Only one host thread may drive `flat_runtime_schedule()` at a time. A concurrent
 The C API now exposes `flat_runtime_task_cancel_request()`. It returns `0` when the request is accepted or already pending, `1` when the task is terminal, and `-1` for an invalid/unknown task. The call publishes only `cancel_requested` under `scheduler_mutex`; it never touches VM state. The cooperative scheduler claims unowned requests before normal dispatch, while the current dispatch owner observes a RUNNING task's request after `flat_vm_step()` returns. The caller cannot interrupt a native call. Cancellation commit performs VM cancellation, wait-edge removal, Channel transaction rollback/reference release, terminal publication, and dependent wakeup in that order. Completion/failure wins if already reached.
 
 `flvm[40]` validates CREATED, RUNNABLE, WAITING and RUNNING requests, repeated requests, unknown and terminal IDs, completion precedence, dependent wakeup, and the running-VM safe-point boundary using a held DOM invocation gate. The current implementation scans the task registry for pending unowned requests; a dedicated worker cleanup queue, DRAIN/CANCEL shutdown, join, and pthread worker loop remain future work.
+
+
+## 22. Runtime shutdown lifecycle (archive 304)
+
+The runtime lifecycle is separate from individual task states: `RUNNING`, `DRAINING`, `CANCELLING`, and `STOPPED`. The host requests shutdown with `flat_runtime_shutdown_request()` and inspects `flat_runtime_shutdown_status()` / `flat_runtime_lifecycle()`.
+
+`DRAIN` closes admission for new task creation/start, native `task.spawn`, and direct `flat_runtime_run()` calls. Already-started tasks continue when the host drives `flat_runtime_schedule()`. CREATED tasks are not auto-started or cancelled; they remain host-owned records. If all runnable work is exhausted while a task remains WAITING, DRAIN reports `BLOCKED`.
+
+`CANCEL` escalates DRAIN and requests cancellation for all nonterminal tasks, including CREATED. Existing safe-point cancellation cleanup performs the actual VM/Channel cleanup. DRAIN cannot downgrade CANCELLING. Repeated requests are idempotent.
+
+Archive 304 initially implemented the lifecycle cooperatively. Archive 305 adds `flat_runtime_workers_start()` and `flat_runtime_workers_join()`. Workers wait on the ready-queue condition variable, execute at most one VM quantum per turn, and exit after lifecycle reaches STOPPED. Shutdown COMPLETE still does not itself mean the threads have been joined; the host must call `flat_runtime_workers_join()` before destroying the runtime. Runtime destruction also requires explicit destruction of all task and Channel records. `flvm[41]` covers lifecycle semantics and `flvm[42]` covers worker execution and join.
+
+
+## 23. Runtime-owned worker pool (archive 305)
+
+`flat_runtime_workers_start(runtime, count, quantum)` creates a fixed worker pool. Startup is guarded by a barrier: no worker executes a VM quantum until every requested thread has been created. If creation fails partway through, the runtime broadcasts stop and joins every thread already created. The pool is one-shot per runtime and accepts 1–256 workers with a nonzero quantum.
+
+Each worker calls the internal scheduler for at most one quantum at a time. The scheduler mutex protects task selection/claim and result/state publication; `flat_vm_step()` and native handlers remain outside it. Multiple workers can own different tasks concurrently. The dispatch state and monotonically increasing token prevent duplicate task ownership and stale release. The public `flat_runtime_schedule()` remains an exclusive cooperative mode and is rejected while the worker pool is active.
+
+Idle workers use a non-consuming condition-variable wait on the ready queue. A wake epoch is captured before the worker attempts a quantum, so a request-only cancellation or shutdown broadcast cannot be lost between checking runtime state and entering the wait. Queue pushes signal work. STOPPED broadcasts to idle workers.
+
+`flat_runtime_workers_join()` is separate from shutdown request/status. Normally it succeeds only after lifecycle reaches STOPPED and no scheduler turn remains active. A blocked DRAIN cannot be joined; the host must resolve its waits or escalate to CANCEL. If a worker reports an internal error, join is allowed after its cancellation request and all worker handles are joined; the host may then use the cooperative scheduler to finish pending cleanup. Runtime destruction refuses while workers remain started or unjoined.
+
+Worker startup freezes process-wide native capability metadata and activates a process-wide worker-mode guard. During that interval `flat_native_invoke()` rejects UNSUPPORTED/UNKNOWN modules, while THREAD_SAFE calls proceed and SERIALIZED/PENDING calls use their module gates. `task` and `channel` are now SERIALIZED because their callbacks enter mutex-protected runtime/Channel state. Legacy plugins without capability declarations remain unsupported. This is dispatch-time enforcement: an unsupported native operation fails its VM when reached; the implementation does not yet scan all bytecode and reject the task before it starts. The guard also applies to other runtimes while any worker pool is active.
+
+`flvm[42]` verifies four workers, 96 tasks, DRAIN/join, CANCEL/join, and rejection of a deliberately unsupported math module. The worker test passed 100 consecutive plain runs and five consecutive ThreadSanitizer runs. This remains a focused scheduler/worker validation, not a complete-VM concurrency certification. Windows and Emscripten worker execution were not validated; single-threaded Emscripten rejects worker creation through its `FlatThread` stub. Runtime destruction still requires the host to prevent new API calls from starting concurrently.

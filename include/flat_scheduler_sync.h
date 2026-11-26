@@ -26,12 +26,19 @@ typedef struct FlatReadyQueue {
     size_t head;
     size_t count;
     int closed;
+    uint64_t wake_epoch;
     int initialized;
 } FlatReadyQueue;
 
 int flat_ready_queue_init(FlatReadyQueue *queue, size_t initial_capacity);
 int flat_ready_queue_push(FlatReadyQueue *queue, uint64_t task_id);
 int flat_ready_queue_pop(FlatReadyQueue *queue, uint64_t *out_task_id);
+/* Wait until an item is available, the queue closes, or wake_all interrupts the wait.
+ * Returns 1 for available work, 0 for closed, 2 for an explicit wake, -1 on error. */
+uint64_t flat_ready_queue_wake_epoch(FlatReadyQueue *queue);
+int flat_ready_queue_wait_since(FlatReadyQueue *queue, uint64_t observed_epoch);
+int flat_ready_queue_wait(FlatReadyQueue *queue);
+int flat_ready_queue_wake_all(FlatReadyQueue *queue);
 /* Nonblocking pop: 1 = item, 0 = currently empty, -1 = error. */
 int flat_ready_queue_try_pop(FlatReadyQueue *queue, uint64_t *out_task_id);
 /* Remove one queued occurrence: 1 = removed, 0 = absent, -1 = error. */

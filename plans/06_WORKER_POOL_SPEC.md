@@ -356,3 +356,8 @@ This does not yet satisfy the full worker acceptance gate: the runtime remains s
 ## Archive 302 runtime synchronization update
 
 Archive 302 closes the earlier queue/Channel gaps: `FlatRuntime` now owns and consumes the MPMC ready queue, and `FlatChannel` uses the cross-platform `FlatMutex`. Queue pop plus dispatch claim is serialized under `scheduler_mutex`; VM stepping remains outside it. The blocking queue pop is retained for future workers, while the current cooperative scheduler uses nonblocking pop. These changes improve the runtime's synchronization foundation but do not satisfy worker admission: there is still one scheduler driver, no worker lifecycle/shutdown/join, no request-only cancellation, and no full-VM multi-worker validation. See [`14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md`](14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md).
+
+
+## 8. Archive 305 implementation status
+
+Archive 305 implements the first fixed runtime-owned worker pool. It uses the existing ready queue and task dispatch ownership, has a startup barrier/rollback, waits on the queue condition variable with wake epochs, integrates DRAIN/CANCEL exit and exposes explicit join. This closes the initial worker creation/loop/join milestone but not the full acceptance matrix above. Task.wait/Channel contention, HTTP/DOM/plugin dependency stress, startup failure injection, Windows validation and full-VM sanitizer coverage remain open. Native capability enforcement currently occurs at invocation time rather than scanning all task bytecode before dispatch.

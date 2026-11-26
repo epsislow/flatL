@@ -93,6 +93,7 @@ static inline int flat_thread_create(FlatThread *thread, FlatThreadFn fn, void *
     thread->native = handle;
     return 0;
 }
+static inline int flat_threads_supported(void) { return 1; }
 static inline int flat_thread_join(FlatThread *thread) {
     HANDLE handle;
     if (!thread || !thread->native) return -1;
@@ -126,6 +127,7 @@ static inline int flat_thread_create(FlatThread *thread, FlatThreadFn fn, void *
     (void)thread; (void)fn; (void)arg; return -1;
 }
 static inline int flat_thread_join(FlatThread *thread) { (void)thread; return -1; }
+static inline int flat_threads_supported(void) { return 0; }
 
 #else
 #include <pthread.h>
@@ -171,6 +173,7 @@ static inline int flat_thread_create(FlatThread *thread, FlatThreadFn fn, void *
     if (rc == 0) thread->valid = 1;
     return rc;
 }
+static inline int flat_threads_supported(void) { return 1; }
 static inline int flat_thread_join(FlatThread *thread) {
     int rc;
     if (!thread || !thread->valid) return -1;
