@@ -659,3 +659,32 @@ DRAIN rejects new submissions and lets already-started tasks finish; CREATED tas
 - The gate is not held across VM stepping or task suspension. Scheduler and Channel lock integration is not implemented yet; future scheduler code must release those locks before native dispatch/VM teardown.
 - Added `flvm[36]`: eight concurrent callers prove exclusive entry for one serialized module; an independent module gate progresses concurrently; DOM runtime destruction waits for the DOM gate.
 - This targeted test does not prove full-VM concurrency or the safety of modules classified `THREAD_SAFE`. DOM remains `PENDING_THREAD_SAFETY_VALIDATION` until complete-VM and supported-build testing.
+
+## Scheduler synchronization foundation — archive 299
+
+Archive 299 adds reusable synchronization primitives, an independent MPMC ready queue, and a tested task-dispatch ownership state machine. These components deliberately remain disconnected from `FlatRuntime` because the current runtime APIs still have inconsistent locking and task/Channel lifetime paths. In particular, simply adding a scheduler mutex around existing functions would introduce nested-lock hazards through native task/channel callbacks and would risk holding the lock across VM execution.
+
+The tested state machine closes one design race: a worker can still own a VM turn when another worker publishes a wakeup. `wake_pending` records that event; the current owner releases with its dispatch token, then requests exactly one requeue. A task ID is queued rather than a raw task pointer, so future workers can revalidate registry membership under the scheduler mutex.
+
+The MPMC queue's own mutex is intentionally not nested with the future scheduler mutex. Runtime integration must coordinate the `queued` flag under scheduler lock, publish the queue item after unlocking, pop without scheduler lock, then reacquire scheduler lock to validate and claim. Runtime task lifetime and shutdown must ensure the queue and all workers are joined before task records or runtime storage are destroyed.
+
+This archive does not change the current cooperative runtime's thread-safety contract.
+
+
+## 26. Archive 300 — scheduler mutex integration and remaining concurrency boundary
+
+Archive 300 replaces the `FlatRuntime` atomic spin gate with `FlatMutex scheduler_mutex`. Task registry publication/removal, task ID allocation, task state/result transitions, wait graph operations, active-run/scheduler-driver counters, Channel registry membership and Channel reference publication are now protected by that mutex. Task records embed the dispatch ownership state from archive 299. The cooperative scheduler claims one dispatch token under the mutex, runs `flat_vm_step()` without the mutex, then publishes state and releases ownership under the mutex.
+
+The new `flvm[38]` test exercises 128 tasks. Sixty-four are initially runnable; a second host thread repeatedly queries task states and starts the remaining 64 while the scheduler is active. The test also verifies that a concurrent `flat_runtime_schedule()` call is rejected and that cancellation of a RUNNING task is rejected. The focused test passes repeatedly and under ThreadSanitizer.
+
+Important safe-point nuance: a native wait/retry callback can set a task record to WAITING before the enclosing `flat_vm_step()` has returned. Its dispatch state remains `worker_owned` during that interval. `flat_runtime_task_cancel()` and `flat_runtime_task_destroy()` now reject worker-owned records, so a host thread cannot destroy a VM merely because its public task state briefly reads WAITING.
+
+VM cancellation/destruction is also deliberately outside `scheduler_mutex`: each operation first marks the record `cleanup_owned`, preventing new starts/waits/cancellation/destruction and excluding it from scheduler selection/wakeup, then releases the mutex before `flat_vm_cancel()` or `flat_vm_destroy()`. This is required because VM teardown can enter serialized native gates such as the DOM/Lexbor gate. The record remains registered until cleanup succeeds. Wait edges and Channel references remain published during the fallible cancellation phase; wakeup skips cleanup-owned records, and a failed cancellation rechecks whether the dependency has already resolved before restoring runnable state. `flvm[38]` holds the DOM gate while another thread cancels a yielded DOM task or destroys a CREATED DOM task, and verifies that concurrent state queries continue to acquire the scheduler mutex. The same case also rejects both cancellation and destruction of a currently RUNNING task. The future request-only cancellation API remains necessary for cancellation of an in-flight worker turn.
+
+The current scheduler is still single-driver and scan-based. `FlatTaskDispatchState` is integrated, but `FlatReadyQueue` is not connected to `FlatRuntime`; no worker threads or condition-variable worker loop exist. `FlatChannel` still uses its pre-existing per-Channel atomic gate. The host must prevent `flat_runtime_destroy()` from racing new API entry. Therefore archive 300 demonstrates synchronized runtime task-registry APIs and a safe VM execution boundary, not full runtime/VM thread safety or worker-pool readiness.
+
+Lock order is scheduler mutex → Channel gate. Channel operations must release their Channel gate before requesting scheduler synchronization (for example, Channel unlock releases the gate before waking Channel waiters). `flat_vm_step()`, native dispatch, output/logging and blocking host operations remain outside the scheduler critical section.
+
+## Archive 302 update — ready queue and Channel gate
+
+Archive 302 integrates the MPMC ready queue into `FlatRuntime` and replaces the per-Channel atomic spin gate with `FlatMutex`. The cooperative scheduler uses nonblocking queue pop and performs dispatch claim under `scheduler_mutex`; `flat_vm_step()` remains outside the lock. Transaction owners retain priority, while other tasks use FIFO order. `flvm[39]` adds concurrent shared-Channel set/read coverage. The runtime is still single-driver and does not yet implement worker threads, request-only cancellation, shutdown/join or complete-VM multi-worker validation. The lock order and remaining worker gates are detailed in [`14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md`](14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md).

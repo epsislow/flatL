@@ -21,7 +21,8 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config);
  * Execute bytecode using this runtime's immutable host configuration.
  * opts may be NULL. opts->host_config is ignored: runtime configuration is
  * authoritative. All other options, including output pointers, are forwarded.
- * Multiple runs may use one runtime concurrently while it remains alive.
+ * Multiple runs may use one runtime concurrently while it remains alive. Runtime
+ * destruction requires the host to prevent new API calls from starting concurrently.
  */
 int flat_runtime_run(FlatRuntime *runtime, const FlatBytecode *bc,
                      const FlatVmOptions *opts);

@@ -2,7 +2,7 @@
 
 **Versiune document:** 1.0 (plan)  
 **Data:** 2026-11-25  
-**Status:** F0, stepping-ul persistent, scheduler-ul cooperativ, wait/cancel, `task.spawn`/`task.wait`, argumentele task, integrarea FlatL pentru Channels, contention wait/retry și `task.result` sunt implementate. Arhivele 284–285 au extins auditul wakeup/destruction; arhiva 286 interzice suspendarea unui task cât timp deține orice tranzacție Channel; arhiva 287 verifică owner multi-Channel și waiter-e independente, corectând și un test cu ID-uri stale; arhiva 288 verifică lanțuri mixte `task.wait` + Channel contention și wakeup-ul diferențiat. Worker pool-ul rămâne blocat de auditul cross-thread.
+**Status:** F0, stepping-ul persistent, scheduler-ul cooperativ, wait/cancel, `task.spawn`/`task.wait`, argumentele task, Channels, contention wait/retry și `task.result` sunt implementate. Arhiva 302 conectează ready queue-ul la scheduler și convertește gate-ul Channel la `FlatMutex`; worker pool-ul propriu-zis rămâne neimplementat. Arhivele 284–285 au extins auditul wakeup/destruction; arhiva 286 interzice suspendarea unui task cât timp deține orice tranzacție Channel; arhiva 287 verifică owner multi-Channel și waiter-e independente, corectând și un test cu ID-uri stale; arhiva 288 verifică lanțuri mixte `task.wait` + Channel contention și wakeup-ul diferențiat. Worker pool-ul rămâne blocat de auditul cross-thread.
 
 ## Direcția generală
 
@@ -119,10 +119,10 @@ Scop: execuție efectivă simultană pe mai multe thread-uri OS.
 
 Livrabile:
 
-1. Worker pool pthread și coadă de task-uri.
-2. Mutex/condvar și sincronizare cross-thread pentru scheduler, task registry și pool-urile de handle-uri.
-3. Mutex real per Channel (de ex. pthread mutex cu tip/error checking potrivit platformei).
-4. Ownership logic bazat pe `flat_task_id`, niciodată exclusiv pe `pthread_t`.
+1. [ ] Worker pool pthread și worker loop. Coada MPMC este deja integrată în runtime, dar nu există încă thread-uri worker.
+2. [ ] Finalizarea sincronizării cross-thread pentru pool-urile de handle-uri și lifecycle-ul worker; scheduler mutex, ready queue și Channel mutex sunt deja implementate.
+3. [x] Mutex real per Channel prin `FlatMutex` (POSIX pthread / Windows SRWLOCK / Emscripten single-thread no-op).
+4. [x] Ownership logic bazat pe `flat_task_id`, niciodată exclusiv pe `pthread_t`.
 5. Audit și eliminare a stării globale incompatibile cu VM-uri simultane.
 6. Shutdown, task-uri waiting și erori worker.
 7. Stress tests multi-writer, invariants, deadlock și cleanup.
@@ -490,3 +490,73 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 **Archive 298 result:** `SERIALIZED` is now enforced by per-module mutex gates at native invocation, and DOM teardown shares the DOM gate. This is not a worker pool and does not certify all `THREAD_SAFE` declarations. `UNSUPPORTED` remains a worker admission restriction, not a restriction on the existing cooperative runtime.
 
 **Next:** implement the worker admission boundary and scheduler synchronization protocol. Do not create workers until task/VM ownership, cancellation and shutdown are implemented. The native invocation gates are now active, but the worker scheduler still has to perform worker-policy preflight before dispatch.
+
+## Scheduler synchronization foundation checkpoint — archive 299
+
+- [x] Extend `flat_sync.h` with mutex init/destroy, condition variable wait/signal/broadcast, and thread create/join abstractions for POSIX and Windows; provide explicit unsupported blocking/thread behavior for single-thread Emscripten.
+- [x] Add a dynamically growing MPMC ready queue of task IDs with predicate-loop pop, close/broadcast, and drain-after-close behavior.
+- [x] Add a dispatch ownership state machine with `queued`, `worker_owned`, `wake_pending`, and monotonically advancing dispatch tokens.
+- [x] Verify wakeup while a worker owns the VM is deferred and materialized as exactly one requeue on release.
+- [x] Verify stale worker tokens cannot release a later ownership claim.
+- [x] Add `flvm[37]` to the existing `bin/run_tests` framework; no Python test runner.
+- [ ] Integrate a real scheduler mutex into all task registry/state/wait-graph operations.
+- [ ] Add dispatch ownership to runtime task records and connect queue publication/pop to task transitions.
+- [ ] Implement worker-owned cancellation request, DRAIN/CANCEL, join, and runtime teardown.
+- [ ] Convert Channel registry/Channel internal synchronization to the documented lock protocol.
+- [ ] Add complete-VM multi-worker stress and sanitizer coverage.
+
+**Conclusion:** archive 299 is a synchronization foundation, not a worker-pool implementation. The MPMC queue and dispatch state machine are independently tested, but they are not connected to `FlatRuntime`. The existing atomic runtime gate and cooperative task API remain unchanged; no general runtime thread safety is claimed.
+
+**Next:** integrate the scheduler mutex and dispatch state into `FlatRuntime` in a separate, carefully audited change. `flat_vm_step()` and native handlers must remain outside the scheduler critical section. Do not start worker threads until task registry lifetime, wait graph, Channel references, cancellation, and shutdown are protected by one consistent protocol.
+
+
+## FlatRuntime scheduler mutex integration checkpoint — archive 300
+
+- [x] Replace the runtime's C11 atomic spin gate with `FlatMutex scheduler_mutex`.
+- [x] Protect task ID reservation/publication, task registry/state/result operations, wait-graph transitions, runtime counters, and Channel registry/reference operations with the scheduler mutex.
+- [x] Embed `FlatTaskDispatchState` in each runtime task record and claim/release one dispatch token per cooperative VM quantum.
+- [x] Preserve the no-lock-across-VM rule: `flat_vm_step()` and native handlers execute outside the scheduler mutex.
+- [x] Reject overlapping `flat_runtime_schedule()` calls; preserve one scheduler-driving host thread.
+- [x] Reject synchronous cancellation/destruction while a task remains dispatch-owned, including the transient WAITING-before-step-return window.
+- [x] Add `flvm[38]` for concurrent state queries, task starts during scheduling, overlapping scheduler rejection, and RUNNING-task cancellation rejection.
+- [ ] Connect the MPMC ready queue to runtime enqueue/pop. Current selection remains a registry scan with dispatch queued-state tracking.
+- [ ] Convert Channel's internal gate to the platform synchronization abstraction and complete lock-order audit.
+- [ ] Implement request-only cancellation, DRAIN/CANCEL, worker condition wait, worker creation/join and worker shutdown.
+- [ ] Integrate native worker preflight at dispatch admission and validate complete-VM multi-worker execution.
+
+**Archive 300 result:** runtime task registry/state operations now use a real scheduler mutex, and dispatch ownership is integrated into the cooperative scheduler. The VM quantum remains outside the critical section. `flvm[38]` demonstrates concurrent task queries and starts while one scheduler runs, and confirms that overlapping scheduler calls and cancellation of a running task are rejected. No worker threads are started; the MPMC ready queue remains a standalone primitive. Channel still uses its existing per-Channel atomic gate.
+
+**Archive 302:** Channel lock conversion and ready-queue integration are implemented; see `14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md`. Archive 303 subsequently implements request-only cancellation and scheduler-owned safe-point cleanup; see `15_CANCELLATION_REQUEST_RUNTIME.md`.
+
+**Next:** implement DRAIN/CANCEL lifecycle and shutdown signaling, blocked-DRAIN reporting, escalation and join semantics. Only after those lifecycle contracts are implemented and tested should the pthread worker loop be added.
+
+
+## Build target parity checkpoint — archive 301
+
+- [x] Make `flvm[32]` tolerate missing/non-executable `pkg-config` by preferring valid libcurl pkg-config flags and falling back to `-lcurl`.
+- [x] Reconcile `Makefile.wasm` with the current runtime/native source graph: locale helpers, runtime logger, Channel implementation, scheduler dispatch helpers, VM handles, native capability metadata, task/channel native handlers and shared HTTP boundary implementation.
+- [x] Guard dynamic-plugin staging helpers with `FLAT_HAVE_DLOPEN`, avoiding unused-function warnings in static-plugin WASM builds.
+- [x] Verify the HTTP test both with normal pkg-config and with a deliberately non-executable pkg-config shim.
+- [x] Run the affected FLVM regressions and check the generated Emscripten source command.
+- [ ] Run the actual `make fleditor-wasm V=1` link with the supported Emscripten SDK; `emcc` was unavailable in the archive validation environment.
+
+**Conclusion:** archive 301 is a build integration/portability fix only. It does not alter runtime scheduling, Channel locking or worker-pool behavior. The native HTTP initialization test now has a reliable dynamic-libcurl fallback. The WASM source list now contains the implementations missing from the current runtime graph, but a real Emscripten link remains to be confirmed on a machine with `emcc`.
+
+**Archive 302 follow-up:** the Channel mutex conversion, lock-order audit and ready-queue integration were completed independently of the pending Emscripten verification. The WASM build remains a separate portability check; it is not a prerequisite for documenting or validating this POSIX runtime work. See `14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md`.
+
+
+## Request-only cancellation checkpoint — archive 303
+
+- [x] Add `flat_runtime_task_cancel_request()` with explicit idempotent/terminal/invalid return semantics.
+- [x] Keep the existing synchronous `flat_runtime_task_cancel()` API and behavior separate.
+- [x] Make the request caller publish intent only under `scheduler_mutex`; it never calls `flat_vm_cancel()` or performs VM/Channel cleanup.
+- [x] Claim pending requests for CREATED/RUNNABLE/WAITING tasks in the scheduler before normal dispatch.
+- [x] Have the current dispatch owner observe RUNNING-task cancellation only after `flat_vm_step()` returns.
+- [x] Preserve completion/failure if the VM reaches a terminal result before cancellation is observed.
+- [x] Add `flvm[40]` for all four task states, idempotency, unknown/terminal IDs, and a blocked DOM native call proving safe-point ownership.
+- [ ] Replace the cooperative registry scan with a dedicated worker cleanup queue when the worker loop is introduced.
+- [ ] Implement DRAIN/CANCEL lifecycle, shutdown request, worker join and runtime teardown.
+
+**Conclusion:** request-only cancellation is now implemented and tested without introducing worker threads. The current single scheduler is the cleanup executor. This provides the ownership/safe-point contract needed by worker mode, but it is not yet a worker pool.
+
+**Next:** implement pool admission/lifecycle and shutdown signaling (`RUNNING`, `DRAINING`, `CANCELLING`, `STOPPED`), including blocked-DRAIN reporting and DRAIN-to-CANCEL escalation. Keep actual pthread worker creation gated on the lifecycle and join tests.

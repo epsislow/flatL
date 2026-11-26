@@ -249,7 +249,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_capability.c src/lib/na
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
                 src/lib/mod_vcx_dschema.c src/lib/mod_executor.c src/lib/mod_task.c src/lib/mod_channel.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(BYTES_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
-VM_SRC  = src/common/flat_locale.c src/common/flat_time.c src/common/flat_runtime_log.c src/common/flat_host_config.c src/common/flat_channel.c src/common/flat_runtime.c src/common/flat_vm_handle.c src/common/vm.c src/common/flat_func_tag.c \
+VM_SRC  = src/common/flat_locale.c src/common/flat_time.c src/common/flat_runtime_log.c src/common/flat_host_config.c src/common/flat_channel.c src/common/flat_scheduler_sync.c src/common/flat_runtime.c src/common/flat_vm_handle.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
@@ -848,6 +848,12 @@ test-native-worker-policy: $(PLUGIN_TARGET)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/034_native_capabilities/native_worker_policy_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 
+# Verify scheduler synchronization primitives, MPMC ready queue and dispatch ownership state.
+.PHONY: test-scheduler-sync-primitives
+test-scheduler-sync-primitives:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/037_scheduler_sync_primitives/scheduler_sync_test.c src/common/flat_scheduler_sync.c $(LDFLAGS)
+
 # Verify per-module invocation gates, independent-module progress, and DOM teardown gating.
 .PHONY: test-native-invocation-gates
 test-native-invocation-gates:
@@ -856,3 +862,21 @@ test-native-invocation-gates:
 	@mkdir -p "$(TEST_PLUGIN_DIR)"
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/034_native_capabilities/serialized_plugin.c
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/036_native_invocation_gates/native_invocation_gates_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify FlatRuntime scheduler mutex, task registry queries, and single-driver exclusion.
+.PHONY: test-runtime-scheduler-mutex
+test-runtime-scheduler-mutex:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/038_runtime_scheduler_mutex/runtime_scheduler_mutex_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify request-only cancellation and scheduler-owned cleanup at safe points.
+.PHONY: test-task-cancel-request
+test-task-cancel-request:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/040_task_cancel_request/task_cancel_request_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify that a shared runtime Channel serializes concurrent set/read operations.
+.PHONY: test-channel-mutex-concurrency
+test-channel-mutex-concurrency:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/039_channel_mutex_concurrency/channel_mutex_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

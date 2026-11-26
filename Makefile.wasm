@@ -31,7 +31,7 @@ WASM_HTTP_CFLAGS = -DFLAT_WITH_HTTP=0
 HTTP_SRC =
 else
 WASM_HTTP_CFLAGS =
-HTTP_SRC = src/lib/mod_http.c src/http/flat_http_fetch.c
+HTTP_SRC = src/lib/mod_http.c src/common/flat_http_boundary.c src/http/flat_http_fetch.c
 endif
 env ?= 1
 ifeq ($(env),0)
@@ -142,14 +142,17 @@ WASM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_math_md
             src/lib/mod_vcx.c \
             src/lib/mod_vcx_dschema.c src/lib/mod_executor.c
 
-NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_parse_rhs.c \
-                src/lib/native_dispatch.c \
+NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_capability.c src/lib/native_util.c src/lib/native_parse_rhs.c \
+                src/lib/native_dispatch.c src/lib/mod_task.c src/lib/mod_channel.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c \
                 src/lib/mod_file.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(BYTES_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) src/lib/native_mods.c \
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
-VM_SRC = src/common/flat_host_config.c src/common/flat_runtime.c src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \
+VM_SRC = src/common/flat_locale.c src/common/flat_runtime_log.c src/common/flat_host_config.c \
+         src/common/flat_channel.c src/common/flat_scheduler_sync.c src/common/flat_runtime.c \
+         src/common/flat_vm_handle.c src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c \
+         src/common/flat_number.c src/common/value_pool.c \
          src/common/flat_file.c src/common/flat_csv.c src/common/flat_csv_runtime.c \
          src/common/flat_io_ctx.c src/common/flat_memstream.c \
          src/common/value_collection.c \

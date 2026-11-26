@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 37
+desc = "scheduler synchronization primitives, MPMC ready queue and single-owner dispatch state"
+kind = "exec"
+cmd = "make test-scheduler-sync-primitives TEST_BIN={tmp}/scheduler_sync_test && {tmp}/scheduler_sync_test"
+expect_exit = 0
+stdout_contains = "scheduler-sync-ok mpmc=20000 growth=fifo dispatch=single-owner wake-pending=coalesced close=drain-broadcast"

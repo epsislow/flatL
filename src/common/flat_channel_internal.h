@@ -2,7 +2,7 @@
 #define FLAT_CHANNEL_INTERNAL_H
 
 #include "flat_channel.h"
-#include <stdatomic.h>
+#include "flat_sync.h"
 
 typedef struct FlatChannelEntry {
     char name[FLAT_VAR_NAME_MAX + 1];
@@ -17,7 +17,8 @@ typedef struct FlatChannelTaskRef {
 
 typedef struct FlatChannel {
     FlatChannelId id;
-    atomic_flag gate;
+    FlatMutex gate;
+    int gate_initialized;
     FlatCollectionPool *coll;
     FlatStringPool *pool;
     FlatChannelEntry *entries;

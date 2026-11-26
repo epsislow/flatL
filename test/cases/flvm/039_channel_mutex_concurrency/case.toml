@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 39
+desc = "Channel mutex serializes concurrent set/read operations on a shared runtime Channel"
+kind = "exec"
+cmd = "make test-channel-mutex-concurrency TEST_BIN={tmp}/channel_mutex_test && {tmp}/channel_mutex_test"
+expect_exit = 0
+stdout_contains = "channel-mutex-ok threads=8 iterations=2000 shared-channel=1"

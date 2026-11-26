@@ -80,6 +80,7 @@ static int registry_is_embedded(uint16_t id) {
     return embedded;
 }
 
+#ifdef FLAT_HAVE_DLOPEN
 static void plugin_staging_begin(void) {
     memset(g_plugin_staged_handlers, 0, sizeof g_plugin_staged_handlers);
     memset(g_plugin_staged_set, 0, sizeof g_plugin_staged_set);
@@ -105,6 +106,7 @@ static void plugin_staging_end(int commit) {
     memset(g_plugin_staged_handlers, 0, sizeof g_plugin_staged_handlers);
     memset(g_plugin_staged_set, 0, sizeof g_plugin_staged_set);
 }
+#endif
 static int g_loaded_math_trig;
 static int g_loaded_math_stats;
 static int g_loaded_math_mdim;

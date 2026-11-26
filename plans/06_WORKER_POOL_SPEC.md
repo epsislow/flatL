@@ -273,8 +273,8 @@ In both modes:
 
 1. [x] Source-level mutable-state inventory for embedded native modules and built-in optional plugin entry points (`07_NATIVE_THREAD_SAFETY_AUDIT.md`). External dependency internals remain to be verified.
 2. [x] Replace the HTTP multipart static sequence with an atomic allocator and add a pthread uniqueness regression (`flvm[31]`).
-3. [ ] Replace the partial runtime atomic gate with a documented lock/refcount/queue protocol.
-4. [ ] Add task `worker_owned`/dispatch token and wake-pending semantics; prove no duplicate queue entries or lost wakeups.
+3. [ ] Complete the runtime lock/refcount/queue protocol. Archive 300 replaces the runtime atomic gate and synchronizes task registry/wait graph, but the MPMC queue is not connected and Channel still has its atomic gate.
+4. [x] Add task `worker_owned`/dispatch token and wake-pending semantics; prove no duplicate queue entries or lost wakeups in the dispatch state machine. Archive 300 embeds the state in runtime task records and exercises cooperative claim/release; real multi-worker proof remains pending.
 5. [ ] Define cancellation request and cancellation/completion race semantics without violating safe VM ownership.
 6. [ ] Implement and test runtime/Channel lock order; no lock is held across VM step, native handler, blocking IO or callback.
 7. [x] Define plugin capability states and the default rejection policy for unknown third-party plugins. [ ] Implement metadata/enforcement and output interleaving policy.
@@ -333,3 +333,26 @@ Capability declarations are module-level. The plugin initializer ABI remains unc
 ## Archive 298 implementation update
 
 The common native invocation boundary now applies the module policy before returning to VM execution. `SERIALIZED`/effective `PENDING` calls use an independent per-module gate; `THREAD_SAFE` calls are ungated. The gate implementation is backed by POSIX pthread mutexes, Windows SRWLOCK, and a no-op single-thread Emscripten implementation. DOM VM teardown acquires the same DOM gate as DOM handlers. This closes the native invocation serialization boundary but does not implement worker admission in a scheduler, scheduler/Channel locks, condition variables, task ownership, cancellation, shutdown or worker creation. See `10_NATIVE_SYNC_GATES.md`.
+
+## 11. Scheduler primitive implementation checkpoint (archive 299)
+
+The following low-level pieces now exist independently of `FlatRuntime`:
+
+- `FlatMutex`, `FlatCond`, and `FlatThread` wrappers in `include/flat_sync.h`;
+- `FlatReadyQueue`, an MPMC FIFO of task IDs with close/drain semantics;
+- `FlatTaskDispatchState`, which coalesces duplicate enqueue/wakeup events and prevents a task from being queued while worker-owned.
+
+The dispatch state must be protected by the future scheduler mutex. Queue operations use their own mutex and must not be nested with scheduler locking. Worker pop returns an ID, not a pointer; the runtime must revalidate/claim it under scheduler lock. Wakeup while worker-owned sets `wake_pending`; owner release validates its dispatch token and asks the caller to publish one requeue outside the scheduler critical section.
+
+These primitives are tested in `flvm[37]`, but they are not yet connected to the runtime. The current `FlatRuntime` atomic gate, task registry, wait graph, Channel registry, cancellation API and teardown remain unchanged and are not thread-safe for concurrent host calls. No VM worker threads are started in archive 299.
+
+
+## 15. Runtime scheduler mutex integration (archive 300)
+
+Archive 300 replaces the `FlatRuntime` atomic spin gate with `FlatMutex scheduler_mutex`, protects task registry/state/wait-graph transitions, and embeds `FlatTaskDispatchState` in each `FlatTaskRecord`. The scheduler claims/releases dispatch ownership under the mutex and always executes `flat_vm_step()` outside it. Concurrent task queries and starts are tested while the one cooperative scheduler driver is active; a second scheduler call is rejected. Cancellation/destruction is rejected while dispatch ownership remains active, including a transient WAITING state before the current VM step returns.
+
+This does not yet satisfy the full worker acceptance gate: the runtime remains single-driver and scan-based, the MPMC ready queue is not connected, Channel still uses its existing atomic gate, and no worker thread/condition wait, request-only cancellation, shutdown/join, or complete-VM stress exists. See [`12_RUNTIME_SCHEDULER_MUTEX.md`](12_RUNTIME_SCHEDULER_MUTEX.md).
+
+## Archive 302 runtime synchronization update
+
+Archive 302 closes the earlier queue/Channel gaps: `FlatRuntime` now owns and consumes the MPMC ready queue, and `FlatChannel` uses the cross-platform `FlatMutex`. Queue pop plus dispatch claim is serialized under `scheduler_mutex`; VM stepping remains outside it. The blocking queue pop is retained for future workers, while the current cooperative scheduler uses nonblocking pop. These changes improve the runtime's synchronization foundation but do not satisfy worker admission: there is still one scheduler driver, no worker lifecycle/shutdown/join, no request-only cancellation, and no full-VM multi-worker validation. See [`14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md`](14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md).

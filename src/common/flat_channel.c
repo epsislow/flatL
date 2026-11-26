@@ -74,7 +74,11 @@ FlatChannel *flat_channel_create(FlatChannelId id) {
     FlatChannel *channel = (FlatChannel *)calloc(1, sizeof *channel);
     if (!channel) return NULL;
     channel->id = id;
-    atomic_flag_clear(&channel->gate);
+    if (flat_mutex_init(&channel->gate) != 0) {
+        free(channel);
+        return NULL;
+    }
+    channel->gate_initialized = 1;
     channel->coll = flat_coll_create();
     channel->pool = flat_pool_create();
     if (!channel->coll || !channel->pool) {
@@ -86,11 +90,11 @@ FlatChannel *flat_channel_create(FlatChannelId id) {
 
 void flat_channel_lock(FlatChannel *channel) {
     if (!channel) return;
-    while (atomic_flag_test_and_set_explicit(&channel->gate, memory_order_acquire)) { }
+    (void)flat_mutex_lock(&channel->gate);
 }
 
 void flat_channel_unlock(FlatChannel *channel) {
-    if (channel) atomic_flag_clear_explicit(&channel->gate, memory_order_release);
+    if (channel) (void)flat_mutex_unlock(&channel->gate);
 }
 
 void flat_channel_destroy(FlatChannel *channel) {
@@ -100,6 +104,7 @@ void flat_channel_destroy(FlatChannel *channel) {
     storage_destroy(channel->snapshot_entries, channel->snapshot_coll, channel->snapshot_pool);
     user = channel->users;
     while (user) { FlatChannelTaskRef *next = user->next; free(user); user = next; }
+    if (channel->gate_initialized) (void)flat_mutex_destroy(&channel->gate);
     free(channel);
 }
 

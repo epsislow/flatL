@@ -1,0 +1,8 @@
+suite = "flvm"
+mods = "dom"
+id = 38
+desc = "runtime scheduler mutex, synchronized task registry, single-driver exclusion and unlocked VM teardown"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/runtime_scheduler_mutex.fb {root}/test/cases/flvm/038_runtime_scheduler_mutex/program.fl && {root}/bin/flc -o {tmp}/runtime_scheduler_dom_cleanup.fb {root}/test/cases/flvm/038_runtime_scheduler_mutex/dom_cleanup.fl && make -s test-runtime-scheduler-mutex TEST_BIN={tmp}/runtime_scheduler_mutex_test && {tmp}/runtime_scheduler_mutex_test {tmp}/runtime_scheduler_mutex.fb {tmp}/runtime_scheduler_dom_cleanup.fb"
+expect_exit = 0
+stdout_contains = "runtime-scheduler-mutex-ok tasks=128 started-during-run=64"

@@ -5,8 +5,9 @@
 #include "flat_vm_internal.h"
 #include "flat_runtime_log.h"
 #include "flat_number.h"
+#include "flat_sync.h"
+#include "flat_scheduler_sync.h"
 
-#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
@@ -19,13 +20,18 @@ typedef struct FlatTaskRecord {
     FlatVmResult result;
     FlatTaskId waiting_on;
     FlatChannelId waiting_channel_id;
+    int cleanup_owned;
+    int cancel_requested;
+    FlatTaskDispatchState dispatch;
     struct FlatTaskRecord *next;
 } FlatTaskRecord;
 
 struct FlatRuntime {
     FlatHostConfig host;
-    atomic_bool lock;
+    FlatMutex scheduler_mutex;
+    FlatReadyQueue ready_queue;
     unsigned active_runs;
+    int schedule_active;
     FlatTaskRecord *tasks;
     FlatChannel *channels;
     size_t channel_count;
@@ -68,24 +74,63 @@ static int runtime_task_native_channel_unlock(void *user, uint64_t task_id, uint
 static int runtime_task_native_channel_revert(void *user, uint64_t task_id, uint64_t channel_id);
 static int runtime_task_native_channel_destroy(void *user, uint64_t task_id, uint64_t channel_id);
 static FlatChannel *runtime_channel_acquire(FlatRuntime *runtime, FlatChannelId id);
+static FlatChannel *runtime_channel_acquire_for_owner(FlatRuntime *runtime, FlatChannelId id,
+                                                       FlatTaskId owner_id);
 static int runtime_task_wait_channel(FlatRuntime *runtime, FlatTaskId task_id,
                                      FlatChannelId channel_id);
 static int runtime_channel_add_user_locked(FlatChannel *channel, FlatTaskId task_id);
 static void runtime_release_task_channel_refs(FlatRuntime *runtime, FlatTaskId task_id);
+static void runtime_abort_task_channel_transactions_locked(FlatRuntime *runtime, FlatTaskId task_id);
+static void runtime_release_task_channel_refs_locked(FlatRuntime *runtime, FlatTaskId task_id);
+static int runtime_task_is_running(FlatRuntime *runtime, FlatTaskId task_id);
 static int runtime_channel_destroy_owned(FlatRuntime *runtime, FlatChannelId id,
                                          FlatTaskId owner_id);
 static int runtime_channel_create_owned(FlatRuntime *runtime, FlatTaskId owner_id,
                                         FlatChannelId *out_id);
 
 static void runtime_lock(FlatRuntime *runtime) {
-    while (atomic_exchange_explicit(&runtime->lock, 1, memory_order_acquire)) { }
+    if (runtime) (void)flat_mutex_lock(&runtime->scheduler_mutex);
 }
 
 static void runtime_unlock(FlatRuntime *runtime) {
-    atomic_store_explicit(&runtime->lock, 0, memory_order_release);
+    if (runtime) (void)flat_mutex_unlock(&runtime->scheduler_mutex);
+}
+
+/* Dispatch publication is serialized by scheduler_mutex. Queue consumers
+ * release the queue mutex before acquiring scheduler_mutex. */
+static int runtime_dispatch_enqueue_locked(FlatRuntime *runtime, FlatTaskRecord *task) {
+    int rc;
+    if (!runtime || !task) return -1;
+    rc = flat_task_dispatch_enqueue(&task->dispatch);
+    if (rc <= 0) return rc;
+    if (flat_ready_queue_push(&runtime->ready_queue, task->id) != 0) {
+        task->dispatch.queued = 0;
+        return -1;
+    }
+    return 1;
+}
+
+static int runtime_dispatch_wake_locked(FlatRuntime *runtime, FlatTaskRecord *task) {
+    int rc;
+    if (!runtime || !task) return -1;
+    rc = flat_task_dispatch_wake(&task->dispatch);
+    if (rc <= 0) return rc;
+    if (flat_ready_queue_push(&runtime->ready_queue, task->id) != 0) {
+        task->dispatch.queued = 0;
+        return -1;
+    }
+    return 1;
+}
+
+static void runtime_dispatch_dequeue_locked(FlatRuntime *runtime, FlatTaskRecord *task) {
+    if (!runtime || !task) return;
+    if (task->dispatch.queued)
+        (void)flat_ready_queue_remove(&runtime->ready_queue, task->id);
+    task->dispatch.queued = 0;
 }
 
 static FlatTaskRecord *runtime_find_task(const FlatRuntime *runtime, FlatTaskId id);
+static int runtime_task_is_terminal(const FlatTaskRecord *task);
 
 static int runtime_has_waiters(const FlatRuntime *runtime, FlatTaskId id) {
     const FlatTaskRecord *task;
@@ -95,27 +140,40 @@ static int runtime_has_waiters(const FlatRuntime *runtime, FlatTaskId id) {
     return 0;
 }
 
-static void runtime_wake_waiters(FlatRuntime *runtime, FlatTaskId target_id) {
+/* Caller holds scheduler_mutex. */
+static void runtime_wake_waiters_locked(FlatRuntime *runtime, FlatTaskId target_id) {
     FlatTaskRecord *task;
     for (task = runtime->tasks; task; task = task->next) {
-        if (task->state == FLAT_TASK_WAITING && task->waiting_on == target_id) {
+        if (!task->cleanup_owned && task->state == FLAT_TASK_WAITING &&
+            task->waiting_on == target_id) {
             task->waiting_on = 0;
             task->waiting_channel_id = 0;
             task->state = FLAT_TASK_RUNNABLE;
+            (void)runtime_dispatch_wake_locked(runtime, task);
+        }
+    }
+}
+
+/* Caller holds scheduler_mutex. */
+static void runtime_wake_channel_waiters_locked(FlatRuntime *runtime, FlatChannelId channel_id) {
+    FlatTaskRecord *task;
+    if (!runtime || channel_id == 0) return;
+    for (task = runtime->tasks; task; task = task->next) {
+        if (!task->cleanup_owned && task->state == FLAT_TASK_WAITING &&
+            task->waiting_channel_id == channel_id) {
+            task->waiting_on = 0;
+            task->waiting_channel_id = 0;
+            task->state = FLAT_TASK_RUNNABLE;
+            (void)runtime_dispatch_wake_locked(runtime, task);
         }
     }
 }
 
 static void runtime_wake_channel_waiters(FlatRuntime *runtime, FlatChannelId channel_id) {
-    FlatTaskRecord *task;
     if (!runtime || channel_id == 0) return;
-    for (task = runtime->tasks; task; task = task->next) {
-        if (task->state == FLAT_TASK_WAITING && task->waiting_channel_id == channel_id) {
-            task->waiting_on = 0;
-            task->waiting_channel_id = 0;
-            task->state = FLAT_TASK_RUNNABLE;
-        }
-    }
+    runtime_lock(runtime);
+    runtime_wake_channel_waiters_locked(runtime, channel_id);
+    runtime_unlock(runtime);
 }
 
 /* Each task has at most one outgoing wait edge. Following the target chain is
@@ -184,17 +242,19 @@ static int runtime_task_owns_channel_transaction(FlatRuntime *runtime, FlatTaskI
     return 0;
 }
 
-static void runtime_abort_task_channel_transactions(FlatRuntime *runtime, FlatTaskId task_id) {
+/* Caller holds scheduler_mutex. */
+static void runtime_abort_task_channel_transactions_locked(FlatRuntime *runtime, FlatTaskId task_id) {
     FlatChannel *channel;
     if (!runtime || task_id == 0) return;
-    runtime_lock(runtime);
     for (channel = runtime->channels; channel; channel = channel->next) {
+        int aborted = 0;
+        FlatChannelId channel_id = channel->id;
         flat_channel_lock(channel);
         if (channel->transaction_locked && channel->transaction_owner == task_id)
-            (void)flat_channel_tx_abort(channel, task_id);
+            aborted = flat_channel_tx_abort(channel, task_id) == 0;
         flat_channel_unlock(channel);
+        if (aborted) runtime_wake_channel_waiters_locked(runtime, channel_id);
     }
-    runtime_unlock(runtime);
 }
 
 static FlatTaskRecord *runtime_find_task(const FlatRuntime *runtime, FlatTaskId id) {
@@ -218,23 +278,40 @@ static FlatChannel *runtime_find_channel(const FlatRuntime *runtime, FlatChannel
 FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
     FlatRuntime *runtime = (FlatRuntime *)calloc(1, sizeof *runtime);
     if (!runtime) return NULL;
-    atomic_init(&runtime->lock, 0);
+    if (flat_mutex_init(&runtime->scheduler_mutex) != 0) {
+        free(runtime);
+        return NULL;
+    }
+    if (flat_ready_queue_init(&runtime->ready_queue, 16) != 0) {
+        (void)flat_mutex_destroy(&runtime->scheduler_mutex);
+        free(runtime);
+        return NULL;
+    }
     runtime->next_task_id = 1;
     runtime->next_channel_id = 1;
 
     if (config) {
         if (flat_env_context_clone(&runtime->host.env, &config->env) != 0) {
+            (void)flat_ready_queue_close(&runtime->ready_queue);
+            (void)flat_ready_queue_destroy(&runtime->ready_queue);
+            (void)flat_mutex_destroy(&runtime->scheduler_mutex);
             free(runtime);
             return NULL;
         }
         runtime->host.path = config->path;
         if (runtime->host.path.sep != '/' && runtime->host.path.sep != '\\') {
             flat_host_config_destroy(&runtime->host);
+            (void)flat_ready_queue_close(&runtime->ready_queue);
+            (void)flat_ready_queue_destroy(&runtime->ready_queue);
+            (void)flat_mutex_destroy(&runtime->scheduler_mutex);
             free(runtime);
             return NULL;
         }
     } else if (flat_host_config_capture_staging(&runtime->host) != 0) {
         flat_host_config_destroy(&runtime->host);
+        (void)flat_ready_queue_close(&runtime->ready_queue);
+        (void)flat_ready_queue_destroy(&runtime->ready_queue);
+        (void)flat_mutex_destroy(&runtime->scheduler_mutex);
         free(runtime);
         return NULL;
     }
@@ -272,7 +349,7 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
     FlatVmOptions task_opts;
     FlatTaskNativeBridge bridge;
     FlatTaskId id;
-    if (!runtime || !bc || !out_id || runtime->next_task_id == 0) return -1;
+    if (!runtime || !bc || !out_id) return -1;
 
     task = (FlatTaskRecord *)calloc(1, sizeof *task);
     if (!task) return -1;
@@ -292,9 +369,22 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
         return -1;
     }
 
+    runtime_lock(runtime);
+    if (runtime->next_task_id == 0) {
+        runtime_unlock(runtime);
+        flat_vm_destroy(task->vm);
+        free(task);
+        return -1;
+    }
     id = runtime->next_task_id++;
+    runtime_unlock(runtime);
     task->id = id;
     task->state = initial_state;
+    flat_task_dispatch_init(&task->dispatch);
+    /* Mark the new task as queued before publication; the queue item itself is
+     * pushed later under scheduler_mutex together with registry insertion. */
+    if (initial_state == FLAT_TASK_RUNNABLE)
+        (void)flat_task_dispatch_enqueue(&task->dispatch);
     task->result.state = FLAT_VM_READY;
     memset(&bridge, 0, sizeof bridge);
     bridge.user = runtime;
@@ -339,10 +429,20 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
             }
         }
     }
+    runtime_lock(runtime);
+    if (initial_state == FLAT_TASK_RUNNABLE &&
+        flat_ready_queue_push(&runtime->ready_queue, task->id) != 0) {
+        runtime_unlock(runtime);
+        runtime_release_task_channel_refs(runtime, id);
+        flat_vm_destroy(task->vm);
+        free(task);
+        return -1;
+    }
     if (runtime->tasks_tail) runtime->tasks_tail->next = task;
     else runtime->tasks = task;
     runtime->tasks_tail = task;
     runtime->task_count++;
+    runtime_unlock(runtime);
     *out_id = id;
     return 0;
 }
@@ -359,11 +459,17 @@ static int runtime_task_native_spawn(void *user, uint64_t parent_id, const FlatB
                                      FlatStringPool *source_pool, FlatFileTable *source_files,
                                      uint64_t *out_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *parent = runtime_find_task(runtime, parent_id);
+    FlatTaskRecord *parent;
     size_t bi;
     unsigned expected = 0;
-    if (!runtime || !parent || parent->state != FLAT_TASK_RUNNING || !bc || !entry_label ||
-        !entry_label[0]) return -1;
+    if (!runtime || !bc || !entry_label || !entry_label[0]) return -1;
+    runtime_lock(runtime);
+    parent = runtime_find_task(runtime, parent_id);
+    if (!parent || parent->cleanup_owned || parent->state != FLAT_TASK_RUNNING) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime_unlock(runtime);
     for (bi = 0; bi < bc->block_count; bi++) {
         if (bc->block_labels && strcmp(bc->block_labels[bi], entry_label) == 0) {
             expected = bc->block_params ? bc->block_params[bi].param_count : 0;
@@ -382,44 +488,75 @@ static int runtime_task_native_wait(void *user, uint64_t waiter_id, uint64_t tar
     FlatTaskRecord *waiter;
     FlatTaskRecord *target;
     if (!runtime || waiter_id == 0 || target_id == 0 || waiter_id == target_id) return -1;
+    runtime_lock(runtime);
     waiter = runtime_find_task(runtime, waiter_id);
     target = runtime_find_task(runtime, target_id);
-    if (!waiter || !target || waiter->state != FLAT_TASK_RUNNING ||
+    if (!waiter || !target || waiter->cleanup_owned || target->cleanup_owned ||
+        waiter->state != FLAT_TASK_RUNNING ||
         runtime_task_owns_channel_transaction(runtime, waiter_id) ||
-        runtime_wait_would_cycle(runtime, waiter_id, target_id)) return -1;
+        runtime_wait_would_cycle(runtime, waiter_id, target_id)) {
+        runtime_unlock(runtime);
+        return -1;
+    }
     if (target->state == FLAT_TASK_COMPLETED || target->state == FLAT_TASK_FAILED ||
-        target->state == FLAT_TASK_CANCELLED) return 0;
+        target->state == FLAT_TASK_CANCELLED) {
+        runtime_unlock(runtime);
+        return 0;
+    }
     waiter->waiting_on = target_id;
     waiter->waiting_channel_id = 0;
     waiter->state = FLAT_TASK_WAITING;
+    runtime_dispatch_dequeue_locked(runtime, waiter);
+    runtime_unlock(runtime);
     return 1;
 }
 
 static int runtime_task_native_state(void *user, uint64_t task_id, int *out_state) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
-    if (!task || !out_state) return -1;
+    FlatTaskRecord *task;
+    if (!runtime || !out_state) return -1;
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, task_id);
+    if (!task) { runtime_unlock(runtime); return -1; }
     *out_state = (int)task->state;
+    runtime_unlock(runtime);
     return 0;
 }
 
 static int runtime_task_native_result(void *user, uint64_t task_id,
                                       FlatVmResult *out_result, int *out_task_state) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
-    if (!task || !out_result || !out_task_state ||
+    FlatTaskRecord *task;
+    if (!runtime || !out_result || !out_task_state) return -1;
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, task_id);
+    if (!task || task->cleanup_owned ||
         (task->state != FLAT_TASK_COMPLETED && task->state != FLAT_TASK_FAILED &&
-         task->state != FLAT_TASK_CANCELLED)) return -1;
+         task->state != FLAT_TASK_CANCELLED)) {
+        runtime_unlock(runtime);
+        return -1;
+    }
     *out_result = task->result;
     *out_task_state = (int)task->state;
+    runtime_unlock(runtime);
     return 0;
+}
+
+static int runtime_task_is_running(FlatRuntime *runtime, FlatTaskId task_id) {
+    FlatTaskRecord *task;
+    int running;
+    if (!runtime || task_id == 0) return 0;
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, task_id);
+    running = task && !task->cleanup_owned && task->state == FLAT_TASK_RUNNING;
+    runtime_unlock(runtime);
+    return running;
 }
 
 static int runtime_task_native_channel_create(void *user, uint64_t task_id,
                                               uint64_t *out_channel_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
-    if (!task || task->state != FLAT_TASK_RUNNING || !out_channel_id) return -1;
+    if (!runtime_task_is_running(runtime, task_id) || !out_channel_id) return -1;
     if (runtime_channel_create_owned(runtime, task_id, out_channel_id) != 0) return -1;
     /* FlatL NUMBER handles must remain exactly representable as IEEE-754 integers. */
     if (*out_channel_id > UINT64_C(9007199254740991)) {
@@ -436,9 +573,8 @@ static int runtime_task_native_channel_set(void *user, uint64_t task_id, uint64_
                                            FlatStringPool *source_pool,
                                            FlatFileTable *source_files) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
     int rc;
-    if (!task || task->state != FLAT_TASK_RUNNING) return -1;
+    if (!runtime_task_is_running(runtime, task_id)) return -1;
     rc = flat_runtime_channel_set(runtime, channel_id, task_id, name, value,
                                   source_coll, source_pool, source_files);
     if (rc == -2) {
@@ -463,16 +599,13 @@ static int runtime_task_native_channel_var(void *user, uint64_t task_id, uint64_
                                            FlatFileTable *destination_files,
                                            FlatValue *out_value) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
     FlatChannel *channel;
     int rc;
-    if (!task || task->state != FLAT_TASK_RUNNING) return -1;
-    channel = runtime_channel_acquire(runtime, channel_id);
+    if (!runtime_task_is_running(runtime, task_id)) return -1;
+    channel = runtime_channel_acquire_for_owner(runtime, channel_id, task_id);
     if (!channel) return -1;
-    rc = runtime_channel_add_user_locked(channel, task_id);
-    if (rc == 0)
-        rc = flat_channel_var_unretained(channel, task_id, name, destination_coll,
-                                         destination_pool, destination_files, out_value);
+    rc = flat_channel_var_unretained(channel, task_id, name, destination_coll,
+                                     destination_pool, destination_files, out_value);
     flat_channel_unlock(channel);
     if (rc == -2) {
         int wait_rc = runtime_task_wait_channel(runtime, task_id, channel_id);
@@ -482,12 +615,10 @@ static int runtime_task_native_channel_var(void *user, uint64_t task_id, uint64_
             return 1;
         }
         if (wait_rc == 0) {
-            channel = runtime_channel_acquire(runtime, channel_id);
+            channel = runtime_channel_acquire_for_owner(runtime, channel_id, task_id);
             if (!channel) return -1;
-            rc = runtime_channel_add_user_locked(channel, task_id);
-            if (rc == 0)
-                rc = flat_channel_var_unretained(channel, task_id, name, destination_coll,
-                                                 destination_pool, destination_files, out_value);
+            rc = flat_channel_var_unretained(channel, task_id, name, destination_coll,
+                                             destination_pool, destination_files, out_value);
             flat_channel_unlock(channel);
         } else return -1;
     }
@@ -500,121 +631,330 @@ static int runtime_task_native_channel_var(void *user, uint64_t task_id, uint64_
 
 static int runtime_task_native_channel_lock(void *user, uint64_t task_id, uint64_t channel_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
-    if (!task || task->state != FLAT_TASK_RUNNING) return -1;
+    if (!runtime_task_is_running(runtime, task_id)) return -1;
     return flat_runtime_channel_lock(runtime, channel_id, task_id);
 }
 
 static int runtime_task_native_channel_unlock(void *user, uint64_t task_id, uint64_t channel_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
-    if (!task || task->state != FLAT_TASK_RUNNING) return -1;
+    if (!runtime_task_is_running(runtime, task_id)) return -1;
     return flat_runtime_channel_unlock(runtime, channel_id, task_id);
 }
 
 static int runtime_task_native_channel_revert(void *user, uint64_t task_id, uint64_t channel_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
-    if (!task || task->state != FLAT_TASK_RUNNING) return -1;
+    if (!runtime_task_is_running(runtime, task_id)) return -1;
     return flat_runtime_channel_revert(runtime, channel_id, task_id);
 }
 
 static int runtime_task_native_channel_destroy(void *user, uint64_t task_id, uint64_t channel_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
-    FlatTaskRecord *task = runtime_find_task(runtime, task_id);
-    if (!task || task->state != FLAT_TASK_RUNNING) return -1;
+    if (!runtime_task_is_running(runtime, task_id)) return -1;
     return runtime_channel_destroy_owned(runtime, channel_id, task_id);
 }
 
 int flat_runtime_task_start(FlatRuntime *runtime, FlatTaskId id) {
-    FlatTaskRecord *task = runtime_find_task(runtime, id);
-    if (!task || task->state != FLAT_TASK_CREATED) return -1;
+    FlatTaskRecord *task;
+    int rc;
+    if (!runtime || id == 0) return -1;
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, id);
+    if (!task || task->cleanup_owned || task->cancel_requested || task->state != FLAT_TASK_CREATED) {
+        runtime_unlock(runtime);
+        return -1;
+    }
     task->state = FLAT_TASK_RUNNABLE;
-    return 0;
+    rc = runtime_dispatch_enqueue_locked(runtime, task);
+    if (rc < 0) task->state = FLAT_TASK_CREATED;
+    runtime_unlock(runtime);
+    return rc < 0 ? -1 : 0;
 }
 
-static FlatTaskRecord *runtime_next_runnable(FlatRuntime *runtime) {
+static FlatTaskRecord *runtime_next_transaction_runnable_locked(FlatRuntime *runtime) {
     FlatTaskRecord *task;
     FlatTaskRecord *first = NULL;
-    FlatTaskRecord *first_transaction = NULL;
-    FlatTaskRecord *next_transaction = NULL;
+    FlatTaskRecord *next = NULL;
     for (task = runtime->tasks; task; task = task->next) {
-        if (task->state != FLAT_TASK_RUNNABLE) continue;
+        if (task->cleanup_owned || task->state != FLAT_TASK_RUNNABLE ||
+            !task->dispatch.queued || !runtime_task_owns_channel_transaction(runtime, task->id))
+            continue;
         if (!first) first = task;
-        if (runtime_task_owns_channel_transaction(runtime, task->id)) {
-            if (!first_transaction) first_transaction = task;
-            if (task->id > runtime->last_scheduled_id && !next_transaction)
-                next_transaction = task;
-        }
+        if (task->id > runtime->last_scheduled_id && !next) next = task;
     }
-    if (next_transaction) return next_transaction;
-    if (first_transaction) return first_transaction;
+    return next ? next : first;
+}
+
+static FlatTaskRecord *runtime_find_unqueued_runnable_locked(FlatRuntime *runtime) {
+    FlatTaskRecord *task;
     for (task = runtime->tasks; task; task = task->next) {
-        if (task->state == FLAT_TASK_RUNNABLE && task->id > runtime->last_scheduled_id)
-            return task;
+        if (!task->cleanup_owned && task->state == FLAT_TASK_RUNNABLE &&
+            !task->dispatch.queued && !task->dispatch.worker_owned) return task;
     }
-    return first;
+    return NULL;
 }
 
 int flat_runtime_task_wait(FlatRuntime *runtime, FlatTaskId waiter_id, FlatTaskId target_id) {
     FlatTaskRecord *waiter;
     FlatTaskRecord *target;
     if (!runtime || waiter_id == 0 || target_id == 0 || waiter_id == target_id) return -1;
+    runtime_lock(runtime);
     waiter = runtime_find_task(runtime, waiter_id);
     target = runtime_find_task(runtime, target_id);
-    if (!waiter || !target || waiter->state != FLAT_TASK_RUNNABLE ||
+    if (!waiter || !target || waiter->cleanup_owned || target->cleanup_owned ||
+        waiter->cancel_requested || target->cancel_requested ||
+        waiter->state != FLAT_TASK_RUNNABLE ||
         runtime_task_owns_channel_transaction(runtime, waiter_id) ||
-        runtime_wait_would_cycle(runtime, waiter_id, target_id)) return -1;
+        runtime_wait_would_cycle(runtime, waiter_id, target_id)) {
+        runtime_unlock(runtime);
+        return -1;
+    }
     if (target->state == FLAT_TASK_COMPLETED || target->state == FLAT_TASK_FAILED ||
         target->state == FLAT_TASK_CANCELLED) {
+        runtime_unlock(runtime);
         return 0; /* The dependency has already resolved. */
     }
     waiter->waiting_on = target_id;
     waiter->waiting_channel_id = 0;
     waiter->state = FLAT_TASK_WAITING;
+    runtime_dispatch_dequeue_locked(runtime, waiter);
+    runtime_unlock(runtime);
     return 0;
+}
+
+int flat_runtime_task_cancel_request(FlatRuntime *runtime, FlatTaskId id) {
+    FlatTaskRecord *task;
+    int rc = 0;
+    if (!runtime || id == 0) return -1;
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, id);
+    if (!task) {
+        rc = -1;
+    } else if (runtime_task_is_terminal(task)) {
+        rc = 1; /* A terminal outcome already won; never rewrite its result. */
+    } else {
+        /* Idempotent publication only. VM teardown is always scheduler-owned. */
+        task->cancel_requested = 1;
+    }
+    runtime_unlock(runtime);
+    return rc;
 }
 
 int flat_runtime_task_cancel(FlatRuntime *runtime, FlatTaskId id) {
     FlatTaskRecord *task;
+    FlatTaskState previous_state;
+    FlatVmResult cancel_result;
+    int cancel_rc;
     if (!runtime || id == 0) return -1;
+
+    runtime_lock(runtime);
     task = runtime_find_task(runtime, id);
-    if (!task || (task->state != FLAT_TASK_CREATED &&
-                  task->state != FLAT_TASK_RUNNABLE &&
-                  task->state != FLAT_TASK_WAITING)) return -1;
-    if (flat_vm_cancel(task->vm, &task->result) != 0) return -1;
+    if (!task || task->cleanup_owned || task->dispatch.worker_owned ||
+        (task->state != FLAT_TASK_CREATED &&
+         task->state != FLAT_TASK_RUNNABLE &&
+         task->state != FLAT_TASK_WAITING)) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    previous_state = task->state;
+    task->cleanup_owned = 1;
+    runtime_dispatch_dequeue_locked(runtime, task);
+    runtime_unlock(runtime);
+
+    /* VM cancellation destroys VM-owned resources (including DOM/Lexbor state).
+     * Never hold scheduler_mutex while performing that teardown. Keep the wait
+     * edge/reference published until cancellation succeeds so its target cannot
+     * be destroyed while this operation is still fallible. */
+    memset(&cancel_result, 0, sizeof cancel_result);
+    cancel_rc = flat_vm_cancel(task->vm, &cancel_result);
+
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, id);
+    if (!task || !task->cleanup_owned) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    if (cancel_rc != 0) {
+        task->cleanup_owned = 0;
+        if (previous_state == FLAT_TASK_RUNNABLE) {
+            (void)runtime_dispatch_enqueue_locked(runtime, task);
+        } else if (previous_state == FLAT_TASK_WAITING && task->waiting_on != 0) {
+            FlatTaskRecord *target = runtime_find_task(runtime, task->waiting_on);
+            if (!target || target->state == FLAT_TASK_COMPLETED ||
+                target->state == FLAT_TASK_FAILED || target->state == FLAT_TASK_CANCELLED) {
+                task->waiting_on = 0;
+                task->waiting_channel_id = 0;
+                task->state = FLAT_TASK_RUNNABLE;
+                (void)runtime_dispatch_enqueue_locked(runtime, task);
+            }
+        } else if (previous_state == FLAT_TASK_WAITING && task->waiting_channel_id != 0) {
+            FlatChannel *channel = runtime_find_channel(runtime, task->waiting_channel_id);
+            int available = 0;
+            if (channel) {
+                flat_channel_lock(channel);
+                available = !channel->transaction_locked ||
+                            channel->transaction_owner == task->id;
+                flat_channel_unlock(channel);
+            }
+            if (!channel || available) {
+                task->waiting_on = 0;
+                task->waiting_channel_id = 0;
+                task->state = FLAT_TASK_RUNNABLE;
+                (void)runtime_dispatch_enqueue_locked(runtime, task);
+            }
+        }
+        runtime_unlock(runtime);
+        return -1;
+    }
+    task->result = cancel_result;
+    task->cancel_requested = 0;
     task->waiting_on = 0;
     task->waiting_channel_id = 0;
-    runtime_abort_task_channel_transactions(runtime, id);
-    runtime_release_task_channel_refs(runtime, id);
+    runtime_dispatch_dequeue_locked(runtime, task);
+    runtime_abort_task_channel_transactions_locked(runtime, id);
+    runtime_release_task_channel_refs_locked(runtime, id);
     task->state = FLAT_TASK_CANCELLED;
-    runtime_wake_waiters(runtime, id);
+    task->cleanup_owned = 0;
+    runtime_wake_waiters_locked(runtime, id);
+    runtime_unlock(runtime);
     return 0;
+}
+
+/* Caller holds scheduler_mutex. Cancellation becomes terminal only after VM
+ * teardown and task-owned Channel cleanup have completed. */
+static void runtime_cancel_commit_locked(FlatRuntime *runtime, FlatTaskRecord *task,
+                                         const FlatVmResult *cancel_result) {
+    task->result = *cancel_result;
+    task->waiting_on = 0;
+    task->waiting_channel_id = 0;
+    runtime_dispatch_dequeue_locked(runtime, task);
+    runtime_abort_task_channel_transactions_locked(runtime, task->id);
+    runtime_release_task_channel_refs_locked(runtime, task->id);
+    task->state = FLAT_TASK_CANCELLED;
+    task->cancel_requested = 0;
+    task->cleanup_owned = 0;
+    runtime_wake_waiters_locked(runtime, task->id);
+}
+
+static int runtime_task_is_terminal(const FlatTaskRecord *task) {
+    return task && (task->state == FLAT_TASK_COMPLETED ||
+                    task->state == FLAT_TASK_FAILED ||
+                    task->state == FLAT_TASK_CANCELLED);
 }
 
 int flat_runtime_schedule(FlatRuntime *runtime, uint64_t quantum,
                           uint64_t max_quanta, uint64_t *out_quanta) {
     uint64_t turns = 0;
+    int scheduler_error = 0;
     if (out_quanta) *out_quanta = 0;
     if (!runtime || quantum == 0) return -1;
 
     runtime_lock(runtime);
+    if (runtime->schedule_active) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime->schedule_active = 1;
     runtime->active_runs++;
     runtime_unlock(runtime);
 
     while (max_quanta == 0 || turns < max_quanta) {
-        FlatTaskRecord *task = runtime_next_runnable(runtime);
+        FlatTaskRecord *task;
         FlatVmResult result;
+        uint64_t dispatch_token = 0;
         int rc;
-        if (!task) break;
+        int requeue = 0;
+        int cancellation_cleanup = 0;
 
+        /* Queue pop and dispatch claim share scheduler_mutex with every state
+         * transition. This prevents a popped stale ID from being reused after a
+         * WAITING -> RUNNABLE cycle. The queue mutex is always released before
+         * any worker would acquire scheduler_mutex in the future. */
+        runtime_lock(runtime);
+        /* CREATED, RUNNABLE and WAITING tasks can be claimed for cleanup without
+         * executing another bytecode instruction. A RUNNING task is cleaned by
+         * its current owner after flat_vm_step() returns below. */
+        for (task = runtime->tasks; task; task = task->next) {
+            if (task->cancel_requested && !task->cleanup_owned &&
+                !task->dispatch.worker_owned && !runtime_task_is_terminal(task)) {
+                task->cleanup_owned = 1;
+                runtime_dispatch_dequeue_locked(runtime, task);
+                cancellation_cleanup = 1;
+                break;
+            }
+        }
+        if (cancellation_cleanup) {
+            runtime_unlock(runtime);
+            memset(&result, 0, sizeof result);
+            rc = flat_vm_cancel(task->vm, &result);
+            runtime_lock(runtime);
+            if (rc == 0) {
+                runtime_cancel_commit_locked(runtime, task, &result);
+            } else {
+                task->cancel_requested = 0;
+                task->cleanup_owned = 0;
+                if (task->state == FLAT_TASK_RUNNABLE)
+                    (void)runtime_dispatch_enqueue_locked(runtime, task);
+                scheduler_error = 1;
+            }
+            runtime_unlock(runtime);
+            if (scheduler_error) break;
+            turns++;
+            continue;
+        }
+        task = runtime_next_transaction_runnable_locked(runtime);
+        if (task) {
+            (void)flat_ready_queue_remove(&runtime->ready_queue, task->id);
+            if (flat_task_dispatch_claim(&task->dispatch, &dispatch_token) != 0) {
+                scheduler_error = 1;
+                runtime_unlock(runtime);
+                break;
+            }
+        } else {
+            for (;;) {
+                uint64_t queued_id = 0;
+                int pop_rc = flat_ready_queue_try_pop(&runtime->ready_queue, &queued_id);
+                if (pop_rc < 0) {
+                    scheduler_error = 1;
+                    break;
+                }
+                if (pop_rc == 0) {
+                    FlatTaskRecord *unpublished = runtime_find_unqueued_runnable_locked(runtime);
+                    if (unpublished) {
+                        if (runtime_dispatch_enqueue_locked(runtime, unpublished) < 0)
+                            scheduler_error = 1;
+                        else continue;
+                    }
+                    break;
+                }
+                task = runtime_find_task(runtime, queued_id);
+                if (!task || task->cleanup_owned || task->state != FLAT_TASK_RUNNABLE ||
+                    !task->dispatch.queued) {
+                    /* Defensive stale entry: state remains authoritative. */
+                    continue;
+                }
+                if (flat_task_dispatch_claim(&task->dispatch, &dispatch_token) != 0) {
+                    scheduler_error = 1;
+                    break;
+                }
+                break;
+            }
+        }
+        if (scheduler_error || !task) {
+            runtime_unlock(runtime);
+            if (scheduler_error) break;
+            break;
+        }
         task->state = FLAT_TASK_RUNNING;
         runtime->last_scheduled_id = task->id;
+        runtime_unlock(runtime);
+
         memset(&result, 0, sizeof result);
         rc = flat_vm_step(task->vm, quantum, &result);
+
+        runtime_lock(runtime);
         task->result = result;
         if (task->state == FLAT_TASK_WAITING && rc == 0 && result.state == FLAT_VM_YIELDED) {
-            /* task.wait() changed RUNNING -> WAITING inside the native call. */
+            /* task.wait()/Channel contention changed RUNNING -> WAITING in the native call. */
         } else if (rc == 0 && result.state == FLAT_VM_YIELDED) {
             task->state = FLAT_TASK_RUNNABLE;
         } else if (rc == 0 && result.state == FLAT_VM_COMPLETED) {
@@ -625,56 +965,136 @@ int flat_runtime_schedule(FlatRuntime *runtime, uint64_t quantum,
                 task->result.termination = FLAT_TERM_ERROR;
             task->result.state = FLAT_VM_FAILED;
         }
-        if (task->state == FLAT_TASK_COMPLETED || task->state == FLAT_TASK_FAILED) {
-            runtime_abort_task_channel_transactions(runtime, task->id);
-            runtime_release_task_channel_refs(runtime, task->id);
-            runtime_wake_waiters(runtime, task->id);
+
+        /* Completion/failure wins if the VM reached a terminal result during
+         * this quantum. Otherwise the current dispatch owner performs cancel. */
+        if (task->cancel_requested && !runtime_task_is_terminal(task)) {
+            FlatVmResult cancel_result;
+            task->cleanup_owned = 1;
+            runtime_unlock(runtime);
+            memset(&cancel_result, 0, sizeof cancel_result);
+            rc = flat_vm_cancel(task->vm, &cancel_result);
+            runtime_lock(runtime);
+            if (rc == 0) {
+                runtime_cancel_commit_locked(runtime, task, &cancel_result);
+            } else {
+                task->cancel_requested = 0;
+                task->cleanup_owned = 0;
+                scheduler_error = 1;
+            }
+        } else if (runtime_task_is_terminal(task)) {
+            task->cancel_requested = 0;
         }
+        if (task->state == FLAT_TASK_COMPLETED || task->state == FLAT_TASK_FAILED) {
+            runtime_abort_task_channel_transactions_locked(runtime, task->id);
+            runtime_release_task_channel_refs_locked(runtime, task->id);
+            runtime_wake_waiters_locked(runtime, task->id);
+        }
+        if (task->state == FLAT_TASK_COMPLETED || task->state == FLAT_TASK_FAILED ||
+            task->state == FLAT_TASK_CANCELLED || task->state == FLAT_TASK_WAITING)
+            task->dispatch.wake_pending = 0;
+        if (flat_task_dispatch_release(&task->dispatch, dispatch_token, &requeue) != 0) {
+            scheduler_error = 1;
+            runtime_unlock(runtime);
+            break;
+        }
+        if (task->state == FLAT_TASK_RUNNABLE) {
+            int publish_rc;
+            if (requeue) {
+                publish_rc = flat_ready_queue_push(&runtime->ready_queue, task->id);
+                if (publish_rc != 0) task->dispatch.queued = 0;
+            } else {
+                publish_rc = runtime_dispatch_enqueue_locked(runtime, task);
+            }
+            if (publish_rc < 0) scheduler_error = 1;
+        }
+        runtime_unlock(runtime);
+        if (scheduler_error) break;
         turns++;
     }
 
     runtime_lock(runtime);
     if (runtime->active_runs > 0) runtime->active_runs--;
+    runtime->schedule_active = 0;
     runtime_unlock(runtime);
     if (out_quanta) *out_quanta = turns;
-    return 0;
+    return scheduler_error ? -1 : 0;
 }
 
-FlatTaskState flat_runtime_task_state(const FlatRuntime *runtime, FlatTaskId id) {
-    FlatTaskRecord *task = runtime_find_task(runtime, id);
-    return task ? task->state : (FlatTaskState)0;
+FlatTaskState flat_runtime_task_state(const FlatRuntime *runtime_const, FlatTaskId id) {
+    FlatRuntime *runtime = (FlatRuntime *)runtime_const;
+    FlatTaskRecord *task;
+    FlatTaskState state = (FlatTaskState)0;
+    if (!runtime || id == 0) return state;
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, id);
+    if (task) state = task->state;
+    runtime_unlock(runtime);
+    return state;
 }
 
-int flat_runtime_task_result(const FlatRuntime *runtime, FlatTaskId id,
+int flat_runtime_task_result(const FlatRuntime *runtime_const, FlatTaskId id,
                              FlatVmResult *out_result) {
-    FlatTaskRecord *task = runtime_find_task(runtime, id);
-    if (!task || !out_result ||
+    FlatRuntime *runtime = (FlatRuntime *)runtime_const;
+    FlatTaskRecord *task;
+    if (!runtime || !out_result || id == 0) return -1;
+    runtime_lock(runtime);
+    task = runtime_find_task(runtime, id);
+    if (!task || task->cleanup_owned ||
         (task->state != FLAT_TASK_COMPLETED && task->state != FLAT_TASK_FAILED &&
-         task->state != FLAT_TASK_CANCELLED)) return -1;
+         task->state != FLAT_TASK_CANCELLED)) {
+        runtime_unlock(runtime);
+        return -1;
+    }
     *out_result = task->result;
+    runtime_unlock(runtime);
     return 0;
 }
 
 int flat_runtime_task_destroy(FlatRuntime *runtime, FlatTaskId id) {
     FlatTaskRecord *task;
-    FlatTaskRecord *prev = NULL;
+    FlatTaskRecord *prev;
     if (!runtime || id == 0) return -1;
-    for (task = runtime->tasks; task; prev = task, task = task->next) {
+    runtime_lock(runtime);
+    for (prev = NULL, task = runtime->tasks; task; prev = task, task = task->next) {
         if (task->id == id) break;
     }
-    if (!task || runtime_has_waiters(runtime, id) ||
-        (task->state != FLAT_TASK_CREATED &&
-                  task->state != FLAT_TASK_COMPLETED &&
-                  task->state != FLAT_TASK_FAILED &&
-                  task->state != FLAT_TASK_CANCELLED)) return -1;
-    runtime_abort_task_channel_transactions(runtime, id);
-    runtime_release_task_channel_refs(runtime, id);
-    if (flat_vm_destroy(task->vm) != 0) return -1;
+    if (!task || task->cleanup_owned || task->cancel_requested || runtime_has_waiters(runtime, id) ||
+        (task->state != FLAT_TASK_CREATED && task->state != FLAT_TASK_COMPLETED &&
+         task->state != FLAT_TASK_FAILED && task->state != FLAT_TASK_CANCELLED) ||
+        task->dispatch.worker_owned) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    task->cleanup_owned = 1;
+    runtime_unlock(runtime);
+
+    /* VM teardown may enter serialized native-module gates (notably DOM). */
+    if (flat_vm_destroy(task->vm) != 0) {
+        runtime_lock(runtime);
+        task = runtime_find_task(runtime, id);
+        if (task) task->cleanup_owned = 0;
+        runtime_unlock(runtime);
+        return -1;
+    }
+
+    runtime_lock(runtime);
+    for (prev = NULL, task = runtime->tasks; task; prev = task, task = task->next) {
+        if (task->id == id) break;
+    }
+    if (!task || !task->cleanup_owned) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime_dispatch_dequeue_locked(runtime, task);
+    runtime_abort_task_channel_transactions_locked(runtime, id);
+    runtime_release_task_channel_refs_locked(runtime, id);
     if (prev) prev->next = task->next;
     else runtime->tasks = task->next;
     if (runtime->tasks_tail == task) runtime->tasks_tail = prev;
     if (runtime->task_count > 0) runtime->task_count--;
     free(task);
+    runtime_unlock(runtime);
     return 0;
 }
 
@@ -719,10 +1139,10 @@ static int runtime_channel_add_user_locked(FlatChannel *channel, FlatTaskId task
     return 0;
 }
 
-static void runtime_release_task_channel_refs(FlatRuntime *runtime, FlatTaskId task_id) {
+/* Caller holds scheduler_mutex. */
+static void runtime_release_task_channel_refs_locked(FlatRuntime *runtime, FlatTaskId task_id) {
     FlatChannel *channel;
     if (!runtime || task_id == 0) return;
-    runtime_lock(runtime);
     for (channel = runtime->channels; channel; channel = channel->next) {
         FlatChannelTaskRef **link;
         flat_channel_lock(channel);
@@ -737,6 +1157,12 @@ static void runtime_release_task_channel_refs(FlatRuntime *runtime, FlatTaskId t
         }
         flat_channel_unlock(channel);
     }
+}
+
+static void runtime_release_task_channel_refs(FlatRuntime *runtime, FlatTaskId task_id) {
+    if (!runtime || task_id == 0) return;
+    runtime_lock(runtime);
+    runtime_release_task_channel_refs_locked(runtime, task_id);
     runtime_unlock(runtime);
 }
 
@@ -745,6 +1171,33 @@ static FlatChannel *runtime_channel_acquire(FlatRuntime *runtime, FlatChannelId 
     runtime_lock(runtime);
     channel = runtime_find_channel(runtime, id);
     if (channel) flat_channel_lock(channel);
+    runtime_unlock(runtime);
+    return channel;
+}
+
+/* Atomically validate a task reference and pin the Channel while the registry is locked. */
+static FlatChannel *runtime_channel_acquire_for_owner(FlatRuntime *runtime, FlatChannelId id,
+                                                       FlatTaskId owner_id) {
+    FlatChannel *channel;
+    FlatTaskRecord *owner;
+    int active;
+    if (!runtime || id == 0) return NULL;
+    runtime_lock(runtime);
+    owner = owner_id ? runtime_find_task(runtime, owner_id) : NULL;
+    if (owner && owner->cleanup_owned) {
+        runtime_unlock(runtime);
+        return NULL;
+    }
+    active = owner && owner->state != FLAT_TASK_COMPLETED &&
+             owner->state != FLAT_TASK_FAILED && owner->state != FLAT_TASK_CANCELLED;
+    channel = runtime_find_channel(runtime, id);
+    if (channel) {
+        flat_channel_lock(channel);
+        if (active && runtime_channel_add_user_locked(channel, owner_id) != 0) {
+            flat_channel_unlock(channel);
+            channel = NULL;
+        }
+    }
     runtime_unlock(runtime);
     return channel;
 }
@@ -762,13 +1215,16 @@ static int runtime_task_wait_channel(FlatRuntime *runtime, FlatTaskId task_id,
     int rc = -1;
     if (!runtime || task_id == 0 || channel_id == 0) return -1;
     /* A retry is a suspension just like task.wait(): never park while this
-     * task owns another Channel transaction. Check before taking runtime or
-     * Channel gates because the helper traverses and locks the Channel list. */
-    if (runtime_task_owns_channel_transaction(runtime, task_id)) return -1;
+     * task owns another Channel transaction. The scheduler mutex protects the
+     * Channel registry while the ownership scan acquires individual Channel gates. */
     runtime_lock(runtime);
+    if (runtime_task_owns_channel_transaction(runtime, task_id)) {
+        runtime_unlock(runtime);
+        return -1;
+    }
     task = runtime_find_task(runtime, task_id);
     channel = runtime_find_channel(runtime, channel_id);
-    if (!task || task->state != FLAT_TASK_RUNNING || !channel) {
+    if (!task || task->cleanup_owned || task->state != FLAT_TASK_RUNNING || !channel) {
         runtime_unlock(runtime);
         return -1;
     }
@@ -779,11 +1235,13 @@ static int runtime_task_wait_channel(FlatRuntime *runtime, FlatTaskId task_id,
         owner_id = channel->transaction_owner;
         transaction_owner = runtime_find_task(runtime, owner_id);
         if (owner_id != 0 && owner_id != task_id && transaction_owner &&
+            !transaction_owner->cleanup_owned &&
             !runtime_wait_would_cycle(runtime, task_id, owner_id) &&
             runtime_channel_add_user_locked(channel, task_id) == 0) {
             task->waiting_on = owner_id;
             task->waiting_channel_id = channel_id;
             task->state = FLAT_TASK_WAITING;
+            runtime_dispatch_dequeue_locked(runtime, task);
             rc = 1;
         }
     }
@@ -837,14 +1295,9 @@ int flat_runtime_channel_set(FlatRuntime *runtime, FlatChannelId id, FlatTaskId 
     FlatChannel *channel;
     int rc;
     if (!runtime) return -1;
-    channel = runtime_channel_acquire(runtime, id);
+    channel = runtime_channel_acquire_for_owner(runtime, id, owner_id);
     if (!channel) return -1;
-    if (owner_id && runtime_find_task(runtime, owner_id) &&
-        runtime_find_task(runtime, owner_id)->state != FLAT_TASK_COMPLETED &&
-        runtime_find_task(runtime, owner_id)->state != FLAT_TASK_FAILED &&
-        runtime_find_task(runtime, owner_id)->state != FLAT_TASK_CANCELLED &&
-        runtime_channel_add_user_locked(channel, owner_id) != 0) rc = -1;
-    else rc = flat_channel_set(channel, owner_id, name, value, source_coll, source_pool, source_files);
+    rc = flat_channel_set(channel, owner_id, name, value, source_coll, source_pool, source_files);
     flat_channel_unlock(channel);
     runtime_log_channel(owner_id, id, "set", name, runtime_value_type_name(value),
                         rc == 0 ? "stored" : (rc == -2 ? "busy" : "rejected"),
@@ -859,15 +1312,10 @@ int flat_runtime_channel_var(FlatRuntime *runtime, FlatChannelId id, FlatTaskId 
     FlatChannel *channel;
     int rc;
     if (!runtime) return -1;
-    channel = runtime_channel_acquire(runtime, id);
+    channel = runtime_channel_acquire_for_owner(runtime, id, owner_id);
     if (!channel) return -1;
-    if (owner_id && runtime_find_task(runtime, owner_id) &&
-        runtime_find_task(runtime, owner_id)->state != FLAT_TASK_COMPLETED &&
-        runtime_find_task(runtime, owner_id)->state != FLAT_TASK_FAILED &&
-        runtime_find_task(runtime, owner_id)->state != FLAT_TASK_CANCELLED &&
-        runtime_channel_add_user_locked(channel, owner_id) != 0) rc = -1;
-    else rc = flat_channel_var(channel, owner_id, name, destination_coll, destination_pool,
-                               destination_files, out_value);
+    rc = flat_channel_var(channel, owner_id, name, destination_coll, destination_pool,
+                          destination_files, out_value);
     flat_channel_unlock(channel);
     runtime_log_channel(owner_id, id, "var", name, rc == 0 ? runtime_value_type_name(out_value) : NULL,
                         rc == 0 ? "read" : (rc == -2 ? "busy" : "rejected"),
@@ -884,12 +1332,12 @@ int flat_runtime_channel_lock(FlatRuntime *runtime, FlatChannelId id, FlatTaskId
     /* Avoid a cooperative wait while holding a different Channel transaction.
      * Compute this before acquiring runtime/channel gates (the scan locks each
      * Channel itself). */
-    owns_transaction = runtime_task_owns_channel_transaction(runtime, owner_id);
     runtime_lock(runtime);
+    owns_transaction = runtime_task_owns_channel_transaction(runtime, owner_id);
     owner = runtime_find_task(runtime, owner_id);
     channel = runtime_find_channel(runtime, id);
-    if (!owner || owner->state == FLAT_TASK_COMPLETED || owner->state == FLAT_TASK_FAILED ||
-        owner->state == FLAT_TASK_CANCELLED || !channel) {
+    if (!owner || owner->cleanup_owned || owner->state == FLAT_TASK_COMPLETED ||
+        owner->state == FLAT_TASK_FAILED || owner->state == FLAT_TASK_CANCELLED || !channel) {
         runtime_unlock(runtime);
         return -1;
     }
@@ -898,6 +1346,7 @@ int flat_runtime_channel_lock(FlatRuntime *runtime, FlatChannelId id, FlatTaskId
         FlatTaskId transaction_owner = channel->transaction_owner;
         if (owner->state == FLAT_TASK_RUNNING && !owns_transaction &&
             transaction_owner != 0 && runtime_find_task(runtime, transaction_owner) &&
+            !runtime_find_task(runtime, transaction_owner)->cleanup_owned &&
             !runtime_wait_would_cycle(runtime, owner_id, transaction_owner)) {
             if (runtime_channel_add_user_locked(channel, owner_id) != 0) {
                 flat_channel_unlock(channel);
@@ -965,7 +1414,16 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
     runtime_unlock(runtime);
     if (busy) return -1;
 
+    if (flat_ready_queue_close(&runtime->ready_queue) != 0) return -1;
+    for (;;) {
+        uint64_t ignored_id = 0;
+        int pop_rc = flat_ready_queue_try_pop(&runtime->ready_queue, &ignored_id);
+        if (pop_rc < 0) return -1;
+        if (pop_rc == 0) break;
+    }
+    if (flat_ready_queue_destroy(&runtime->ready_queue) != 0) return -1;
     flat_host_config_destroy(&runtime->host);
+    if (flat_mutex_destroy(&runtime->scheduler_mutex) != 0) return -1;
     memset(runtime, 0, sizeof *runtime);
     free(runtime);
     return 0;

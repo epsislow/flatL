@@ -385,14 +385,14 @@ The exact public API for worker startup, cancellation requests, shutdown modes a
 
 ## 21. Cancellation request and worker shutdown contract (archive 296)
 
-Archive 296 separates the cooperative cancellation API that exists today from the request/cleanup protocol required by worker mode. The behavioral contract is recorded in [`09_CANCELLATION_SHUTDOWN_SPEC.md`](09_CANCELLATION_SHUTDOWN_SPEC.md); no asynchronous API or worker shutdown implementation is added in this archive.
+Archive 296 separates the cooperative cancellation API from the request/cleanup protocol required by worker mode. Archive 303 implements the request-only API and scheduler-owned safe-point cleanup, while the worker shutdown contract remains future work. The behavioral contract is recorded in [`09_CANCELLATION_SHUTDOWN_SPEC.md`](09_CANCELLATION_SHUTDOWN_SPEC.md).
 
 ### 21.1 Cancellation request is not cancellation completion
 
-- Worker mode must introduce a request-only operation (proposed name: `flat_runtime_task_cancel_request`). The caller publishes cancellation intent; it must not call `flat_vm_cancel()`, destroy VM state, rollback Channel transactions, release VM resources, or publish `CANCELLED`.
+- The runtime exposes `flat_runtime_task_cancel_request()`. The caller publishes cancellation intent; it must not call `flat_vm_cancel()`, destroy VM state, rollback Channel transactions, release VM resources, or publish `CANCELLED`.
 - A task's cancellation request is separate from `FlatTaskState`. Repeated requests are idempotent. A terminal task keeps its already-committed result.
 - The worker that owns a RUNNING task is the only thread allowed to step/cancel/destroy its VM. It observes cancellation at the next scheduler-visible safe boundary after `flat_vm_step()` returns (normally the configured quantum boundary); a long-running native call delays that boundary.
-- CREATED/RUNNABLE/WAITING tasks that are not worker-owned are claimed as cancellation-cleanup work. Cleanup still runs through the worker/scheduler ownership protocol, not on an arbitrary request caller.
+- CREATED/RUNNABLE/WAITING tasks that are not dispatch-owned are claimed as cancellation-cleanup work by the scheduler (archive 303); the future worker pool will use its dedicated cleanup queue. Cleanup never runs on the arbitrary request caller.
 - `CANCELLED` is published only after Channel rollback, wait-edge removal, Channel-reference release, VM cleanup, and terminal result publication. Dependents wake after cleanup.
 - Cancellation is cooperative and best-effort. A long-running/blocking native call delays cancellation; `pthread_cancel()` and arbitrary C-stack unwinding are forbidden.
 - If a task reaches a terminal VM result before its owner observes the request, that terminal outcome wins. A request must never rewrite a completed/failed result.
@@ -409,7 +409,7 @@ Archive 296 separates the cooperative cancellation API that exists today from th
 
 ### 21.3 Scope and implementation status
 
-These are the worker-mode design contracts, not current runtime capabilities. Existing `flat_runtime_task_cancel()` remains a cooperative host-thread API and the scheduler/task registry remain host-thread-confined. Archive 296 adds no pthread worker, cancellation-request flag/queue, shutdown state, or join implementation. Future implementation must pass the acceptance matrix in `09_CANCELLATION_SHUTDOWN_SPEC.md` before worker mode is enabled.
+The request-only cancellation contract is partially implemented by archive 303: callers publish intent under `scheduler_mutex`; the cooperative scheduler claims unowned cleanup, and a running task's dispatch owner performs cancellation after the VM step returns. The old synchronous `flat_runtime_task_cancel()` remains available for non-dispatch-owned tasks. There is not yet a dedicated worker cleanup queue, pool lifecycle state, DRAIN/CANCEL API, join, or pthread worker. Future implementation must pass the remaining acceptance matrix in `09_CANCELLATION_SHUTDOWN_SPEC.md` before worker mode is enabled.
 
 
 ## 22. Native module capability metadata and worker admission (archive 297)
@@ -432,3 +432,52 @@ These are the worker-mode design contracts, not current runtime capabilities. Ex
 - Never hold scheduler or Channel locks while acquiring a module gate. Never hold a module gate across a VM quantum, task suspension, or scheduler wait. Native handlers must remain synchronous while holding the gate.
 - Capability declarations must be frozen before worker creation. Plugin loading/unloading remains setup-only while worker execution is active. A serialized handler must not recursively dispatch into the same module while holding its non-recursive gate.
 - Archive 298 adds synchronization/gate infrastructure only. It does not add worker creation, condition variables, task scheduling locks, cancellation requests, or worker shutdown.
+
+## 11. Scheduler dispatch ownership foundation (archive 299)
+
+- A task may be queued for dispatch or owned by one worker, never both simultaneously.
+- Repeated enqueue/wakeup notifications are coalesced.
+- A wakeup received while a worker still owns the VM turn is recorded as `wake_pending`; it must not enqueue the same task concurrently.
+- Worker release validates a monotonically advancing dispatch token. A stale completion token cannot release a newer ownership claim.
+- If `wake_pending` is set at release, exactly one requeue is requested and published after releasing the scheduler mutex.
+- Queue entries contain task IDs, not task-record pointers. A worker must revalidate the ID and state under the scheduler mutex after pop.
+- The ready-queue mutex is never nested with the runtime scheduler mutex. Queue publication/pop and task-state validation/claim are separate critical sections coordinated by the dispatch flags.
+- The ready queue drains already-published IDs after close, rejects new pushes, and wakes all blocked consumers. Destruction requires producers/consumers to have been joined.
+- These are implemented synchronization primitives and tested state-machine rules only. They are not yet integrated into `FlatRuntime`; current cooperative scheduler semantics remain unchanged.
+
+
+## 24. FlatRuntime scheduler mutex and single-driver ownership (archive 300)
+
+- Replace the `FlatRuntime` atomic spin gate with the cross-platform `FlatMutex` abstraction. The scheduler mutex protects task registry/state, wait graph, task IDs, Channel registry membership, Channel reference publication, and runtime scheduling counters.
+- Task registry/state APIs are synchronized while the runtime remains alive. Host threads may query task state/result and start CREATED tasks while the cooperative scheduler is running. Runtime destruction still requires exclusive host-side lifetime control; no mutex can protect an API call that races the free of the runtime object itself.
+- Only one thread may call `flat_runtime_schedule()` at a time. A concurrent second scheduler call is rejected with `-1`; it does not block or become a second scheduler driver.
+- `flat_vm_step()` and native handlers always run outside `scheduler_mutex`. The scheduler claims a task under the mutex, releases it for the VM quantum, then reacquires it to publish the result/state and release ownership.
+- `FlatTaskRecord` embeds `FlatTaskDispatchState`. Queue state, worker ownership, wake-pending coalescing and dispatch tokens are transitioned under `scheduler_mutex`. The current cooperative scheduler still scans the task registry; the standalone MPMC ready queue is not yet connected.
+- Lock order is `scheduler_mutex` then an individual Channel gate. A Channel gate must be released before a helper acquires `scheduler_mutex`. Owner-aware Channel acquisition validates the task and pins the Channel reference atomically while the registry is locked. Aborting a task-owned transaction wakes Channel waiters after releasing that Channel gate, while still publishing waiter state under the scheduler mutex.
+- Task cancellation/destruction marks an internal `cleanup_owned` guard under the scheduler mutex, then performs `flat_vm_cancel()` / `flat_vm_destroy()` outside the mutex because VM teardown may acquire serialized native gates such as DOM/Lexbor. The task stays registered until cleanup completes. While cleanup-owned, start/wait/cancel/destroy, scheduler selection and owner-aware Channel operations reject or skip it.
+- Task destruction rejects a task whose dispatch state is still worker-owned, even if a native wait callback has temporarily published `WAITING` before `flat_vm_step()` returns. Synchronous cancellation applies the same ownership guard. A running VM is never cancelled or destroyed by another host thread. Wait edges and Channel references remain published until cancellation succeeds so their targets/resources cannot be destroyed during a fallible cleanup operation.
+- The current `flat_runtime_task_cancel()` remains synchronous. Archive 303 adds the separate request-only cancellation API; DRAIN/CANCEL shutdown and worker join remain future work as specified in `09_CANCELLATION_SHUTDOWN_SPEC.md`.
+- Archive 300 does not create workers, use the MPMC queue in runtime scheduling, convert Channel's internal atomic gate, or claim complete-VM thread safety.
+
+
+## 23. Ready-queue integration and Channel mutex conversion (archive 302)
+
+- `FlatRuntime` owns one `FlatReadyQueue`. Task IDs are published when a task becomes RUNNABLE and removed when it becomes WAITING, is cancelled, or receives transaction-owner priority. The queue is the normal source of scheduler dispatch order; task state and `FlatTaskDispatchState` remain authoritative.
+- The cooperative scheduler uses nonblocking `flat_ready_queue_try_pop()` because it must return when no task is runnable. The blocking `flat_ready_queue_pop()` remains available for future worker threads.
+- Queue pop and dispatch claim occur in one `scheduler_mutex` critical section. This prevents a popped ID from being reused after a WAITING/RUNNABLE transition. `flat_vm_step()` remains outside all scheduler/queue locks.
+- Explicit Channel transaction owners retain scheduler priority. The scheduler selects them from the task registry and removes their queued ID before claiming; all other tasks follow FIFO ready-queue order.
+- `FlatReadyQueue` adds nonblocking pop and ID removal. Dispatch state prevents duplicate publication; if queue allocation fails, a RUNNABLE task remains visible and the scheduler retries publication rather than treating the runtime as idle.
+- Each `FlatChannel` now uses `FlatMutex` instead of an `atomic_flag` spin gate. The established lock order is `scheduler_mutex -> Channel gate`; Channel operations release the Channel gate before requesting scheduler wakeups.
+- Lock order for queue integration is `scheduler_mutex -> ready_queue mutex`; Channel operations use `scheduler_mutex -> Channel gate`. A Channel gate and the queue mutex must not be held simultaneously. A future blocking worker pop may hold only the queue mutex while waiting and must release it before acquiring `scheduler_mutex`; no nested queue-to-scheduler acquisition is permitted.
+- Runtime creation initializes the queue. Idle runtime destruction closes, drains and destroys it. This does not add worker threads, worker join, cancellation requests, or shutdown modes.
+
+
+## 24. Request-only cancellation and scheduler-owned safe-point cleanup (archive 303)
+
+- Add `flat_runtime_task_cancel_request(runtime, id)` as a separate API; do not change the synchronous compatibility semantics of `flat_runtime_task_cancel()`.
+- Return `0` for an accepted or repeated request, `1` when the task is already terminal, and `-1` for invalid runtime/ID. A terminal result is never rewritten.
+- The request caller only sets `cancel_requested` under `scheduler_mutex`. It never invokes `flat_vm_cancel()`, rolls back Channels, releases VM resources, or publishes `CANCELLED`.
+- The current cooperative scheduler scans and claims pending requests for non-dispatch-owned CREATED/RUNNABLE/WAITING tasks before selecting bytecode. The current dispatch owner checks a RUNNING task's request after `flat_vm_step()` returns, including the transient WAITING-before-step-return case.
+- Cancellation commit order remains VM cancellation/cleanup, outgoing wait metadata removal, Channel transaction rollback/reference release, terminal CANCELLED publication, then dependent wakeup. Completion/failure wins if already reached.
+- This is a pre-worker implementation of the request/safe-point protocol. A dedicated worker cleanup queue, DRAIN/CANCEL pool lifecycle, shutdown request, join, and pthread worker creation remain future work.
+- `flvm[40]` covers idempotent requests for CREATED/RUNNABLE/WAITING/RUNNING, terminal-result preservation, unknown IDs, and a DOM gate held across a running VM step to prove that the request returns without touching the VM and cleanup occurs after the safe point.

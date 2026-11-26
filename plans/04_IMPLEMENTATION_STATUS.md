@@ -2,7 +2,7 @@
 
 **Ultima actualizare:** 2026-11-26  
 **Arhivă de referință:** `flatL-main-296-cancellation-shutdown-contract.zip`
-**Arhivă curentă:** `flatL-main-297-native-module-capability-metadata.zip`  
+**Arhivă curentă:** `flatL-main-303-cancellation-request-runtime.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 ## Ce este prezent în arhiva 252 (bază)
@@ -1017,3 +1017,174 @@ The bundled Lexbor independent-context test provides positive concurrency eviden
 - A combined `flvm[23-36]` run encountered intermittent runner/build timeouts around rebuilding the `flvm[26]`/`flvm[27]` integration binaries. Those IDs were rerun separately and passed; no complete grouped-range pass is claimed.
 - Test discovery reports 1171 tests; the full default suite was NOT RUN.
 - Windows and Emscripten builds were not available for validation.
+
+## Archive 299 — scheduler synchronization foundation
+
+### Implemented
+
+- Extended `include/flat_sync.h` with cross-platform mutex lifecycle, condition variables, and thread create/join. POSIX uses pthreads; Windows uses SRWLOCK/CONDITION_VARIABLE and `_beginthreadex`; single-thread Emscripten explicitly rejects blocking waits and thread creation while retaining no-op mutexes.
+- Added `include/flat_scheduler_sync.h` and `src/common/flat_scheduler_sync.c` with a dynamically growing MPMC FIFO ready queue of task IDs.
+- Added `FlatTaskDispatchState` with `queued`, `worker_owned`, `wake_pending`, and dispatch tokens. Wakeups during worker ownership are coalesced and requeued once on release; stale tokens are rejected. Queue destruction rejects an open or non-drained queue.
+- Added `test/cases/flvm/037_scheduler_sync_primitives/` (`flvm[37]`) to the existing `bin/run_tests` framework.
+- Added `plans/11_SCHEDULER_SYNC_FOUNDATION.md` and updated architecture decisions/roadmap.
+
+### Not implemented
+
+- The ready queue and dispatch state are not connected to `FlatRuntime` or `FlatTaskRecord`.
+- The current `FlatRuntime` atomic gate has not been replaced; task registry, wait graph, state queries, and task lifecycle APIs are not yet safe for concurrent host callers.
+- No worker threads execute VM tasks. No scheduler mutex/condition wait loop, cancellation request, DRAIN/CANCEL, join, or worker-owned teardown exists.
+- Channel registry and per-Channel atomic gate have not been converted to the future scheduler/Channel mutex protocol.
+- No complete-VM concurrent execution or worker-pool readiness is claimed.
+
+### Validation
+
+- `flvm[37]` — PASS (4 producers, 4 consumers, 20,000 unique queue IDs; dispatch ownership/wake-pending/token checks; close/drain/broadcast).
+- Full build, documentation build, sanitizer results and other selected regression results are recorded below after execution.
+
+### Validation results
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests 'flvm[37]' -v -e` — PASS (1/1; 4 producers, 4 consumers, 20,000 unique IDs).
+- `bin/run_tests 'flvm[29]' -v -e` — PASS.
+- `bin/run_tests 'flvm[30]' -v -e` — PASS.
+- `bin/run_tests 'flvm[34]' -v -e` — PASS.
+- `bin/run_tests 'flvm[36]' -v -e` — PASS.
+- Focused `flvm[37]` binary under ThreadSanitizer — PASS.
+- Focused `flvm[37]` binary under AddressSanitizer/UndefinedBehaviorSanitizer — PASS.
+- Test discovery reports 1172 tests; the full default suite was NOT RUN.
+- Windows and Emscripten builds were not available for validation. The current Linux build validates the POSIX implementation only.
+- `bin/run_tests 'flvm[36]' -v -e` — PASS (rerun individually after a combined validation command hit the execution timeout at this case).
+
+
+## Archive 300 — FlatRuntime scheduler mutex integration
+
+### Implemented
+
+- Replaced `FlatRuntime`'s `atomic_bool` spin gate with `FlatMutex scheduler_mutex`; mutex initialization/destruction is part of runtime lifecycle.
+- Protected task ID reservation and registry publication, task start/wait/cancel/state/result/destroy, native task bridge registry lookups, wait-graph changes, active-run/scheduler-driver counters, and Channel registry/reference acquisition.
+- Embedded `FlatTaskDispatchState` in `FlatTaskRecord`. The cooperative scheduler claims a token under the mutex, executes `flat_vm_step()` outside it, then publishes task result/state and releases ownership under the mutex.
+- Integrated queued/worker-owned/wake-pending transitions into task start, wait, Channel wait, wakeup, cancellation and scheduler yield handling. Runtime selection remains a task-registry scan; the MPMC ready queue is not yet used.
+- Rejected overlapping `flat_runtime_schedule()` calls. Rejected synchronous cancel/destroy when `dispatch.worker_owned` remains set, including a transient WAITING state published by a native wait callback before `flat_vm_step()` returns.
+- Added owner-aware Channel acquisition so task validation and Channel reference pinning occur atomically under scheduler-registry then Channel locking. Automatic transaction abort/rollback now wakes waiters on each Channel released by task cleanup.
+- Added `test/cases/flvm/038_runtime_scheduler_mutex/` (`flvm[38]`) using the existing `bin/run_tests` framework. It runs 128 tasks, starts 64 while scheduling is active, performs concurrent state queries, rejects a second scheduler driver, and rejects both cancellation and destruction of a RUNNING task. It also blocks the DOM gate while another thread cancels a yielded DOM task and destroys a CREATED DOM task, proving scheduler queries continue while VM teardown waits.
+- Added `plans/12_RUNTIME_SCHEDULER_MUTEX.md` and updated the architecture decisions, roadmap, runtime audit, normative task runtime model, README and plans index.
+
+### Not implemented / limitations
+
+- No pthread worker pool or worker loop. Only one scheduler-driving thread is permitted.
+- The MPMC ready queue remains a standalone primitive; the runtime still scans its task registry.
+- `FlatChannel` still uses its existing per-Channel atomic gate; conversion to `FlatMutex` and the final lock-order audit remain open.
+- No request-only cancellation API, DRAIN/CANCEL shutdown, condition-variable worker wait, worker join or post-join runtime teardown.
+- `flat_runtime_destroy()` still requires the host to prevent concurrent new API entries.
+- No complete-VM thread-safety or worker-pool readiness is claimed. Windows and Emscripten were not available for validation.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `flvm[22]`, `[23]`, `[24]` — PASS individually.
+- `flvm[25]` — PASS individually and in 100 direct repeated executions of the compiled test binary.
+- `flvm[26]`, `[27]`, `[28]`, `[29]`, `[30]` — PASS individually.
+- `flvm[31-38]` — PASS individually, including new `flvm[38]`.
+- `native` — PASS (22/22); `native_use` — PASS (6/6); `dom[1-18]` — PASS (18/18).
+- `flvm[38]` repeated 10 times before the final cancellation guard and 5 times after it — PASS.
+- Focused `flvm[38]` under ThreadSanitizer — PASS (128 tasks; concurrent queries and starts; overlapping scheduler, RUNNING-task cancel and destroy rejected; DOM-gated VM cancellation/destruction leaves scheduler queries unblocked).
+- An AddressSanitizer/UndefinedBehaviorSanitizer build attempt exceeded the execution timeout during full-source compilation; no ASan/UBSan result is claimed for archive 300.
+- `bin/run_tests` reported 1173 discovered tests; the full default suite was NOT RUN.
+- Windows and Emscripten builds were not available; only POSIX/Linux synchronization was exercised.
+
+
+## Archive 301 — build target parity fixes
+
+### Implemented
+
+- Replaced the inline `flvm[32]` `pkg-config` invocation with `test/cases/flvm/032_http_prepare/run.sh`. The script uses libcurl pkg-config flags when available and executable, otherwise falls back to `-lcurl`.
+- Reconciled `Makefile.wasm` with the current runtime source graph by adding `flat_locale.c`, `flat_runtime_log.c`, `flat_channel.c`, `flat_scheduler_sync.c`, `flat_vm_handle.c`, `native_capability.c`, `mod_task.c`, `mod_channel.c`, and the shared `flat_http_boundary.c` implementation.
+- Guarded dynamic-plugin staging helpers in `native_plugin_host.c` with `FLAT_HAVE_DLOPEN`; Emscripten static plugin loading does not use these helpers.
+- Added `plans/13_BUILD_TARGET_PARITY.md`.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests 'flvm[32]' -v -e` — PASS.
+- `flvm[32]` with a non-executable `pkg-config` shim earlier in `PATH` — PASS via `-lcurl` fallback.
+- `bin/run_tests 'flvm[31-38]' -v -e` — PASS (8/8).
+- `bin/run_tests 'flvm[18]' -v -e` — PASS.
+- `make -f Makefile.wasm -n ... fleditor-wasm` — PASS; all added source files are present in the generated emcc command.
+- Actual Emscripten linking was NOT run: `emcc` is unavailable in this environment. Do not mark the WASM build verified until `make fleditor-wasm V=1` passes with the supported SDK.
+- A full `bin/run_tests flvm` attempt hit the execution timeout while building/running the existing VM-owned lifecycle case; no test failure was reported by that attempt. Focused affected regressions passed.
+- Test discovery reports 1173 cases; the complete default suite was NOT run.
+
+### Scope / next work
+
+No runtime semantics changed and no worker threads were added. Archive 301 only fixes the HTTP test's linker fallback and restores the missing common/native source files in the WASM target. Channel mutex conversion, lock-order audit and ready-queue integration remain future work from the archive 300 roadmap.
+
+
+## Archive 302 — ready-queue integration and Channel mutex
+
+### Implemented
+
+- `FlatRuntime` owns and initializes `FlatReadyQueue`; runnable tasks are published to it on spawn/start, wakeup and quantum yield.
+- The cooperative scheduler consumes IDs through nonblocking `flat_ready_queue_try_pop()` and claims dispatch under the same `scheduler_mutex` critical section. This avoids stale-ID reuse across WAITING/RUNNABLE transitions.
+- Transaction-owning tasks retain priority; their ID is removed from the FIFO before claim. Other tasks follow FIFO queue order.
+- WAITING, cancellation and task-destroy transitions remove queued IDs. Wakeups while a task is worker-owned are coalesced and published after ownership release. Queue publication failures leave runnable state recoverable for a later enqueue attempt.
+- `FlatReadyQueue` now exposes nonblocking pop and ID removal; blocking pop remains available for future worker threads.
+- `FlatChannel.gate` is now a `FlatMutex`; the per-Channel atomic spin gate is removed.
+- Runtime creation/destruction owns ready-queue initialization and close/drain/destroy.
+- Added `flvm[39]`: eight pthreads concurrently set/read one shared runtime Channel using independent value pools (2,000 iterations per thread). Updated `flvm[37]` to cover try-pop and FIFO removal. Updated `flvm[15]`'s minimal link command to include `flat_scheduler_sync.c`.
+- Added `plans/14_READY_QUEUE_CHANNEL_MUTEX_INTEGRATION.md` and updated decisions/roadmap/docs.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- Focused FLVM cases `[15-30]` and `[31-39]` were run individually or in focused groups; all relevant cases passed. Grouped invocations that exceeded the execution window were rerun individually. The full default suite was NOT run.
+- `flvm[37]` under ThreadSanitizer — PASS.
+- `flvm[39]` under ThreadSanitizer — PASS (8 threads × 2,000 set/read iterations).
+- `flvm[38]` under ThreadSanitizer — PASS on a diagnostic rerun (128 tasks; concurrent starts/queries and DOM teardown gate).
+- AddressSanitizer/UndefinedBehaviorSanitizer compilation for `flvm[39]` exceeded the execution time limit; no ASan/UBSan result is claimed.
+- POSIX/Linux only. Windows and Emscripten builds were not run in this archive.
+
+### Remaining
+
+- One cooperative scheduler driver remains; no worker thread loop/pool is implemented.
+- No request-only cancellation, worker-owned cleanup queue, DRAIN/CANCEL shutdown, or join implementation.
+- Runtime destruction still requires the host to prevent concurrent new API entries.
+- Full-VM/native worker-mode readiness is not claimed.
+- The Emscripten build issue from archive 301 remains an independent pending verification on a machine with `emcc`; archive 302 did not validate the actual WASM link.
+
+
+## Archive 303 — request-only cancellation and scheduler-owned cleanup
+
+### Implemented
+
+- Added `flat_runtime_task_cancel_request()` with return contract: `0` accepted/idempotent, `1` already terminal, `-1` invalid runtime or unknown task ID.
+- Added a per-task `cancel_requested` flag protected by `scheduler_mutex`; the request caller only publishes intent.
+- The cooperative scheduler scans pending requests for unowned CREATED/RUNNABLE/WAITING tasks before selecting normal work, claims cleanup, and runs `flat_vm_cancel()` outside `scheduler_mutex`.
+- A RUNNING task's current dispatch owner checks the request after `flat_vm_step()` returns and performs cancellation before releasing dispatch ownership. A long-running native call therefore delays cancellation safely.
+- Cancellation commit clears outgoing wait metadata, rolls back task-owned Channel transactions, releases Channel references, publishes CANCELLED, then wakes dependents.
+- A VM completion/failure reached before the request is observed wins and is not rewritten. The existing synchronous `flat_runtime_task_cancel()` API remains available and unchanged in purpose.
+- Added `flvm[40]` covering CREATED/RUNNABLE/WAITING/RUNNING, idempotent requests, unknown IDs, terminal-result preservation, and a DOM-gated in-flight VM step.
+- Added `plans/15_CANCELLATION_REQUEST_RUNTIME.md` and updated the normative task runtime model, decisions, roadmap and cancellation/shutdown specification.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests 'flvm[40]' -v -e` — PASS (1/1).
+- `bin/run_tests 'flvm[23]' -v -e` — PASS (existing synchronous cancellation/wait regression).
+- `bin/run_tests 'flvm[38]' -v -e` — PASS (scheduler ownership and concurrent API regression).
+- `bin/run_tests 'flvm[39]' -v -e` — PASS (Channel concurrency regression).
+- Test discovery reports 1175 cases; the full default suite was NOT run.
+- Focused `flvm[40]` under ThreadSanitizer — PASS (including a request issued while the VM is blocked inside the DOM native invocation gate).
+- AddressSanitizer/UndefinedBehaviorSanitizer compilation exceeded the execution time limit; no ASan/UBSan result is claimed for archive 303.
+- POSIX/Linux only; actual Emscripten build remains pending user validation from archive 301.
+
+### Remaining
+
+- The cooperative scheduler currently scans task records for pending cancellations; there is no dedicated worker cleanup queue yet.
+- No pool lifecycle state machine, DRAIN/CANCEL request API, blocked-DRAIN status, worker join or pthread worker loop.
+- No complete-VM multi-worker concurrency guarantee.
+- Runtime destruction still requires the host to prevent concurrent new API entries.

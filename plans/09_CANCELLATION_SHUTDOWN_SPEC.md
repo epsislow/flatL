@@ -20,27 +20,27 @@ A request is not a terminal state and does not imply that cleanup has happened.
 
 ## 2. Cancellation API and request semantics
 
-### 2.1 Proposed host API
+### 2.1 Host API
 
-Proposed shape:
+Implemented API:
 
 ```c
 int flat_runtime_task_cancel_request(FlatRuntime *runtime, FlatTaskId id);
 ```
 
-The exact return enum may be made more expressive during implementation. The minimum required distinctions are:
+The implemented return contract is:
 
-- accepted (including an already-pending request; requests are idempotent);
-- task already terminal (completion/failure/cancellation has won);
-- invalid runtime or unknown task ID.
+- `0`: accepted, including an already-pending request (idempotent);
+- `1`: task already terminal (completion/failure/cancellation has won);
+- `-1`: invalid runtime or unknown task ID.
 
-The call is a request-only operation. It must not call `flat_vm_cancel()`, destroy `VmState`, rollback a Channel transaction, release VM resources, or publish `CANCELLED` from the caller's thread.
+The call is a request-only operation. It only sets a task-record flag under `scheduler_mutex`; it does not call `flat_vm_cancel()`, destroy `VmState`, rollback a Channel transaction, release VM resources, or publish `CANCELLED` from the caller's thread.
 
-The existing `flat_runtime_task_cancel()` remains the cooperative single-thread API for the current build. It must remain confined to the scheduler-driving host thread and must not be repurposed as an asynchronous cross-thread operation. Worker mode uses the request API.
+The existing `flat_runtime_task_cancel()` remains the synchronous cooperative API for tasks that are not dispatch-owned. It is not repurposed as an asynchronous cross-thread operation. `flat_runtime_task_cancel_request()` is safe to call from another host thread while the scheduler is active.
 
 ### 2.2 Request state
 
-Each task needs a cancellation-request flag/state distinct from `FlatTaskState`, protected by the runtime synchronization protocol (atomic publication may be used for the RUNNING fast path, but the task record and queue transitions still require the scheduler mutex).
+Each task has a cancellation-request flag distinct from `FlatTaskState`, protected by `scheduler_mutex`. In archive 303, the single cooperative scheduler scans for pending requests on unowned tasks before selecting runnable work; a RUNNING task's current dispatch owner checks the flag after `flat_vm_step()` returns. This is an intermediate implementation, not yet a dedicated worker cleanup queue.
 
 - Repeated requests are idempotent; they must not enqueue duplicate cancellation work.
 - A request against an unknown ID is rejected.
@@ -53,7 +53,7 @@ Each task needs a cancellation-request flag/state distinct from `FlatTaskState`,
 - A worker that is executing a task is the sole owner allowed to step, cancel, or destroy that task's VM.
 - A cancellation request observed while `RUNNING` is acted on at the next scheduler-visible safe boundary, after `flat_vm_step()` has returned (normally at the configured quantum boundary). The current VM step may execute multiple opcodes before returning; a long-running native call delays the boundary. The first worker-pool implementation does not asynchronously unwind C frames or interrupt arbitrary native handlers.
 - A long-running or blocking native call can therefore delay cancellation and shutdown. Native-specific cancellation/polling is a separate future contract.
-- A `CREATED`, `RUNNABLE`, or `WAITING` task that is not currently worker-owned is claimed as a cancellation-cleanup job. The worker performs the same cleanup path without executing another user bytecode instruction.
+- A `CREATED`, `RUNNABLE`, or `WAITING` task that is not currently dispatch-owned is claimed as a cancellation-cleanup job. The current scheduler performs the cleanup without executing another user bytecode instruction. The future worker pool will move this claim to its worker cleanup queue.
 - The dispatch ownership token (`worker_owned` or equivalent) prevents another worker from claiming cleanup while the task is still executing. A request arriving while worker-owned sets pending intent; it does not mutate the VM.
 - If a wakeup races with cancellation, the scheduler mutex linearizes the state/queue change. A task may be in at most one of RUNNING, READY-queue, WAITING, or cancellation-cleanup ownership at a time. `wake_pending` or an equivalent dispatch token must prevent lost wakeups and duplicate queue entries.
 
@@ -157,10 +157,10 @@ The following tests are future requirements. They are not claimed as implemented
 
 ### Cancellation request
 
-- Request cancellation for CREATED, RUNNABLE, RUNNING, and WAITING tasks.
-- Repeated requests are idempotent and do not duplicate cleanup work.
-- Unknown task IDs are rejected; terminal task requests do not rewrite results.
-- A RUNNING task is not destroyed by the requesting thread; it is cleaned by its owner worker after `flat_vm_step()` returns at the next scheduler-visible safe boundary (normally the configured quantum boundary).
+- [x] Request cancellation for CREATED, RUNNABLE, RUNNING, and WAITING tasks.
+- [x] Repeated requests are idempotent and do not duplicate cleanup work.
+- [x] Unknown task IDs are rejected; terminal task requests do not rewrite results.
+- [x] A RUNNING task is not destroyed by the requesting thread; it is cleaned by its current dispatch owner after `flat_vm_step()` returns at the next scheduler-visible safe boundary.
 - Cancellation racing with completion/failure has one deterministic winner and never double-destroys VM state.
 - Cancelling a WAITING Channel waiter removes its outgoing wait edge and releases Channel references before dependents are woken.
 - Cancellation of an owner rolls back every owned Channel transaction and wakes all dependent tasks after cleanup.
@@ -198,21 +198,23 @@ The following tests are future requirements. They are not claimed as implemented
 
 ## 6. Current implementation versus this specification
 
-Implemented today:
+Implemented today (archive 303):
 
 - Cooperative `flat_runtime_task_cancel()` for CREATED/RUNNABLE/WAITING tasks.
+- Request-only `flat_runtime_task_cancel_request()` with idempotent publication and return values 0 (accepted), 1 (already terminal), -1 (invalid/unknown).
+- Scheduler-owned cancellation cleanup for pending CREATED/RUNNABLE/WAITING requests and owner-safe cancellation of RUNNING tasks after `flat_vm_step()` returns.
+- Completion/failure wins if the VM reaches a terminal outcome before the request is observed.
 - VM cancellation through `flat_vm_cancel()` for READY/YIELDED VM handles.
 - Cleanup of Channel transactions and task-held Channel references on cancellation.
 - Wakeup of tasks waiting on a cancelled target.
 - Runtime destruction guards while tasks/Channels/active runs remain.
-- Cooperative scheduler APIs are confined to the scheduler-driving host thread.
+- Only one thread may drive `flat_runtime_schedule()`; the request-only cancellation API and synchronized task-state queries may be called by other host threads while the runtime remains alive.
 
-Not implemented by archive 296:
+Still not implemented after archive 303:
 
-- `flat_runtime_task_cancel_request()` or a cancellation-request flag.
-- Worker-owned cancellation cleanup queue or asynchronous cancellation.
+- A dedicated worker-owned cancellation cleanup queue; the current single scheduler scans the task registry for pending requests.
 - Pool lifecycle states, DRAIN/CANCEL shutdown, shutdown request API, or worker join.
-- Scheduler mutex/condition variable/worker ownership protocol.
-- pthread worker creation or complete-VM concurrency.
+- Worker condition-variable wait loop and pthread worker creation.
+- Complete-VM multi-worker concurrency.
 
 Archive 296 is specification and regression-baseline work only. It does not claim worker-mode cancellation or shutdown is implemented.
