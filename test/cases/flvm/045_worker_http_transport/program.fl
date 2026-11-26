@@ -1,0 +1,11 @@
+use native http
+use native env
+
+#main
+  url = env.get('FLAT_HTTP_TEST_URL')
+  req = http.create('GET', url)
+  http.send(req)
+  http.status(req) == 200
+  http.responseBody(req) == 'worker-http-ok'
+  http.close(req)
+  OK

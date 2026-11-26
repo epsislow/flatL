@@ -639,3 +639,16 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [ ] Resume worker-mode HTTP/DOM lifecycle, plugin-load race, and partial worker-start failure testing.
 
 **Archive 308 result:** all four focused cases pass on the available POSIX host; both FLVM test binaries pass five consecutive executions. `make all -j2` and `make docs` pass. No runtime implementation behavior changed. The supplied Termux run is not reproducible in this environment, so device confirmation remains required. See `20_TERMUX_TEST_PORTABILITY.md`.
+
+
+## Worker native dependency audit — archive 309
+
+- [x] Add real libcurl worker-mode integration with 32 requests and four runtime workers (`flvm[45]`).
+- [x] Verify worker startup preflight initializes curl before task execution and each request uses an independent easy handle.
+- [x] Add DOM worker-mode document isolation and cancellation/teardown test (`flvm[46]`).
+- [x] Retain DOM's PENDING declaration and SERIALIZED effective policy.
+- [ ] Audit optional native plugin load/preflight races and runtime-wide worker-mode guard transitions.
+- [ ] Add deterministic failure injection for worker creation and verify partial startup rollback.
+- [ ] Complete platform/sanitizer matrix: Windows, actual Emscripten, TSAN final test shape, ASan/UBSan.
+
+**Archive 309:** HTTP and DOM lifecycle tests pass on the available POSIX host; see `21_WORKER_HTTP_DOM_LIFECYCLE_AUDIT.md`.

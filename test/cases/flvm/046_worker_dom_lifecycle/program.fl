@@ -1,0 +1,10 @@
+use native dom
+use native list
+
+#main
+  dom.parseHtml('<section class="worker"><p>worker-dom-ok</p></section>') -> page
+  dom.select(page, 'section.worker p') -> nodes
+  list.get(nodes, 0) -> node
+  dom.text(node) == 'worker-dom-ok'
+  dom.close(page)
+  OK

@@ -1324,3 +1324,31 @@ Next validation priorities: multi-chain wait graph under workers, simultaneous c
 ### Limitations / next
 
 The Termux log supplied exact linker errors for `types[108]` but did not include verbose failure details for `flvm[38]` and `[40]`. Their updated tests pass on this POSIX host; Termux confirmation is still required. After confirmation, resume the archive 307 roadmap: worker-mode HTTP/DOM lifecycle, plugin preparation/load races, and deterministic partial worker-start failure injection.
+
+
+## Archive 309 — worker HTTP and DOM lifecycle audit
+
+### Implemented
+
+- Added `flvm[45]`, a real loopback HTTP server integration. Thirty-two tasks issue independent libcurl requests through four runtime workers; response status/body are asserted and the server records simultaneous active connections. The test unsets `FLAT_HTTP_MOCK_FILE`, ensuring the real curl transport is used. Worker startup preflight initializes curl through the HTTP manifest before thread creation.
+- Added `flvm[46]`, which executes 48 independent DOM document lifecycles across four workers and asserts each VM's document contents.
+- Added a DOM cancellation case: the host holds the serialized DOM invocation gate, the worker reaches RUNNING and blocks entering DOM, request-only cancellation is published, the gate is released, and CANCEL must complete VM teardown, join and destruction.
+- Added Makefile targets `test-worker-http` and `test-worker-dom`.
+- Added `plans/21_WORKER_HTTP_DOM_LIFECYCLE_AUDIT.md`.
+- No runtime scheduling or capability policy changed. DOM remains `PENDING_THREAD_SAFETY_VALIDATION` with effective `SERIALIZED` fallback.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests 'flvm[45]' -v -e` — PASS.
+- `bin/run_tests 'flvm[46]' -v -e` — PASS.
+- HTTP worker test binary repeated 10 times — PASS; maximum observed simultaneous loopback connections: 4.
+- DOM worker test binary repeated 10 times — PASS.
+- Final GCC ThreadSanitizer builds: HTTP 10/10 consecutive runs PASS; DOM 10/10 consecutive runs PASS.
+- HTTP ASan/UBSan run — PASS. DOM ASan/UBSan build exceeded the execution limit before producing a test binary.
+- The complete default suite, Windows and actual Emscripten link were not run. The grouped `flvm[38-46]` invocation hit the command time limit; every selected case 38–46 passed in separately completed invocations.
+
+### Next
+
+Audit plugin loading/preflight races and add deterministic worker-thread creation failure injection before making any worker-pool policy or scheduler changes.
