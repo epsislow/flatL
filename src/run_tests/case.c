@@ -714,7 +714,11 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             snprintf(opts->captured_output, opts->captured_output_size, "%s", out);
         }
         if (code != c->expect_exit) {
-            snprintf(err, (size_t)err_size, "exit %d want %d (cmd: %s)", code, c->expect_exit, cmd);
+            size_t output_len = strlen(out);
+            const char *output_tail = out;
+            if (output_len > 420) output_tail = out + output_len - 420;
+            snprintf(err, (size_t)err_size, "exit %d want %d; output tail:\n%.420s",
+                     code, c->expect_exit, output_tail);
             if (timing && measure) {
                 timing->exec_ms = exec_ms;
                 timing->have_exec = 1;

@@ -23,7 +23,7 @@ static void *query_worker(void *arg) {
     for (i = 0; i < QUERY_ROUNDS; ++i) {
         check_capability("math", FLAT_NATIVE_THREAD_CAP_THREAD_SAFE);
         check_capability("dom", FLAT_NATIVE_THREAD_CAP_SERIALIZED);
-        check_capability("task", FLAT_NATIVE_THREAD_CAP_UNSUPPORTED);
+        check_capability("task", FLAT_NATIVE_THREAD_CAP_SERIALIZED);
         check_capability("csv", FLAT_NATIVE_THREAD_CAP_SERIALIZED);
     }
     return NULL;
@@ -35,8 +35,8 @@ int main(void) {
 
     if (flat_native_module_thread_capability("dom") != FLAT_NATIVE_THREAD_CAP_PENDING) return 1;
     if (flat_native_module_worker_policy("dom") != FLAT_NATIVE_THREAD_CAP_SERIALIZED) return 2;
-    if (flat_native_module_worker_policy("task") != FLAT_NATIVE_THREAD_CAP_UNSUPPORTED) return 3;
-    if (flat_native_module_worker_policy("channel") != FLAT_NATIVE_THREAD_CAP_UNSUPPORTED) return 4;
+    if (flat_native_module_worker_policy("task") != FLAT_NATIVE_THREAD_CAP_SERIALIZED) return 3;
+    if (flat_native_module_worker_policy("channel") != FLAT_NATIVE_THREAD_CAP_SERIALIZED) return 4;
     if (flat_native_module_worker_policy("unknown-plugin") != FLAT_NATIVE_THREAD_CAP_UNSUPPORTED)
         return 5;
 

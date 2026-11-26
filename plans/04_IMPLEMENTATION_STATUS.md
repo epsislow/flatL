@@ -1352,3 +1352,11 @@ The Termux log supplied exact linker errors for `types[108]` but did not include
 ### Next
 
 Audit plugin loading/preflight races and add deterministic worker-thread creation failure injection before making any worker-pool policy or scheduler changes.
+
+
+## Archive 310 — Termux worker-test failure diagnostics
+
+- Corrected `flvm[34-35]` to match the implemented worker capability policy: `task` and `channel` are `SERIALIZED`; legacy plugin and post-freeze lazy loading remain rejected.
+- Improved `bin/run_tests` exec failure messages to include the tail of captured command output.
+- `make all -j2`, `flvm[34-35]`, and individual `flvm[38]`, `[40]`, `[42]`, `[43]`, `[45]`, `[46]` passed on the available POSIX host. `flvm[43]` also passed five direct repeated runs.
+- The six failures originally observed on Termux are not yet diagnosed. No runtime behavior was changed; use the improved output in the next Termux run before making platform-specific changes.

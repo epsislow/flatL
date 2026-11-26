@@ -60,11 +60,12 @@ int main(int argc, char **argv) {
                       FLAT_NATIVE_THREAD_CAP_SERIALIZED, "declared serialized plugin") != 0)
         return 6;
     if (expect_rejected(&runtime, FLAT_NATIVE_OBJ_EMPTY, "legacy plugin") != 0) return 7;
-    if (expect_rejected(&runtime, FLAT_NATIVE_TASK_SPAWN, "task module") != 0) return 8;
+    if (expect_policy(&runtime, FLAT_NATIVE_TASK_SPAWN,
+                      FLAT_NATIVE_THREAD_CAP_SERIALIZED, "task module") != 0) return 8;
     if (flat_native_runtime_freeze_worker_capabilities() != 0) return 9;
     if (expect_rejected(&runtime, FLAT_NATIVE_MATH_TRIG_SIN,
                         "lazy plugin load after capability freeze") != 0) return 10;
 
-    puts("native-worker-policy-ok bundled=thread-safe declared=serialized legacy=denied frozen=load-denied");
+    puts("native-worker-policy-ok bundled=thread-safe declared=serialized task=serialized legacy=denied frozen=load-denied");
     return 0;
 }

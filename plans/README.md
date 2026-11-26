@@ -25,6 +25,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [19 — Worker Wait-Graph and Cancellation Audit](19_WORKER_WAIT_GRAPH_CANCELLATION_AUDIT.md): validates chain/cycle behavior, cancellation of a middle waiter, and cleanup of a cancelled Channel waiter under real workers.
 - [20 — Termux Test Portability](20_TERMUX_TEST_PORTABILITY.md): fixes locale helper linkage, targets malformed SCHM data correctly, and makes scheduler/cancellation regressions less timing-sensitive on mobile systems.
 - [21 — Worker HTTP and DOM Lifecycle Audit](21_WORKER_HTTP_DOM_LIFECYCLE_AUDIT.md): real concurrent libcurl requests and DOM VM lifecycle/cancellation under the worker pool; DOM remains serialized pending broader validation.
+- [22 — Termux Worker-Test Failure Diagnostics](22_TERMUX_WORKER_FAILURE_DIAGNOSTICS.md): corrects stale task/channel capability expectations and makes `run_tests` include captured output when an exec command fails; six Termux-specific failures remain to be diagnosed on device.
 - [Native module thread capabilities](../doc_src/NATIVE_THREAD_CAPABILITIES.md): enum-ul de capabilități, declarația pluginurilor, fallback-ul conservator și enforcement-ul worker-mode.
 
 ## Reguli pentru continuarea lucrului
@@ -39,7 +40,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima arhivă:** `flatL-main-309-worker-http-dom-audit.zip`.
+**Ultima arhivă:** `flatL-main-310-termux-worker-test-diagnostics.zip`.
 
 **Ultimul checkpoint:** arhiva 305 adaugă primul worker pool pthread deținut de runtime: startup cu barrier/rollback, execuție concurentă a quantum-urilor, wait pe condition variable cu wake epoch, integrare DRAIN/CANCEL și join. `flvm[42]` validează 4 workers și 96 task-uri, inclusiv admission preflight pentru task-uri noi. 100 de execuții plain consecutive au trecut; 5 execuții TSAN au trecut pe forma anterioară a testului, dar rebuild-ul TSAN pentru forma finală nu a putut fi terminat în limita de execuție. Aceasta nu certifică încă întregul set de native modules/dependențe în worker mode. Arhiva 304 adaugă lifecycle-ul DRAIN/CANCEL, iar arhiva 303 adaugă `flat_runtime_task_cancel_request()` și cleanup la safe point. Arhiva 302 conectează MPMC ready queue la `FlatRuntime` și convertește gate-ul Channel la `FlatMutex`; `flat_vm_step()` rămâne în afara mutex-ului. Arhiva 301 repară fallback-ul de link pentru `flvm[32]` și completează sursele runtime/native din `Makefile.wasm`, dar build-ul Emscripten real trebuie confirmat într-un mediu cu `emcc`. Lexbor rămâne `PENDING_THREAD_SAFETY_VALIDATION`, cu `SERIALIZED` drept fallback. Orice decizie nouă se consemnează în `01_DECISIONS.md` și roadmap înainte de implementare.
 
@@ -77,3 +78,6 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [ ] Validate Windows worker execution, final TSAN/ASan/UBSan matrix and actual Emscripten build.
 
 **Archive 309 result:** `flvm[45]` and `[46]` pass; each dedicated test binary passed 10 consecutive executions. The HTTP loopback server observed four simultaneous connections. HTTP and DOM each passed 10/10 final GCC TSAN runs; HTTP ASan/UBSan passed, while DOM ASan/UBSan compilation exceeded the command limit. DOM remains serialized; no capability promotion is made. Every selected regression `flvm[38-46]` passed individually; the grouped run hit the execution limit. See `21_WORKER_HTTP_DOM_LIFECYCLE_AUDIT.md`.
+
+
+**Checkpoint archive 310:** corrects stale assertions in `flvm[34-35]`: `task` and `channel` are `SERIALIZED`, not `UNSUPPORTED`. The exec-case runner now includes the captured output tail on unexpected exit, so Termux failures identify the failing stage. `flvm[34-35]` and the previously failing `[38]`, `[40]`, `[42]`, `[43]`, `[45]`, `[46]` pass individually on the available POSIX host. The six Termux-specific failures remain unverified pending the improved diagnostics from the device; no runtime behavior changed. See `22_TERMUX_WORKER_FAILURE_DIAGNOSTICS.md`.
