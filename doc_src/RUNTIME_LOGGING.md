@@ -12,9 +12,11 @@ flvm program.fb --show-tasks-log --show-channel-log
 ```
 
 The categories are independent. When enabled, their events are written to `stdout`.
-The flags are accepted by the VM now; task and Channel event producers will be added
-with the task runtime and Channel implementations. Therefore, a program that does
-not use those features currently emits no task or Channel events.
+The task category is reserved for task lifecycle producers. The Channel category emits
+`create`, `set`, `var`, `lock`, `unlock`, `revert`, and `destroy` events from the runtime
+Channel API. Records include IDs, key names, value types, action/outcome, and rejection
+reason when applicable; stored values are never included. Events are emitted only when
+the corresponding category is enabled.
 
 By default, events are written live. To use bounded buffered output instead:
 
@@ -34,8 +36,8 @@ The central logger formats one structured, line-oriented record per event. For
 example, future task/channel producers can emit records such as:
 
 ```text
-{seq: 1, taskId: 3, event: "started", block: "#worker1"}
-{seq: 2, chanId: 21, taskId: 3, event: "read", var: "x", type: "list"}
+{seq: 1, taskId: 3, chanId: 21, event: "set", var: "x", type: "list", action: "stored"}
+{seq: 2, chanId: 21, event: "destroy", reason: "active-task-reference", action: "rejected"}
 ```
 
 `seq` is a monotonically increasing event sequence within one `flvm` process.
@@ -49,6 +51,6 @@ runtime; it must be made thread-safe before the parallel worker-pool phase.
 - [x] Logging disabled by default; no event formatting or buffer allocation when disabled.
 - [x] Live output and bounded optional buffering.
 - [x] CLI switches for task and Channel categories.
-- [ ] Task lifecycle event producers (planned with Task Runtime).
-- [ ] Channel operation/transaction event producers (planned with Channels).
-- [ ] `case.toml` event assertions (to be designed with the test runner changes).
+- [ ] Task lifecycle event producers (still planned).
+- [x] Channel operation/transaction event producers (archive 282).
+- [x] Runtime test verifies Channel event emission (archive 282).

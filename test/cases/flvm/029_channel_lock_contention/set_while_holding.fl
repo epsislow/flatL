@@ -1,0 +1,7 @@
+use native channel
+
+#main
+  first = channel.lock(3)
+  stored = channel.set(4, 'blocked', 1)
+  channel.unlock(3)
+  OK

@@ -1,0 +1,5 @@
+#main
+  io.outln('step-1')
+  io.outln('step-2')
+  io.outln('step-3')
+  OK

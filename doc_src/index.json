@@ -52,6 +52,11 @@
       "file": "TASK_RUNTIME_AUDIT.md"
     },
     {
+      "id": "task-runtime-model",
+      "label": "Task Runtime — persistent VM model",
+      "file": "TASK_RUNTIME_MODEL.md"
+    },
+    {
       "id": "user-functions",
       "label": "User functions",
       "file": "USER_FUNCTIONS.md"
@@ -157,6 +162,16 @@
       "file": "natives/obj.md"
     },
     {
+      "id": "task-native",
+      "label": "Native task",
+      "file": "natives/task.md"
+    },
+    {
+      "id": "channel-native",
+      "label": "Native channel",
+      "file": "natives/channel.md"
+    },
+    {
       "id": "vcx-native",
       "label": "Native vcx",
       "file": "natives/vcx.md"
@@ -225,6 +240,11 @@
       "id": "dom-native",
       "label": "Native dom",
       "file": "natives/dom.md"
+    },
+    {
+      "id": "runtime-channels",
+      "label": "Runtime Channels",
+      "file": "CHANNELS.md"
     }
   ]
 }

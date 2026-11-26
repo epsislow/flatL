@@ -115,8 +115,8 @@ channel.unlock(ch)          -- commit
 | `channel.unlock()` | Commit + eliberare lock |
 | `channel.revert()` | Anulează modificări din tranzacția curentă; **păstrează** lock-ul |
 | `channel.update(name, delta, op)` | Opțional v2 — `add` / `subtract` atomic pe o cheie |
-| `task.spawn(block\|label, …)` | Pornește task; args includ handle Channel |
-| `task.wait(handle)` | Așteaptă terminare (TBD: cooperative vs blocant OS) |
+| `task.spawn(#block, ...)` | Implementat: argumente poziționale mapate la parametrii numiți ai block-ului; NUMBER/STRING/LIST/OBJECT deep-copy, file handles respinse |
+| `task.wait(taskId)` | Implementat: suspendare cooperativă, fără blocare OS |
 
 Sintaxă exactă `spawn` / blocuri `#worker` — de aliniat la executor existent; **nu** amesteca cu `def` overload.
 
@@ -208,9 +208,9 @@ Definită separat; **poate consuma** Channel din C1/C2 fără a aștepta mdim/st
 | `task.channel.lock.reentrant` | al doilea `lock` în același task |
 | `task.channel.lock.none` | `unlock` fără tranzacție activă |
 | `task.channel.destroyed` | Channel distrus cu ref live |
-| `task.spawn.arg` | Channel/task id nu e NUMBER valid sau pool |
+| `task.spawn.arg` | Block label invalid sau argumente suplimentare (încă nesuportate în MVP) |
 | `task.channel.id` | Id 0, negativ, sau necunoscut la orice op Channel |
-| `task.wait.invalid` | Handle task necunoscut |
+| `task.wait.invalid` | Task ID necunoscut, self-wait sau apel fără context de task |
 
 Prefixul exact (`task.*` vs `channel.*`) — de unificat la implementare cu SPECIFICATION panic families.
 
@@ -379,3 +379,7 @@ Doc: `doc_src/natives/task.md`, `doc_src/natives/channel.md` (sau secțiune unic
 ---
 
 *Ultima actualizare plan: 2026-11-25 — §2.2.1 race / mutex (VCX ≠ sync; Channel + C1/C2); §2.5 handle NUMBER; UI §6.*
+
+### Archive 282 update — cooperative task/Channel safety
+
+The current runtime now rejects cyclic task wait dependencies, tracks direct Channel-ID spawn arguments as task-held references, releases those references at task termination/cancellation/destruction, and emits structured Channel lifecycle/operation events for `--show-channel-log`. These additions are still single-thread cooperative semantics; they do not make `FlatRuntime`, `FlatVm`, or native execution safe for a pthread worker pool.

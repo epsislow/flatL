@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 static int mdim_gather_subtree_ids(FlatCollectionPool *coll, uint32_t list_id, uint32_t *buf,
                                    int *n, int cap);
@@ -19,16 +20,21 @@ typedef int (*MdimBinOpFn)(double a, double b, double *out);
 
 typedef struct MdimBcastLayout MdimBcastLayout;
 
-static int mdim_debug_enabled(void) {
-    static int inited;
-    static int on;
+static atomic_flag g_mdim_debug_lock = ATOMIC_FLAG_INIT;
+static atomic_int g_mdim_debug_state = ATOMIC_VAR_INIT(-1); /* -1 = unknown, 0 = off, 1 = on */
 
-    if (!inited) {
+static int mdim_debug_enabled(void) {
+    int state = atomic_load_explicit(&g_mdim_debug_state, memory_order_acquire);
+    if (state >= 0) return state;
+    while (atomic_flag_test_and_set_explicit(&g_mdim_debug_lock, memory_order_acquire)) { }
+    state = atomic_load_explicit(&g_mdim_debug_state, memory_order_relaxed);
+    if (state < 0) {
         const char *env = getenv("FLAT_MDIM_DEBUG");
-        on = (env != NULL && env[0] != '\0' && strcmp(env, "0") != 0);
-        inited = 1;
+        state = (env != NULL && env[0] != '\0' && strcmp(env, "0") != 0) ? 1 : 0;
+        atomic_store_explicit(&g_mdim_debug_state, state, memory_order_release);
     }
-    return on;
+    atomic_flag_clear_explicit(&g_mdim_debug_lock, memory_order_release);
+    return state;
 }
 
 #define MDIM_DBG(...)                                                                              \

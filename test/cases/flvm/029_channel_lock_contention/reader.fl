@@ -1,0 +1,5 @@
+use native channel
+
+#main
+  value = channel.var(1, 'seed')
+  OK

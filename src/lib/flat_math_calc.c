@@ -1,4 +1,5 @@
 #include "flat_number.h"
+#include "flat_locale.h"
 #include "flat_math_calc.h"
 #include "flat_native_util.h"
 #include "flat_obj_path.h"
@@ -55,7 +56,7 @@ static int parse_number(CalcParser *cp, double *out) {
         set_err(cp, FLAT_MATH_CALC_SYNTAX);
         return -1;
     }
-    v = strtod(cp->p, &end);
+    v = flat_strtod(cp->p, &end);
     if (end == cp->p) {
         set_err(cp, FLAT_MATH_CALC_SYNTAX);
         return -1;

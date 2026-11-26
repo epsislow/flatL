@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 23
+desc = "cooperative task wait/wakeup, cycle rejection and safe-point cancellation"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/task_wait_cancel.fb {root}/test/cases/flvm/019_vm_stepping/program.fl && {root}/bin/flc -o {tmp}/task_wait_fail.fb {root}/test/cases/flvm/021_vm_failure_lifecycle/fail.fl && make -s test-task-wait-cancel TEST_BIN={tmp}/task_wait_cancel_test && {tmp}/task_wait_cancel_test {tmp}/task_wait_cancel.fb {tmp}/task_wait_fail.fb"
+expect_exit = 0
+stdout_contains = "task-wait-cancel-ok"

@@ -14,7 +14,6 @@ typedef struct FlatDateRunState {
 
 void flat_date_run_begin(FlatDateRunState *st);
 
-FlatDateRunState *flat_date_global_state(void);
 
 int flat_date_parse_offset_hhmm(const char *s, int *out_min_east);
 

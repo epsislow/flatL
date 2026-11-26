@@ -1,0 +1,4 @@
+#main
+  io.outln('before-destroy')
+  io.outln('after-destroy')
+  OK

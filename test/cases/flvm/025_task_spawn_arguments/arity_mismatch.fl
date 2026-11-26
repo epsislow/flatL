@@ -1,0 +1,8 @@
+use native task
+
+#main
+  child = task.spawn(#worker, 1)
+  OK
+
+#worker(first, second)
+  OK

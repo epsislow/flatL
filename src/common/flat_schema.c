@@ -1,21 +1,21 @@
 #include "flat_list_typed.h"
+#include "flat_ascii.h"
 #include "flat_schema.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static char *trim_inplace(char *s) {
     char *e;
-    while (*s && isspace((unsigned char)*s)) {
+    while (*s && flat_ascii_is_space((unsigned char)*s)) {
         s++;
     }
     if (*s == '\0') {
         return s;
     }
     e = s + strlen(s) - 1;
-    while (e > s && isspace((unsigned char)*e)) {
+    while (e > s && flat_ascii_is_space((unsigned char)*e)) {
         *e-- = '\0';
     }
     return s;
@@ -30,7 +30,7 @@ int flat_schema_parse_header_line(const char *line, char *name_out, size_t name_
         return -1;
     }
     p = line;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '<') {
@@ -49,14 +49,14 @@ int flat_schema_parse_header_line(const char *line, char *name_out, size_t name_
     name_out[nlen] = '\0';
     {
         const char *rest = end + 1;
-        while (*rest && isspace((unsigned char)*rest)) {
+        while (*rest && flat_ascii_is_space((unsigned char)*rest)) {
             rest++;
         }
         if (*rest != ':') {
             return -1;
         }
         rest++;
-        while (*rest && (isspace((unsigned char)*rest) || *rest == '\r')) {
+        while (*rest && (flat_ascii_is_space((unsigned char)*rest) || *rest == '\r')) {
             rest++;
         }
         if (*rest != '\0') {
@@ -76,7 +76,7 @@ int flat_schema_header_missing_colon(const char *line, char *name_out, size_t na
         return 0;
     }
     p = line;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '<') {
@@ -95,7 +95,7 @@ int flat_schema_header_missing_colon(const char *line, char *name_out, size_t na
     name_buf[nlen] = '\0';
     {
         const char *rest = end + 1;
-        while (*rest && isspace((unsigned char)*rest)) {
+        while (*rest && flat_ascii_is_space((unsigned char)*rest)) {
             rest++;
         }
         if (*rest == ':') {
@@ -337,7 +337,7 @@ int flat_bind_parse_lhs_catalog(const char *lhs, char *name_out, size_t name_sz,
     }
     *has_type_out = 0;
     flat_slot_type_clear(type_out);
-    while (*lhs && isspace((unsigned char)*lhs)) {
+    while (*lhs && flat_ascii_is_space((unsigned char)*lhs)) {
         lhs++;
     }
     colon = strchr(lhs, ':');
@@ -348,7 +348,7 @@ int flat_bind_parse_lhs_catalog(const char *lhs, char *name_out, size_t name_sz,
         snprintf(name_out, name_sz, "%s", lhs);
         {
             char *t = name_out + strlen(name_out);
-            while (t > name_out && isspace((unsigned char)t[-1])) {
+            while (t > name_out && flat_ascii_is_space((unsigned char)t[-1])) {
                 *--t = '\0';
             }
         }
@@ -358,7 +358,7 @@ int flat_bind_parse_lhs_catalog(const char *lhs, char *name_out, size_t name_sz,
         return -1;
     }
     nlen = (size_t)(colon - lhs);
-    while (nlen > 0 && isspace((unsigned char)lhs[nlen - 1])) {
+    while (nlen > 0 && flat_ascii_is_space((unsigned char)lhs[nlen - 1])) {
         nlen--;
     }
     if (nlen == 0 || nlen >= name_sz) {
@@ -368,7 +368,7 @@ int flat_bind_parse_lhs_catalog(const char *lhs, char *name_out, size_t name_sz,
     name_out[nlen] = '\0';
     {
         const char *spec = colon + 1;
-        while (*spec && isspace((unsigned char)*spec)) {
+        while (*spec && flat_ascii_is_space((unsigned char)*spec)) {
             spec++;
         }
         if (*spec == '\0') {
@@ -407,10 +407,10 @@ int flat_bind_validate_lhs(const char *lhs, const FlatSchemaCatalog *cat, char *
         return 0;
     }
     spec = colon + 1;
-    while (*spec && isspace((unsigned char)*spec)) {
+    while (*spec && flat_ascii_is_space((unsigned char)*spec)) {
         spec++;
     }
-    if (spec[0] == 't' && isdigit((unsigned char)spec[1])) {
+    if (spec[0] == 't' && flat_ascii_is_digit((unsigned char)spec[1])) {
         char *endp = NULL;
         unsigned long tn = strtoul(spec + 1, &endp, 10);
         if (endp && *endp == '\0' && tn > FLAT_SLOT_TYPE_AUX_T_MAX) {
@@ -446,7 +446,7 @@ int flat_bind_validate_lhs(const char *lhs, const FlatSchemaCatalog *cat, char *
             FlatSlotType dummy;
             char suberr[128];
             const char *tyspec = colon + 1;
-            while (*tyspec && isspace((unsigned char)*tyspec)) {
+            while (*tyspec && flat_ascii_is_space((unsigned char)*tyspec)) {
                 tyspec++;
             }
             if (flat_slot_type_parse_spec(tyspec, &dummy, cat, suberr, sizeof suberr) != 0) {

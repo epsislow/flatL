@@ -11,18 +11,28 @@
 #include <time.h>
 #endif
 
+#if defined(_WIN32)
+static INIT_ONCE g_time_freq_once = INIT_ONCE_STATIC_INIT;
+static LARGE_INTEGER g_time_freq;
+
+static BOOL CALLBACK flat_time_init_frequency(PINIT_ONCE once, PVOID param, PVOID *context) {
+    (void)once;
+    (void)param;
+    (void)context;
+    return QueryPerformanceFrequency(&g_time_freq);
+}
+#endif
+
 double flat_time_monotonic_ms(void) {
 #if defined(_WIN32)
-    static LARGE_INTEGER freq;
-    static int init;
     LARGE_INTEGER ctr;
 
-    if (!init) {
-        QueryPerformanceFrequency(&freq);
-        init = 1;
+    if (!InitOnceExecuteOnce(&g_time_freq_once, flat_time_init_frequency, NULL, NULL) ||
+        g_time_freq.QuadPart <= 0) {
+        return 0.0;
     }
     QueryPerformanceCounter(&ctr);
-    return (double)ctr.QuadPart * 1000.0 / (double)freq.QuadPart;
+    return (double)ctr.QuadPart * 1000.0 / (double)g_time_freq.QuadPart;
 #else
     struct timespec ts;
 

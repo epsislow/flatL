@@ -5,6 +5,7 @@
 #include "fgir.h"
 #include "flat_value.h"
 #include "flat_slot_type.h"
+#include "flat_rng.h"
 
 #include <stdint.h>
 
@@ -349,6 +350,17 @@ typedef enum {
     FLAT_NATIVE_BYTES_SLICE,
     FLAT_NATIVE_BYTES_LEN,
     FLAT_NATIVE_BYTES_WRITESTR,
+    FLAT_NATIVE_TASK_SPAWN,
+    FLAT_NATIVE_TASK_WAIT,
+    FLAT_NATIVE_TASK_STATE,
+    FLAT_NATIVE_TASK_RESULT,
+    FLAT_NATIVE_CHANNEL_CREATE,
+    FLAT_NATIVE_CHANNEL_SET,
+    FLAT_NATIVE_CHANNEL_VAR,
+    FLAT_NATIVE_CHANNEL_LOCK,
+    FLAT_NATIVE_CHANNEL_UNLOCK,
+    FLAT_NATIVE_CHANNEL_REVERT,
+    FLAT_NATIVE_CHANNEL_DESTROY,
     FLAT_NATIVE_COUNT
 } FlatNativeId;
 
@@ -363,6 +375,8 @@ typedef enum {
 #define FLAT_NATIVE_MODULE_RE "re"
 #define FLAT_NATIVE_MODULE_HASH "hash"
 #define FLAT_NATIVE_MODULE_BYTES "bytes"
+#define FLAT_NATIVE_MODULE_TASK "task"
+#define FLAT_NATIVE_MODULE_CHANNEL "channel"
 
 #define FLAT_NATIVE_CORE_COUNT ((int)FLAT_NATIVE_MATH_TRIG_SIN)
 #define FLAT_NATIVE_MODULE_MATH_TRIG "math.trig"
@@ -383,6 +397,16 @@ struct FlatCsvRuntime;
 struct FlatClockRuntime;
 struct FlatHttpRuntime;
 struct FlatDomRuntime;
+struct FlatDateRunState;
+struct FlatEnvContext;
+struct FlatPathContext;
+struct FlatTaskNativeBridge;
+
+/* Immutable authorization data owned by one VM/program execution. */
+typedef struct {
+    const FlatOptionalNativeDecl *manifest;
+    int manifest_count;
+} FlatNativeRuntimeContext;
 
 typedef struct {
     FlatStringPool *pool;
@@ -412,6 +436,13 @@ typedef struct {
     struct FlatHttpRuntime *http; /* synchronous HTTP request resources */
     struct FlatDomRuntime *dom; /* HTML DOM resources */
     struct FlatExecutorContext *executor; /* per-VM executor state */
+    uint32_t call_instr_id; /* resolved by the owning VM execution */
+    FlatRngState *rng; /* per-VM random generator */
+    struct FlatDateRunState *date; /* per-VM date/time run configuration */
+    struct FlatEnvContext *env; /* per-VM environment/argv snapshot */
+    struct FlatPathContext *path; /* per-VM path formatting configuration */
+    FlatNativeRuntimeContext *native_runtime; /* per-VM optional-native authorization */
+    struct FlatTaskNativeBridge *task_bridge; /* present only for runtime-owned task VMs */
 } FlatNativeCtx;
 
 int flat_native_is_core_module(const char *mod);

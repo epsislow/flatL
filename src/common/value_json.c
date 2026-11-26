@@ -1,4 +1,5 @@
 #include "flat_number.h"
+#include "flat_locale.h"
 #include "flat_value.h"
 
 #include "flat_number.h"
@@ -886,7 +887,7 @@ static int stringify_value(const FlatValue *v, FlatStringPool *pool, FlatCollect
                append_char(buf, pos, max, 'l') || append_char(buf, pos, max, 's') ||
                append_char(buf, pos, max, 'e');
     case VAL_NUMBER:
-        snprintf(tmp, sizeof tmp, "%.17g", flat_number_as_f64(v));
+        flat_snprintf(tmp, sizeof tmp, "%.17g", flat_number_as_f64(v));
         for (size_t i = 0; tmp[i]; i++) {
             if (append_char(buf, pos, max, tmp[i]) != 0) {
                 return -1;

@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 17
+desc = "FlatRuntime can run a fresh VM after a previous invocation fails and tears down"
+kind = "exec"
+cmd = "make -s test-runtime-reuse TEST_BIN={tmp}/runtime_reuse_test && {tmp}/runtime_reuse_test {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 0
+stdout_contains = "runtime-reuse-ok"

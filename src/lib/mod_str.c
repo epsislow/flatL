@@ -1,4 +1,5 @@
 #include "flat_native_mod.h"
+#include "flat_locale.h"
 #include "flat_native_tag.h"
 #include "flat_native_util.h"
 #include "flat_number.h"
@@ -1044,9 +1045,9 @@ static int from_num_format(double x, int decimals, int trim_frac, char group_ch,
     ax = negative ? -rounded : rounded;
 
     if (decimals == 0) {
-        snprintf(body, sizeof body, "%.0f", ax);
+        flat_snprintf(body, sizeof body, "%.0f", ax);
     } else {
-        snprintf(body, sizeof body, "%.*f", decimals, ax);
+        flat_snprintf(body, sizeof body, "%.*f", decimals, ax);
     }
     if (trim_frac) {
         from_num_trim_fraction(body);

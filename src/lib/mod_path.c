@@ -138,7 +138,7 @@ int flat_native_path_join(FlatNativeCtx *ctx) {
         cparts[i] = strs[i];
     }
     n = argc;
-    if (flat_path_join(cparts, n, out, sizeof out, &why) != 0) {
+    if (flat_path_join_ctx(ctx->path, cparts, n, out, sizeof out, &why) != 0) {
         for (i = 0; i < n; i++) {
             free(strs[i]);
             flat_native_parse_rhs_release(ctx, &vals[i]);
@@ -158,7 +158,7 @@ int flat_native_path_base(FlatNativeCtx *ctx) {
     char out[FLAT_PATH_MAX];
     const char *why = NULL;
     if (unary_path_string(ctx, &p, &len, "path.base.args", "path.base.empty") != 0) return -1;
-    if (flat_path_base(p, out, sizeof out, &why) != 0) {
+    if (flat_path_base_ctx(ctx->path, p, out, sizeof out, &why) != 0) {
         free(p);
         return path_fail(ctx, why ? why : "path.base");
     }
@@ -172,7 +172,7 @@ int flat_native_path_dir(FlatNativeCtx *ctx) {
     char out[FLAT_PATH_MAX];
     const char *why = NULL;
     if (unary_path_string(ctx, &p, &len, "path.dir.args", "path.dir.empty") != 0) return -1;
-    if (flat_path_dir(p, out, sizeof out, &why) != 0) {
+    if (flat_path_dir_ctx(ctx->path, p, out, sizeof out, &why) != 0) {
         free(p);
         return path_fail(ctx, why ? why : "path.dir");
     }
@@ -186,7 +186,7 @@ int flat_native_path_ext(FlatNativeCtx *ctx) {
     char out[FLAT_PATH_MAX];
     const char *why = NULL;
     if (unary_path_string(ctx, &p, &len, "path.ext.args", "path.ext.empty") != 0) return -1;
-    if (flat_path_ext(p, out, sizeof out, &why) != 0) {
+    if (flat_path_ext_ctx(ctx->path, p, out, sizeof out, &why) != 0) {
         free(p);
         return path_fail(ctx, why ? why : "path.ext");
     }
@@ -201,7 +201,7 @@ int flat_native_path_normalize(FlatNativeCtx *ctx) {
     const char *why = NULL;
     if (unary_path_string(ctx, &p, &len, "path.normalize.args", "path.normalize.empty") != 0)
         return -1;
-    if (flat_path_normalize(p, out, sizeof out, &why) != 0) {
+    if (flat_path_normalize_ctx(ctx->path, p, out, sizeof out, &why) != 0) {
         free(p);
         return path_fail(ctx, why ? why : "path.normalize");
     }
@@ -215,7 +215,7 @@ int flat_native_path_is_abs(FlatNativeCtx *ctx) {
     int abs = 0;
     const char *why = NULL;
     if (unary_path_string(ctx, &p, &len, "path.isAbs.args", "path.isAbs.empty") != 0) return -1;
-    if (flat_path_is_abs(p, &abs, &why) != 0) {
+    if (flat_path_is_abs_ctx(ctx->path, p, &abs, &why) != 0) {
         free(p);
         return path_fail(ctx, why ? why : "path.isAbs");
     }

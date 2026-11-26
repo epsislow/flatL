@@ -100,7 +100,7 @@ int flat_native_env_has(FlatNativeCtx *ctx) {
         return env_fail(ctx, "env.has.args");
     }
     flat_native_parse_rhs_release(ctx, &v);
-    if (flat_env_lookup(name, buf, sizeof buf, &found) != 0) {
+    if (flat_env_context_lookup(ctx->env, name, buf, sizeof buf, &found) != 0) {
         free(name);
         return env_fail(ctx, "env.has.memory");
     }
@@ -139,7 +139,7 @@ int flat_native_env_get(FlatNativeCtx *ctx) {
             return env_fail(ctx, "env.get.default");
         }
     }
-    if (flat_env_lookup(name, buf, sizeof buf, &found) != 0) {
+    if (flat_env_context_lookup(ctx->env, name, buf, sizeof buf, &found) != 0) {
         free(name);
         free(def);
         release_args(ctx, &v0, 1);
@@ -166,7 +166,7 @@ int flat_native_env_get(FlatNativeCtx *ctx) {
 int flat_native_env_argc(FlatNativeCtx *ctx) {
     if (!ctx || !ctx->out) return -1;
     env_ok(ctx);
-    return flat_value_set_number(ctx->out, (double)flat_env_argc());
+    return flat_value_set_number(ctx->out, (double)flat_env_context_argc(ctx->env));
 }
 
 int flat_native_env_args(FlatNativeCtx *ctx) {
@@ -177,7 +177,7 @@ int flat_native_env_args(FlatNativeCtx *ctx) {
     if (ctx->inner && flat_native_trim((char *)ctx->inner)[0]) {
         return env_fail(ctx, "env.args.args");
     }
-    n = flat_env_argc();
+    n = flat_env_context_argc(ctx->env);
     if (n == 0) {
         if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0)
             return env_fail(ctx, "env.args.memory");
@@ -187,7 +187,7 @@ int flat_native_env_args(FlatNativeCtx *ctx) {
     items = (FlatValue *)calloc(n, sizeof *items);
     if (!items) return env_fail(ctx, "env.args.memory");
     for (i = 0; i < n; ++i) {
-        const char *a = flat_env_arg(i);
+        const char *a = flat_env_context_arg(ctx->env, i);
         size_t al = a ? strlen(a) : 0;
         if (al <= FLAT_INLINE_STR_MAX) {
             if (flat_value_set_str_inline(&items[i], a ? a : "", al) != 0) {

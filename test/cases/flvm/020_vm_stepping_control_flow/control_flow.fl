@@ -1,0 +1,53 @@
+use "../../../../blocks/native-exec.fl" as #ne_
+use native executor with E
+use native vcx with V
+use native math with m
+
+jump:blockMax 1
+func:executor #ne_executor.unique.scope
+func:callVM 1
+
+def double(a) -> r
+  m.calc('a * 2') -> r
+  return
+
+def bump(a) -> r
+  double(a) -> t
+  double(t) -> r
+  return
+
+#main
+  call #outer
+  i == 3
+  items = [1, 2, 3, 4]
+  foreach(items, item, '#each')
+  item == 4
+  bump(3) -> x
+  x == 12
+  jump #spin
+  OK
+
+#outer
+  for(4, i, '#step')
+  return
+
+#step
+  call #worker
+  next
+
+#each
+  call #worker
+  next
+
+#worker
+  return
+
+#spin
+  jump #spin
+  OK
+
+#panic.any
+  panicReason() -> reason
+  io.outln(reason)
+  io.outln('handled')
+  OK

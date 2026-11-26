@@ -16,8 +16,8 @@ typedef struct {
 
 typedef struct {
     uint32_t category;
-    int task_id;    /* negative = omit */
-    int channel_id; /* negative = omit */
+    int64_t task_id;    /* negative = omit */
+    int64_t channel_id; /* negative = omit */
     const char *event;
     const char *block;
     const char *target;
@@ -27,7 +27,11 @@ typedef struct {
     const char *action;
 } FlatRuntimeLogEvent;
 
-/* Configure once per flvm invocation. Disabled categories do no formatting or allocation. */
+/*
+ * Process-owned logger. Its internal state is synchronized; configure/shutdown may
+ * serialize with emit/flush, but callers must keep event strings alive for the call.
+ * Disabled categories do no formatting or allocation.
+ */
 int flat_runtime_log_configure(const FlatRuntimeLogConfig *config);
 int flat_runtime_log_enabled(uint32_t category);
 void flat_runtime_log_emit(const FlatRuntimeLogEvent *event);

@@ -1,4 +1,5 @@
 #include "flat_value.h"
+#include "flat_locale.h"
 
 #include <ctype.h>
 #include <stdlib.h>
@@ -84,7 +85,7 @@ int flat_parse_number_token(const char *token, double *out_num) {
     if (*t == '\0') {
         return -1;
     }
-    v = strtod(t, &end);
+    v = flat_strtod(t, &end);
     if (end == t || (end && *end != '\0')) {
         return -1;
     }

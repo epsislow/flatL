@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 20
+desc = "FlatVm stepping preserves nested calls, loops, executor scopes and panic recovery"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/control_flow.fb {case}/control_flow.fl && make -s test-vm-stepping-control-flow TEST_BIN={tmp}/vm_stepping_control_flow_test && {tmp}/vm_stepping_control_flow_test {tmp}/control_flow.fb"
+expect_exit = 0
+stdout_contains = "vm-stepping-control-flow-ok"

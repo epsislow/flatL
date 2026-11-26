@@ -1,8 +1,8 @@
 #include "flat_func_tag.h"
+#include "flat_ascii.h"
 #include "flat_native_tag.h"
 #include "flat_native_util.h"
 
-#include <ctype.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,12 +45,12 @@ static int split_call_param_list(char *inner, char out[][64], int max_out, int *
                 tmp[seg_len] = '\0';
                 {
                     char *t = tmp;
-                    while (*t && isspace((unsigned char)*t)) {
+                    while (*t && flat_ascii_is_space((unsigned char)*t)) {
                         t++;
                     }
                     {
                         char *e = t + strlen(t);
-                        while (e > t && isspace((unsigned char)*(e - 1))) {
+                        while (e > t && flat_ascii_is_space((unsigned char)*(e - 1))) {
                             e--;
                         }
                         *e = '\0';
@@ -96,7 +96,7 @@ static int string_from_tag_expr_compile(const char *tag_expr, char *out, size_t 
         return -1;
     }
     p = tag_expr;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '"' && *p != '\'') {
@@ -117,7 +117,7 @@ static int string_from_tag_expr_compile(const char *tag_expr, char *out, size_t 
         out[i] = '\0';
     }
     while (*++p) {
-        if (!isspace((unsigned char)*p)) {
+        if (!flat_ascii_is_space((unsigned char)*p)) {
             return -1;
         }
     }
@@ -141,7 +141,7 @@ static int tokenize_sort(char tokens[][FLAT_TAG_TOKEN_LEN], int *count, const ch
     while (*p) {
         size_t i = 0;
 
-        while (*p && isspace((unsigned char)*p)) {
+        while (*p && flat_ascii_is_space((unsigned char)*p)) {
             p++;
         }
         if (!*p) {
@@ -150,7 +150,7 @@ static int tokenize_sort(char tokens[][FLAT_TAG_TOKEN_LEN], int *count, const ch
         if (n >= FLAT_TAG_MAX_TOKENS) {
             return -1;
         }
-        while (*p && !isspace((unsigned char)*p)) {
+        while (*p && !flat_ascii_is_space((unsigned char)*p)) {
             if (i + 1 >= FLAT_TAG_TOKEN_LEN) {
                 return -1;
             }
@@ -213,7 +213,7 @@ int flat_func_tag_canonical_from_literal(const char *tag_expr, char *canonical, 
     if (!tag_expr) {
         return 0;
     }
-    while (*tag_expr && isspace((unsigned char)*tag_expr)) {
+    while (*tag_expr && flat_ascii_is_space((unsigned char)*tag_expr)) {
         tag_expr++;
     }
     if (*tag_expr == '\0') {

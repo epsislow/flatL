@@ -68,6 +68,7 @@ int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatColle
     uint16_t id;
     char inner[4096];
     FlatNativeCtx ctx;
+    FlatNativeRuntimeContext native_runtime;
 
     if (out_status) {
         *out_status = FLAT_IO_ERR;
@@ -95,6 +96,9 @@ int flat_io_exec_line_manifest(const char *line, FlatStringPool *pool, FlatColle
     ctx.vars_max = vars_max;
     ctx.io_ctx = io_ctx;
     ctx.file_tbl = file_tbl;
+    native_runtime.manifest = decls;
+    native_runtime.manifest_count = decl_count;
+    ctx.native_runtime = &native_runtime;
     if (io_ctx) {
         flat_io_ctx_bind_vars(io_ctx, vars, var_count, vcx);
     }

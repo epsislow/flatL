@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <ctype.h>
+#include <stdatomic.h>
 
 typedef struct {
     FlatHttpResponse *response;
@@ -292,19 +293,36 @@ static void finalize_status_chain(FlatHttpResponse *out) {
     }
 }
 
+static atomic_flag g_curl_init_lock = ATOMIC_FLAG_INIT;
+static atomic_int g_curl_init_state = ATOMIC_VAR_INIT(0); /* 0 = uninitialized, 1 = ready, -1 = failed */
+
 static int ensure_curl_global(FlatHttpResponse *out) {
-    static int ready;
-    CURLcode rc;
-    if (ready) return 0;
-    rc = curl_global_init(CURL_GLOBAL_DEFAULT);
-    if (rc != CURLE_OK) {
+    int state = atomic_load_explicit(&g_curl_init_state, memory_order_acquire);
+    CURLcode rc = CURLE_OK;
+    if (state == 1) return 0;
+    if (state == -1) {
         if (out) {
-            out->error_code = (int)rc;
-            snprintf(out->error, sizeof out->error, "%s", curl_easy_strerror(rc));
+            out->error_code = (int)CURLE_FAILED_INIT;
+            snprintf(out->error, sizeof out->error, "curl global initialization previously failed");
         }
         return -1;
     }
-    ready = 1;
+    while (atomic_flag_test_and_set_explicit(&g_curl_init_lock, memory_order_acquire)) { }
+    state = atomic_load_explicit(&g_curl_init_state, memory_order_relaxed);
+    if (state == 0) {
+        rc = curl_global_init(CURL_GLOBAL_DEFAULT);
+        state = (rc == CURLE_OK) ? 1 : -1;
+        atomic_store_explicit(&g_curl_init_state, state, memory_order_release);
+    }
+    atomic_flag_clear_explicit(&g_curl_init_lock, memory_order_release);
+    if (state != 1) {
+        if (out) {
+            out->error_code = (int)(rc == CURLE_OK ? CURLE_FAILED_INIT : rc);
+            snprintf(out->error, sizeof out->error, "%s",
+                     rc == CURLE_OK ? "curl global initialization failed" : curl_easy_strerror(rc));
+        }
+        return -1;
+    }
     return 0;
 }
 

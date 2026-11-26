@@ -1,4 +1,5 @@
 #include "flat_date.h"
+#include "flat_locale.h"
 #include "flat_number.h"
 #include "flat_value.h"
 
@@ -11,11 +12,6 @@
 #define SEC_PER_DAY 86400LL
 #define MS_THRESHOLD 100000000000LL
 
-static FlatDateRunState g_date_state;
-
-FlatDateRunState *flat_date_global_state(void) {
-    return &g_date_state;
-}
 
 static int64_t env_now_override(void) {
     const char *e = getenv("FLAT_DATE_NOW_SEC");
@@ -476,7 +472,7 @@ int flat_date_parse_auto(const char *s, int64_t *out_utc_sec, const FlatDateRunS
     }
     {
         char *end;
-        double n = strtod(buf, &end);
+        double n = flat_strtod(buf, &end);
         if (end != buf) {
             while (*end && isspace((unsigned char)*end)) {
                 end++;

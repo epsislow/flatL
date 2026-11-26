@@ -621,7 +621,7 @@ int flat_native_math_seed(FlatNativeCtx *ctx) {
     } else {
         memcpy(&seed, &n, sizeof(uint64_t) < sizeof(double) ? sizeof(uint64_t) : sizeof(double));
     }
-    flat_rng_seed_u64(seed);
+    flat_rng_seed_u64(ctx->rng, seed);
     return flat_value_set_null(ctx->out);
 }
 
@@ -657,7 +657,7 @@ int flat_native_math_random(FlatNativeCtx *ctx) {
         if (has_result_ty && !is_float_tag) {
             return math_fail(ctx, "math.random.tag");
         }
-        result = flat_rng_f64_unit();
+        result = flat_rng_f64_unit(ctx->rng);
         return math_set_tagged_number(ctx, result, &result_ty, has_result_ty);
     }
 
@@ -678,7 +678,7 @@ int flat_native_math_random(FlatNativeCtx *ctx) {
             if (amin == amax) {
                 return math_fail(ctx, "math.random.range");
             }
-            result = amin + (amax - amin) * flat_rng_f64_unit();
+            result = amin + (amax - amin) * flat_rng_f64_unit(ctx->rng);
             return math_set_tagged_number(ctx, result, &result_ty, 1);
         }
 
@@ -689,13 +689,13 @@ int flat_native_math_random(FlatNativeCtx *ctx) {
                 return math_fail(ctx, "math.random.bounds");
             }
             if (lo >= 0) {
-                result = (double)flat_rng_u64_range((uint64_t)lo, (uint64_t)hi);
+                result = (double)flat_rng_u64_range(ctx->rng, (uint64_t)lo, (uint64_t)hi);
             } else if (hi < 0) {
                 uint64_t span = (uint64_t)(hi - lo);
-                result = (double)(lo + (int64_t)flat_rng_u64_range(0, span));
+                result = (double)(lo + (int64_t)flat_rng_u64_range(ctx->rng, 0, span));
             } else {
                 uint64_t span = (uint64_t)hi + (uint64_t)(-(lo));
-                result = (double)(lo + (int64_t)flat_rng_u64_range(0, span));
+                result = (double)(lo + (int64_t)flat_rng_u64_range(ctx->rng, 0, span));
             }
             if (!has_result_ty) {
                 FlatSlotType u32ty;

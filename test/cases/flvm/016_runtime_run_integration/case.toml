@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 16
+desc = "FlatRuntime executes bytecode through the real VM using its owned host config"
+kind = "exec"
+cmd = "make -s test-runtime-run-integration TEST_BIN={tmp}/runtime_run_integration_test && {tmp}/runtime_run_integration_test {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 0
+stdout_contains = "runtime-run-integration-ok"

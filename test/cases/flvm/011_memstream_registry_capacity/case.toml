@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 11
+desc = "fallback memory streams have dynamic registry capacity and independent outputs"
+kind = "exec"
+cmd = "gcc -std=c11 -Wall -Wextra -DFLAT_FORCE_MEMSTREAM_FALLBACK -I{root}/include -o {tmp}/memstream_registry_test {root}/test/cases/flvm/011_memstream_registry_capacity/memstream_registry_test.c {root}/src/common/flat_memstream.c && {tmp}/memstream_registry_test"
+expect_exit = 0
+stdout_contains = "memstream-registry-capacity-ok"

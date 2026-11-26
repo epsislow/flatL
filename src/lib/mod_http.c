@@ -1,4 +1,5 @@
 #include "flat_native.h"
+#include "flat_locale.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_http_runtime.h"
@@ -833,7 +834,7 @@ static int form_value_bytes(FlatNativeCtx *ctx, const FlatValue *v, char **out, 
     *out_len = 0;
     if (v->tag == VAL_STR_INLINE || v->tag == VAL_STR_REF) return value_string(ctx, v, out, out_len);
     if (v->tag == VAL_NUMBER) {
-        snprintf(tmp, sizeof tmp, "%.17g", flat_number_as_f64(v));
+        flat_snprintf(tmp, sizeof tmp, "%.17g", flat_number_as_f64(v));
         *out = dup_n(tmp, strlen(tmp));
         if (!*out) return -1;
         *out_len = strlen(tmp);

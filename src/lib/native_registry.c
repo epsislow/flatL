@@ -359,6 +359,17 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("bytes", "slice", "bytes.slice(data, offset, length)"),
     META_SIG("bytes", "len", "bytes.len(data)"),
     META_SIG("bytes", "writeStr", "bytes.writeStr(data)"),
+    META_SIG("task", "spawn", "task.spawn(#block, ...)"),
+    META_SIG("task", "wait", "task.wait(taskId)"),
+    META_SIG("task", "state", "task.state(taskId)"),
+    META_SIG("task", "result", "task.result(taskId)"),
+    META_SIG("channel", "create", "channel.create()"),
+    META_SIG("channel", "set", "channel.set(channelId, name, value)"),
+    META_SIG("channel", "var", "channel.var(channelId, name)"),
+    META_SIG("channel", "lock", "channel.lock(channelId)"),
+    META_SIG("channel", "unlock", "channel.unlock(channelId)"),
+    META_SIG("channel", "revert", "channel.revert(channelId)"),
+    META_SIG("channel", "destroy", "channel.destroy(channelId)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -398,6 +409,8 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_VCX,
         FLAT_NATIVE_MODULE_EXECUTOR,
         FLAT_NATIVE_MODULE_CSV,
+        FLAT_NATIVE_MODULE_TASK,
+        FLAT_NATIVE_MODULE_CHANNEL,
         NULL,
     };
     int i;
@@ -435,7 +448,7 @@ const char *flat_native_name(uint16_t id) {
 }
 
 const char *flat_native_doc_sig(uint16_t id) {
-    static char buf[160];
+    static _Thread_local char buf[160];
 
     if (id >= FLAT_NATIVE_COUNT) {
         return "?";
@@ -456,6 +469,7 @@ int flat_native_module_for_id(uint16_t id, char *mod_out, size_t mod_out_sz) {
 }
 
 int flat_native_is_optional_id(uint16_t id) {
+    if (id >= (uint16_t)FLAT_NATIVE_TASK_SPAWN && id <= (uint16_t)FLAT_NATIVE_CHANNEL_DESTROY) return 0;
     if (id == (uint16_t)FLAT_NATIVE_IO_DOCS) {
         return 0;
     }

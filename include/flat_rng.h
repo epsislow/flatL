@@ -4,24 +4,24 @@
 #include <stddef.h>
 #include <stdint.h>
 
-/*
- * Shared process RNG (math.random / hash.randomBytes).
- * Not cryptographic. Auto-seeded at VM start; math.seed overrides.
- */
+/* Per-VM RNG state. Not cryptographic. */
+typedef struct {
+    uint64_t state;
+    int seeded;
+} FlatRngState;
 
-void flat_rng_seed_u64(uint64_t seed);
-void flat_rng_seed_auto(void);
+void flat_rng_seed_u64(FlatRngState *rng, uint64_t seed);
+void flat_rng_seed_auto(FlatRngState *rng);
 
-uint64_t flat_rng_u64(void);
+uint64_t flat_rng_u64(FlatRngState *rng);
 /* Uniform in [0, 1). */
-double flat_rng_f64_unit(void);
+double flat_rng_f64_unit(FlatRngState *rng);
 /* Fill buf with random bytes. */
-void flat_rng_fill(void *buf, size_t n);
+void flat_rng_fill(FlatRngState *rng, void *buf, size_t n);
 
-/*
- * Uniform integer in [lo, hi] inclusive (requires lo <= hi).
+/* Uniform integer in [lo, hi] inclusive (requires lo <= hi).
  * Uses rejection sampling to avoid modulo bias.
  */
-uint64_t flat_rng_u64_range(uint64_t lo, uint64_t hi);
+uint64_t flat_rng_u64_range(FlatRngState *rng, uint64_t lo, uint64_t hi);
 
 #endif

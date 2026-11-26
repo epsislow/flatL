@@ -106,7 +106,7 @@ int flat_native_date_format(FlatNativeCtx *ctx) {
     FlatValue src;
     int64_t sec;
     char out[512];
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
 
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.format");
@@ -151,7 +151,7 @@ int flat_native_date_parse_auto(FlatNativeCtx *ctx) {
     char inner_buf[4096];
     FlatValue v;
     int64_t sec;
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
 
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.parse_auto");
@@ -187,7 +187,7 @@ int flat_native_date_parse(FlatNativeCtx *ctx) {
     char stok[512];
     char ftok[256];
     int64_t sec;
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
 
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.parse");
@@ -225,7 +225,7 @@ int flat_native_date_parse(FlatNativeCtx *ctx) {
 }
 
 int flat_native_date_now(FlatNativeCtx *ctx) {
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.now");
     }
@@ -235,7 +235,7 @@ int flat_native_date_now(FlatNativeCtx *ctx) {
 
 int flat_native_date_today(FlatNativeCtx *ctx) {
     char out[32];
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.today");
     }
@@ -253,7 +253,7 @@ int flat_native_date_add(FlatNativeCtx *ctx) {
     FlatValue vb;
     int64_t sec;
     char out[64];
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
 
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.add");
@@ -302,7 +302,7 @@ int flat_native_date_cmp(FlatNativeCtx *ctx) {
     FlatValue vb;
     int64_t sa;
     int64_t sb;
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
 
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.cmp");
@@ -342,7 +342,7 @@ int flat_native_date_to_seconds(FlatNativeCtx *ctx) {
     FlatValue v;
     char inner_buf[4096];
     int64_t sec;
-    FlatDateRunState *st = flat_date_global_state();
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
 
     if (!ctx->out || !ctx->io_status) {
         return date_fail(ctx, "date.to_seconds");
@@ -457,8 +457,8 @@ int flat_native_date_sec_to_time(FlatNativeCtx *ctx) {
 
 int flat_native_date_run_offset(FlatNativeCtx *ctx) {
     char token[64];
-    FlatDateRunState *st = flat_date_global_state();
-    if (!ctx->io_status) {
+    FlatDateRunState *st = (ctx ? ctx->date : NULL);
+    if (!ctx || !ctx->io_status || !st) {
         return date_fail(ctx, "date.run_offset");
     }
     io_ok(ctx);

@@ -1,0 +1,19 @@
+use native task
+use native channel
+use native math
+
+#main
+  shared = channel.create()
+  channel.set(shared, 'value', 1)
+
+  child = task.spawn(#worker, shared)
+  task.wait(child)
+
+  channel.destroy(shared)
+  OK
+
+#worker(shared)
+  value = channel.var(shared, 'value')
+  math.calc('value + 1') -> value
+  channel.set(shared, 'value', value)
+  OK

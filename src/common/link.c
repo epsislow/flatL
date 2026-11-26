@@ -3,6 +3,7 @@
 #endif
 
 #include "flat_guard.h"
+#include "flat_ascii.h"
 #include "flat_func.h"
 #include "flat_func_tag.h"
 #include "flat_link.h"
@@ -12,7 +13,6 @@
 #include "flat_jump_block.h"
 #include "flat_port.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,7 +45,7 @@ typedef struct {
 } FlatFmodUse;
 
 static char *trim_local(char *s) {
-    while (*s && isspace((unsigned char)*s)) {
+    while (*s && flat_ascii_is_space((unsigned char)*s)) {
         s++;
     }
     if (*s == '\0') {
@@ -53,7 +53,7 @@ static char *trim_local(char *s) {
     }
     {
         char *e = s + strlen(s) - 1;
-        while (e > s && isspace((unsigned char)*e)) {
+        while (e > s && flat_ascii_is_space((unsigned char)*e)) {
             *e-- = '\0';
         }
     }
@@ -74,13 +74,13 @@ static int validate_as_prefix(const char *prefix, char *err, size_t err_size) {
         snprintf(err, err_size, "use: empty as prefix");
         return -1;
     }
-    if (!isalpha((unsigned char)prefix[1])) {
+    if (!flat_ascii_is_alpha((unsigned char)prefix[1])) {
         snprintf(err, err_size, "use: as prefix must start with a letter after #");
         return -1;
     }
     for (i = 2; prefix[i]; i++) {
         unsigned char c = (unsigned char)prefix[i];
-        if (isalnum(c) || c == '_' || c == '-' || c == ':') {
+        if (flat_ascii_is_alnum(c) || c == '_' || c == '-' || c == ':') {
             continue;
         }
         snprintf(err, err_size, "use: invalid character in as prefix");
@@ -173,7 +173,7 @@ static int resolve_use_path(const char *source_file, const char *quoted, char *c
 }
 
 static int starts_with_use(const char *s) {
-    return strncmp(s, "use", 3) == 0 && (s[3] == '\0' || isspace((unsigned char)s[3]));
+    return strncmp(s, "use", 3) == 0 && (s[3] == '\0' || flat_ascii_is_space((unsigned char)s[3]));
 }
 
 static int starts_with_use_fmod(const char *s) {
@@ -182,11 +182,11 @@ static int starts_with_use_fmod(const char *s) {
         return 0;
     }
     p = s + 3;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     return strncmp(p, "fmod", 4) == 0 &&
-           (p[4] == '\0' || isspace((unsigned char)p[4]));
+           (p[4] == '\0' || flat_ascii_is_space((unsigned char)p[4]));
 }
 
 static int validate_fmod_ident(const char *ident, char *err, size_t err_size) {
@@ -195,13 +195,13 @@ static int validate_fmod_ident(const char *ident, char *err, size_t err_size) {
         snprintf(err, err_size, "use fmod: missing import name");
         return -1;
     }
-    if (!(isalpha((unsigned char)ident[0]) || ident[0] == '_')) {
+    if (!(flat_ascii_is_alpha((unsigned char)ident[0]) || ident[0] == '_')) {
         snprintf(err, err_size, "use fmod: import name must start with letter or _");
         return -1;
     }
     for (i = 1; ident[i]; i++) {
         unsigned char c = (unsigned char)ident[i];
-        if (!isalnum(c) && c != '_') {
+        if (!flat_ascii_is_alnum(c) && c != '_') {
             snprintf(err, err_size, "use fmod: invalid import name");
             return -1;
         }
@@ -221,14 +221,14 @@ static int parse_use_fmod_line(const char *line, FlatFmodUse *out, char *err, si
         return -1;
     }
     p += 3;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (strncmp(p, "fmod", 4) != 0) {
         return -1;
     }
     p += 4;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '"') {
@@ -244,24 +244,24 @@ static int parse_use_fmod_line(const char *line, FlatFmodUse *out, char *err, si
     *qend = '\0';
     snprintf(out->quoted, sizeof out->quoted, "%s", qstart);
     p = qend + 1;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
-    if (strncmp(p, "as", 2) != 0 || (p[2] != '\0' && !isspace((unsigned char)p[2]))) {
+    if (strncmp(p, "as", 2) != 0 || (p[2] != '\0' && !flat_ascii_is_space((unsigned char)p[2]))) {
         snprintf(err, err_size, "use fmod: missing as name");
         return -1;
     }
     p += 2;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
-    if (*p == '\0' || isspace((unsigned char)*p)) {
+    if (*p == '\0' || flat_ascii_is_space((unsigned char)*p)) {
         snprintf(err, err_size, "use fmod: missing import name");
         return -1;
     }
     {
         char *e = p;
-        while (*e && !isspace((unsigned char)*e)) {
+        while (*e && !flat_ascii_is_space((unsigned char)*e)) {
             e++;
         }
         if (*e) {
@@ -422,14 +422,14 @@ static int starts_with_use_native(const char *s) {
         return 0;
     }
     p = s + 3;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p == '"') {
         return 0; /* use "path.fl" — not use native … */
     }
     return strncmp(p, "native", 6) == 0 &&
-           (p[6] == '\0' || isspace((unsigned char)p[6]));
+           (p[6] == '\0' || flat_ascii_is_space((unsigned char)p[6]));
 }
 
 static int parse_use_line(const char *line, FlatUseLine *out, char *err, size_t err_size) {
@@ -445,7 +445,7 @@ static int parse_use_line(const char *line, FlatUseLine *out, char *err, size_t 
         return -1;
     }
     p += 3;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '"') {
@@ -461,15 +461,15 @@ static int parse_use_line(const char *line, FlatUseLine *out, char *err, size_t 
     *qend = '\0';
     snprintf(out->quoted, sizeof out->quoted, "%s", qstart);
     p = qend + 1;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
-    if (strncmp(p, "as", 2) != 0 || (p[2] != '\0' && !isspace((unsigned char)p[2]))) {
+    if (strncmp(p, "as", 2) != 0 || (p[2] != '\0' && !flat_ascii_is_space((unsigned char)p[2]))) {
         snprintf(err, err_size, "use: missing as #Prefix");
         return -1;
     }
     p += 2;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '#') {
@@ -477,7 +477,7 @@ static int parse_use_line(const char *line, FlatUseLine *out, char *err, size_t 
         return -1;
     }
     as_tok = p;
-    while (*p && !isspace((unsigned char)*p)) {
+    while (*p && !flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p) {
@@ -666,23 +666,30 @@ static int find_mod(const FlatModEntry *mods, int mod_count, const char *canonic
 
 static int discover_modules(const char *entry_path, const FlatLinkOptions *opts, FlatModEntry *mods,
                             int *mod_count, char *err, size_t err_size) {
-    char queue[FLAT_LINK_MAX_MODULES][FLAT_PORT_PATH_MAX];
+    char (*queue)[FLAT_PORT_PATH_MAX] = NULL;
+    FlatUseLine *uses = NULL;
     int qhead = 0;
     int qtail = 0;
     int count = 0;
+    int rc = -1;
 
     *mod_count = 0;
+    queue = (char (*)[FLAT_PORT_PATH_MAX])calloc(FLAT_LINK_MAX_MODULES, sizeof *queue);
+    uses = (FlatUseLine *)calloc(FLAT_LINK_MAX_USE_PER_FILE, sizeof *uses);
+    if (!queue || !uses) {
+        snprintf(err, err_size, "out of memory");
+        goto cleanup;
+    }
     snprintf(queue[qtail++], FLAT_PORT_PATH_MAX, "%s", entry_path);
 
     while (qhead < qtail) {
         char path[FLAT_PORT_PATH_MAX];
-        FlatUseLine uses[FLAT_LINK_MAX_USE_PER_FILE];
         int nu = 0;
         int i;
 
         snprintf(path, sizeof path, "%s", queue[qhead++]);
         if (scan_header_uses(path, opts, uses, FLAT_LINK_MAX_USE_PER_FILE, &nu, err, err_size) != 0) {
-            return -1;
+            goto cleanup;
         }
         for (i = 0; i < nu; i++) {
             char canonical[FLAT_PORT_PATH_MAX];
@@ -695,20 +702,20 @@ static int discover_modules(const char *entry_path, const FlatLinkOptions *opts,
                 if (opts && opts->verbose) {
                     fprintf(stderr, "flc: verbose: tried absolute path %s\n", try_rel);
                 }
-                return -1;
+                goto cleanup;
             }
             mi = find_mod(mods, count, canonical);
             if (mi >= 0) {
                 if (strcmp(mods[mi].prefix, uses[i].prefix) != 0) {
                     snprintf(err, err_size, "%s:%d: module already imported as %s", path, uses[i].line_no,
                              mods[mi].prefix);
-                    return -1;
+                    goto cleanup;
                 }
                 continue;
             }
             if (count >= FLAT_LINK_MAX_MODULES) {
                 snprintf(err, err_size, "too many imported modules");
-                return -1;
+                goto cleanup;
             }
             snprintf(mods[count].canonical, sizeof mods[count].canonical, "%s", canonical);
             snprintf(mods[count].prefix, sizeof mods[count].prefix, "%s", uses[i].prefix);
@@ -717,14 +724,19 @@ static int discover_modules(const char *entry_path, const FlatLinkOptions *opts,
 
             if (qtail >= FLAT_LINK_MAX_MODULES) {
                 snprintf(err, err_size, "use graph too large");
-                return -1;
+                goto cleanup;
             }
             snprintf(queue[qtail++], FLAT_PORT_PATH_MAX, "%s", canonical);
         }
     }
 
     *mod_count = count;
-    return 0;
+    rc = 0;
+
+cleanup:
+    free(uses);
+    free(queue);
+    return rc;
 }
 
 static int is_handler_label(const char *lab) {
@@ -979,12 +991,15 @@ static int attach_unit_to_out(FgirProgram *out, const FgirProgram *mod, int *out
 
 int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirProgram *out,
                       FlatLinkReport *report, char *err, size_t err_size) {
-    FlatModEntry mods[FLAT_LINK_MAX_MODULES];
+    FlatModEntry *mods = NULL;
+    FlatFmodUse *fmods = NULL;
     int mod_count = 0;
+    int fmod_count = 0;
     int fmod_linked = 0;
     FgirProgram *entry_prog = NULL;
     FgirProgram *mod = NULL;
     int i;
+    int rc = -1;
 
     if (!entry_path || !out) {
         return -1;
@@ -992,79 +1007,57 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     memset(out, 0, sizeof *out);
     out->main_index = -1;
 
+    mods = (FlatModEntry *)calloc(FLAT_LINK_MAX_MODULES, sizeof *mods);
+    fmods = (FlatFmodUse *)calloc(32u, sizeof *fmods);
+    if (!mods || !fmods) {
+        snprintf(err, err_size, "out of memory");
+        goto cleanup;
+    }
     if (discover_modules(entry_path, opts, mods, &mod_count, err, err_size) != 0) {
-        return -1;
+        goto cleanup;
     }
-
-    {
-        FlatFmodUse fmods[32];
-        int fmod_count = 0;
-        int fi;
-
-        if (scan_header_fmod_uses(entry_path, opts, fmods, 32, &fmod_count, err, err_size) != 0) {
-            return -1;
-        }
-        fmod_linked = fmod_count;
-        mod = calloc(1, sizeof(FgirProgram));
-        if (!mod) {
-            snprintf(err, err_size, "out of memory");
-            return -1;
-        }
-        for (fi = 0; fi < fmod_count; fi++) {
-            char canonical[FLAT_PORT_PATH_MAX];
-            char try_rel[FLAT_PORT_PATH_MAX];
-            char e2[256];
-            int local_ui;
-            int out_ui;
-
-            memset(mod, 0, sizeof *mod);
-            mod->main_index = -1;
-            if (resolve_use_path(entry_path, fmods[fi].quoted, canonical, try_rel, sizeof try_rel, e2,
-                                 sizeof e2) != 0) {
-                snprintf(err, err_size, "%s:%d: use fmod: %s", entry_path, fmods[fi].line_no, e2);
-                free(mod);
-                return -1;
-            }
-            if (flat_parse_unit(canonical, 0, mod, err, err_size) != 0) {
-                free(mod);
-                return -1;
-            }
-            if (!mod->mod_id_set) {
-                snprintf(err, err_size, "%s: mod('id') missing in fmod unit", canonical);
-                free(mod);
-                return -1;
-            }
-            if (flat_func_prepare_fmod_unit(mod, fmods[fi].ident, err, err_size) != 0) {
-                char detail[512];
-                snprintf(detail, sizeof detail, "%s", err);
-                snprintf(err, err_size, "%s: %s", canonical, detail);
-                free(mod);
-                return -1;
-            }
-            if (prepare_unit_decls(mod, canonical, &local_ui, err, err_size) != 0) {
-                free(mod);
-                return -1;
-            }
-            if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) {
-                free(mod);
-                return -1;
-            }
-            for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
-                mod->blocks[local_ui].native_unit_index = out_ui;
-            }
-            if (merge_fmod_unit(out, mod, err, err_size) != 0) {
-                free(mod);
-                return -1;
-            }
-        }
-        free(mod);
-        mod = NULL;
+    if (scan_header_fmod_uses(entry_path, opts, fmods, 32, &fmod_count, err, err_size) != 0) {
+        goto cleanup;
     }
+    fmod_linked = fmod_count;
 
-    mod = calloc(1, sizeof(FgirProgram));
+    mod = (FgirProgram *)calloc(1, sizeof(FgirProgram));
     if (!mod) {
         snprintf(err, err_size, "out of memory");
-        return -1;
+        goto cleanup;
+    }
+
+    for (i = 0; i < fmod_count; i++) {
+        char canonical[FLAT_PORT_PATH_MAX];
+        char try_rel[FLAT_PORT_PATH_MAX];
+        char e2[256];
+        int local_ui;
+        int out_ui;
+
+        memset(mod, 0, sizeof *mod);
+        mod->main_index = -1;
+        if (resolve_use_path(entry_path, fmods[i].quoted, canonical, try_rel, sizeof try_rel, e2,
+                             sizeof e2) != 0) {
+            snprintf(err, err_size, "%s:%d: use fmod: %s", entry_path, fmods[i].line_no, e2);
+            goto cleanup;
+        }
+        if (flat_parse_unit(canonical, 0, mod, err, err_size) != 0) goto cleanup;
+        if (!mod->mod_id_set) {
+            snprintf(err, err_size, "%s: mod('id') missing in fmod unit", canonical);
+            goto cleanup;
+        }
+        if (flat_func_prepare_fmod_unit(mod, fmods[i].ident, err, err_size) != 0) {
+            char detail[512];
+            snprintf(detail, sizeof detail, "%s", err);
+            snprintf(err, err_size, "%s: %s", canonical, detail);
+            goto cleanup;
+        }
+        if (prepare_unit_decls(mod, canonical, &local_ui, err, err_size) != 0) goto cleanup;
+        if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) goto cleanup;
+        for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
+            mod->blocks[local_ui].native_unit_index = out_ui;
+        }
+        if (merge_fmod_unit(out, mod, err, err_size) != 0) goto cleanup;
     }
 
     for (i = 0; i < mod_count; i++) {
@@ -1073,83 +1066,49 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
 
         memset(mod, 0, sizeof *mod);
         mod->main_index = -1;
-        if (flat_parse_unit(mods[i].canonical, 0, mod, err, err_size) != 0) {
-            free(mod);
-            return -1;
-        }
-        if (prepare_unit_decls(mod, mods[i].canonical, &local_ui, err, err_size) != 0) {
-            free(mod);
-            return -1;
-        }
-        if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) {
-            free(mod);
-            return -1;
-        }
+        if (flat_parse_unit(mods[i].canonical, 0, mod, err, err_size) != 0) goto cleanup;
+        if (prepare_unit_decls(mod, mods[i].canonical, &local_ui, err, err_size) != 0) goto cleanup;
+        if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) goto cleanup;
         for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
             mod->blocks[local_ui].native_unit_index = out_ui;
         }
-        if (merge_module(out, mod, mods[i].prefix, err, err_size) != 0) {
-            free(mod);
-            return -1;
-        }
+        if (merge_module(out, mod, mods[i].prefix, err, err_size) != 0) goto cleanup;
     }
-    free(mod);
 
-    entry_prog = calloc(1, sizeof(FgirProgram));
+    entry_prog = (FgirProgram *)calloc(1, sizeof(FgirProgram));
     if (!entry_prog) {
         snprintf(err, err_size, "out of memory");
-        return -1;
+        goto cleanup;
     }
     entry_prog->main_index = -1;
-    if (flat_parse_unit(entry_path, 1, entry_prog, err, err_size) != 0) {
-        free(entry_prog);
-        return -1;
-    }
+    if (flat_parse_unit(entry_path, 1, entry_prog, err, err_size) != 0) goto cleanup;
     {
         int local_ui;
         int out_ui;
 
-        if (prepare_unit_decls(entry_prog, entry_path, &local_ui, err, err_size) != 0) {
-            free(entry_prog);
-            return -1;
-        }
-        if (attach_unit_to_out(out, entry_prog, &out_ui, err, err_size) != 0) {
-            free(entry_prog);
-            return -1;
-        }
+        if (prepare_unit_decls(entry_prog, entry_path, &local_ui, err, err_size) != 0) goto cleanup;
+        if (attach_unit_to_out(out, entry_prog, &out_ui, err, err_size) != 0) goto cleanup;
         for (local_ui = 0; local_ui < entry_prog->block_count; local_ui++) {
             entry_prog->blocks[local_ui].native_unit_index = out_ui;
         }
     }
-    if (merge_entry(out, entry_prog, err, err_size) != 0) {
-        free(entry_prog);
-        return -1;
-    }
+    if (merge_entry(out, entry_prog, err, err_size) != 0) goto cleanup;
     out->jump_block_max_global = entry_prog->jump_block_max_global;
     out->jump_block_max_global_set = entry_prog->jump_block_max_global_set;
-    free(entry_prog);
 
     if (flat_native_use_build_fnat_union(out) != 0) {
         snprintf(err, err_size, "too many optional native modules in program");
-        return -1;
+        goto cleanup;
     }
     flat_func_reclassify_program(out);
-    if (flat_native_use_validate_program(out, err, err_size) != 0) {
-        return -1;
-    }
-    if (flat_func_resolve_call_sites(out, err, err_size) != 0) {
-        return -1;
-    }
-    if (flat_func_lower_program(out, err, err_size) != 0) {
-        return -1;
-    }
-    if (flat_func_validate_program(out, err, err_size) != 0) {
-        return -1;
-    }
+    if (flat_native_use_validate_program(out, err, err_size) != 0) goto cleanup;
+    if (flat_func_resolve_call_sites(out, err, err_size) != 0) goto cleanup;
+    if (flat_func_lower_program(out, err, err_size) != 0) goto cleanup;
+    if (flat_func_validate_program(out, err, err_size) != 0) goto cleanup;
 
     if (out->main_index < 0) {
         snprintf(err, err_size, "%s: missing #main", entry_path);
-        return -1;
+        goto cleanup;
     }
 
     if (report) {
@@ -1157,6 +1116,12 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         report->units = out->native_unit_count;
         report->fmod = fmod_linked;
     }
+    rc = 0;
 
-    return 0;
+cleanup:
+    free(entry_prog);
+    free(mod);
+    free(fmods);
+    free(mods);
+    return rc;
 }

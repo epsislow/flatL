@@ -1,6 +1,6 @@
 #include "flat_lit.h"
+#include "flat_ascii.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -112,12 +112,12 @@ static int parse_optional_t_cap(const char **p, unsigned *cap, LitCodec codec, c
         return -1;
     }
     s++;
-    if (*s == '\0' || (!(isalnum((unsigned char)*s) || *s == '_'))) {
+    if (*s == '\0' || (!(flat_ascii_is_alnum((unsigned char)*s) || *s == '_'))) {
         *cap = 127u;
         *p = s;
         return 0;
     }
-    if (!isdigit((unsigned char)*s)) {
+    if (!flat_ascii_is_digit((unsigned char)*s)) {
         why_codec(why, why_sz, codec, "type");
         return -1;
     }

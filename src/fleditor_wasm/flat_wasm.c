@@ -324,13 +324,9 @@ const char *flat_wasm_toolchain_version(void) {
 }
 
 const char *flat_wasm_mods(void) {
-    static char buf[512];
-    static int ready;
-    if (!ready) {
-        if (flat_native_mods_format(buf, sizeof buf) < 0) {
-            buf[0] = '\0';
-        }
-        ready = 1;
+    static _Thread_local char buf[512];
+    if (flat_native_mods_format(buf, sizeof buf) < 0) {
+        buf[0] = '\0';
     }
     return buf;
 }

@@ -1,0 +1,8 @@
+suite = "flvm"
+id = 13
+desc = "native plugin initialization, rollback and lazy loading are serialized across VM callers"
+kind = "exec"
+
+cmd = "mkdir -p {tmp}/native-registry-sandbox/bin && make -s test-native-registry-concurrency TEST_BIN={tmp}/native_registry_concurrency_test TEST_PLUGIN_DIR={tmp}/badplugins && {tmp}/native_registry_concurrency_test {root}/bin {tmp}/badplugins {tmp}/native-registry-sandbox"
+expect_exit = 0
+stdout_contains = "native-registry-concurrency-ok"

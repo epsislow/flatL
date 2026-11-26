@@ -1,11 +1,11 @@
 #include "flat_value.h"
+#include "flat_ascii.h"
 #include "flat_func.h"
 #include "flat_native_use.h"
 #include "flat_native.h"
 #include "flat_native_mods.h"
 #include "flat_native_util.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -46,6 +46,8 @@ static const char *const KNOWN_OPTIONAL_MODULES[] = {
     FLAT_NATIVE_MODULE_VCX,
     FLAT_NATIVE_MODULE_EXECUTOR,
     FLAT_NATIVE_MODULE_CSV,
+    FLAT_NATIVE_MODULE_TASK,
+    FLAT_NATIVE_MODULE_CHANNEL,
     NULL,
 };
 
@@ -60,7 +62,7 @@ static int known_optional_module(const char *mod) {
 }
 
 static char *trim(char *s) {
-    while (*s && isspace((unsigned char)*s)) {
+    while (*s && flat_ascii_is_space((unsigned char)*s)) {
         s++;
     }
     if (*s == '\0') {
@@ -68,7 +70,7 @@ static char *trim(char *s) {
     }
     {
         char *e = s + strlen(s) - 1;
-        while (e > s && isspace((unsigned char)*e)) {
+        while (e > s && flat_ascii_is_space((unsigned char)*e)) {
             *e-- = '\0';
         }
     }
@@ -77,17 +79,17 @@ static char *trim(char *s) {
 
 static int starts_with_use_native(const char *s) {
     const char *p;
-    if (!s || strncmp(s, "use", 3) != 0 || !isspace((unsigned char)s[3])) {
+    if (!s || strncmp(s, "use", 3) != 0 || !flat_ascii_is_space((unsigned char)s[3])) {
         return 0;
     }
     p = s + 3;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p == '"') {
         return 0;
     }
-    return strncmp(p, "native", 6) == 0 && (p[6] == '\0' || isspace((unsigned char)p[6]));
+    return strncmp(p, "native", 6) == 0 && (p[6] == '\0' || flat_ascii_is_space((unsigned char)p[6]));
 }
 
 static int validate_alias(const char *alias, char *err, size_t err_size) {
@@ -100,13 +102,13 @@ static int validate_alias(const char *alias, char *err, size_t err_size) {
         snprintf(err, err_size, "native alias \"%s\" is a reserved module name", alias);
         return -1;
     }
-    if (!isalpha((unsigned char)alias[0])) {
+    if (!flat_ascii_is_alpha((unsigned char)alias[0])) {
         snprintf(err, err_size, "native alias must start with a letter");
         return -1;
     }
     for (i = 1; alias[i]; i++) {
         unsigned char c = (unsigned char)alias[i];
-        if (isalnum(c) || c == '_' || c == '-' || c == ':') {
+        if (flat_ascii_is_alnum(c) || c == '_' || c == '-' || c == ':') {
             continue;
         }
         snprintf(err, err_size, "invalid character in native alias");
@@ -129,19 +131,19 @@ static int parse_use_native_line(const char *line, FlatOptionalNativeDecl *out, 
         return -1;
     }
     p += 3;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
-    if (strncmp(p, "native", 6) != 0 || (p[6] != '\0' && !isspace((unsigned char)p[6]))) {
+    if (strncmp(p, "native", 6) != 0 || (p[6] != '\0' && !flat_ascii_is_space((unsigned char)p[6]))) {
         return -1;
     }
     p += 6;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     {
         char *mod_start = p;
-        while (*p && !isspace((unsigned char)*p)) {
+        while (*p && !flat_ascii_is_space((unsigned char)*p)) {
             p++;
         }
         if (p == mod_start) {
@@ -152,7 +154,7 @@ static int parse_use_native_line(const char *line, FlatOptionalNativeDecl *out, 
     }
     is_core = flat_native_is_core_module(mod);
     if (is_core) {
-        while (*p && isspace((unsigned char)*p)) {
+        while (*p && flat_ascii_is_space((unsigned char)*p)) {
             p++;
         }
         if (*p == '\0') {
@@ -164,23 +166,23 @@ static int parse_use_native_line(const char *line, FlatOptionalNativeDecl *out, 
         return -1;
     }
     out->alias[0] = '\0';
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p == '\0') {
         snprintf(out->module, sizeof out->module, "%s", mod);
         return 0;
     }
-    if (strncmp(p, "with", 4) != 0 || (p[4] != '\0' && !isspace((unsigned char)p[4]))) {
+    if (strncmp(p, "with", 4) != 0 || (p[4] != '\0' && !flat_ascii_is_space((unsigned char)p[4]))) {
         snprintf(err, err_size, "use native: expected end or \"with alias\"");
         return -1;
     }
     p += 4;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     with_tok = p;
-    while (*p && !isspace((unsigned char)*p)) {
+    while (*p && !flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (with_tok == p) {

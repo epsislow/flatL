@@ -43,9 +43,6 @@ void flat_vcx_runtime_destroy(FlatVcxRuntime *rt, FlatCollectionPool *coll, Flat
 void flat_vcx_runtime_attach_vm(FlatVcxRuntime *rt, FlatVcxVmBind bind);
 void flat_vcx_runtime_sync_bind_var_count(FlatVcxRuntime *rt);
 
-void flat_vcx_runtime_set_active(FlatVcxRuntime *rt);
-FlatVcxRuntime *flat_vcx_runtime_active(void);
-
 uint32_t flat_vcx_current_id(const FlatVcxRuntime *rt);
 
 int flat_vcx_context_live(const FlatVcxRuntime *rt, uint32_t ctx_id);
@@ -95,23 +92,17 @@ int flat_vcx_vars_copy_by_names(FlatVcxRuntime *rt, uint32_t src_id, uint32_t ds
 
 int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectionPool *coll,
                              FlatStringPool *pool, FlatFileTable *files);
+/* Deep-copy a value between independent VM pools. File handles cannot cross VMs. */
+int flat_value_deep_copy_between(const FlatValue *src, FlatValue *dst,
+                                 FlatCollectionPool *src_coll, FlatStringPool *src_pool,
+                                 FlatFileTable *src_files, FlatCollectionPool *dst_coll,
+                                 FlatStringPool *dst_pool, FlatFileTable *dst_files);
 
 /* Toolchain / VM: set a variable on a VCX context (AM-1 call path). */
 int flat_vcx_set_named_var(FlatVcxRuntime *rt, uint32_t ctx_id, const char *name,
                             const FlatValue *val, FlatCollectionPool *coll, FlatStringPool *pool,
                             FlatFileTable *files, FlatMemLiveStats *live, char *panic_detail,
                             size_t panic_sz);
-
-typedef uint32_t (*FlatVcxCallInstrResolver)(void);
-
-void flat_vcx_set_call_instr_resolver(FlatVcxCallInstrResolver fn);
-uint32_t flat_vcx_call_instr_ctx(void);
-
-/* Strategy A nested calls: stack of instr VCX ids when __call_instr_vcx is assigned. */
-void flat_vm_instr_stack_push(uint32_t id);
-int flat_vm_instr_stack_pop(uint32_t id);
-uint32_t flat_vm_instr_stack_peek(void);
-void flat_vm_instr_stack_clear(void);
 
 int flat_vcx_dschema_allow(FlatVcxRuntime *rt, uint32_t ctx_id, int allow, char *panic_detail,
                            size_t panic_sz);

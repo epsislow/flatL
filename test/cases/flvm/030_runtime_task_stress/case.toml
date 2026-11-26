@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 30
+desc = "Runtime stress across many cooperative tasks and independent Channels"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/runtime_task_stress.fb {root}/test/cases/flvm/030_runtime_task_stress/program.fl && make -s test-runtime-task-stress TEST_BIN={tmp}/runtime_task_stress_test && {tmp}/runtime_task_stress_test {tmp}/runtime_task_stress.fb"
+expect_exit = 0
+stdout_contains = "runtime-task-stress-ok tasks=48 channels=24 values=288"

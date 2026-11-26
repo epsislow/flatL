@@ -1,0 +1,7 @@
+use native channel
+
+#main
+  locked = channel.lock(2)
+  stored = channel.set(2, 'waiter_two', 1)
+  unlocked = channel.unlock(2)
+  OK

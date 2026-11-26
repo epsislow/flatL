@@ -211,7 +211,7 @@ int flat_native_hash_random_bytes(FlatNativeCtx *ctx) {
     if (!buf) {
         return hash_fail(ctx, "hash.memory");
     }
-    flat_rng_fill(buf, (size_t)nu);
+    flat_rng_fill(ctx->rng, buf, (size_t)nu);
     rc = out_bytes(ctx, buf, (size_t)nu);
     free(buf);
     return rc;

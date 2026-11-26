@@ -185,3 +185,6 @@ MIT — see [LICENSE](LICENSE).
 ## Author
 
 [epsislow](https://github.com/epsislow)
+
+
+Task Runtime / Channel architecture plans and the latest implementation checkpoint are maintained in [`plans/`](plans/). Current checkpoint: archive 288 (`flatL-main-288-cooperative-chained-wait-graph-audit.zip`).

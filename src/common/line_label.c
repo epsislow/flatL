@@ -1,7 +1,7 @@
 #include "flat_line_label.h"
+#include "flat_ascii.h"
 #include "flat_guard.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -12,7 +12,7 @@ static int valid_line_ident(const char *s) {
     if (!s || !s[0]) {
         return 0;
     }
-    if (!isalpha((unsigned char)s[0])) {
+    if (!flat_ascii_is_alpha((unsigned char)s[0])) {
         return 0;
     }
     n = strlen(s);
@@ -21,7 +21,7 @@ static int valid_line_ident(const char *s) {
     }
     for (i = 1; i < n; i++) {
         unsigned char c = (unsigned char)s[i];
-        if (!isalnum(c) && c != '_') {
+        if (!flat_ascii_is_alnum(c) && c != '_') {
             return 0;
         }
     }
@@ -35,7 +35,7 @@ int flat_line_label_suffix_is_index(const char *suffix) {
         return 0;
     }
     for (p = suffix; *p; p++) {
-        if (!isdigit((unsigned char)*p)) {
+        if (!flat_ascii_is_digit((unsigned char)*p)) {
             return 0;
         }
     }
@@ -55,14 +55,14 @@ int flat_line_label_strip_eol(char *line, char *label_out, size_t label_sz, cons
         return 0;
     }
     end = line + strlen(line);
-    while (end > line && isspace((unsigned char)end[-1])) {
+    while (end > line && flat_ascii_is_space((unsigned char)end[-1])) {
         *--end = '\0';
     }
     dot = strrchr(line, '#');
     if (!dot || dot[1] != '.') {
         return 0;
     }
-    if (dot > line && !isspace((unsigned char)dot[-1])) {
+    if (dot > line && !flat_ascii_is_space((unsigned char)dot[-1])) {
         return 0;
     }
     ident = dot + 2;
@@ -79,7 +79,7 @@ int flat_line_label_strip_eol(char *line, char *label_out, size_t label_sz, cons
     }
     *dot = '\0';
     end = line + strlen(line);
-    while (end > line && isspace((unsigned char)end[-1])) {
+    while (end > line && flat_ascii_is_space((unsigned char)end[-1])) {
         *--end = '\0';
     }
     return 1;

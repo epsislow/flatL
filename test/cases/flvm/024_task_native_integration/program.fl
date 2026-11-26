@@ -1,0 +1,28 @@
+use native task
+use native obj
+
+#main
+  child = task.spawn(#worker)
+  task.wait(child)
+  childState = task.state(child)
+  childResult = task.result(child)
+  childExit = obj.get(childResult, 'exitCode')
+  childTermination = obj.get(childResult, 'termination')
+  failedChild = task.spawn(#workerFail)
+  task.wait(failedChild)
+  failedState = task.state(failedChild)
+  failedResult = task.result(failedChild)
+  failedTermination = obj.get(failedResult, 'termination')
+  io.outln(childState)
+  io.outln(childExit)
+  io.outln(childTermination)
+  io.outln(failedState)
+  io.outln(failedTermination)
+  OK
+
+#worker
+  io.outln('worker-ran')
+  OK
+
+#workerFail
+  FAIL

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 #if defined(FLAT_WASM_BUILD)
 #define FLAT_PATH_HOST_SEP '/'
@@ -14,14 +15,28 @@
 
 #define FLAT_PATH_MAX_SEGS 256
 
-static char g_sep = FLAT_PATH_HOST_SEP;
+static atomic_uchar g_sep = ATOMIC_VAR_INIT(FLAT_PATH_HOST_SEP);
 
-char flat_path_sep(void) { return g_sep; }
-void flat_path_sep_reset(void) { g_sep = FLAT_PATH_HOST_SEP; }
+char flat_path_sep(void) {
+    return (char)atomic_load_explicit(&g_sep, memory_order_acquire);
+}
+void flat_path_sep_reset(void) {
+    atomic_store_explicit(&g_sep, FLAT_PATH_HOST_SEP, memory_order_release);
+}
 int flat_path_sep_set(char sep) {
     if (sep != '/' && sep != '\\') return -1;
-    g_sep = sep;
+    atomic_store_explicit(&g_sep, (unsigned char)sep, memory_order_release);
     return 0;
+}
+void flat_path_context_init(FlatPathContext *ctx) { if (ctx) ctx->sep = flat_path_sep(); }
+int flat_path_context_set(FlatPathContext *ctx, char sep) {
+    if (!ctx || (sep != '/' && sep != '\\')) return -1;
+    ctx->sep = sep;
+    return 0;
+}
+char flat_path_context_sep(const FlatPathContext *ctx) {
+    return ctx && (ctx->sep == '/' || ctx->sep == '\\') ? ctx->sep :
+           (ctx ? FLAT_PATH_HOST_SEP : flat_path_sep());
 }
 int flat_path_sep_set_str(const char *s) {
     if (!s || !s[0]) return -1;
@@ -122,10 +137,9 @@ static int normalize_parts(PathParts *pp) {
 }
 
 /* Emits normalized path using the currently selected path separator. */
-static int build_out(const PathParts *pp, char *out, size_t out_sz) {
+static int build_out(const PathParts *pp, char sep, char *out, size_t out_sz) {
     size_t o = 0;
     int i;
-    char sep = flat_path_sep();
     if (!out || out_sz == 0) return -1;
     out[0] = '\0';
     if (pp->drive[0]) {
@@ -159,7 +173,7 @@ static int is_abs_local(const char *p) {
            p[1] == ':' && flat_path_is_sep(p[2]);
 }
 
-int flat_path_join(const char *const *parts, int nparts, char *out, size_t out_sz, const char **why) {
+int flat_path_join_ctx(const FlatPathContext *ctx, const char *const *parts, int nparts, char *out, size_t out_sz, const char **why) {
     PathParts acc = {0};
     int i, rc = -1;
     set_why(why, NULL);
@@ -182,7 +196,7 @@ int flat_path_join(const char *const *parts, int nparts, char *out, size_t out_s
         }
         parts_clear(&cur);
     }
-    if (normalize_parts(&acc) != 0 || build_out(&acc, out, out_sz) != 0) {
+    if (normalize_parts(&acc) != 0 || build_out(&acc, flat_path_context_sep(ctx), out, out_sz) != 0) {
         set_why(why, "path.join.memory"); goto done;
     }
     rc = 0;
@@ -191,7 +205,8 @@ done:
     return rc;
 }
 
-int flat_path_base(const char *p, char *out, size_t out_sz, const char **why) {
+int flat_path_base_ctx(const FlatPathContext *ctx, const char *p, char *out, size_t out_sz, const char **why) {
+    (void)ctx;
     PathParts pp = {0};
     int rc = -1;
     set_why(why, NULL);
@@ -204,7 +219,7 @@ int flat_path_base(const char *p, char *out, size_t out_sz, const char **why) {
 done: parts_clear(&pp); return rc;
 }
 
-int flat_path_dir(const char *p, char *out, size_t out_sz, const char **why) {
+int flat_path_dir_ctx(const FlatPathContext *ctx, const char *p, char *out, size_t out_sz, const char **why) {
     PathParts pp = {0};
     int rc = -1;
     set_why(why, NULL);
@@ -212,18 +227,19 @@ int flat_path_dir(const char *p, char *out, size_t out_sz, const char **why) {
     if (!p[0]) { set_why(why, "path.dir.empty"); return -1; }
     if (split_path(p, &pp) != 0) { set_why(why, "path.dir.memory"); goto done; }
     if (pp.n > 0) { free(pp.segs[pp.n - 1]); pp.n--; }
-    if (build_out(&pp, out, out_sz) != 0) { set_why(why, "path.dir.memory"); goto done; }
+    if (build_out(&pp, flat_path_context_sep(ctx), out, out_sz) != 0) { set_why(why, "path.dir.memory"); goto done; }
     rc = 0;
 done: parts_clear(&pp); return rc;
 }
 
-int flat_path_ext(const char *p, char *out, size_t out_sz, const char **why) {
+int flat_path_ext_ctx(const FlatPathContext *ctx, const char *p, char *out, size_t out_sz, const char **why) {
+    (void)ctx;
     char base[FLAT_PATH_MAX];
     const char *dot;
     set_why(why, NULL);
     if (!p || !out || out_sz == 0) { set_why(why, "path.ext.args"); return -1; }
     if (!p[0]) { set_why(why, "path.ext.empty"); return -1; }
-    if (flat_path_base(p, base, sizeof base, why) != 0) return -1;
+    if (flat_path_base_ctx(ctx, p, base, sizeof base, why) != 0) return -1;
     if (!base[0] || base[0] == '.') { out[0] = '\0'; return 0; }
     dot = strrchr(base, '.');
     if (!dot || !dot[1] || dot == base) { out[0] = '\0'; return 0; }
@@ -231,24 +247,45 @@ int flat_path_ext(const char *p, char *out, size_t out_sz, const char **why) {
     return 0;
 }
 
-int flat_path_normalize(const char *p, char *out, size_t out_sz, const char **why) {
+int flat_path_normalize_ctx(const FlatPathContext *ctx, const char *p, char *out, size_t out_sz, const char **why) {
     PathParts pp = {0};
     int rc = -1;
     set_why(why, NULL);
     if (!p || !out || out_sz == 0) { set_why(why, "path.normalize.args"); return -1; }
     if (!p[0]) { set_why(why, "path.normalize.empty"); return -1; }
     if (split_path(p, &pp) != 0) { set_why(why, "path.normalize.memory"); goto done; }
-    if (normalize_parts(&pp) != 0 || build_out(&pp, out, out_sz) != 0) {
+    if (normalize_parts(&pp) != 0 || build_out(&pp, flat_path_context_sep(ctx), out, out_sz) != 0) {
         set_why(why, "path.normalize.memory"); goto done;
     }
     rc = 0;
 done: parts_clear(&pp); return rc;
 }
 
-int flat_path_is_abs(const char *p, int *out_abs, const char **why) {
+int flat_path_is_abs_ctx(const FlatPathContext *ctx, const char *p, int *out_abs, const char **why) {
+    (void)ctx;
     set_why(why, NULL);
     if (!p || !out_abs) { set_why(why, "path.isAbs.args"); return -1; }
     if (!p[0]) { set_why(why, "path.isAbs.empty"); return -1; }
     *out_abs = is_abs_local(p) ? 1 : 0;
     return 0;
+}
+
+
+int flat_path_join(const char *const *p, int n, char *o, size_t z, const char **w) {
+    FlatPathContext c; flat_path_context_init(&c); return flat_path_join_ctx(&c, p, n, o, z, w);
+}
+int flat_path_base(const char *p, char *o, size_t z, const char **w) {
+    FlatPathContext c; flat_path_context_init(&c); return flat_path_base_ctx(&c, p, o, z, w);
+}
+int flat_path_dir(const char *p, char *o, size_t z, const char **w) {
+    FlatPathContext c; flat_path_context_init(&c); return flat_path_dir_ctx(&c, p, o, z, w);
+}
+int flat_path_ext(const char *p, char *o, size_t z, const char **w) {
+    FlatPathContext c; flat_path_context_init(&c); return flat_path_ext_ctx(&c, p, o, z, w);
+}
+int flat_path_normalize(const char *p, char *o, size_t z, const char **w) {
+    FlatPathContext c; flat_path_context_init(&c); return flat_path_normalize_ctx(&c, p, o, z, w);
+}
+int flat_path_is_abs(const char *p, int *a, const char **w) {
+    FlatPathContext c; flat_path_context_init(&c); return flat_path_is_abs_ctx(&c, p, a, w);
 }

@@ -1,4 +1,5 @@
 #include "flat_list_typed.h"
+#include "flat_locale.h"
 #include "flat_lit.h"
 #include "flat_number.h"
 #include "flat_obj_path.h"
@@ -69,7 +70,7 @@ static int try_parse_number(const char *s, double *out) {
     if (*s == '\0') {
         return -1;
     }
-    v = strtod(s, &end);
+    v = flat_strtod(s, &end);
     if (end == s || (end && *end != '\0')) {
         return -1;
     }

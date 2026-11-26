@@ -52,6 +52,8 @@ static const FlatModEntry BUILT_MODS[] = {
     {FLAT_NATIVE_MODULE_VCX, 1},
     {FLAT_NATIVE_MODULE_EXECUTOR, 1},
     {FLAT_NATIVE_MODULE_CSV, 1},
+    {FLAT_NATIVE_MODULE_TASK, 1},
+    {FLAT_NATIVE_MODULE_CHANNEL, 1},
 };
 
 int flat_native_mod_is_built(const char *mod) {

@@ -11,6 +11,8 @@
 typedef struct FlatFileTable FlatFileTable;
 typedef struct FlatMemLiveStats FlatMemLiveStats;
 
+#define FLAT_EXEC_INSTR_STACK_MAX 64
+
 typedef enum {
     FLAT_EXEC_SCOPE_UNIQUE = 0,
     FLAT_EXEC_SCOPE_GLOBAL = 1
@@ -35,10 +37,19 @@ typedef struct FlatExecutorContext {
         uint32_t func_vcx;
     } frames[32];
     int frame_sp;
+    uint32_t instr_stack[FLAT_EXEC_INSTR_STACK_MAX];
+    int instr_push_call_sp[FLAT_EXEC_INSTR_STACK_MAX];
+    int instr_stack_sp;
+    int last_call_function_sp;
+    uint32_t call_instr_id;
 } FlatExecutorContext;
 
 void flat_executor_context_reset(FlatExecutorContext *ctx);
 void flat_executor_context_bind_vm(FlatExecutorContext *ctx, const FlatExecutorVmBind *bind);
+void flat_executor_instr_stack_push(FlatExecutorContext *ctx, uint32_t id, int call_sp);
+int flat_executor_instr_stack_pop(FlatExecutorContext *ctx, uint32_t id);
+uint32_t flat_executor_instr_stack_peek(const FlatExecutorContext *ctx);
+void flat_executor_instr_stack_clear(FlatExecutorContext *ctx);
 
 /* Returns body block id NUMBER (targetBlock) in out_val; pushes executor frame. */
 int flat_executor_unique_begin(FlatExecutorContext *ctx, FlatValue *out_val, char *panic, size_t panic_sz);

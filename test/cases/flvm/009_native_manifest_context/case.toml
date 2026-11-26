@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 9
+desc = "optional native manifests are isolated per VM runtime context"
+kind = "exec"
+cmd = "gcc -std=c11 -ffunction-sections -fdata-sections -I{root}/include -Wl,--gc-sections -o {tmp}/native_manifest_context_test {root}/test/cases/flvm/009_native_manifest_context/native_manifest_context_test.c {root}/src/lib/native_plugin_host.c && {tmp}/native_manifest_context_test"
+expect_exit = 0
+stdout_contains = "native-manifest-context-isolation-ok"

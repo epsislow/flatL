@@ -153,6 +153,29 @@ void flat_executor_context_reset(FlatExecutorContext *ctx) {
     memset(ctx, 0, sizeof *ctx);
 }
 
+void flat_executor_instr_stack_push(FlatExecutorContext *ctx, uint32_t id, int call_sp) {
+    if (!ctx || id < 1u || ctx->instr_stack_sp >= FLAT_EXEC_INSTR_STACK_MAX) return;
+    ctx->instr_push_call_sp[ctx->instr_stack_sp] = call_sp;
+    ctx->instr_stack[ctx->instr_stack_sp++] = id;
+}
+
+int flat_executor_instr_stack_pop(FlatExecutorContext *ctx, uint32_t id) {
+    if (!ctx || ctx->instr_stack_sp <= 0 || ctx->instr_stack[ctx->instr_stack_sp - 1] != id) return 0;
+    ctx->instr_stack_sp--;
+    return 1;
+}
+
+uint32_t flat_executor_instr_stack_peek(const FlatExecutorContext *ctx) {
+    return ctx && ctx->instr_stack_sp > 0 ? ctx->instr_stack[ctx->instr_stack_sp - 1] : 0u;
+}
+
+void flat_executor_instr_stack_clear(FlatExecutorContext *ctx) {
+    if (!ctx) return;
+    ctx->instr_stack_sp = 0;
+    ctx->last_call_function_sp = 0;
+    ctx->call_instr_id = 0u;
+}
+
 void flat_executor_context_bind_vm(FlatExecutorContext *ctx, const FlatExecutorVmBind *bind) {
     if (!ctx) {
         return;
@@ -236,7 +259,7 @@ int flat_executor_panic_unwind_instr(FlatExecutorContext *ctx, uint32_t instr_id
         infer_unique_child_vcx(ctx, instr_id, calle_vcx, &fr.func_vcx) != 0) {
         return -1;
     }
-    (void)flat_vm_instr_stack_pop(instr_id);
+    (void)flat_executor_instr_stack_pop(ctx, instr_id);
     return panic_end_one(ctx, &fr, 1, panic, panic_sz);
 }
 
@@ -293,7 +316,7 @@ int flat_executor_unique_begin(FlatExecutorContext *ctx, FlatValue *out_val, cha
         snprintf(panic, panic_sz, "executor.begin.nobind");
         return -1;
     }
-    instr_id = flat_vcx_call_instr_ctx();
+    instr_id = ctx->call_instr_id;
     if (instr_id < 1u) {
         snprintf(panic, panic_sz, "executor.begin.callInstr");
         return -1;
@@ -368,7 +391,7 @@ int flat_executor_global_begin(FlatExecutorContext *ctx, FlatValue *out_val, cha
         snprintf(panic, panic_sz, "executor.begin.nobind");
         return -1;
     }
-    instr_id = flat_vcx_call_instr_ctx();
+    instr_id = ctx->call_instr_id;
     if (instr_id < 1u) {
         snprintf(panic, panic_sz, "executor.begin.callInstr");
         return -1;

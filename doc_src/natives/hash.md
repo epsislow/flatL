@@ -49,7 +49,7 @@ use native hash
   OK
 ```
 
-`hash.randomBytes` uses the shared **`flat_rng`** (same process RNG as `math.random`). It does **not** require `use native math`. Not suitable as a CSPRNG.
+`hash.randomBytes` uses the VM-shared **`flat_rng`** (same per-VM RNG as `math.random` and `math.seed`). It does **not** require `use native math`. Not suitable as a CSPRNG.
 
 ## Related
 

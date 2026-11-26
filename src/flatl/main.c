@@ -416,6 +416,8 @@ static int cmd_crun(int argc, char **argv) {
 int main(int argc, char **argv) {
     int i;
 
+    /* Stdio mode is process configuration, not per-VM runtime state. */
+    flat_port_stdio_setup();
     flat_native_runtime_set_search_dir_from_argv0(argv[0]);
     for (i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-V") == 0) {

@@ -6,6 +6,17 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
     if (!ctx || id >= FLAT_NATIVE_COUNT) {
         return -1;
     }
+    if (id == FLAT_NATIVE_TASK_SPAWN) return flat_native_task_spawn(ctx);
+    if (id == FLAT_NATIVE_TASK_WAIT) return flat_native_task_wait(ctx);
+    if (id == FLAT_NATIVE_TASK_STATE) return flat_native_task_state(ctx);
+    if (id == FLAT_NATIVE_TASK_RESULT) return flat_native_task_result(ctx);
+    if (id == FLAT_NATIVE_CHANNEL_CREATE) return flat_native_channel_create(ctx);
+    if (id == FLAT_NATIVE_CHANNEL_SET) return flat_native_channel_set(ctx);
+    if (id == FLAT_NATIVE_CHANNEL_VAR) return flat_native_channel_var(ctx);
+    if (id == FLAT_NATIVE_CHANNEL_LOCK) return flat_native_channel_lock(ctx);
+    if (id == FLAT_NATIVE_CHANNEL_UNLOCK) return flat_native_channel_unlock(ctx);
+    if (id == FLAT_NATIVE_CHANNEL_REVERT) return flat_native_channel_revert(ctx);
+    if (id == FLAT_NATIVE_CHANNEL_DESTROY) return flat_native_channel_destroy(ctx);
     if (flat_native_is_optional_id(id)) {
         return flat_native_invoke_optional(id, ctx);
     }

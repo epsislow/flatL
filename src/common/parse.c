@@ -1,4 +1,5 @@
 #include "fgir.h"
+#include "flat_ascii.h"
 #include "flat_value.h"
 #include "flat_func.h"
 #include "flat_func_tag.h"
@@ -10,20 +11,19 @@
 #include "flat_schema.h"
 #include "flat_jump_block.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static char *trim(char *s) {
-    while (*s && isspace((unsigned char)*s)) {
+    while (*s && flat_ascii_is_space((unsigned char)*s)) {
         s++;
     }
     if (*s == '\0') {
         return s;
     }
     char *e = s + strlen(s) - 1;
-    while (e > s && isspace((unsigned char)*e)) {
+    while (e > s && flat_ascii_is_space((unsigned char)*e)) {
         *e-- = '\0';
     }
     return s;
@@ -169,7 +169,7 @@ static int try_begin_schema(FgirProgram *out, const char *path, int line_no, con
 static int starts_with_kw(const char *s, const char *kw) {
     size_t n = strlen(kw);
     return strncmp(s, kw, n) == 0 &&
-           (s[n] == '\0' || isspace((unsigned char)s[n]) || s[n] == '(');
+           (s[n] == '\0' || flat_ascii_is_space((unsigned char)s[n]) || s[n] == '(');
 }
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz) {
@@ -184,29 +184,29 @@ int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz) {
         return -1;
     }
     p = line + 4;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '(') {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     start = p;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-')) {
+    while (*p && (flat_ascii_is_alnum((unsigned char)*p) || *p == '_' || *p == '-')) {
         p++;
     }
     end = p;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != ')' || end == start) {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '\0') {
@@ -231,29 +231,29 @@ int flat_parse_freeze_varname(const char *line, char *var_out, size_t var_sz) {
         return -1;
     }
     p = line + 6;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '(') {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     start = p;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-')) {
+    while (*p && (flat_ascii_is_alnum((unsigned char)*p) || *p == '_' || *p == '-')) {
         p++;
     }
     end = p;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != ')' || end == start) {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '\0') {
@@ -276,21 +276,21 @@ int flat_parse_panic_reset_line(const char *line) {
         return -1;
     }
     p = line + 10;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '(') {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != ')') {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     return (*p == '\0') ? 0 : -1;
@@ -309,14 +309,14 @@ int flat_parse_panic_reason_bind(const char *line, char *var_out, size_t var_sz)
         return -1;
     }
     p = line + 11;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '(') {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != ')') {
@@ -328,15 +328,15 @@ int flat_parse_panic_reason_bind(const char *line, char *var_out, size_t var_sz)
         return -1;
     }
     p = arrow + 2;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     start = p;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-')) {
+    while (*p && (flat_ascii_is_alnum((unsigned char)*p) || *p == '_' || *p == '-')) {
         p++;
     }
     end = p;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '\0' || end == start) {
@@ -362,14 +362,14 @@ int flat_parse_panic_loc_bind(const char *line, char *var_out, size_t var_sz) {
         return -1;
     }
     p = line + 8;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '(') {
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != ')') {
@@ -381,15 +381,15 @@ int flat_parse_panic_loc_bind(const char *line, char *var_out, size_t var_sz) {
         return -1;
     }
     p = arrow + 2;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     start = p;
-    while (*p && (isalnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '.' || *p == '#')) {
+    while (*p && (flat_ascii_is_alnum((unsigned char)*p) || *p == '_' || *p == '-' || *p == '.' || *p == '#')) {
         p++;
     }
     end = p;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '\0' || end == start) {
@@ -454,7 +454,7 @@ static int parse_line_modifier(char *line, FgirLineMod *mod_out, const char *pat
     }
     *mod_out = (*p == '?') ? FGIR_LINE_MOD_Q : FGIR_LINE_MOD_TILDE;
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     memmove(line, p, strlen(p) + 1);
@@ -473,7 +473,7 @@ static int line_mod_allowed(FgirInstrKind kind, const char *text) {
 
 /* Typed bind uses `:<schema>`; do not treat those angle brackets as relational ops. */
 static int schema_lt_at(const char *line, const char *p) {
-    while (p > line && isspace((unsigned char)p[-1])) {
+    while (p > line && flat_ascii_is_space((unsigned char)p[-1])) {
         p--;
     }
     return p > line && p[-1] == ':';

@@ -23,7 +23,7 @@ int flat_port_scan_dir(const char *dir_path, FlatPortDirFn fn, void *ctx);
 /* In-place: native path separators; on Windows also flc.exe / flvm.exe in bin/ paths. */
 void flat_port_path_to_native(char *path);
 void flat_port_prepare_shell_cmd(char *cmd, size_t cmd_cap);
-/* MinGW/MSVC: set stdio text mode so piped stdin has LF line ends (matches POSIX tests). */
+/* Process initialization: MinGW/MSVC stdio text mode (call once from CLI/host setup). */
 void flat_port_stdio_setup(void);
 /* Resolve node/node.exe from PATH only (process PATH, plus Windows Path env on Win32).
  * Writes a slash-normalized path suitable for sh (quote it if it contains spaces).

@@ -1,0 +1,5 @@
+use native task
+
+#main
+  task.wait(999)
+  OK

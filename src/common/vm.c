@@ -1,8 +1,14 @@
 #include "vm.h"
+#include "flat_vm_internal.h"
+#include "flat_task_native.h"
+#include "flat_locale.h"
 #include "fgir.h"
 #include "flat_func.h"
 #include "flat_func_tag.h"
 #include "flat_date.h"
+#include "flat_env.h"
+#include "flat_host_config.h"
+#include "flat_path.h"
 #include "flat_file.h"
 #include "flat_io_ctx.h"
 #include "flat_native_plugin.h"
@@ -39,13 +45,12 @@
 
 #include <ctype.h>
 #include <limits.h>
-#include <locale.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#define VM_MAX_CALL 64
+#define VM_MAX_CALL FLAT_EXEC_INSTR_STACK_MAX
 #define VM_MAX_FOREACH 8
 
 /* vm_jump_panic_any trace: fixed prefix + reason (≤64) + handler + loc. */
@@ -76,6 +81,8 @@ typedef struct {
 
 typedef struct {
     const FlatBytecode *bc;
+    FlatNativeRuntimeContext native_runtime;
+    FlatTaskNativeBridge task_bridge;
     FlatStringPool *pool;
     FlatCollectionPool *coll;
     NamedVar *vars;
@@ -96,11 +103,20 @@ typedef struct {
     uint64_t step_count;
     uint64_t jump_count;
     uint32_t *jump_block_entry_count;
-    const FlatVmOptions *run_opts;
+    /* Instruction continuation and guard scratch belong to the VM state. */
+    uint32_t ip;
+    size_t entry_index;
+    char (*guard_names)[64];
+    FlatValue *guard_vals;
     FlatVcxRuntime *vcx;
     FlatExecutorContext executor;
+    FlatRngState rng;
+    FlatDateRunState date;
+    FlatEnvContext env;
+    FlatPathContext path;
     FlatCsvRuntime *csv;
     FlatClockRuntime clock;
+    int resources_active;
 #if FLAT_WITH_HTTP
     FlatHttpRuntime http;
 #endif
@@ -108,41 +124,6 @@ typedef struct {
     struct FlatDomRuntime *dom;
 #endif
 } VmState;
-
-static VmState *g_vm_call_instr;
-static uint32_t g_instr_stack[VM_MAX_CALL];
-static int g_instr_stack_sp;
-static int g_instr_push_call_sp[VM_MAX_CALL];
-static int g_last_call_function_sp;
-
-void flat_vm_instr_stack_push(uint32_t id) {
-    if (id < 1u || g_instr_stack_sp >= VM_MAX_CALL) {
-        return;
-    }
-    g_instr_push_call_sp[g_instr_stack_sp] =
-        g_vm_call_instr ? g_vm_call_instr->call_sp : 0;
-    g_instr_stack[g_instr_stack_sp++] = id;
-}
-
-int flat_vm_instr_stack_pop(uint32_t id) {
-    if (g_instr_stack_sp <= 0 || g_instr_stack[g_instr_stack_sp - 1] != id) {
-        return 0;
-    }
-    g_instr_stack_sp--;
-    return 1;
-}
-
-uint32_t flat_vm_instr_stack_peek(void) {
-    if (g_instr_stack_sp <= 0) {
-        return 0u;
-    }
-    return g_instr_stack[g_instr_stack_sp - 1];
-}
-
-void flat_vm_instr_stack_clear(void) {
-    g_instr_stack_sp = 0;
-    g_last_call_function_sp = 0;
-}
 
 static void vm_write_stderr(const char *s) {
     size_t n;
@@ -232,8 +213,8 @@ static int vm_finish(VmState *st, char *guard_names, FlatValue *guard_vals, int 
         *opts->out_termination = (int)term;
     }
     vm_record_run_message(opts, st, term, exit_code);
-    free(guard_names);
-    free(guard_vals);
+    (void)guard_names;
+    (void)guard_vals;
     vm_teardown(st, exit_code);
     return exit_code;
 }
@@ -252,12 +233,87 @@ static uint64_t vm_effective_max_jumps(const FlatVmOptions *opts) {
     return (uint64_t)FLAT_VM_DEFAULT_MAX_JUMPS;
 }
 
-static int vm_fail_setup(VmState *st, const FlatVmOptions *opts) {
-    if (opts && opts->out_termination) {
-        *opts->out_termination = (int)FLAT_TERM_ERROR;
+/* Initialize all VM-owned runtime resources once for the persistent FlatVm. */
+static int vm_ip_for_block_label(const FlatBytecode *bc, const char *label, uint32_t *out_ip);
+
+static int vm_state_initialize(VmState *st, const FlatBytecode *bc,
+                               const FlatVmOptions *opts, const char *entry_label) {
+    size_t scratch_n;
+
+    memset(st, 0, sizeof *st);
+    st->native_runtime.manifest = bc->optional_natives;
+    st->native_runtime.manifest_count = bc->optional_native_count;
+    flat_native_runtime_init();
+    flat_rng_seed_auto(&st->rng);
+    flat_date_run_begin(&st->date);
+    if (opts && opts->host_config) {
+        if (flat_env_context_clone(&st->env, &opts->host_config->env) != 0) goto fail;
+        st->path = opts->host_config->path;
+        if (st->path.sep != '/' && st->path.sep != '\\') goto fail;
+    } else {
+        if (flat_env_context_init(&st->env) != 0) goto fail;
+        flat_path_context_init(&st->path);
     }
+    st->bc = bc;
+    st->var_slots_max = bc->var_slots;
+    scratch_n = st->var_slots_max > 0 ? st->var_slots_max : 1u;
+    st->pool = flat_pool_create();
+    st->coll = flat_coll_create();
+    flat_mem_stats_init(&st->live);
+    st->vcx = flat_vcx_runtime_create(scratch_n);
+    st->csv = flat_csv_runtime_create();
+#if FLAT_WITH_DOM
+    st->dom = flat_dom_runtime_create();
+#endif
+    if (!st->vcx || !st->csv || !st->pool || !st->coll
+#if FLAT_WITH_DOM
+        || !st->dom
+#endif
+    ) goto fail;
+    flat_vcx_runtime_attach_vm(st->vcx,
+                               (FlatVcxVmBind){.vars = (FlatVcxVar **)&st->vars,
+                                               .var_count = &st->var_count,
+                                               .var_slots_max = &st->var_slots_max});
+    flat_executor_context_reset(&st->executor);
+    flat_executor_context_bind_vm(&st->executor, &(FlatExecutorVmBind){
+        .vcx = st->vcx,
+        .coll = st->coll,
+        .pool = st->pool,
+        .files = &st->files,
+        .live = &st->live,
+        .bc = bc,
+    });
+    if (!st->vars) goto fail;
+    flat_coll_set_live_stats(st->coll, &st->live);
+    flat_file_table_init(&st->files);
+    st->io_ctx = flat_io_ctx_create(&st->files);
+    if (!st->io_ctx) goto fail;
+    flat_io_ctx_set_vcx(st->io_ctx, st->vcx);
+    st->guard_names = calloc(scratch_n, 64);
+    st->guard_vals = calloc(scratch_n, sizeof *st->guard_vals);
+    if (!st->guard_names || !st->guard_vals) goto fail;
+    st->jump_block_entry_count = calloc(bc->block_count, sizeof(uint32_t));
+    if (!st->jump_block_entry_count) goto fail;
+
+    if (entry_label && entry_label[0]) {
+        if (vm_ip_for_block_label(bc, entry_label, &st->ip) != 0) goto fail;
+        for (st->entry_index = 0; st->entry_index < bc->block_count; st->entry_index++) {
+            if (bc->blocks[st->entry_index].offset == st->ip) break;
+        }
+        if (st->entry_index >= bc->block_count) goto fail;
+    } else {
+        for (st->entry_index = 0; st->entry_index < bc->block_count; st->entry_index++) {
+            if (bc->blocks[st->entry_index].block_id == FLAT_FB_BLOCK_ID_MAIN) break;
+        }
+        if (st->entry_index >= bc->block_count) st->entry_index = 0;
+        st->ip = bc->blocks[st->entry_index].offset;
+    }
+    st->resources_active = 1;
+    return 0;
+
+fail:
     vm_teardown(st, 1);
-    return 1;
+    return -1;
 }
 
 static uint32_t flat_label_hash(const char *label) {
@@ -510,28 +566,28 @@ static uint32_t vm_number_to_u32(double d) {
     return (uint32_t)d;
 }
 
-static uint32_t vm_resolve_call_instr_ctx(void) {
+static uint32_t vm_resolve_call_instr_ctx(VmState *st) {
     int i;
 
-    if (!g_vm_call_instr) {
+    if (!st) {
         return 0u;
     }
     {
-        uint32_t stack_id = flat_vm_instr_stack_peek();
+        uint32_t stack_id = flat_executor_instr_stack_peek(&st->executor);
         uint32_t frame_id = 0u;
         int push_sp = 0;
 
-        for (i = g_vm_call_instr->call_sp - 1; i >= 0; i--) {
-            if (g_vm_call_instr->calls[i].func_instr_ctx != 0u) {
-                frame_id = g_vm_call_instr->calls[i].func_instr_ctx;
+        for (i = st->call_sp - 1; i >= 0; i--) {
+            if (st->calls[i].func_instr_ctx != 0u) {
+                frame_id = st->calls[i].func_instr_ctx;
                 break;
             }
         }
-        if (g_instr_stack_sp > 0) {
-            push_sp = g_instr_push_call_sp[g_instr_stack_sp - 1];
+        if (st->executor.instr_stack_sp > 0) {
+            push_sp = st->executor.instr_push_call_sp[st->executor.instr_stack_sp - 1];
         }
         if (stack_id >= 1u && frame_id >= 1u && stack_id != frame_id) {
-            if (push_sp >= g_last_call_function_sp) {
+            if (push_sp >= st->executor.last_call_function_sp) {
                 return stack_id;
             }
             return frame_id;
@@ -544,24 +600,24 @@ static uint32_t vm_resolve_call_instr_ctx(void) {
         }
     }
     {
-        int vi = find_var(g_vm_call_instr, FLAT_FUNC_RESERVED_INSTR_VAR);
-        if (vi >= 0 && g_vm_call_instr->vars[vi].val.tag == VAL_NUMBER) {
-            uint32_t id = vm_number_to_u32(flat_number_as_f64(&g_vm_call_instr->vars[vi].val));
+        int vi = find_var(st, FLAT_FUNC_RESERVED_INSTR_VAR);
+        if (vi >= 0 && st->vars[vi].val.tag == VAL_NUMBER) {
+            uint32_t id = vm_number_to_u32(flat_number_as_f64(&st->vars[vi].val));
             if (id >= 1u) {
                 return id;
             }
         }
     }
-    if (g_vm_call_instr->vcx) {
+    if (st->vcx) {
         FlatValue v;
         char panic[32];
 
-        if (flat_vcx_get_var(g_vm_call_instr->vcx, 1u, FLAT_FUNC_RESERVED_INSTR_VAR, &v,
-                             g_vm_call_instr->coll, g_vm_call_instr->pool, &g_vm_call_instr->files,
+        if (flat_vcx_get_var(st->vcx, 1u, FLAT_FUNC_RESERVED_INSTR_VAR, &v,
+                             st->coll, st->pool, &st->files,
                              panic, sizeof panic) == 0 &&
             v.tag == VAL_NUMBER) {
             uint32_t id = vm_number_to_u32(flat_number_as_f64(&v));
-            flat_value_release(g_vm_call_instr->coll, g_vm_call_instr->pool, &v);
+            flat_value_release(st->coll, st->pool, &v);
             if (id >= 1u) {
                 return id;
             }
@@ -712,7 +768,7 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
         if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && use->tag == VAL_NUMBER) {
             uint32_t iid = vm_number_to_u32(flat_number_as_f64(use));
             if (iid >= 1u) {
-                flat_vm_instr_stack_push(iid);
+                flat_executor_instr_stack_push(&st->executor, iid, st->call_sp);
             }
         }
         return 0;
@@ -777,7 +833,7 @@ static int set_var_value(VmState *st, const char *name, const FlatValue *val,
     if (strcmp(name, FLAT_FUNC_RESERVED_INSTR_VAR) == 0 && use->tag == VAL_NUMBER) {
         uint32_t iid = vm_number_to_u32(flat_number_as_f64(use));
         if (iid >= 1u) {
-            flat_vm_instr_stack_push(iid);
+            flat_executor_instr_stack_push(&st->executor, iid, st->call_sp);
         }
     }
     if (st->vcx) {
@@ -1149,6 +1205,14 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
             ctx.file_tbl = &st->files;
             ctx.vcx = st->vcx;
             ctx.executor = &st->executor;
+            ctx.call_instr_id = vm_resolve_call_instr_ctx(st);
+            ctx.rng = &st->rng;
+            ctx.date = &st->date;
+            ctx.env = &st->env;
+            ctx.path = &st->path;
+            ctx.native_runtime = &st->native_runtime;
+            ctx.task_bridge = &st->task_bridge;
+            st->executor.call_instr_id = ctx.call_instr_id;
             ctx.csv = st->csv;
             ctx.clock = &st->clock;
 #if FLAT_WITH_HTTP
@@ -1176,6 +1240,12 @@ static int apply_assign(VmState *st, const FlatBytecode *bc, uint32_t *ip,
         rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios,
                                  ctx.panic_detail, trace);
         if (rc != 0) {
+            goto done;
+        }
+        /* A retryable native expression has not completed. Keep the OP_ASSIGN
+         * instruction intact and do not bind its provisional result. */
+        if (invoke_rc == 0 && ctx.task_bridge && ctx.task_bridge->retry_requested) {
+            rc = FLAT_VM_STATE_TASK_WAITING;
             goto done;
         }
         if (invoke_rc == 0 && ios == FLAT_IO_OK) {
@@ -1261,7 +1331,7 @@ static int eval_for_ntimes(VmState *st, const char *token, int *out_iters) {
 
     snprintf(buf, sizeof buf, "%s", token);
     trim(buf);
-    d = strtod(buf, &end);
+    d = flat_strtod(buf, &end);
     if (end != buf && *end == '\0') {
         int fl = for_limit_from_double(d, out_iters);
         if (fl == -3) {
@@ -1466,11 +1536,11 @@ static int setup_foreach(VmState *st, const FlatBytecode *bc, uint32_t *ip, cons
 
 static void vm_teardown(VmState *st, int rc) {
     (void)rc;
-    if (g_vm_call_instr == st) {
-        g_vm_call_instr = NULL;
-        flat_vcx_set_call_instr_resolver(NULL);
-        flat_vm_instr_stack_clear();
-    }
+    free(st->guard_names);
+    st->guard_names = NULL;
+    free(st->guard_vals);
+    st->guard_vals = NULL;
+    flat_executor_instr_stack_clear(&st->executor);
     flat_executor_context_reset(&st->executor);
     if (st->csv) {
         flat_csv_runtime_destroy(st->csv);
@@ -1489,7 +1559,6 @@ static void vm_teardown(VmState *st, int rc) {
         st->vars = NULL;
         st->var_count = 0;
     }
-    flat_vcx_runtime_set_active(NULL);
     flat_io_ctx_destroy(st->io_ctx);
     st->io_ctx = NULL;
     flat_file_table_close_all(&st->files);
@@ -1497,6 +1566,8 @@ static void vm_teardown(VmState *st, int rc) {
     st->jump_block_entry_count = NULL;
     flat_coll_destroy(st->coll);
     flat_pool_destroy(st->pool);
+    flat_env_context_destroy(&st->env);
+    st->resources_active = 0;
 }
 
 static const char *opcode_name(uint8_t opcode) {
@@ -1832,7 +1903,7 @@ static int vm_apply_call_function(VmState *st, const FlatBytecode *bc, const uin
     st->calls[st->call_sp].return_ip = *ip + 2u + psz;
     st->calls[st->call_sp].func_instr_ctx = instr_id;
     st->call_sp++;
-    g_last_call_function_sp = st->call_sp;
+    st->executor.last_call_function_sp = st->call_sp;
     *ip = exec_ip;
     return 0;
 }
@@ -2145,6 +2216,14 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
     ctx.file_tbl = &st->files;
     ctx.vcx = st->vcx;
     ctx.executor = &st->executor;
+    ctx.call_instr_id = vm_resolve_call_instr_ctx(st);
+    ctx.rng = &st->rng;
+    ctx.date = &st->date;
+    ctx.env = &st->env;
+    ctx.path = &st->path;
+    ctx.native_runtime = &st->native_runtime;
+    ctx.task_bridge = &st->task_bridge;
+    st->executor.call_instr_id = ctx.call_instr_id;
     ctx.csv = st->csv;
     ctx.clock = &st->clock;
 #if FLAT_WITH_HTTP
@@ -2175,6 +2254,12 @@ static int run_native_call(VmState *st, const FlatBytecode *bc, uint32_t *ip, ui
         rc = vm_line_mod_outcome(st, bc, ip, native_id, mod, or_target, invoke_rc, ios,
                                  ctx.panic_detail, trace);
         if (rc != 0) {
+            goto done;
+        }
+        /* A retryable native has not completed its operation. Do not bind its
+         * provisional output; the same OP_NATIVE will be invoked after wakeup. */
+        if (invoke_rc == 0 && ctx.task_bridge && ctx.task_bridge->retry_requested) {
+            rc = 0;
             goto done;
         }
         if (invoke_rc == 0 && ios == FLAT_IO_OK && bind && bind[0] != '\0') {
@@ -2237,113 +2322,32 @@ int flat_vm_run(const FlatBytecode *bc) {
     return flat_vm_run_opts(bc, NULL);
 }
 
-int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
-    VmState st;
-    uint32_t ip;
-    size_t entry_index = 0;
-    char (*guard_names)[64] = NULL;
-    FlatValue *guard_vals = NULL;
-    size_t scratch_n;
+static int vm_state_execute(VmState *st_ptr, const FlatVmOptions *opts,
+                            uint64_t instruction_budget) {
+#define st (*st_ptr)
+#define ip (st.ip)
+#define entry_index (st.entry_index)
+#define guard_names (st.guard_names)
+#define guard_vals (st.guard_vals)
+    const FlatBytecode *bc = st.bc;
     int trace = opts && opts->trace;
     int trace_vars = opts && opts->trace_vars;
+    uint64_t instructions_this_step = 0;
 
-    if (!bc || !bc->data || bc->block_count == 0) {
-        if (opts && opts->out_termination) {
-            *opts->out_termination = (int)FLAT_TERM_ERROR;
-        }
-        return 1;
-    }
-    /*
-     * Host locale can use ',' as decimal separator; strtod then rejects '.' from
-     * piped test input → io.parse / json parse failures on Windows.
-     */
-    (void)setlocale(LC_ALL, "C");
-#ifndef FLAT_WASM_BUILD
-    flat_port_stdio_setup();
-#endif
-    flat_native_runtime_reset();
-    flat_date_run_begin(flat_date_global_state());
-    flat_native_runtime_set_manifest(bc->optional_natives, bc->optional_native_count);
-    flat_rng_seed_auto();
-    memset(&st, 0, sizeof st);
-    st.run_opts = opts;
-    st.bc = bc;
-    st.var_slots_max = bc->var_slots;
-    scratch_n = st.var_slots_max > 0 ? st.var_slots_max : 1u;
-    st.pool = flat_pool_create();
-    st.coll = flat_coll_create();
-    flat_mem_stats_init(&st.live);
-    st.vcx = flat_vcx_runtime_create(scratch_n);
-    st.csv = flat_csv_runtime_create();
-#if FLAT_WITH_DOM
-    st.dom = flat_dom_runtime_create();
-#endif
-    if (!st.vcx || !st.csv || !st.pool || !st.coll
-#if FLAT_WITH_DOM
-        || !st.dom
-#endif
-    ) {
-        return vm_fail_setup(&st, opts);
-    }
-    flat_vcx_runtime_attach_vm(st.vcx,
-                               (FlatVcxVmBind){.vars = (FlatVcxVar **)&st.vars,
-                                               .var_count = &st.var_count,
-                                               .var_slots_max = &st.var_slots_max});
-    flat_vcx_runtime_set_active(st.vcx);
-    g_vm_call_instr = &st;
-    flat_vcx_set_call_instr_resolver(vm_resolve_call_instr_ctx);
-    flat_executor_context_reset(&st.executor);
-    flat_executor_context_bind_vm(&st.executor, &(FlatExecutorVmBind){
-        .vcx = st.vcx,
-        .coll = st.coll,
-        .pool = st.pool,
-        .files = &st.files,
-        .live = &st.live,
-        .bc = bc,
-    });
-    if (!st.vars) {
-        return vm_fail_setup(&st, opts);
-    }
-    flat_coll_set_live_stats(st.coll, &st.live);
-    flat_file_table_init(&st.files);
-    st.io_ctx = flat_io_ctx_create(&st.files);
-    if (!st.io_ctx) {
-        return vm_fail_setup(&st, opts);
-    }
-    flat_io_ctx_set_vcx(st.io_ctx, st.vcx);
-    guard_names = calloc(scratch_n, 64);
-    guard_vals = calloc(scratch_n, sizeof *guard_vals);
-    if (!guard_names || !guard_vals) {
-        free(guard_names);
-        free(guard_vals);
-        return vm_fail_setup(&st, opts);
-    }
-    if (bc->block_count > 0) {
-        st.jump_block_entry_count = calloc(bc->block_count, sizeof(uint32_t));
-        if (!st.jump_block_entry_count) {
-            free(guard_names);
-            free(guard_vals);
-            return vm_fail_setup(&st, opts);
-        }
-    }
     if (opts && opts->out_termination) {
-        *opts->out_termination = (int)FLAT_TERM_ERROR;
+        *opts->out_termination = (int)FLAT_TERM_UNKNOWN;
     }
-
-    for (entry_index = 0; entry_index < bc->block_count; entry_index++) {
-        if (bc->blocks[entry_index].block_id == FLAT_FB_BLOCK_ID_MAIN) {
-            break;
-        }
-    }
-    if (entry_index >= bc->block_count) {
-        entry_index = 0;
-    }
-    ip = bc->blocks[entry_index].offset;
 
     for (;;) {
         uint8_t opcode;
         uint8_t payload_size;
         const uint8_t *payload;
+
+        /* Yield only at the top of the dispatch loop. The previous opcode has
+         * completed and updated st.ip, so resume never repeats its side effects. */
+        if (instruction_budget > 0 && instructions_this_step >= instruction_budget) {
+            return FLAT_VM_STATE_YIELDED;
+        }
 
         if (opts && opts->max_steps > 0) {
             st.step_count++;
@@ -2392,6 +2396,7 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
             trace_vars_dump(&st);
         }
 
+        instructions_this_step++;
         switch (opcode) {
         case OP_OK:
             return vm_finish(&st, (char *)guard_names, guard_vals, 0, FLAT_TERM_OK, opts);
@@ -2441,6 +2446,11 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         case OP_ASSIGN: {
             uint32_t ip_before = ip;
             int ar = apply_assign(&st, bc, &ip, payload, payload_size, trace);
+            if (ar == FLAT_VM_STATE_TASK_WAITING) {
+                st.task_bridge.retry_requested = 0;
+                st.task_bridge.yield_requested = 0;
+                return FLAT_VM_STATE_TASK_WAITING;
+            }
             if (ar == 2) {
                 return vm_finish(&st, (char *)guard_names, guard_vals, 2, FLAT_TERM_FAIL, opts);
             }
@@ -2509,8 +2519,19 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
                 return vm_finish(&st, (char *)guard_names, guard_vals, 1, vm_term_for_exit1(&st),
                                  opts);
             }
+            if (st.task_bridge.retry_requested) {
+                /* A contended native lock has not completed. Keep IP on this
+                 * instruction so it is retried after the scheduler wakes us. */
+                st.task_bridge.retry_requested = 0;
+                st.task_bridge.yield_requested = 0;
+                return FLAT_VM_STATE_TASK_WAITING;
+            }
             if (ip == ip_before) {
                 ip += 2u + payload_size;
+            }
+            if (st.task_bridge.yield_requested) {
+                st.task_bridge.yield_requested = 0;
+                return FLAT_VM_STATE_TASK_WAITING;
             }
             continue;
         }
@@ -2730,3 +2751,99 @@ int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
         }
     }
 }
+
+#undef guard_vals
+#undef guard_names
+#undef entry_index
+#undef ip
+#undef st
+
+void *flat_vm_state_create_at_label(const FlatBytecode *bc, const FlatVmOptions *opts,
+                                    const char *entry_label) {
+    VmState *st;
+    if (!bc || !bc->data || bc->block_count == 0) return NULL;
+    st = (VmState *)calloc(1, sizeof *st);
+    if (!st) return NULL;
+    if (vm_state_initialize(st, bc, opts, entry_label) != 0) {
+        free(st);
+        return NULL;
+    }
+    return st;
+}
+
+void *flat_vm_state_create(const FlatBytecode *bc, const FlatVmOptions *opts) {
+    return flat_vm_state_create_at_label(bc, opts, NULL);
+}
+
+int flat_vm_state_set_task_bridge(void *state, const FlatTaskNativeBridge *bridge) {
+    VmState *st = (VmState *)state;
+    if (!st || !bridge) return -1;
+    st->task_bridge = *bridge;
+    return 0;
+}
+
+int flat_vm_state_set_initial_args(void *state, const FlatValue *args, size_t arg_count,
+                                   FlatCollectionPool *source_coll, FlatStringPool *source_pool,
+                                   FlatFileTable *source_files) {
+    VmState *st = (VmState *)state;
+    const FlatFbBlockParams *params;
+    uint32_t ctx_id;
+    size_t i;
+    char panic[64] = "task.spawn.args";
+    if (!st || !st->bc || st->entry_index >= st->bc->block_count ||
+        (arg_count > 0 && (!args || !source_coll || !source_pool))) return -1;
+    params = st->bc->block_params ? &st->bc->block_params[st->entry_index] : NULL;
+    if ((params ? params->param_count : 0u) != arg_count) return -1;
+    if (arg_count == 0) return 0;
+    ctx_id = flat_vcx_current_id(st->vcx);
+    if (ctx_id == 0) return -1;
+    for (i = 0; i < arg_count; i++) {
+        FlatValue copied;
+        memset(&copied, 0, sizeof copied);
+        if (!params->params[i][0] ||
+            flat_value_deep_copy_between(&args[i], &copied, source_coll, source_pool,
+                                         source_files, st->coll, st->pool, &st->files) != 0) {
+            return -1;
+        }
+        if (flat_vcx_set_named_var(st->vcx, ctx_id, params->params[i], &copied, st->coll,
+                                   st->pool, &st->files, &st->live, panic, sizeof panic) != 0) {
+            flat_value_release(st->coll, st->pool, &copied);
+            return -1;
+        }
+        /* The VCX bind retained the newly allocated value; it now owns the reference. */
+    }
+    return 0;
+}
+
+int flat_vm_state_step(void *state, const FlatVmOptions *opts, uint64_t instruction_budget) {
+    if (!state) return 1;
+    return vm_state_execute((VmState *)state, opts, instruction_budget);
+}
+
+int flat_vm_state_execute(void *state, const FlatVmOptions *opts) {
+    return flat_vm_state_step(state, opts, 0);
+}
+
+void flat_vm_state_destroy(void *state) {
+    VmState *st = (VmState *)state;
+    if (!st) return;
+    if (st->resources_active) vm_teardown(st, 0);
+    free(st);
+}
+
+int flat_vm_run_opts(const FlatBytecode *bc, const FlatVmOptions *opts) {
+    VmState *st;
+    int rc;
+    st = (VmState *)flat_vm_state_create(bc, opts);
+    if (!st) {
+        if (opts && opts->out_termination) *opts->out_termination = (int)FLAT_TERM_ERROR;
+        if (opts && opts->out_panic_msg && opts->out_panic_msg_sz) {
+            snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "VM initialization failed");
+        }
+        return 1;
+    }
+    rc = flat_vm_state_execute(st, opts);
+    flat_vm_state_destroy(st);
+    return rc;
+}
+

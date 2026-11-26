@@ -1,0 +1,7 @@
+use native channel
+
+#main
+  first = channel.lock(3)
+  value = channel.var(4, 'seed')
+  channel.unlock(3)
+  OK

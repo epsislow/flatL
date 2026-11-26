@@ -1,0 +1,8 @@
+suite = "flvm"
+id = 12
+desc = "runtime logger serializes concurrent emitters and sequence allocation"
+kind = "exec"
+
+cmd = "gcc -std=c11 -pthread -I{root}/include -o {tmp}/runtime_log_concurrency_test {root}/test/cases/flvm/012_runtime_log_concurrency/log_concurrency_test.c {root}/src/common/flat_runtime_log.c && {tmp}/runtime_log_concurrency_test"
+expect_exit = 0
+stdout_contains_2 = "runtime-log-concurrency-ok"

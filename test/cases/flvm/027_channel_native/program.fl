@@ -1,0 +1,68 @@
+use native task
+use native channel
+use native math
+use native list
+use native obj
+
+#main
+  shared = channel.create()
+  channel.set(shared, 'counter', 10)
+  values = [3, 5]
+  metadata = { count: 1, nested: [7, 8] }
+  channel.set(shared, 'values', values)
+  channel.set(shared, 'metadata', metadata)
+
+  first = task.spawn(#worker, shared)
+  second = task.spawn(#worker, shared)
+
+  task.wait(first)
+  task.wait(second)
+
+  badWaiter = task.spawn(#workerWaitInsideTransaction, shared, first)
+  task.wait(badWaiter)
+  badWaiterState = task.state(badWaiter)
+
+  finalValue = channel.var(shared, 'counter')
+  valuesOut = channel.var(shared, 'values')
+  firstValue = list.get(valuesOut, 0)
+  metadataOut = channel.var(shared, 'metadata')
+  countOut = obj.get(metadataOut, 'count')
+  originalValue = list.get(values, 0)
+
+  io.outln(finalValue)
+  io.outln(firstValue)
+  io.outln(countOut)
+  io.outln(originalValue)
+  io.outln(badWaiterState)
+  channel.destroy(shared)
+  OK
+
+#worker(shared)
+  channel.lock(shared)
+
+  value = channel.var(shared, 'counter')
+  math.calc('value + 100') -> value
+  channel.set(shared, 'counter', value)
+  channel.revert(shared)
+
+  value = channel.var(shared, 'counter')
+  math.calc('value + 1') -> value
+  channel.set(shared, 'counter', value)
+
+  items = channel.var(shared, 'values')
+  list.set(items, 0, 99) -> items
+  channel.set(shared, 'values', items)
+
+  info = channel.var(shared, 'metadata')
+  obj.set(info, 'count', 2) -> info
+  channel.set(shared, 'metadata', info)
+
+  channel.unlock(shared)
+  OK
+
+#workerWaitInsideTransaction(shared, target)
+  channel.lock(shared)
+  task.wait(target)
+  channel.set(shared, 'counter', 999)
+  channel.unlock(shared)
+  OK

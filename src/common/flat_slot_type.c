@@ -1,9 +1,9 @@
 #include "flat_list_typed.h"
+#include "flat_ascii.h"
 #include "flat_number.h"
 #include "flat_slot_type.h"
 #include "flat_schema.h"
 
-#include <ctype.h>
 #include <limits.h>
 #include <math.h>
 #include <stdint.h>
@@ -65,7 +65,7 @@ static int parse_one_axis(const char **p, uint8_t *mode_out, uint16_t *val_out, 
     }
     if (*s == '=') {
         s++;
-        if (!isdigit((unsigned char)*s)) {
+        if (!flat_ascii_is_digit((unsigned char)*s)) {
             if (err && err_sz) {
                 snprintf(err, err_sz, "type.list.dim.zero");
             }
@@ -83,7 +83,7 @@ static int parse_one_axis(const char **p, uint8_t *mode_out, uint16_t *val_out, 
         *p = endptr + 1;
         return 0;
     }
-    if (!isdigit((unsigned char)*s)) {
+    if (!flat_ascii_is_digit((unsigned char)*s)) {
         if (err && err_sz) {
             snprintf(err, err_sz, "invalid list bound");
         }
@@ -122,7 +122,7 @@ static int parse_axes_suffix(const char *rest, FlatSlotType *out, char *err, siz
         }
         rank++;
     }
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '\0') {
@@ -172,7 +172,7 @@ static int parse_type_spec_core(const char *spec, FlatSlotType *out) {
         out->aux = FLAT_SLOT_TYPE_AUX_T_DEFAULT;
         return 0;
     }
-    if (spec[0] == 't' && isdigit((unsigned char)spec[1])) {
+    if (spec[0] == 't' && flat_ascii_is_digit((unsigned char)spec[1])) {
         unsigned long maxn;
         char *endp;
 
@@ -235,7 +235,7 @@ int flat_bind_parse_lhs(const char *lhs, char *name_out, size_t name_sz, FlatSlo
     }
     *has_type_out = 0;
     flat_slot_type_clear(type_out);
-    while (*lhs && isspace((unsigned char)*lhs)) {
+    while (*lhs && flat_ascii_is_space((unsigned char)*lhs)) {
         lhs++;
     }
     colon = strchr(lhs, ':');
@@ -243,14 +243,14 @@ int flat_bind_parse_lhs(const char *lhs, char *name_out, size_t name_sz, FlatSlo
         snprintf(name_out, name_sz, "%s", lhs);
         {
             char *t = name_out + strlen(name_out);
-            while (t > name_out && isspace((unsigned char)t[-1])) {
+            while (t > name_out && flat_ascii_is_space((unsigned char)t[-1])) {
                 *--t = '\0';
             }
         }
         return name_out[0] ? 0 : -1;
     }
     nlen = (size_t)(colon - lhs);
-    while (nlen > 0 && isspace((unsigned char)lhs[nlen - 1])) {
+    while (nlen > 0 && flat_ascii_is_space((unsigned char)lhs[nlen - 1])) {
         nlen--;
     }
     if (nlen == 0 || nlen >= name_sz) {
@@ -260,7 +260,7 @@ int flat_bind_parse_lhs(const char *lhs, char *name_out, size_t name_sz, FlatSlo
     name_out[nlen] = '\0';
     {
         const char *spec = colon + 1;
-        while (*spec && isspace((unsigned char)*spec)) {
+        while (*spec && flat_ascii_is_space((unsigned char)*spec)) {
             spec++;
         }
         if (*spec == '\0') {
@@ -312,7 +312,7 @@ int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSch
             }
             return -1;
         }
-        while (*rest && isspace((unsigned char)*rest)) {
+        while (*rest && flat_ascii_is_space((unsigned char)*rest)) {
             rest++;
         }
         if (*rest == '[') {
@@ -334,7 +334,7 @@ int flat_slot_type_parse_spec(const char *spec, FlatSlotType *out, const FlatSch
     }
     if (spec[0] == '/') {
         const char *ex = spec + 1;
-        while (*ex && isspace((unsigned char)*ex)) {
+        while (*ex && flat_ascii_is_space((unsigned char)*ex)) {
             ex++;
         }
         if (*ex == '\0') {
@@ -374,7 +374,7 @@ int flat_bind_validate_t1_lhs(const char *lhs, char *err, size_t err_sz) {
         return 0;
     }
     spec = colon + 1;
-    while (*spec && isspace((unsigned char)*spec)) {
+    while (*spec && flat_ascii_is_space((unsigned char)*spec)) {
         spec++;
     }
     if (*spec == '/' || *spec == '<') {

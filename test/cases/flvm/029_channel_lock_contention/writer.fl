@@ -1,0 +1,5 @@
+use native channel
+
+#main
+  stored = channel.set(1, 'written', 11)
+  OK

@@ -21,7 +21,7 @@ static int vcx_fail(FlatNativeCtx *ctx, const char *reason) {
 }
 
 static FlatVcxRuntime *rt_from(FlatNativeCtx *ctx) {
-    return ctx && ctx->vcx ? ctx->vcx : flat_vcx_runtime_active();
+    return ctx ? ctx->vcx : NULL;
 }
 
 static int parse_ctx_id(FlatNativeCtx *ctx, const char *expr, uint32_t *out_id) {

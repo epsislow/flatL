@@ -2,6 +2,7 @@
 #define FLAT_NATIVE_MOD_H
 
 #include "flat_native.h"
+#include "flat_task_native.h"
 
 int flat_native_io_outln(FlatNativeCtx *ctx);
 int flat_native_io_out(FlatNativeCtx *ctx);
@@ -365,5 +366,17 @@ int flat_native_dom_inner_text(FlatNativeCtx *ctx);
 int flat_native_dom_html(FlatNativeCtx *ctx);
 int flat_native_dom_outer_html(FlatNativeCtx *ctx);
 int flat_native_dom_prop(FlatNativeCtx *ctx);
+
+int flat_native_task_spawn(FlatNativeCtx *ctx);
+int flat_native_task_wait(FlatNativeCtx *ctx);
+int flat_native_task_state(FlatNativeCtx *ctx);
+int flat_native_task_result(FlatNativeCtx *ctx);
+int flat_native_channel_create(FlatNativeCtx *ctx);
+int flat_native_channel_set(FlatNativeCtx *ctx);
+int flat_native_channel_var(FlatNativeCtx *ctx);
+int flat_native_channel_lock(FlatNativeCtx *ctx);
+int flat_native_channel_unlock(FlatNativeCtx *ctx);
+int flat_native_channel_revert(FlatNativeCtx *ctx);
+int flat_native_channel_destroy(FlatNativeCtx *ctx);
 
 #endif

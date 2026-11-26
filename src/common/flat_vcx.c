@@ -42,28 +42,6 @@ struct FlatVcxRuntime {
     int bind_attached;
 };
 
-static FlatVcxRuntime *g_vcx_active;
-static FlatVcxCallInstrResolver g_call_instr_resolver;
-
-void flat_vcx_runtime_set_active(FlatVcxRuntime *rt) {
-    g_vcx_active = rt;
-}
-
-void flat_vcx_set_call_instr_resolver(FlatVcxCallInstrResolver fn) {
-    g_call_instr_resolver = fn;
-}
-
-uint32_t flat_vcx_call_instr_ctx(void) {
-    if (g_call_instr_resolver) {
-        return g_call_instr_resolver();
-    }
-    return 0u;
-}
-
-FlatVcxRuntime *flat_vcx_runtime_active(void) {
-    return g_vcx_active;
-}
-
 static int ctx_index_by_id(const FlatVcxRuntime *rt, uint32_t id) {
     int i;
     if (!rt) {
@@ -307,6 +285,96 @@ static int glob_match(const char *pat, const char *name) {
         return 0;
     }
     return glob_match(pat + 1, name + 1);
+}
+
+
+int flat_value_deep_copy_between(const FlatValue *src, FlatValue *dst,
+                                 FlatCollectionPool *src_coll, FlatStringPool *src_pool,
+                                 FlatFileTable *src_files, FlatCollectionPool *dst_coll,
+                                 FlatStringPool *dst_pool, FlatFileTable *dst_files) {
+    int i;
+    int len;
+    uint32_t id;
+    FlatValue item;
+    (void)src_files;
+    (void)dst_files;
+    if (!src || !dst || !src_coll || !src_pool || !dst_coll || !dst_pool) return -1;
+    switch (src->tag) {
+    case VAL_EMPTY: dst->tag = VAL_EMPTY; return 0;
+    case VAL_BOOL: return flat_value_set_bool(dst, src->u.boolean);
+    case VAL_NUMBER: *dst = *src; return 0;
+    case VAL_NULL: return flat_value_set_null(dst);
+    case VAL_STR_INLINE: return flat_value_set_str_inline(dst, src->u.ins.bytes, src->u.ins.len);
+    case VAL_STR_REF: {
+        size_t n = 0;
+        const uint8_t *bytes = flat_pool_read(src_pool, src->u.ref_id, &n);
+        if (!flat_pool_slot_in_use(src_pool, src->u.ref_id)) return -1;
+        if ((n == 0 ? flat_pool_alloc_empty(dst_pool, &id) :
+             (bytes ? flat_pool_alloc_copy(dst_pool, bytes, n, &id) : -1)) != 0) return -1;
+        return flat_value_set_str_ref(dst, id);
+    }
+    case VAL_FILE:
+        /* File handles belong to the source VM's file table and are not transferable. */
+        return -1;
+    case VAL_LIST: {
+        FlatValue *items = NULL;
+        if (flat_list_len(src_coll, src->u.coll_id, &len) != 0 || len < 0) return -1;
+        if (len > 0) {
+            items = calloc((size_t)len, sizeof *items);
+            if (!items) return -1;
+            for (i = 0; i < len; i++) {
+                if (flat_list_get(src_coll, src->u.coll_id, i, &item) != 0 ||
+                    flat_value_deep_copy_between(&item, &items[i], src_coll, src_pool,
+                                                 src_files, dst_coll, dst_pool, dst_files) != 0) {
+                    int j;
+                    for (j = 0; j <= i; j++) flat_value_release(dst_coll, dst_pool, &items[j]);
+                    free(items);
+                    return -1;
+                }
+            }
+        }
+        if (flat_list_build(dst_coll, dst_pool, items, len, &id) != 0) {
+            for (i = 0; i < len; i++) flat_value_release(dst_coll, dst_pool, &items[i]);
+            free(items);
+            return -1;
+        }
+        free(items);
+        return flat_value_set_list(dst, id);
+    }
+    case VAL_OBJECT: {
+        int count = 0;
+        char (*keys)[FLAT_OBJ_KEY_MAX + 1] = NULL;
+        FlatValue *values = NULL;
+        if (flat_obj_len(src_coll, src->u.coll_id, &count) != 0 || count < 0 ||
+            count > FLAT_OBJ_MAX_KEYS) return -1;
+        if (count == 0) {
+            if (flat_obj_empty(dst_coll, dst_pool, &id) != 0) return -1;
+            return flat_value_set_object(dst, id);
+        }
+        keys = calloc((size_t)count, sizeof *keys);
+        values = calloc((size_t)count, sizeof *values);
+        if (!keys || !values) { free(keys); free(values); return -1; }
+        for (i = 0; i < count; i++) {
+            const char *key = NULL;
+            if (flat_obj_entry_at(src_coll, src->u.coll_id, i, &key, &item) != 0 || !key) goto obj_fail;
+            snprintf(keys[i], sizeof keys[i], "%s", key);
+            if (flat_value_deep_copy_between(&item, &values[i], src_coll, src_pool,
+                                             src_files, dst_coll, dst_pool, dst_files) != 0)
+                goto obj_fail;
+        }
+        if (flat_obj_build(dst_coll, dst_pool, (const char (*)[FLAT_OBJ_KEY_MAX + 1])keys,
+                           values, count, &id) != 0) goto obj_fail;
+        free(keys);
+        free(values);
+        return flat_value_set_object(dst, id);
+obj_fail:
+        for (i = 0; i < count; i++) flat_value_release(dst_coll, dst_pool, &values[i]);
+        free(keys);
+        free(values);
+        return -1;
+    }
+    default: return -1;
+    }
 }
 
 int flat_vcx_deep_copy_value(const FlatValue *src, FlatValue *dst, FlatCollectionPool *coll,

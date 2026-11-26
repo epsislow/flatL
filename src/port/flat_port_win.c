@@ -201,7 +201,8 @@ static int write_temp_sh_script(const char *body, char *path_out, size_t path_ou
     FILE *f;
     unsigned long pid;
     unsigned tick;
-    static unsigned seq;
+    static volatile LONG seq;
+    unsigned seq_no;
     size_t n;
 
     if (!body || !path_out || path_out_sz == 0) {
@@ -217,8 +218,8 @@ static int write_temp_sh_script(const char *body, char *path_out, size_t path_ou
     }
     pid = (unsigned long)GetCurrentProcessId();
     tick = (unsigned)GetTickCount();
-    seq++;
-    if (snprintf(path_out, path_out_sz, "%s\\flatl_sh_%lu_%u_%u.sh", parent, pid, tick, seq) >=
+    seq_no = (unsigned)InterlockedIncrement(&seq);
+    if (snprintf(path_out, path_out_sz, "%s\\flatl_sh_%lu_%u_%u.sh", parent, pid, tick, seq_no) >=
         (int)path_out_sz) {
         return -1;
     }

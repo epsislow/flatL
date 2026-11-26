@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || \
     defined(__OpenBSD__)
@@ -14,9 +15,96 @@
 #endif
 
 static int (*g_handlers[FLAT_NATIVE_COUNT])(FlatNativeCtx *);
-static FlatOptionalNativeDecl g_manifest[FGIR_MAX_OPTIONAL_NATIVES];
-static int g_manifest_count;
+static unsigned char g_embedded_handlers[FLAT_NATIVE_COUNT];
+static _Thread_local int g_registering_embedded;
+static int g_registry_initialized;
 static char g_search_dir[512];
+static char g_native_path[512];
+static int g_native_path_initialized;
+
+/*
+ * Process-wide plugin state has two independent critical sections:
+ * - runtime lock: one-time initialization, search path, and lazy module loading;
+ * - registry lock: handler table publication and lookup.
+ *
+ * The runtime lock may be held while a plugin initializer runs. Plugin
+ * registration only takes the registry lock, so initializer callbacks can
+ * publish handlers without recursively acquiring the runtime lock. Native
+ * handlers are always invoked after both locks have been released.
+ */
+static atomic_flag g_runtime_lock = ATOMIC_FLAG_INIT;
+static atomic_flag g_registry_lock = ATOMIC_FLAG_INIT;
+
+/* Plugin init registration is staged per thread and committed only on success. */
+static _Thread_local int g_plugin_staging;
+static _Thread_local int (*g_plugin_staged_handlers[FLAT_NATIVE_COUNT])(FlatNativeCtx *);
+static _Thread_local unsigned char g_plugin_staged_set[FLAT_NATIVE_COUNT];
+
+static void runtime_lock(void) {
+    while (atomic_flag_test_and_set_explicit(&g_runtime_lock, memory_order_acquire)) {
+    }
+}
+
+static void runtime_unlock(void) {
+    atomic_flag_clear_explicit(&g_runtime_lock, memory_order_release);
+}
+
+static void registry_lock(void) {
+    while (atomic_flag_test_and_set_explicit(&g_registry_lock, memory_order_acquire)) {
+    }
+}
+
+static void registry_unlock(void) {
+    atomic_flag_clear_explicit(&g_registry_lock, memory_order_release);
+}
+
+static int (*registry_get_handler(uint16_t id))(FlatNativeCtx *) {
+    int (*handler)(FlatNativeCtx *) = NULL;
+    if (id >= FLAT_NATIVE_COUNT) {
+        return NULL;
+    }
+    registry_lock();
+    handler = g_handlers[id];
+    registry_unlock();
+    return handler;
+}
+
+static int registry_is_embedded(uint16_t id) {
+    int embedded = 0;
+    if (id >= FLAT_NATIVE_COUNT) {
+        return 0;
+    }
+    registry_lock();
+    embedded = g_embedded_handlers[id] != 0;
+    registry_unlock();
+    return embedded;
+}
+
+static void plugin_staging_begin(void) {
+    memset(g_plugin_staged_handlers, 0, sizeof g_plugin_staged_handlers);
+    memset(g_plugin_staged_set, 0, sizeof g_plugin_staged_set);
+    g_plugin_staging = 1;
+}
+
+static void plugin_staging_end(int commit) {
+    size_t i;
+    g_plugin_staging = 0;
+    if (!commit) {
+        memset(g_plugin_staged_handlers, 0, sizeof g_plugin_staged_handlers);
+        memset(g_plugin_staged_set, 0, sizeof g_plugin_staged_set);
+        return;
+    }
+    registry_lock();
+    for (i = 0; i < FLAT_NATIVE_COUNT; i++) {
+        if (g_plugin_staged_set[i]) {
+            g_handlers[i] = g_plugin_staged_handlers[i];
+            g_embedded_handlers[i] = 0;
+        }
+    }
+    registry_unlock();
+    memset(g_plugin_staged_handlers, 0, sizeof g_plugin_staged_handlers);
+    memset(g_plugin_staged_set, 0, sizeof g_plugin_staged_set);
+}
 static int g_loaded_math_trig;
 static int g_loaded_math_stats;
 static int g_loaded_math_mdim;
@@ -282,10 +370,14 @@ static void register_embedded_file(void) {
     flat_native_plugin_register(FLAT_NATIVE_FILE_SEP, flat_native_file_sep);
 }
 
-static int manifest_has_module(const char *mod) {
+int flat_native_runtime_manifest_has_module(const FlatNativeRuntimeContext *runtime,
+                                            const char *mod) {
     int i;
-    for (i = 0; i < g_manifest_count; i++) {
-        if (strcmp(g_manifest[i].module, mod) == 0) {
+    if (!runtime || !runtime->manifest || runtime->manifest_count <= 0) {
+        return 0;
+    }
+    for (i = 0; i < runtime->manifest_count; i++) {
+        if (strcmp(runtime->manifest[i].module, mod) == 0) {
             return 1;
         }
     }
@@ -528,11 +620,15 @@ static int try_dlopen_path(const char *path, char *err, size_t err_size) {
         dlclose(h);
         return -1;
     }
+    plugin_staging_begin();
     if (init(flat_native_plugin_register) != 0) {
+        plugin_staging_end(0);
         snprintf(err, err_size, "plugin init failed: %s", path);
         dlclose(h);
         return -1;
     }
+    plugin_staging_end(1);
+    /* Keep a successful module resident for the process lifetime. */
     (void)h;
     return 0;
 #else
@@ -585,8 +681,15 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
         return -1;
     }
 
-    env = getenv("FLAT_NATIVE_PATH");
-    if (env && env[0]) {
+    /* Snapshot process plugin search configuration on first lazy load. The
+       host must set FLAT_NATIVE_PATH before the first optional plugin load. */
+    if (!g_native_path_initialized) {
+        env = getenv("FLAT_NATIVE_PATH");
+        snprintf(g_native_path, sizeof g_native_path, "%s", env ? env : "");
+        g_native_path_initialized = 1;
+    }
+    env = g_native_path;
+    if (env[0]) {
         char buf[512];
         size_t k;
         snprintf(buf, sizeof buf, "%s", env);
@@ -663,21 +766,12 @@ ok:
     return 0;
 }
 
-void flat_native_runtime_reset(void) {
-    char saved_search[sizeof g_search_dir];
-    snprintf(saved_search, sizeof saved_search, "%s", g_search_dir);
-    memset(g_handlers, 0, sizeof g_handlers);
-    g_manifest_count = 0;
-    g_loaded_math_trig = 0;
-    g_loaded_math_stats = 0;
-    g_loaded_math_mdim = 0;
-    g_loaded_math = 0;
-    g_loaded_list = 0;
-    g_loaded_obj = 0;
-    g_loaded_vcx = 0;
-    g_loaded_executor = 0;
-    g_loaded_csv = 0;
-    snprintf(g_search_dir, sizeof g_search_dir, "%s", saved_search);
+static void flat_native_runtime_init_locked(void) {
+    if (g_registry_initialized) {
+        return;
+    }
+    g_registry_initialized = 1;
+    g_registering_embedded = 1;
     register_embedded_mem();
     register_embedded_file();
     register_embedded_date();
@@ -712,29 +806,23 @@ void flat_native_runtime_reset(void) {
     register_embedded_vcx();
     register_embedded_executor();
     register_embedded_str_extras();
+    g_registering_embedded = 0;
 }
 
-void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count) {
-    int i;
-    g_manifest_count = 0;
-    if (!decls || count <= 0) {
-        return;
-    }
-    if (count > FGIR_MAX_OPTIONAL_NATIVES) {
-        count = FGIR_MAX_OPTIONAL_NATIVES;
-    }
-    for (i = 0; i < count; i++) {
-        g_manifest[i] = decls[i];
-    }
-    g_manifest_count = count;
+void flat_native_runtime_init(void) {
+    runtime_lock();
+    flat_native_runtime_init_locked();
+    runtime_unlock();
 }
 
 void flat_native_runtime_set_search_dir(const char *dir) {
+    runtime_lock();
     if (!dir) {
         g_search_dir[0] = '\0';
-        return;
+    } else {
+        snprintf(g_search_dir, sizeof g_search_dir, "%s", dir);
     }
-    snprintf(g_search_dir, sizeof g_search_dir, "%s", dir);
+    runtime_unlock();
 }
 
 void flat_native_runtime_set_search_dir_from_argv0(const char *argv0) {
@@ -758,42 +846,87 @@ void flat_native_plugin_register(uint16_t id, int (*handler)(FlatNativeCtx *)) {
     if (id >= FLAT_NATIVE_COUNT || !handler) {
         return;
     }
+    if (g_plugin_staging) {
+        g_plugin_staged_handlers[id] = handler;
+        g_plugin_staged_set[id] = 1;
+        return;
+    }
+    registry_lock();
     g_handlers[id] = handler;
+    g_embedded_handlers[id] = g_registering_embedded ? 1 : 0;
+    registry_unlock();
 }
 
-int flat_native_runtime_prepare(uint16_t native_id, char *err, size_t err_size) {
+int flat_native_runtime_prepare(const FlatNativeRuntimeContext *runtime, uint16_t native_id,
+                                char *err, size_t err_size) {
     char mod[FGIR_NATIVE_MODULE_LEN];
+    int result = -1;
 
-    if (!flat_native_is_optional_id(native_id)) {
-        return 0;
+    if (err && err_size) {
+        err[0] = '\0';
     }
-    if (g_handlers[native_id]) {
-        return 0;
+    if (native_id >= FLAT_NATIVE_COUNT) {
+        if (err && err_size) snprintf(err, err_size, "unknown native id %u", (unsigned)native_id);
+        return -1;
+    }
+
+    runtime_lock();
+    flat_native_runtime_init_locked();
+    if (!flat_native_is_optional_id(native_id)) {
+        result = 0;
+        goto done;
+    }
+    if (registry_get_handler(native_id) && registry_is_embedded(native_id)) {
+        /* Core handlers are part of the VM runtime, not optional plugins. */
+        result = 0;
+        goto done;
     }
     if (flat_native_module_for_id(native_id, mod, sizeof mod) != 0) {
-        snprintf(err, err_size, "unknown native id %u", (unsigned)native_id);
-        return -1;
+        if (err && err_size) snprintf(err, err_size, "unknown native id %u", (unsigned)native_id);
+        goto done;
     }
     if (!flat_native_mod_is_built(mod)) {
-        snprintf(err, err_size, "module %s not built into this toolchain", mod);
-        return -1;
+        if (err && err_size) snprintf(err, err_size, "module %s not built into this toolchain", mod);
+        goto done;
     }
-    if (!manifest_has_module(mod)) {
-        snprintf(err, err_size, "native %s not declared in program manifest", mod);
-        return -1;
+    /* Authorization is per VM, even if the process has loaded the module. */
+    if (!flat_native_runtime_manifest_has_module(runtime, mod)) {
+        if (err && err_size) snprintf(err, err_size, "native %s not declared in program manifest", mod);
+        goto done;
     }
-    return load_module_plugin(mod, err, err_size);
+    if (!registry_get_handler(native_id)) {
+        if (load_module_plugin(mod, err, err_size) != 0) {
+            goto done;
+        }
+    }
+    if (!registry_get_handler(native_id)) {
+        if (err && err_size) snprintf(err, err_size, "optional native handler missing for id %u",
+                                      (unsigned)native_id);
+        goto done;
+    }
+    result = 0;
+
+done:
+    runtime_unlock();
+    return result;
 }
 
 int flat_native_invoke_optional(uint16_t id, FlatNativeCtx *ctx) {
     char err[256];
-    if (flat_native_runtime_prepare(id, err, sizeof err) != 0) {
-        fprintf(stderr, "flvm: %s\n", err);
+    int (*handler)(FlatNativeCtx *);
+    if (!ctx) {
+        fprintf(stderr, "flvm: invalid native context\n");
         return -1;
     }
-    if (!g_handlers[id]) {
+    if (flat_native_runtime_prepare(ctx->native_runtime, id, err, sizeof err) != 0) {
+        fprintf(stderr, "flvm: %s\n", err[0] ? err : "native preparation failed");
+        return -1;
+    }
+    handler = registry_get_handler(id);
+    if (!handler) {
         fprintf(stderr, "flvm: optional native handler missing for id %u\n", (unsigned)id);
         return -1;
     }
-    return g_handlers[id](ctx);
+    /* Never hold registry/lifecycle locks while running user native code. */
+    return handler(ctx);
 }

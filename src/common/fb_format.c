@@ -2,6 +2,7 @@
 #include "flat.h"
 #include "flat_value.h"
 #include "flat_schema.h"
+#include "flat_slot_type.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,6 +43,98 @@ size_t flat_fb_native_section_size(int decl_count, const FlatOptionalNativeDecl 
         n += 2 + ml + al;
     }
     return n;
+}
+
+
+size_t flat_fb_block_params_section_size(uint16_t count, const FlatFbBlockParams *params) {
+    size_t n = 6;
+    uint16_t i;
+    if (!params || count == 0) return 0;
+    for (i = 0; i < count; i++) {
+        int j;
+        if (params[i].param_count > FGIR_MAX_PARAMS) return 0;
+        n += 1;
+        for (j = 0; j < params[i].param_count; j++) {
+            size_t len = strlen(params[i].params[j]);
+            if (len == 0 || len > FLAT_VAR_NAME_MAX) return 0;
+            n += 1 + len;
+        }
+    }
+    return n;
+}
+
+int flat_fb_write_block_params_section(FILE *f, uint16_t count,
+                                       const FlatFbBlockParams *params) {
+    uint32_t magic = FLAT_FB_BPAR_MAGIC;
+    uint16_t i;
+    if (!f || !params || count == 0 || write_bytes(f, &magic, 4) != 0 ||
+        write_bytes(f, &count, 2) != 0) return -1;
+    for (i = 0; i < count; i++) {
+        int j;
+        uint8_t pc = params[i].param_count;
+        if (pc > FGIR_MAX_PARAMS || write_bytes(f, &pc, 1) != 0) return -1;
+        for (j = 0; j < pc; j++) {
+            size_t len = strlen(params[i].params[j]);
+            uint8_t ulen;
+            if (len == 0 || len > FLAT_VAR_NAME_MAX) return -1;
+            ulen = (uint8_t)len;
+            if (write_bytes(f, &ulen, 1) != 0 ||
+                write_bytes(f, params[i].params[j], len) != 0) return -1;
+        }
+    }
+    return 0;
+}
+
+int flat_fb_parse_block_params_section(const uint8_t *sec, size_t sec_len, uint16_t expect_count,
+                                       FlatFbBlockParams **out_params) {
+    FlatFbBlockParams *params;
+    size_t pos = 6;
+    uint16_t count;
+    uint16_t i;
+    if (!sec || !out_params || sec_len < 6) return -1;
+    *out_params = NULL;
+    if (read_u32_le(sec) != FLAT_FB_BPAR_MAGIC) return -1;
+    count = read_u16_le(sec + 4);
+    if (count != expect_count) return -1;
+    params = calloc(count, sizeof *params);
+    if (!params) return -1;
+    for (i = 0; i < count; i++) {
+        uint8_t pc;
+        int j;
+        if (pos >= sec_len) goto fail;
+        pc = sec[pos++];
+        if (pc > FGIR_MAX_PARAMS) goto fail;
+        params[i].param_count = pc;
+        for (j = 0; j < pc; j++) {
+            uint8_t len;
+            if (pos >= sec_len) goto fail;
+            len = sec[pos++];
+            if (len == 0 || len > FLAT_VAR_NAME_MAX || pos + len > sec_len) goto fail;
+            memcpy(params[i].params[j], sec + pos, len);
+            params[i].params[j][len] = '\0';
+            {
+                char parsed_name[FLAT_VAR_NAME_MAX + 1];
+                FlatSlotType parsed_type;
+                int has_type = 0;
+                int k;
+                if (flat_bind_parse_lhs(params[i].params[j], parsed_name,
+                                        sizeof parsed_name, &parsed_type, &has_type) != 0 ||
+                    has_type || strcmp(parsed_name, params[i].params[j]) != 0 ||
+                    strcmp(parsed_name, "null") == 0 || strcmp(parsed_name, "true") == 0 ||
+                    strcmp(parsed_name, "false") == 0) goto fail;
+                for (k = 0; k < j; k++) {
+                    if (strcmp(params[i].params[k], parsed_name) == 0) goto fail;
+                }
+            }
+            pos += len;
+        }
+    }
+    if (pos != sec_len) goto fail;
+    *out_params = params;
+    return 0;
+fail:
+    free(params);
+    return -1;
 }
 
 size_t flat_fb_label_section_size(uint16_t count) {
@@ -717,6 +810,12 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
         if (out->format_version >= 13) {
             plin_off = read_u32_le(buf + 36);
         }
+        /* v14 places BPAR immediately after the fixed-size JBMX section. */
+        if (out->format_version >= 14 && jbmx_off == 0) {
+            free(buf);
+            fprintf(stderr, "flvm: missing JBMX/BPAR sections in v14 bytecode\n");
+            return -1;
+        }
 
         if (plin_off != 0 && plin_off <= fsize) {
             out->code_size = plin_off;
@@ -832,20 +931,28 @@ static int flat_fb_parse_loaded(uint8_t *buf, size_t fsize, FlatBytecode *out) {
             }
         }
         if (jbmx_off != 0 && jbmx_off < fsize) {
-            size_t jbmx_len;
-            if (native_off != 0 && native_off > jbmx_off) {
-                jbmx_len = (size_t)(native_off - jbmx_off);
-            } else {
-                jbmx_len = (size_t)(fsize - jbmx_off);
-            }
+            size_t jbmx_need = flat_fb_jbmx_section_size(count);
+            size_t jbmx_len = out->format_version >= 14 ? jbmx_need :
+                (native_off != 0 && native_off > jbmx_off ?
+                 (size_t)(native_off - jbmx_off) : (size_t)(fsize - jbmx_off));
             if (flat_fb_parse_jbmx_section(buf + jbmx_off, jbmx_len, count,
                                            &out->jump_block_entry_max) != 0) {
                 free(buf);
                 fprintf(stderr, "flvm: invalid JBMX section\n");
                 return -1;
             }
-            if (native_off == 0) {
-                size_t jbmx_need = flat_fb_jbmx_section_size(count);
+            if (out->format_version >= 14) {
+                size_t bpar_start = (size_t)jbmx_off + jbmx_need;
+                size_t bpar_len = native_off != 0 && native_off > bpar_start ?
+                    (size_t)(native_off - bpar_start) : (size_t)(fsize - bpar_start);
+                if (bpar_start >= fsize ||
+                    flat_fb_parse_block_params_section(buf + bpar_start, bpar_len, count,
+                                                       &out->block_params) != 0) {
+                    free(buf);
+                    fprintf(stderr, "flvm: invalid BPAR section\n");
+                    return -1;
+                }
+            } else if (native_off == 0) {
                 size_t tail = (size_t)jbmx_off + jbmx_need;
                 if (tail < fsize) {
                     free(buf);
@@ -1135,6 +1242,7 @@ void flat_fb_free(FlatBytecode *bc) {
     free(bc->data);
     free(bc->blocks);
     free(bc->block_labels);
+    free(bc->block_params);
     free(bc->native_units);
     free(bc->block_native_unit);
     free(bc->jump_block_entry_max);
@@ -1293,6 +1401,7 @@ int flat_fb_write_min_ok(const char *path) {
     const uint32_t schm_magic = FLAT_FB_SCHM_MAGIC;
     const uint16_t schm_count = 0;
     const uint32_t jbmx_magic = FLAT_FB_JBMX_MAGIC;
+    const uint32_t bpar_magic = FLAT_FB_BPAR_MAGIC;
     const uint32_t jbmx_limit = 0;
 
     f = fopen(path, "wb");
@@ -1316,7 +1425,8 @@ int flat_fb_write_min_ok(const char *path) {
         write_bytes(f, &ffun_magic, 4) != 0 || write_bytes(f, &ffun_count, 2) != 0 ||
         write_bytes(f, &schm_magic, 4) != 0 || write_bytes(f, &schm_count, 2) != 0 ||
         write_bytes(f, &jbmx_magic, 4) != 0 || write_bytes(f, &blbl_count, 2) != 0 ||
-        write_bytes(f, &jbmx_limit, 4) != 0) {
+        write_bytes(f, &jbmx_limit, 4) != 0 || write_bytes(f, &bpar_magic, 4) != 0 ||
+        write_bytes(f, &blbl_count, 2) != 0 || write_bytes(f, &zero_decl, 1) != 0) {
         fclose(f);
         return -1;
     }

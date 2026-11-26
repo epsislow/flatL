@@ -1,8 +1,8 @@
 # Task Runtime — stadiul implementării
 
-**Ultima actualizare:** 2026-11-25  
+**Ultima actualizare:** 2026-11-26  
 **Arhivă de referință:** `flatL-main-252-task-runtime-plans.zip`
-**Arhivă curentă:** `flatL-main-253-task-runtime-executor-context.zip`  
+**Arhivă curentă:** `flatL-main-288-cooperative-chained-wait-graph-audit.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 ## Ce este prezent în arhiva 252 (bază)
@@ -26,51 +26,678 @@ Logger-ul este central și opt-in. Logging-ul dezactivat nu trebuie să formatez
 
 Verificările cross-platform (Termux, MSYS2 UCRT64, WSL Ubuntu) menționate anterior de utilizator se referă la arhiva de bază 57, nu constituie o validare a arhivei 251.
 
-## F0.3 — progres curent în arhiva 253
+## F0.3 — progres curent în arhiva 254
 
-Prima sub-etapă a F0.3 este implementată: **executor context per VM**.
+Refactorul structural F0.3 este implementat: **execution context per VM**.
 
-- `FlatExecutorContext` deține acum binding-ul VM și stack-ul de frame-uri executor.
-- `VmState` deține propriul `FlatExecutorContext`.
-- `FlatNativeCtx` primește pointer-ul către contextul executorului VM curent.
-- Native executor operations (`unique` / `global`, begin / end) folosesc contextul explicit; nu mai rebindează o stare globală.
-- Panic drain și unwind pentru frame-urile executorului primesc contextul VM curent.
-- `g_bind`, `g_bind_ok`, `g_frames` și `g_frame_sp` au fost eliminate din `flat_executor.c`.
+- `FlatExecutorContext` deține binding-ul VM, frame stack-ul executor, stack-ul call-instruction, push-call positions și `last_call_function_sp`.
+- `VmState` deține propriul `FlatExecutorContext`; resolver-ul call-instruction primește explicit `VmState` și nu folosește un pointer global către VM.
+- `FlatNativeCtx` primește pointer-ul către executorul VM curent, VCX-ul curent și `call_instr_id` rezolvat pentru acel apel.
+- Native executor operations (`unique` / `global`, begin / end) folosesc contextul explicit.
+- VCX native operations folosesc `FlatNativeCtx.vcx`; fallback-ul către un runtime VCX global activ a fost eliminat.
+- Panic drain, pop și teardown pentru stack-ul call-instruction sunt scoped la contextul VM curent.
+- Au fost eliminate globalele `g_bind`, `g_bind_ok`, `g_frames`, `g_frame_sp`, `g_vm_call_instr`, `g_instr_stack`, `g_instr_push_call_sp`, `g_last_call_function_sp`, `g_vcx_active` și `g_call_instr_resolver`.
 
-**Încă nefinalizat în F0.3:** bookkeeping-ul call-instruction din `vm.c` și `g_vcx_active` / `g_call_instr_resolver` din `flat_vcx.c` sunt încă globale. `flat_vcx_call_instr_ctx()` și stiva asociată rămân dependente de acel mecanism. Prin urmare, această schimbare elimină doar prima familie de globale și NU declară VM-ul reentrant, task-safe sau thread-safe.
+**Limitare importantă:** F0.3 elimină aceste globale și clarifică ownership-ul contextului, dar NU declară VM-ul reentrant, task-safe sau thread-safe. Mai există alte stări globale în runtime (de exemplu reset-ul native runtime, RNG, locale și alte subsisteme), care trebuie auditate înainte de worker pool sau execuție concurentă.
 
-### Verificări pentru arhiva 253
+### Verificări pentru arhiva 254
 
 - `make all -j2` — PASS.
-- `bin/run_tests flvm -v` — 7/7 PASS (include testul nou `007_executor_context_isolation`).
-- `bin/run_tests func -v` — 37/37 PASS (include nested/native executor și panic unwind).
-- `bin/run_tests fmod -v` — 18/18 PASS.
-- Suita completă nu a fost rulată în această etapă.
+- `bin/run_tests flvm -v -e` — 7/7 PASS.
+- `bin/run_tests func[1-37] -v -e` și `func[101-106] -v -e` — 37/37 PASS cumulat.
+- `bin/run_tests fmod -v -e` — 18/18 PASS.
+- `bin/run_tests vcx -v -e` — 30/30 PASS.
+- Suita completă (1141 teste default descoperite) nu a fost rulată în această etapă.
 
 ## Ce NU este implementat încă
 
-- `FlatTask` și task lifecycle;
-- `task.spawn()` / `task.wait()`;
-- scheduler cooperativ și yield/resume;
-- VCX separat per task;
+- `task.spawn()` / `task.wait()` natives;
+- scheduler-level `WAITING` / wakeup și dependency handling;
+- cancellation request și safe-point cancellation;
+- API pentru configurarea logger-ului TASKS din scheduler;
+- Channels și worker pool pthread;
+- VCX separat per task (fiecare task deține deja un VM/VCX independent, dar nu există API de partajare);
 - panic wildcard `.any` în forma `#panic.#worker.any`;
-- Channel pool și `task.channel()`;
-- `channel.set()` / `channel.var()`;
-- mutex per Channel;
-- `lock` / `unlock` / `revert` și tranzacții;
+- Channel event producers / `channel.log()`;
 - `task.log()` / `channel.log()`;
 - worker pool pthread și execuție paralelă;
 - integrare UI thread.
 
-## Următorul pas
+## Stadiul curent
 
-**F0.3 — Execution Context Refactoring**:
+F0.4 — Global State Audit & Isolation rămâne închisă structural, cu limitele process-owned documentate în audit. `FlatVm` oferă stepping/yield/resume cooperativ la limite de instrucțiune. Arhivele 276–277 adaugă `FlatTask`, scheduler round-robin, wait/wakeup și cancellation. Arhiva 278 adaugă integrarea nativă inițială `task.spawn()`, `task.wait()` și `task.state()`, iar arhiva 279 adaugă transmiterea argumentelor către parametrii numiți ai block-urilor și formatul `.fb` v14. Arhiva 280 adaugă Channel registry runtime-owned, deep-copy între pool-uri, sincronizare C1, tranzacții C2 și rollback automat la terminarea task-ului. Arhiva 281 adaugă natives `channel.create/set/var/lock/unlock/revert/destroy`, transmiterea numerică a handle-urilor prin `task.spawn()`, prioritate scheduler pentru owner-ul tranzacției și testarea partajării efective între VM-uri.
 
-1. [x] Introducerea unui context explicit pentru executor.
-2. [x] Mutarea binding-ului și a frame stack-ului executor în acel context.
-3. [ ] Mutarea bookkeeping-ului call-instruction din VM în contextul execuției.
-4. [ ] Scoped VCX active runtime și call-instruction resolver.
-5. [~] Panic drain pentru frame-urile executorului este scoped; drain-ul call-instruction încă folosește starea VM globală.
-6. [x] Regresie pentru nested calls, unique/global executor și panic unwind prin suitele existente `func` / `fmod`.
+**Istoricul F0.4 — Global State Audit & Isolation**:
 
-Nu începe schedulerul înainte ca ownership-ul și cleanup-ul acestor contexte să fie demonstrate prin teste.
+1. [x] Inventarierea globalelor mutabile relevante pentru VM/runtime.
+2. [x] Mutarea RNG-ului în `VmState` și transmiterea prin `FlatNativeCtx.rng`.
+3. [x] Test de izolare pentru două instanțe RNG.
+4. [ ] Clasificarea globalelor rămase după ownership: process / VM / task.
+5. [x] Separarea date run state per VM.
+6. [x] Separarea manifestului per VM și inițializarea registry-ului embedded la nivel de proces (lazy loading rămâne nesincronizat).
+7. [x] Eliminarea modificării localei procesului și mutarea setup-ului stdio la inițializarea CLI.
+8. [x] Snapshot per-VM pentru path/env și extinderea registry-ului fallback memory streams; logger-ul rămâne process-owned și necesită audit de sincronizare.
+
+F0.3 este închis structural. F0.4 a fost continuată în arhivele 255–263; limitele process-owned rămase sunt păstrate în audit. Nu declara general reentrancy sau thread-safety.
+
+
+## F0.4 — progres în arhiva 255
+
+A fost eliminată starea RNG globală. `FlatRngState` este deținut de `VmState`, iar `FlatNativeCtx.rng` transmite pointer-ul către native calls. `math.seed`, `math.random` și `hash.randomBytes` păstrează RNG comun în interiorul aceluiași VM, dar contexte RNG diferite nu se influențează reciproc. RNG-ul nu este criptografic.
+
+Teste adăugate: `test/cases/flvm/008_rng_context_isolation` verifică izolarea între două instanțe RNG.
+
+Verificări pentru arhiva 255:
+- `make all -j2` — PASS.
+- `bin/run_tests flvm -v -e` — 8/8 PASS.
+- `bin/run_tests math -v -e` — 34/34 PASS.
+- `bin/run_tests hash -v -e` — 4/4 PASS.
+- `bin/run_tests bytes -v -e` — a depășit limita de execuție după afișarea testului 11; nu este declarat PASS.
+
+Auditul globalelor a identificat în plus registry/reset plugin native, date run state, path separator, environment state, memory-stream slots, runtime logger, compile panic-site emission state și WASM last-result state. Acestea nu au fost mutate în această etapă.
+
+
+## F0.4 — progres în arhiva 256
+
+Starea de configurare date/time a fost mutată din `g_date_state` într-un `FlatDateRunState` deținut de fiecare `VmState`. `FlatNativeCtx.date` transmite pointer-ul către handler-ele native. `flat_date_global_state()` a fost eliminată; `flat_date_run_begin()` inițializează acum starea VM-ului curent, inclusiv snapshot-ul valorilor `FLAT_DATE_RUN_OFFSET` și `FLAT_DATE_NOW_SEC`. `date.run_offset()` modifică doar configurația VM-ului apelant.
+
+Test nou: `test/cases/date/082_run_state_isolation` verifică două structuri inițializate cu configurații diferite și faptul că modificarea uneia nu o afectează pe cealaltă.
+
+Verificări pentru arhiva 256 (1143 teste default descoperite):
+- `make all -j2` — PASS.
+- `bin/run_tests date[1-48] -e` — 48/48 PASS.
+- `bin/run_tests date[49-81] -v -e --time` — 33/33 PASS.
+- `bin/run_tests date[82] -v -e` — 1/1 PASS.
+- Încercarea combinată `date[1-82]` a atins limita de execuție după testul 50; toate cele 82 au fost confirmate prin cele trei rulări separate de mai sus.
+
+### Native plugin registry — clasificare
+
+Auditul a confirmat că `native_plugin_host.c` combină stări cu ownership diferit: `g_handlers`, flag-urile `g_loaded_*` și `g_search_dir` sunt registry/configurație de proces (cu mutații la înregistrare și încărcare), în timp ce `g_manifest` / `g_manifest_count` reprezintă permisiunile unui program/VM și nu trebuie să fie globale. `flat_native_runtime_reset()` șterge și reconstruiește handlers, resetează flag-urile de module și golește manifestul la fiecare `flat_vm_run_opts()`. Acest reset nu este compatibil cu două VM-uri suprapuse și poate invalida registry-ul altui apel.
+
+Nu am schimbat încă lifecycle-ul registry-ului: încărcarea dinamică și înregistrarea handler-elor trebuie proiectate separat de manifestul fiecărui VM. Până atunci, execuțiile VM suprapuse/concurente rămân nesuportate. Nu declara reentrancy sau thread-safety.
+
+## F0.4 — progress in archive 257: native plugin host
+
+The native plugin host now separates process-wide plugin availability from per-VM authorization:
+
+- Removed process-global `g_manifest` and `g_manifest_count`.
+- Added `FlatNativeRuntimeContext` with a manifest pointer/count, owned by `VmState` and passed through `FlatNativeCtx.native_runtime`.
+- Replaced per-run `flat_native_runtime_reset()` with one-time process initialization `flat_native_runtime_init()`.
+- Embedded core handlers are registered once and tracked separately from optional plugin handlers.
+- Optional plugin authorization is checked against the current VM manifest even when another execution has already loaded the handler into the process registry.
+- The process-wide handler table, loaded-module flags, and search directory remain process-owned.
+
+Regression test: `test/cases/flvm/009_native_manifest_context` verifies that two VM runtime contexts retain independent manifests. An initial regression run exposed that embedded core `mem` handlers must not be treated as optional plugins; the registry now tracks embedded handlers separately, and `native_use[5]` passes.
+
+Validation on archive 257:
+- `make all -j2` — PASS.
+- `make docs` — PASS (45 sections).
+- `flvm` — 9/9 PASS.
+- `native` — 22/22 PASS.
+- `native_use` — 6/6 PASS.
+- `fmod` — 18/18 PASS in two bounded runs (1–14 and 15–18; the first combined command timed out after test 14, which was not counted as a completed suite).
+- `math` — 34/34 PASS.
+- `list` — 5/5 PASS.
+- `obj` — 17/17 PASS in two bounded runs (1–13 and 14–17).
+- `csv` — 36/36 PASS.
+
+**Not claimed:** the full default suite (1144 discovered tests) was not run. The registry still has unsynchronized process-wide initialization and lazy loading, so this does not make the VM thread-safe or ready for a worker pool.
+
+## F0.4 progress in archive 258 — locale and stdio
+
+- Removed process-global `setlocale(LC_ALL, "C")` from VM startup.
+- Added `flat_strtod()` / `flat_snprintf()` with thread-scoped C numeric locale handling on POSIX (shared immutable locale object, atomic one-time initialization) and locale-specific conversion APIs on Windows; WASM uses its C-locale runtime behavior.
+- Routed FlatL numeric parsing and numeric formatting/serialization through those helpers.
+- Moved `flat_port_stdio_setup()` from every VM run to one-time `flvm` / `flatl` CLI process initialization. Embedders must call it themselves when Windows text-mode stdio is required.
+- `make all -j2` — PASS; `make docs` — PASS (45 sections).
+- Tests: `flvm` 9/9, `math` 34/34, `json` 50/50, `date` 82/82, `io` 53/53, `io_ctx` 13/13, `values` 9/9, `str` 16/16, `http` 32/32, `port` 1/1, selected `types` 82/82. Runs were bounded; combined JSON/date/IO attempts hit the execution limit and remaining cases were rerun separately. `env` had 3 failures/14 and `path` had 1 failure/9; the same failures were reproduced against the unmodified archive 257 (e.g. env cases 004/008/009 report `io.outln.args` instead of their expected native panic, and path case 006 misses `path.normalize.empty`). These are pre-existing test failures, not regressions from archive 258. The full 1144-case default suite was not run.
+- Non-C locale integration was not directly exercised; requires a host with a suitable installed locale.
+
+### Remaining F0.4 work
+
+- [x] Remove process-global locale mutation and move stdio setup to CLI process initialization.
+- [x] Snapshot environment overrides/argv and path separator into per-VM contexts.
+- [x] Replace the fallback memory-stream fixed slot table with a dynamically sized synchronized registry.
+- [ ] Define runtime logger lifecycle and synchronization; it remains process-owned.
+- [ ] Audit compiler panic-site state and WASM last-result state.
+- [ ] Define a single-thread cooperative runtime contract and the process-global freeze/synchronization boundary for any later worker pool.
+
+
+## F0.4 progress — per-VM environment/path snapshots and memory-stream registry (archive 259)
+
+The process-level environment override/argv staging API remains available to CLI and WASM entry points, but each `flat_vm_run_opts()` now snapshots it into `FlatEnvContext` owned by `VmState`. `FlatNativeCtx.env` passes that context to `env.has`, `env.get`, `env.argc`, and `env.args`. The snapshot deep-copies override keys/values and program arguments, so later changes to process staging do not alter an already-running VM. The host process environment (`getenv`) remains process-owned and is treated as immutable for the duration of a VM run; hosts must not mutate it while a VM is executing.
+
+Path separator configuration is now snapshotted into `FlatPathContext` per VM and passed through `FlatNativeCtx.path`. Native `path.*` and `file.sep` operations use that context instead of reading the process staging separator during execution. The legacy process-level path setter is retained only as CLI/WASM staging and for compatibility wrappers; the VM copies its selected separator at run start.
+
+The non-GNU fallback implementation of `flat_open_memstream()` no longer has a fixed 16-slot registry. It now allocates registry nodes dynamically and protects registry insertion/removal with a C11 atomic-flag lock. Stream I/O and output-buffer ownership remain with the caller; the lock protects only the process-wide FILE-to-output-target registry. A forced-fallback regression test opens 40 simultaneous streams and verifies their independent outputs.
+
+New regression test `test/cases/flvm/010_env_path_context_isolation` verifies deep snapshots of overrides/argv and independent path separators. New test `test/cases/flvm/011_memstream_registry_capacity` forces the fallback implementation, opens 40 streams (more than the previous 16-slot cap), and checks all output buffers.
+
+Validation on archive 259:
+- `make all -j2` — PASS.
+- `bin/run_tests flvm -v -e` — 10/10 PASS before adding case 011; cases 010–011 — 2/2 PASS after addition.
+- `bin/run_tests env -v -e` — 11/14 PASS; cases 004, 008, and 009 still fail with missing expected panic text, matching the known failures recorded for archive 258.
+- `bin/run_tests path -v -e` — 8/9 PASS; case 006 still fails with missing expected `path.normalize.empty`, matching the known failure recorded for archive 258.
+- Full default suite (1147 discovered tests) not run.
+
+Remaining process-owned state: environment/path staging APIs (must be configured before VM start and not mutated concurrently), process environment itself, native plugin registry lazy loading, runtime logger configuration/counters/output, compiler panic-site emission state, and WASM last-result state. The fallback memory-stream registry is now dynamically sized and its registry operations are synchronized. This does not establish general VM reentrancy or thread safety.
+
+
+## F0.4 — progres în arhiva 260
+
+- [x] Corectate testele `env[4]`, `env[8]`, `env[9]` și `path[6]`: apelurile native care trebuie să producă panic sunt acum instrucțiuni standalone cu binding explicit `-> p`, astfel încât panic detail-ul nativ ajunge la harness. Semantica runtime nu a fost modificată.
+- [x] Sincronizată starea logger-ului process-owned cu `atomic_flag`: configure, emit/sequence, buffer, dropped counter, flush și shutdown sunt serializate.
+- [x] Eliminată starea globală mutabilă din compiler emission: `FlatCompileContext` local fiecărei compilări deține schema catalog, panic-site collection și locația/IP-ul instrucțiunii emise.
+- [x] Documentat contractul WASM last-result getters ca singleton pentru bridge-ul FLEditor curent; o API multi-instance va trebui să returneze rezultat per apel.
+- [ ] Native plugin lazy loading și staging process-level env/path necesită contract freeze/sincronizare înainte de worker pool.
+
+Validare arhiva 260: `make all -j2` PASS; `env path flvm flc panic` 44/44 PASS (env 14/14, path 9/9, flvm 12/12, flc 3/3, panic 6/6). `make docs` PASS (45 secțiuni). Suita default completă (1147 teste descoperite) nu a fost rulată. Nu se declară reentrancy sau thread-safety generală.
+
+## Archive 261 — native plugin registry synchronization
+
+- [x] Added a process lifecycle lock for one-time embedded registration, search-directory updates, and optional plugin lazy loading.
+- [x] Added a separate handler-registry lock for registration and lookup; native handlers are invoked only after releasing both locks.
+- [x] Made dynamic plugin initialization transactional with thread-local staged registrations. Failed initializers discard staged handler pointers before `dlclose()`.
+- [x] Made embedded-registration marking thread-local to prevent unrelated registrations from being marked as core handlers.
+- [x] Snapshotted `FLAT_NATIVE_PATH` on first optional plugin load. Hosts must set it before the first optional load; later environment changes are ignored.
+- [x] Added `flvm[13]` concurrent initialization/lazy-load coverage with eight threads and a post-load manifest-denial check.
+
+Validation: `make all -j2` PASS; `make docs` PASS (45 sections); `flvm` 13/13; `native` 22/22; `native_use` 6/6; `env` 14/14; `path` 9/9; `fmod` 18/18; `math` 34/34; `list` 5/5; `obj` 17/17; `csv` 36/36 — all PASS. The full 1148-test default suite was not run. This closes the plugin registry initialization/lazy-load synchronization item, but does not establish general VM thread safety or worker-pool readiness.
+
+## Archive 262 — transversal audit and initialization-race fixes
+
+- [x] Inventory file-scope and function-local mutable statics beyond `g_*` names.
+- [x] Serialize environment staging mutation/lookup with per-VM snapshot creation; fix partial-allocation cleanup in `flat_env_context_init()`.
+- [x] Make path separator staging atomic and VM snapshot reads atomic.
+- [x] Serialize libcurl global initialization and latch its result.
+- [x] Replace Windows QPC lazy-init flag with `INIT_ONCE`.
+- [x] Make math multidimensional debug-flag first-use initialization atomic.
+- [x] Make native signature fallback and WASM module-list buffers thread-local.
+- [x] Make Windows temporary shell-script sequence allocation atomic.
+- [x] Add `flvm[14]` host environment/path staging concurrency regression.
+- [x] Update the ownership matrix and document WASM singleton/fixed-file limitations.
+
+Validation: `make all -j2` PASS; `make docs` PASS (45 sections); `flvm` 14/14; `env` 14/14; `path[1-4]` + `path[5-9]` 9/9; `http[1-8]` + `[9-16]` + `[17-24]` + `[25-32]` 32/32; `math_mdim` 51/51; `port` 1/1. Full default suite (1149 discovered) not run. Windows-specific changes were not compiled or exercised in this Linux environment. General VM reentrancy/thread safety and worker-pool readiness are not claimed.
+
+## Archive 263 — parser/linker and host configuration
+
+- [x] Audited parser, linker, and compiler for mutable file-scope/function-local static state; none was found in the parser/linker path, and compiler emission state remains invocation-local.
+- [x] Replaced locale-sensitive C `ctype` classification in FlatL syntax code with ASCII-defined helpers (`flat_ascii.h`) across parser, linker, function, schema, native-use, labels, slots, numbers, and literal parsing.
+- [x] Moved large linker module queue/use workspaces and `flat_link_program()` module/fmod workspaces from thread stacks to per-call heap allocations with centralized cleanup.
+- [x] Added `FlatHostConfig`, independent initialization and legacy staging capture APIs, and `FlatVmOptions.host_config`.
+- [x] Added deep-clone and independent per-context environment override/argv APIs; VM snapshots host configuration before execution.
+- [x] Preserved legacy process staging when `host_config` is NULL.
+- [x] Extended `flvm[10]` to cover independent host configs, staging capture, and deep snapshot behavior.
+
+Validation: `make all -j2` PASS; `make docs` PASS (45 sections); `flvm[10]` + `flc` + `native_use` 10/10 PASS; selected `types`/`func` parser-related cases 15/15 PASS. Broader `types` and `func` runs reached the execution timeout after printing passing cases and are not counted as complete. Full default suite (1149 discovered tests) not run. No general thread-safety or worker-pool readiness is claimed.
+
+## Archive 264 — FlatRuntime lifecycle foundation
+
+- [x] Added opaque `FlatRuntime` with create/run/destroy API.
+- [x] Runtime deep-copies an explicit `FlatHostConfig`, or captures legacy staging when config is NULL.
+- [x] `flat_runtime_run()` makes runtime-owned host config authoritative while forwarding other VM options.
+- [x] Track active VM calls and reject destruction while a run is active.
+- [x] Added `flvm[15]` lifecycle test with a stubbed VM boundary, including active-run destroy rejection and host-config ownership.
+- [x] Added `flvm[16]` integration test that executes real bytecode through `flat_runtime_run()`.
+
+Validation: `make all -j2` PASS; `make docs` PASS; `flvm` 16/16 PASS. Full default suite (1151 discovered tests) not run. Actual concurrent VM execution, Windows, and WASM are not validated. The host must prevent new API calls from starting concurrently with `flat_runtime_destroy()`. This does not establish general VM thread safety or scheduler readiness.
+
+## Archive 265 — FlatRuntime resource ownership audit
+
+- [x] Classified runtime-lifetime, VM-invocation, caller-owned, compile/link invocation, and process-owned resources.
+- [x] Kept CSV/DOM/VCX/HTTP/IO/file/pool/executor/RNG/date state per VM invocation; these resources contain mutable state and cross-references that are not safe to share between runs.
+- [x] Confirmed `FlatRuntime` currently owns only its immutable `FlatHostConfig` snapshot; native registry, plugin libraries, logger, locale, libcurl initialization, and memory-stream registry remain process-owned.
+- [x] Added `flvm[17]` to force a real VM execution error after setup, then run successfully again through the same runtime, checking diagnostic reset and teardown/reuse.
+- [x] Documented caller ownership of bytecode and `FlatVmOptions` output buffers, including distinct buffers for concurrent runs.
+
+Validation: `flvm[15-17]` 3/3 PASS; `make all -j2` PASS; `make docs` PASS (45 sections). Full default suite (1152 discovered tests) not run. This does not establish general VM thread safety, persistent VM semantics, scheduler readiness, or worker-pool safety.
+
+## Archive 266 — persistent VM and cooperative task lifecycle specification
+
+- [x] Defined separate ownership/lifecycle boundaries for `FlatRuntime`, `FlatTask`, and persistent `FlatVm`.
+- [x] Defined task states and allowed transitions, including terminal-state invariants.
+- [x] Defined instruction-boundary yield/resume and the saved-next-IP invariant.
+- [x] Defined bytecode ownership, copied scalar options, and prohibition on retaining caller output pointers across yields.
+- [x] Defined panic/failure isolation, cooperative cancellation, cleanup, and runtime-destroy busy semantics.
+- [x] Defined scheduler-level `task.wait` behavior and documented initial wait-cycle limitation.
+- [x] Added normative `doc_src/TASK_RUNTIME_MODEL.md` and indexed it for generated documentation.
+- [ ] Heap-stable persistent `FlatVm` implementation and opcode-budget stepping.
+- [ ] `FlatTask` registry, cooperative scheduler, spawn/wait natives, and Channels.
+
+Validation on archive 266: baseline `make all -j2` PASS; baseline `bin/run_tests flvm -v -e` 17/17 PASS. This archive is a specification/documentation milestone; no persistent VM, task scheduler, or yield/resume code is introduced. Full default suite (1152 discovered tests) not run.
+
+
+## Archive 267 — FlatVm ownership API foundation
+
+- [x] Added opaque heap-allocated `FlatVm` handle and public lifecycle API (`flat_vm_create`, `flat_vm_execute`, `flat_vm_destroy`, `flat_vm_state`).
+- [x] `flat_vm_create()` deep-copies the FlatBytecode through `flat_fb_load_buffer()`, copies scalar execution options, and deep-snapshots `FlatHostConfig` (or captures process staging).
+- [x] `flat_vm_execute()` uses VM-owned bytecode/configuration and returns a value result with termination and diagnostic; it does not retain caller output pointers. Execution is one-shot and transitions READY → RUNNING → TERMINAL.
+- [x] Added `flvm[18]` proving caller bytecode and host config can be destroyed after VM creation, successful execution, and rejection of a second execute.
+
+**Explicit limitation:** the current `FlatVm` is an ownership shell, not yet a resumable VM. `VmState`, IP, guard scratch, and the opcode loop still live in `flat_vm_run_opts()` and are torn down at the end of execution. No bounded step/yield/resume, `FlatTask`, scheduler, task natives, Channels, or pthread workers are implemented.
+
+Validation for archive 267 so far: `make all -j2` PASS; `bin/run_tests 'flvm[18]' -v -e` PASS (1/1). A full `bin/run_tests flvm -v -e` attempt stalled at the new case under the runner's suite invocation; the same case passed independently. The full default suite (1153 discovered tests) was not run.
+
+Next step: extract the current VM initialization/continuation state into the stable handle, then implement an internal bounded-step function and resume equivalence tests before adding scheduler/task abstractions.
+
+
+## Archive 268 — stable heap allocation for VM invocation state
+
+- [x] Changed `flat_vm_run_opts()` to allocate `VmState` on the heap instead of the C stack.
+- [x] Kept the `VmState` address stable for the entire invocation, before VCX and executor bindings retain pointers into it.
+- [x] Routed normal completion and setup-failure cleanup through the existing teardown path and then freed the heap state.
+- [x] Kept invalid-bytecode validation before allocation, avoiding an allocation leak on early rejection.
+- [x] Updated the task-runtime model to distinguish stable per-invocation allocation from persistent cross-call continuation ownership.
+
+**Explicit limitation:** this does not yet make `FlatVm` resumable. The IP, guard scratch arrays, and opcode loop remain local to `flat_vm_run_opts()`; `VmState` is still destroyed at the end of each invocation. No stepping/yield/resume, task scheduler, task natives, Channels, or pthread workers are implemented.
+
+Validation for archive 268: `make all -j2` PASS; `bin/run_tests 'flvm[1-17]' -e` PASS (17/17); `bin/run_tests 'flvm[18]' -v -e` PASS (1/1). The combined `flvm` invocation was interrupted while building test 18, but the same case was built and passed independently. Full default suite (1153 discovered tests) not run.
+
+
+## Archive 269 — continuation scratch consolidation
+
+- [x] Moved the instruction pointer and entry-block index into `VmState`.
+- [x] Moved guard-name and guard-value scratch arrays into `VmState`.
+- [x] Kept the existing step/jump counters and call/loop frames in the same state object.
+- [x] Removed the unused borrowed `FlatVmOptions *` member from `VmState`; options remain call-scoped in the run-to-completion interpreter.
+- [x] Preserved existing `flat_vm_run_opts()` behavior and cleanup paths.
+
+**Explicit limitation:** `VmState` is still allocated, initialized, executed, torn down, and freed inside one `flat_vm_run_opts()` call. The `FlatVm` handle does not yet own the initialized state across calls. No bounded stepping, yield/resume, `FlatTask`, scheduler, task natives, Channels, or pthread workers are implemented.
+
+Validation for archive 269: `make all -j2` PASS; `bin/run_tests 'flvm[1-17]' -e` PASS (17/17); `bin/run_tests 'flvm[18]' -v -e` PASS (1/1). Full default suite (1153 discovered tests) not run.
+
+
+## Archive 270 — explicit FlatVm terminal outcomes
+
+- [x] Distinguished `FLAT_VM_COMPLETED` from `FLAT_VM_FAILED` in the public VM lifecycle state.
+- [x] Kept `FLAT_VM_TERMINAL` as a compatibility alias for successful completion.
+- [x] Added `flat_vm_is_terminal()` so callers can recognize either completed or failed handles without duplicating enum checks.
+- [x] Updated `flvm[18]` to assert successful completion state and terminal query behavior.
+- [x] Updated the task-runtime model and generated documentation source.
+
+**Explicit limitation:** this is a lifecycle/API clarification, not persistent execution. `flat_vm_execute()` still runs to completion in one call; no yield/resume or opcode-budget stepping is available. The handle still delegates to `flat_vm_run_opts()`, which creates and destroys `VmState` during that call. No `FlatTask`, scheduler, task natives, Channels, or pthread workers are implemented.
+
+Validation for archive 270: `make all -j2` PASS; `make docs` PASS (46 sections); `bin/run_tests 'flvm[1-17]' -v -e` PASS (17/17); `bin/run_tests 'flvm[18]' -v -e` PASS (1/1). A combined `bin/run_tests flvm -v -e` run passed tests 1–17 but hit the command timeout while compiling test 18; test 18 passed separately. Full default suite (1153 discovered tests) not run. The source snapshot contains no `.git` metadata, so no branch/commit status was available.
+
+
+## Archive 271 — VM initialization separation
+
+- [x] Extracted VM-owned runtime/resource initialization from `flat_vm_run_opts()` into `vm_state_initialize()`.
+- [x] The helper initializes the VM state, binds VCX/executor pointers only after the heap allocation is stable, allocates guard scratch and jump counters, and selects the main entry block/IP.
+- [x] Centralized partial-initialization failure cleanup; guard scratch is released before the remaining VM resources are torn down.
+- [x] Kept the opcode loop and the public one-shot API behavior unchanged.
+
+**Explicit limitation:** `vm_state_initialize()` is currently called by `flat_vm_run_opts()` and its `VmState` is still destroyed before that function returns. The new helper is not yet a persistent `FlatVm` initializer. No bounded stepping, yield/resume, `FlatTask`, scheduler, task natives, Channels, or pthread workers are implemented.
+
+Validation for archive 271: `make all -j2` PASS; `bin/run_tests 'flvm[1-17]' -v -e` and `bin/run_tests 'flvm[18]' -v -e` are run separately (results recorded after final validation); `make docs` result recorded after final validation. Full default suite (1153 discovered tests) not run. Combined `bin/run_tests flvm -v -e` reached test 17 but timed out while building test 18; test 18 passed independently.
+
+
+## F0.5 — persistent VM ownership progress (archive 272)
+
+`FlatVm` now owns the initialized `VmState` from `flat_vm_create()` through `flat_vm_destroy()`. The internal bridge in `src/common/flat_vm_internal.h` provides state create/execute/destroy operations without exposing `VmState` publicly. `flat_vm_execute()` runs the owned state; the compatibility `flat_vm_run_opts()` uses the same bridge and preserves its run-to-completion behavior. `VmState` records whether runtime resources are active so destroying a never-executed READY handle tears them down exactly once, while terminal execution does not trigger duplicate teardown.
+
+The flvm[18] lifecycle test now also creates and destroys a READY VM without executing it. This confirms the newly moved initialization/ownership path has a cleanup path before execution.
+
+Validation for archive 272:
+- `make all -j2` — PASS.
+- `bin/run_tests flvm -v -e` — tests 1–17 PASS; command hit its execution timeout while compiling test 18.
+- `bin/run_tests 'flvm[18]' -v -e` — 1/1 PASS (including READY-state destroy).
+- Combined flvm coverage: 18/18 confirmed across the two runs above; the full default suite (1153 discovered tests) was not run.
+
+**Not implemented yet:** bounded stepping, `YIELDED`, resume across calls, `FlatTask`, scheduler, task natives, or Channels.
+
+
+## Archive 273 — cooperative FlatVm stepping and resume
+
+- [x] Added public `flat_vm_step(vm, instruction_budget, result)`; a zero budget runs until terminal state.
+- [x] Added `FLAT_VM_YIELDED` to the public VM lifecycle states.
+- [x] Refactored the interpreter dispatch loop to yield at the top of the next dispatch iteration, only after the preceding opcode has completed and updated `VmState.ip`.
+- [x] Kept the `VmState`, VCX/executor bindings, call/loop frames, pools, IO/file state, and counters alive across yielded calls.
+- [x] Kept `flat_vm_execute()` and `flat_vm_run_opts()` as run-to-completion compatibility paths.
+- [x] Added `flvm[19]`, compiling a multi-opcode program and resuming it with a one-opcode budget until completion.
+
+The per-call instruction budget is distinct from the cumulative `FlatVmOptions.max_steps` execution limit. Yield cannot preempt an opcode or native call; long-running native work remains cooperative and non-preemptible.
+
+**Not implemented:** exhaustive resume equivalence tests for nested calls, loops, executor scopes, and panic handlers; `FlatTask`, scheduler, task natives, Channels, cancellation, and pthread workers.
+
+Validation for archive 273: `make all -j2` PASS; `make docs` PASS (46 sections); `bin/run_tests 'flvm[1-17]' -v -e` PASS (17/17); `bin/run_tests 'flvm[18]' -v -e` PASS (1/1); `bin/run_tests 'flvm[19]' -v -e` PASS (1/1). A combined `bin/run_tests flvm -v -e` run passed tests 1–17 but timed out while compiling test 18; tests 18 and 19 passed separately. The full default suite (1154 discovered tests) was not run. The source snapshot has no `.git` metadata, so branch/commit status could not be inspected.
+
+
+## F0.6 — archive 274: control-flow continuation regression
+
+The persistent VM stepping test now covers more than straight-line bytecode. `flvm[20]` exercises nested block `call`/`return`, `for`, `foreach`, nested unique executor scopes with `func:callVM 1`, and panic-handler control transfer through `#panic.any`. The test compares `flat_vm_run_opts()` against a stepped run of the same bytecode using rotating instruction budgets (1, 2, 3), and verifies equal terminal exit code/termination plus at least one yield.
+
+The test deliberately uses one compiled program so that all continuation features coexist in the same `VmState`. It also frees the caller's loaded bytecode after `flat_vm_create()`, continuing to verify the VM-owned bytecode snapshot. The harness supplies `out_termination` and `out_panic_msg` pointers at creation, changes both caller buffers immediately after creation, and confirms that repeated steps never mutate them.
+
+**Still outstanding after archive 274:** exact output side-effect comparison, failure lifecycle tests, and all `FlatTask`/scheduler/Channel APIs. Archive 275 closes the first two test gaps. No thread-safety or worker-pool guarantee is implied.
+
+## Archive 275 — stepping side effects and failure lifecycle
+
+`flvm[20]` now captures stdout from both the compatibility `flat_vm_run_opts()` execution and the repeated `flat_vm_step()` execution of the same bytecode, then compares the output byte-for-byte. This extends the existing nested call/loop/executor/panic-handler continuation test from result equivalence to observable side-effect equivalence.
+
+New `flvm[21]` covers three lifecycle paths: (1) yield after an output instruction, then execute logical `FAIL` and verify `FLAT_VM_FAILED` / `FLAT_TERM_FAIL`; (2) execute an unhandled `math.calc('1 / 0')` panic and verify `FLAT_VM_FAILED` / `FLAT_TERM_PANIC` plus a diagnostic; and (3) destroy a VM immediately after yield and verify later instructions never run. Both failure cases reject further stepping, while destruction remains permitted for terminal and yielded handles.
+
+Validation for archive 275:
+- `make all -j2` — PASS.
+- `make docs` — PASS (46 sections).
+- `bin/run_tests 'flvm[1-17]' -v -e` — 17/17 PASS.
+- `bin/run_tests 'flvm[18]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[19]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[20]' -v -e` — 1/1 PASS (including stdout equivalence).
+- `bin/run_tests 'flvm[21]' -v -e` — 1/1 PASS (failure and destroy-after-yield lifecycle).
+- `bin/run_tests 'func[1-37]' -v -e` — 31/31 PASS.
+- The default suite has 1156 discovered tests and was not run in full.
+
+No `FlatTask`, scheduler, task natives, Channels, cancellation API, or pthread worker pool is introduced. The source snapshot has no `.git` metadata, so branch/commit status is unavailable.
+
+
+## Archive 276 — first cooperative FlatTask scheduler
+
+- [x] Added public task IDs and lifecycle enum in `include/flat_task.h`.
+- [x] Added runtime-owned task registry; each record owns one persistent `FlatVm`.
+- [x] Added monotonic runtime-local task IDs that are not reused after task destruction.
+- [x] Added explicit `CREATED -> RUNNABLE` start transition.
+- [x] Added synchronous round-robin scheduler using `flat_vm_step()` with a per-turn instruction quantum and bounded/unbounded scheduler turns.
+- [x] Mapped VM yield/completion/failure to task lifecycle states; one failed task does not stop other runnable tasks.
+- [x] Added task state/result queries and explicit destruction of CREATED or terminal tasks.
+- [x] Made runtime destruction return busy while any task record remains.
+- [x] Added `flvm[22]` with two interleaving successful tasks, one failing task, result/state checks, runtime busy checks, and ID non-reuse.
+
+Validation for archive 276: `make all -j2` PASS; direct `test-cooperative-task-scheduler` integration executable PASS; `flvm[22]` test case pending final runner validation; full default suite not run. Task registry/scheduler APIs are single-host-thread only. `WAITING`, wakeup, cancellation, task natives, Channels, and pthread workers are not implemented. The source snapshot has no `.git` metadata, so branch/commit status is unavailable.
+
+
+**Arhivă curentă 276:** `flatL-main-276-cooperative-flat-task-scheduler.zip`. `make all -j2`, `make docs`, `flvm[15-17]`, `flvm[18-21]` și `flvm[22]` PASS. Testul 22 verifică alternarea a două task-uri cu quantum 1, eșec izolat al unui al treilea task, query de state/result, runtime busy cât timp task-urile există și ne-reutilizarea ID-urilor. Suita generală are 1157 teste descoperite și nu a fost rulată integral. Task APIs sunt single-host-thread; `WAITING`, wakeup, cancellation, task natives, Channels și pthread workers nu sunt implementate. Snapshot-ul nu conține `.git`, deci branch/commit nu au putut fi verificate.
+
+
+## Archive 277 — task wait/wakeup and safe-point cancellation
+
+- [x] Added `flat_runtime_task_wait()` with self/unknown ID validation, a single wait dependency per waiter, immediate continuation for an already-terminal target, and `RUNNABLE` → `WAITING` transition.
+- [x] Wake all dependent waiters when a target completes, fails, or is cancelled.
+- [x] Prevent destruction of a target while tasks still wait on it.
+- [x] Added `flat_runtime_task_cancel()` for CREATED/RUNNABLE/WAITING tasks; cancellation is applied between scheduler turns and releases VM execution resources.
+- [x] Added `FLAT_VM_CANCELLED` and `FLAT_TERM_CANCELLED`; cancelled tasks expose terminal results and wake their dependants.
+- [x] Added `flvm[23]` coverage for wait/wakeup, immediate terminal waits, dependency-safe destruction, cancellation before start and after yield, and wakeup after cancellation.
+
+Validation on archive 277: `make all -j2` PASS; `make docs` and the focused/full flvm regression runs are recorded in the archive summary. Waiting-cycle detection, FlatL task natives, Channels, and pthread workers remain unimplemented. C-level task/scheduler APIs remain confined to the scheduler-driving host thread.
+
+Validation on archive 277:
+- `make all -j2` — PASS.
+- `make docs` — PASS (46 sections).
+- `flvm[1-18]` — 18/18 PASS in the first broad run; the run timed out while compiling test 19.
+- `flvm[19-21]` — 3/3 PASS.
+- `flvm[22]` — 1/1 PASS.
+- `flvm[23]` — 1/1 PASS after the final wait/failure/cancellation coverage additions.
+- `func[1-37]` — 31/31 discovered tests PASS.
+- Full default suite (1158 discovered tests) not run.
+
+
+## Archive 278 — FlatL task natives
+
+- [x] Registered built-in `task` native module and documented it in `doc_src/natives/task.md`.
+- [x] Added `task.spawn(#block)` to create a runtime-owned child VM starting at a named block in the same bytecode. The initial form accepts no arguments.
+- [x] Added `task.wait(taskId)` as a scheduler-aware native suspension; the VM advances past the native call before yielding and does not replay it after wakeup.
+- [x] Added `task.state(taskId)` for numeric lifecycle-state inspection.
+- [x] Connected task-native callbacks through a per-VM bridge; non-task VMs do not receive a bridge.
+- [x] Added `flvm[24]` coverage for successful child completion, native wait/resume, and wakeup after child FAIL.
+
+Argument passing, Channel handles, wait-cycle detection, and pthread workers remain future work. The scheduler remains single-threaded and task APIs remain host-thread confined.
+
+
+## Archive 279 — task.spawn named argument binding and bytecode v14
+
+- [x] Extended `.fb` format to v14 with the `BPAR` section after `JBMX`; each block's declared parameter names are serialized in block order.
+- [x] Kept the loader compatible with v3–v13 bytecode. A v13 compatibility image derived from the minimal fixture was loaded successfully.
+- [x] Included block parameter names in compiler `var_slots` accounting and rejected invalid/duplicate parameter names during compilation.
+- [x] Extended `task.spawn(#block, arg1, ...)` to parse nested/quoted argument expressions, including commas inside strings, lists, and objects. Argument count must exactly match the target block's declared parameters.
+- [x] Bound values to the child's named parameters in its initial private VCX context. Scalars and strings are copied; LIST/OBJECT values are recursively deep-copied across independent VM pools. File handles are rejected because their table ownership is VM-local.
+- [x] Added `flvm[25]`, which transfers NUMBER, STRING, LIST, and OBJECT values, mutates the child copies, and verifies the parent retains its original LIST/OBJECT values.
+
+Validation on archive 279:
+- `make all -j2` — PASS.
+- `make docs` — PASS (47 sections).
+- `flvm[1-10]` — 10/10 PASS; `flvm[11-18]` — 8/8 PASS; `flvm[19-21]` — 3/3 PASS; `flvm[22]`, `[23]`, `[24]`, `[25]` — each 1/1 PASS. All 25 flvm cases were validated in bounded runs.
+- `native[1-8]` — 8/8 PASS; `native[9-22]` — 13/13 selected tests PASS (case 17 is not present in this range's discovered set); `native_use[1-6]` — 6/6 PASS.
+- `func[1-37]` — 31/31 discovered tests PASS.
+- `flvm[25]` also constructs a v13-compatible bytecode image by removing BPAR and verifies that the loader accepts it; it checks the v14 BPAR names, nested LIST/OBJECT deep-copy isolation, comma-containing string parsing, and exact-arity failure.
+
+A combined `flvm[1-25]` run exceeded the command time limit after tests 1–18 while compiling the next target; the cases were then run in smaller groups or individually. The full default suite (1160 discovered tests) was not run. Source snapshot has no `.git` metadata, so branch/commit status is unavailable.
+
+Channels, wait-cycle detection, result transfer/await return values, file-handle transfer, and pthread workers remain future work.
+
+
+## Arhiva 280 — Runtime Channels C API
+
+- `include/flat_channel.h` / `src/common/flat_channel.c` definesc Channel handles și operațiile create/set/var/lock/unlock/revert/destroy.
+- `FlatRuntime` deține registry-ul și allocatorul monotonic de Channel ID-uri; runtime destroy rămâne busy cât timp există Channels.
+- Fiecare Channel deține pool-uri independente de string/collection; primitivele, string-urile, LIST și OBJECT sunt copiate recursiv. VAL_FILE este respins.
+- Fiecare operație C1 este serializată printr-un gate C11 atomic per Channel. Acesta este locking portabil pentru milestone-ul cooperativ, nu o declarație de thread-safety generală și nu un mutex pthread.
+- Tranzacțiile C2 păstrează un snapshot deep-copy și sunt deținute de un task ID. `unlock` comite, `revert` restaurează snapshot-ul fără a elibera lock-ul, iar non-owner access întoarce busy.
+- Tranzacțiile active sunt automat rollback + unlock la completion, failure, cancellation sau destroy al task-ului.
+- `flvm[26]` verifică ownership, copiere, file-handle rejection, tranzacții, busy destroy și rollback la cancellation.
+
+Nu există încă integrare FlatL native pentru Channels, transfer de Channel handles prin `task.spawn`, evenimente Channel în logger sau worker pool pthread.
+
+Validare pentru arhiva 280:
+- `make all -j2` — PASS.
+- `make docs` — PASS (48 sections).
+- `flvm[1-17]` — 17/17 PASS.
+- `flvm[18-21]` — 4/4 PASS.
+- `flvm[22-23]` — PASS; rularea grupată `flvm[22-24]` a expirat în timpul compilării targetului 24, care a trecut separat.
+- `flvm[24]`, `flvm[25]`, `flvm[26]` — fiecare 1/1 PASS separat.
+- `func[1-37]` — 31/31 discovered tests PASS.
+- `native` — 22/22 PASS; `native_use` — 6/6 PASS.
+- Toate cele 26 de cazuri `flvm` au fost confirmate prin rulări bounded sau individuale. Suita generală (1161 discovered tests) nu a fost rulată integral.
+- Snapshot-ul de bază nu conține metadata `.git`; branch/commit nu pot fi verificate.
+
+
+## Arhiva 281 — FlatL Channel native integration
+
+- [x] Registered the built-in `channel` native module and added `doc_src/natives/channel.md`.
+- [x] Added `channel.create()` for runtime-owned Channel creation from a running task.
+- [x] Added `channel.set(channelId, name, value)` and `channel.var(channelId, name)` with deep-copy semantics between VM and Channel pools.
+- [x] Added `channel.lock`, `channel.unlock`, and `channel.revert` for explicit C2 transactions.
+- [x] Added `channel.destroy(channelId)` for explicit destruction of an unlocked Channel; handles are not reference-counted.
+- [x] Reused the existing numeric `task.spawn(#block, channelId)` argument transfer; the handle is copied while the runtime-owned Channel remains shared.
+- [x] Added scheduler priority for runnable transaction owners so a small instruction quantum does not interleave other tasks into an active multi-instruction transaction.
+- [x] Rejected `task.wait()` while the current task owns a Channel transaction; terminal cleanup still rolls back on failure/cancellation.
+- [x] Added `flvm[27]` with two workers sharing one Channel, transaction commit/revert, LIST/OBJECT values, one-instruction quantum, explicit destruction, and failure/rollback for wait-inside-transaction.
+
+Validation for archive 281:
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `flvm[1-17]` — 17/17 PASS.
+- `flvm[22]` — 1/1 PASS separately.
+- `flvm[22-25]` — 4/4 PASS; `flvm[26-27]` — 2/2 PASS. The expanded `flvm[26]` also verifies that the C-level `flat_runtime_task_wait()` rejects a waiter that owns a Channel transaction. `flvm[27]` verifies the same restriction through the FlatL native. A larger combined `flvm[22-27]` invocation timed out after test 25; tests 26–27 passed in a separate bounded run.
+- `native` — 22/22 PASS; `native_use` — 6/6 PASS.
+- Full default suite (1162 discovered tests) not run.
+- Source snapshot has no `.git` metadata; branch/commit status is unavailable.
+
+Remaining: Channel logger event producers/`channel.log()`, wait-cycle detection, automatic/reference-counted Channel handle lifetime, non-owner Channel-lock waiting, pthread worker pool and cross-thread runtime/VM safety.
+
+
+## Archive 282 — wait cycles, Channel references, and event logging
+
+- [x] Reject a new wait dependency if following the target's wait chain reaches the waiter; added three-task cycle coverage to `flvm[23]`.
+- [x] Register direct numeric `task.spawn()` arguments that match live Channel IDs as task-held Channel references.
+- [x] Release task-held Channel references on completion, failure, cancellation, and task destruction.
+- [x] Reject Channel destruction while another task holds a reference; allow the sole remaining task holder to destroy its Channel.
+- [x] Emit `--show-channel-log` events for create/set/var/lock/unlock/revert/destroy, including outcomes and safe metadata but never stored values.
+- [x] Added `flvm[28]` for Channel event logging and task-held lifetime protection.
+
+Validation for archive 282:
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `flvm[1-18]` — 18/18 PASS in the first bounded run.
+- `flvm[19-21]` — 3/3 PASS; the combined `flvm[19-22]` invocation timed out while compiling test 22, which passed separately.
+- `flvm[22]`, `flvm[23]`, `flvm[24-25]`, `flvm[26]`, `flvm[27]`, and `flvm[28]` — all PASS in bounded runs (1/1, 1/1, 2/2, 1/1, 1/1, 1/1 respectively).
+- `native` — 22/22 PASS; `native_use` — 6/6 PASS.
+- `func[1-37]` was attempted but timed out after the first 3 tests, all of which passed. The complete function suite is not claimed as passing in this archive.
+- Full default suite (1163 discovered tests) not run.
+
+Limitations: Channel references are recognized for direct numeric spawn arguments and task-level Channel operations only; nested LIST/OBJECT values are not scanned. Because Channel IDs remain ordinary NUMBER values, a numeric argument coincidentally equal to a live Channel ID is conservatively treated as a reference. Non-owner transaction waiting and pthread worker safety remain future work.
+
+## Cooperative Channel contention and task result summary — archive 283
+
+- [x] Add a native retry continuation flag distinct from completed-native `task.wait()` suspension.
+- [x] Make task-native `channel.lock`, `channel.set`, and `channel.var` wait on a transaction owner instead of failing with busy.
+- [x] Preserve the VM IP on a contended native instruction and retry it after Channel unlock or owner transaction abort.
+- [x] Register a Channel reference for a task waiting on that Channel so the handle cannot be destroyed while the task is suspended.
+- [x] Wake Channel waiters on commit/unlock and on transaction-owner terminal cleanup; keep waiters suspended across `revert`.
+- [x] Add `task.result(taskId)` returning terminal state, exit code, termination, and diagnostic metadata.
+- [x] Add `flvm[29]` for lock/set/var contention and retry; add `flvm[30]` for 48-task / 24-Channel runtime stress.
+- [x] Extend `flvm[24]` to verify success/failure result objects.
+
+Validation for archive 283:
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `flvm[1-18]` — 18/18 PASS.
+- `flvm[19-22]` — 4/4 PASS before the larger `flvm[19-30]` batch timed out after #22.
+- `flvm[23]`, `flvm[24]`, `flvm[25]`, `flvm[26]`, `flvm[27]`, `flvm[28]`, `flvm[29]`, and `flvm[30]` — each PASS in separate bounded runs.
+- `native` — 22/22 PASS; `native_use` — 6/6 PASS; `func[1-37]` — 31/31 PASS.
+- Full default suite — not run.
+
+The scheduler and Channel semantics remain cooperative and single-threaded. The C Channel API still reports busy rather than suspending because host calls have no current task continuation. No pthread or general thread-safety claim is made.
+
+
+## Archive 284 — cooperative scheduler correctness audit
+
+**Arhivă de bază:** `flatL-main-283-cooperative-channel-wait-and-task-results.zip`
+**Arhivă curentă:** `flatL-main-288-cooperative-chained-wait-graph-audit.zip`
+
+### Schimbări
+
+- Extins testul existent `test/cases/flvm/029_channel_lock_contention` pentru două scenarii suplimentare: owner-ul este anulat sau eșuează VM-ul său în timp ce waiter-ul este WAITING. Ambele verifică rollback/release, wakeup-ul waiter-ului, retry al aceleiași instrucțiuni `channel.lock` și terminarea cu succes a waiter-ului.
+- Nu s-a schimbat implementarea runtime; testul adaugă acoperire pentru calea de cancellation care exista deja în cleanup-ul task-ului.
+- `01_DECISIONS.md` documentează contractul retry/yield, ownership-ul waiter-ului, referința Channel, wakeup rules și `task.result`.
+- `02_ROADMAP.md` actualizează milestone-urile și checkpoint-ul următor.
+- `03_RUNTIME_AUDIT.md` înregistrează traseele confirmate și limitele care blochează pthread.
+
+### Validare
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[23]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[24]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[28]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[29]' -v -e` — 1/1 PASS după extinderea testului cu owner cancellation și owner failure.
+- `bin/run_tests 'flvm[30]' -v -e` — 1/1 PASS într-o rulare individuală; o comandă grupată a atins limita de timp înainte de finalizarea compilării acestui target.
+
+**Nu este declarat:** full default suite; întregul `flvm[1-30]` într-o singură rulare; thread safety sau readiness pentru worker pool.
+
+### Următorul pas
+
+Verificări pentru task destruction în prezența dependențelor wait și a referințelor Channel, inclusiv ordinea destroy/wakeup/retry. Abia după acestea continuăm regresia wait graph / cleanup. Nu introducem pthread în această etapă.
+
+
+## Arhiva 285 — cooperative task destruction audit
+
+### Modificări
+
+- Extins `test/cases/flvm/029_channel_lock_contention/channel_lock_contention_test.c` cu două secvențe de lifecycle pentru task destruction și Channel references.
+- Verificat că owner-ul cu waiter activ nu poate fi distrus; după anularea waiter-ului, destroy-ul owner-ului CREATED face abort/rollback al tranzacției și eliberează Channel-ul.
+- Verificat că waiter-ul trezit de commit este RUNNABLE și nu poate fi distrus direct; cancellation înainte de retry eliberează referința, apoi waiter/owner/Channel pot fi distruse.
+- Actualizate `plans/01_DECISIONS.md`, `02_ROADMAP.md`, `03_RUNTIME_AUDIT.md`, acest status și `doc_src/TASK_RUNTIME_MODEL.md`.
+- Nu a fost necesară schimbare în runtime: auditul a confirmat că guard-urile și cleanup-ul existente respectă contractul testat.
+
+### Validare
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[23]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[24]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[26-27]' -v -e` — 2/2 PASS.
+- `bin/run_tests 'flvm[28]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[29]' -v -e` — 1/1 PASS cu noile secvențe de task destruction.
+- `bin/run_tests 'flvm[30]' -v -e` — 1/1 PASS.
+- `bin/run_tests native -v -e` — 22/22 PASS.
+- `bin/run_tests native_use -v -e` — 6/6 PASS.
+
+Full default suite (1165 discovered tests) — NOT RUN. Nu se declară full-suite PASS, thread safety sau readiness pentru worker pool. Snapshot-ul sursă nu conține metadata `.git`; branch/commit nu pot fi verificate.
+
+
+## Archive 286 — multi-Channel suspension guard
+
+### Finding and implementation
+
+- Found a gap in the archive 285 invariant: `task.wait()` was rejected while a task owned a Channel transaction, but a Channel retry on a second Channel could still suspend that same task while it retained the first transaction.
+- Updated `flat_runtime_channel_lock()` to reject contention-based waiting when the caller owns any Channel transaction.
+- Updated `runtime_task_wait_channel()` with the same ownership guard, covering contended `channel.set()` and `channel.var()`.
+- The ownership scan is executed before taking runtime/Channel gates, avoiding recursive acquisition of the target Channel gate.
+- Added `lock_while_holding.fl`, `set_while_holding.fl`, and `var_while_holding.fl` to `flvm[29]`. Each test acquires Channel 1, contends on Channel 2, and verifies task failure plus rollback of Channel 1.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[23]' -v -e` — 1/1 PASS (within the first bounded `flvm[23-30]` attempt).
+- `bin/run_tests 'flvm[24]' -v -e` — 1/1 PASS (within the first bounded `flvm[23-30]` attempt).
+- `bin/run_tests 'flvm[25]' -v -e` — 1/1 PASS (individual rerun after the grouped command timed out during this case's build).
+- `bin/run_tests 'flvm[26]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[27]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[28]' -v -e` — 1/1 PASS (individual rerun after a grouped invocation timed out during build).
+- `bin/run_tests 'flvm[29]' -v -e` — 1/1 PASS, including lock/set/var while holding a different Channel transaction.
+- `bin/run_tests 'flvm[30]' -v -e` — 1/1 PASS.
+- `bin/run_tests native -v -e` — 22/22 PASS.
+- `bin/run_tests native_use -v -e` — 6/6 PASS.
+
+A grouped `flvm[23-30]` run timed out during build steps; all eight cases subsequently passed in bounded runs (23–24 in the first grouped attempt, 25 and 28 individually, and 26–27 / 29–30 in bounded invocations). The full default suite (1165 discovered tests) is not claimed as passing. No pthread or general thread-safety guarantee is introduced. The source archive has no `.git` metadata, so branch/commit state cannot be verified from this snapshot.
+
+
+## Archive 287 — cooperative multi-Channel wait graph audit
+
+### Modificări
+
+- Extins `test/cases/flvm/029_channel_lock_contention` cu un owner care deține simultan două Channel-uri și două waiter-e care așteaptă același owner prin Channel-uri diferite.
+- Verificat wakeup separat la commit pentru primul Channel și wakeup ulterior al celui de-al doilea waiter prin abort-ul tranzacției rămase în cleanup-ul terminal al owner-ului.
+- Verificat că ambele waiter-e sunt RUNNABLE după cleanup-ul owner-ului și apoi reiau operațiile originale până la COMPLETED.
+- Corectate programele no-suspend din testul `flvm[29]`: folosesc acum Channel-urile live 3 și 4. Auditul a descoperit că versiunile din arhiva 286 foloseau Channel 1 după ce acesta fusese distrus, deci testele eșuau prea devreme și nu verificau efectiv suspendarea cu tranzacție activă.
+- Nu a fost necesară modificarea runtime-ului; corectitudinea căilor de cleanup/wakeup existente a fost confirmată prin teste care ating acum scenariile intenționate.
+- Actualizate deciziile, roadmap-ul, auditul runtime, acest status și documentația normativă `doc_src/TASK_RUNTIME_MODEL.md`.
+
+### Validare
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[23]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[24]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[25]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[26]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[27]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[28]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[29]' -v -e --time` — 1/1 PASS, inclusiv owner multi-Channel, wakeup diferențiat și testele no-suspend corectate.
+- `bin/run_tests 'flvm[30]' -v -e --time` — 1/1 PASS.
+
+O comandă grupată pentru mai multe cazuri a fost întreruptă în timpul build-ului la `flvm[26]`; cazurile 23–30 au fost apoi rulate individual și fiecare a trecut. Full default suite (1165 discovered tests) — NOT RUN. `native` și `native_use` nu au fost rerulate în această arhivă. Nu se declară pthread readiness sau thread safety. Snapshot-ul nu conține `.git`; branch/commit nu pot fi verificate.
+
+
+## Archive 288 — cooperative chained task.wait + Channel wait graph audit
+
+### Modificări
+
+- Extins `test/cases/flvm/029_channel_lock_contention/channel_lock_contention_test.c` cu un lanț mixt de dependențe: Task C așteaptă un Channel deținut de B; D execută `task.wait(C)`; A execută `task.wait(B)`.
+- Verificat că unlock-ul Channel-ului trezește numai C, în timp ce A și D rămân WAITING.
+- Verificat că finalizarea lui C trezește D, fără să trezească A; finalizarea ulterioară a lui B trezește A.
+- Runtime-ul nu a necesitat modificări. Testul confirmă folosirea comună a `waiting_on` și rolul separat al `waiting_channel_id`.
+- Documentat de ce un ciclu mixt printr-un owner activ de tranzacție este exclus de regula cooperativă no-suspend-while-owning, fără a pretinde deadlock freedom generală.
+- Actualizate `plans/01_DECISIONS.md`, `02_ROADMAP.md`, `03_RUNTIME_AUDIT.md`, acest status, `plans/README.md` și `doc_src/TASK_RUNTIME_MODEL.md`.
+
+### Validare
+
+- `make all -j2` — PASS.
+- `bin/run_tests 'flvm[23]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[24]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[25]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[26]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[27]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[28]' -v -e` — 1/1 PASS.
+- `bin/run_tests 'flvm[29]' -v -e` — 1/1 PASS, inclusiv lanțul mixt de dependențe.
+- `bin/run_tests 'flvm[30]' -v -e` — 1/1 PASS.
+- `bin/run_tests native -v -e` — 22/22 PASS.
+- `bin/run_tests native_use -v -e` — 6/6 PASS.
+- `make docs` — PASS (49 sections).
+
+Comanda grupată `flvm[23-30]` a fost întreruptă în timpul build-ului la `flvm[25]`; toate cazurile 23–30 au fost apoi executate individual și au trecut. Full default suite (1165 discovered tests) — NOT RUN. Nu se declară pthread readiness sau thread safety. Snapshot-ul nu conține `.git`; branch/commit nu pot fi verificate.
+
+### Următorul pas
+
+Testarea cancellation/failure în fiecare poziție a lanțului: owner-ul Channel, waiter-ul Channel și task-ul care așteaptă waiter-ul. Apoi auditul teardown-ului runtime după eliminarea tuturor dependențelor și referințelor Channel.

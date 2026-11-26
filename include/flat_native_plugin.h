@@ -6,13 +6,19 @@
 
 typedef void (*FlatNativePluginRegisterFn)(uint16_t id, int (*handler)(FlatNativeCtx *));
 
+/* Plugin initializers must register handlers synchronously on the initializer
+ * thread. Registrations are staged and committed only after init returns 0. */
 typedef int (*FlatNativePluginInitFn)(FlatNativePluginRegisterFn reg);
 
 #define FLAT_NATIVE_PLUGIN_INIT_SYMBOL "flat_native_plugin_init"
 
-void flat_native_runtime_reset(void);
-void flat_native_runtime_set_manifest(const FlatOptionalNativeDecl *decls, int count);
-int flat_native_runtime_prepare(uint16_t native_id, char *err, size_t err_size);
+/* Initializes process-wide embedded native handlers once; safe for concurrent callers. */
+void flat_native_runtime_init(void);
+int flat_native_runtime_manifest_has_module(const FlatNativeRuntimeContext *runtime,
+                                            const char *module);
+int flat_native_runtime_prepare(const FlatNativeRuntimeContext *runtime, uint16_t native_id,
+                                char *err, size_t err_size);
+/* Search directory is process-wide; updates are serialized with lazy plugin loading. */
 void flat_native_runtime_set_search_dir(const char *dir);
 void flat_native_runtime_set_search_dir_from_argv0(const char *argv0);
 

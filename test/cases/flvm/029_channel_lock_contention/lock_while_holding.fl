@@ -1,0 +1,7 @@
+use native channel
+
+#main
+  first = channel.lock(3)
+  second = channel.lock(4)
+  channel.unlock(3)
+  OK

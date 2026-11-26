@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 18
+desc = "FlatVm owns bytecode and host configuration snapshots and executes once to terminal state"
+kind = "exec"
+cmd = "make -s test-vm-owned-lifecycle TEST_BIN={tmp}/vm_owned_lifecycle_test && {tmp}/vm_owned_lifecycle_test {root}/test/cases/flvm/001_min_ok/min_ok.fb"
+expect_exit = 0
+stdout_contains = "vm-owned-lifecycle-ok"

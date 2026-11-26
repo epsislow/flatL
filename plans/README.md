@@ -22,4 +22,6 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima actualizare de implementare:** arhiva 253. Citește `04_IMPLEMENTATION_STATUS.md` pentru starea exactă și testele rulate.
+**Ultima arhivă:** `flatL-main-288-cooperative-chained-wait-graph-audit.zip`.
+
+**Ultima actualizare de implementare:** arhiva 288. Citește `04_IMPLEMENTATION_STATUS.md` pentru starea exactă și testele rulate. Documentele `01`–`04` sunt normative pentru contractele curente; orice decizie nouă se consemnează aici în aceeași arhivă cu implementarea și testele.

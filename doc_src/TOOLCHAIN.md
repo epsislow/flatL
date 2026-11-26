@@ -291,12 +291,15 @@ bin/flc -o /tmp/x.fb --dump-bc examples/order_flow.fl
 
 ### What gets printed
 
-1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, section offsets (v4/v5: **BLBL**, **FNUN**, **FFUN**; **v6** **SCHM**; **v7** typed **FFUN**; **v8** **SCHM** field **aux** = **uint16** for `t`/`tN` **≤ 8192**; **v9** emit toolchain **AM-NUM**; **v10** **FFUN** multi-return **`return_count`** + per-return names/types; **v11** **JBMX** per-block **`jump:blockMax`** limits — **flvm** loads v3–v11). New compiles use **v11** (**toolchain 0.5.0+**).  
+1. **File header** — `FLAT` magic, format version, `block_count`, `var_slots`, and section offsets. The loader accepts v3–v14. Historical additions include **BLBL**, **FNUN**, **FFUN**, **SCHM**, typed/multi-return function metadata, **JBMX** per-block `jump:blockMax`, and **PLIN** panic-site metadata. New compiles use **v14**; v14 adds **BPAR**, the per-block named-parameter table, immediately after JBMX. Older v3–v13 bytecode remains loadable; its blocks have no serialized parameter metadata.  
 2. **Block directory** — block id, code offset, resolved **BLBL** name when present (`#main` = id 0).  
 3. **Per-block bytecode** — for each instruction: IP, opcode name (`0xNN`), payload size, decoded payload per [SPECIFICATION.md §3](./SPECIFICATION.md#3-fb-binary-layout-v12).  
 4. **Optional native manifest** — FNUN units + FNAT (same as `flvm` lazy load metadata).  
 5. **FFUN** (v5; **v7** typed) — user `def` table: name, impl/executor block ids, `param_count`, return slot name, `func_vcx_slots`, then per-param and return **type spec** strings (empty = untyped). Consumed at runtime for **`vcx.bindCallParams`** (T6).
 6. **SCHM** (v6; **v8** string aux) — schema definitions (`schema_id` order). **v6–v7:** câmp descriptor cu **aux 8-bit** (max **`t127`** în schemă). **v8:** **aux 16-bit** ( **`t8192`** ). Load **v6–v7** cu flvm nou rămâne valid. Validare strictă → **`flvm: invalid SCHM section`**.
+7. **JBMX** (v11+) — one `uint32` jump-entry limit per block.
+8. **PLIN** (v13+) — panic-site map used by `panicLoc()`.
+9. **BPAR** (v14+) — block parameter metadata in block-directory order: `u32` magic `BPAR`, `u16` block count, then each block's `u8` parameter count and `u8`-length-prefixed parameter names. This enables `task.spawn(#block, ...)` to bind evaluated values to named block parameters.
 
 Unknown or future opcodes (e.g. **`OP_CALL_FUNCTION`** in AM-1) print as hex with a clear label.
 

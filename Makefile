@@ -158,7 +158,7 @@ endif
 STR_SRC = src/common/flat_str.c
 PORT_LIB = $(STR_SRC) $(PORT_SRC)
 FB_SRC  = src/common/fb_format.c
-FB_TOOL_SRC = $(FB_SRC) src/common/flat_assign.c src/common/flat_schema.c \
+FB_TOOL_SRC = $(FB_SRC) src/common/flat_locale.c src/common/flat_assign.c src/common/flat_schema.c \
               src/common/flat_slot_type.c src/common/flat_list_typed.c src/common/flat_list_shape.c \
               src/common/flat_number.c \
               src/common/value_pool.c \
@@ -179,7 +179,7 @@ VM_EXTRA_LIBS = -ldl
 PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
                 $(BINDIR)/libflat_math_mdim.so $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so \
                 $(BINDIR)/libflat_obj.so $(BINDIR)/libflat_csv.so
-PLUGIN_COMMON_SRCS = src/lib/native_util.c src/lib/native_parse_rhs.c src/common/flat_native_tag_common.c \
+PLUGIN_COMMON_SRCS = src/common/flat_locale.c src/lib/native_util.c src/lib/native_parse_rhs.c src/common/flat_native_tag_common.c \
                src/common/flat_native_tag_runtime.c src/common/value_parse.c src/common/value_ops.c \
                src/common/flat_lit.c \
                src/common/value_json.c src/common/flat_number.c src/common/value_pool.c \
@@ -246,9 +246,9 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
-                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(BYTES_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
+                src/lib/mod_vcx_dschema.c src/lib/mod_executor.c src/lib/mod_task.c src/lib/mod_channel.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(BYTES_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
-VM_SRC  = src/common/flat_time.c src/common/flat_runtime_log.c src/common/vm.c src/common/flat_func_tag.c \
+VM_SRC  = src/common/flat_locale.c src/common/flat_time.c src/common/flat_runtime_log.c src/common/flat_host_config.c src/common/flat_channel.c src/common/flat_runtime.c src/common/flat_vm_handle.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
@@ -263,7 +263,7 @@ VM_SRC  = src/common/flat_time.c src/common/flat_runtime_log.c src/common/vm.c s
           src/common/flat_io_ctx.c src/common/flat_memstream.c \
           $(STR_SRC) $(NATIVE_VM_SRC)
 FLAT_TIME_SRC = src/common/flat_time.c
-FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
+FGIR_SRC = src/common/flat_locale.c src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
                src/common/flat_func_tag.c src/common/flat_assign.c src/common/flat_slot_type.c \
                src/common/flat_list_typed.c src/common/flat_list_shape.c src/common/flat_schema.c \
                src/common/flat_number.c src/common/flat_lit.c \
@@ -736,3 +736,102 @@ clean:
 	rm -rf $(BINDIR)
 	rm -f $(MIN_OK_FB)
 	@$(call step_end)
+
+# Integration test for process-wide native plugin registry synchronization.
+.PHONY: test-native-registry-concurrency
+test-native-registry-concurrency: $(PLUGIN_TARGET)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	@test -n "$(TEST_PLUGIN_DIR)" || (echo "TEST_PLUGIN_DIR is required" >&2; exit 2)
+	@mkdir -p "$(TEST_PLUGIN_DIR)"
+	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/013_native_registry_concurrency/bad_plugin.c
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/013_native_registry_concurrency/native_registry_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for the public FlatRuntime -> real VM execution boundary.
+.PHONY: test-runtime-run-integration
+test-runtime-run-integration:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/015_runtime_lifecycle/runtime_run_integration_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for sequential VM lifecycle reuse within one FlatRuntime.
+.PHONY: test-runtime-reuse
+test-runtime-reuse:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/017_runtime_reuse/runtime_reuse_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for the owned FlatVm handle and bytecode/config snapshots.
+.PHONY: test-vm-owned-lifecycle
+test-vm-owned-lifecycle:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/018_vm_owned_lifecycle/vm_owned_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for cooperative FlatVm instruction-budget stepping/resume.
+.PHONY: test-vm-stepping
+test-vm-stepping:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/019_vm_stepping/vm_stepping_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for stepping through nested calls, loops and panic recovery.
+.PHONY: test-vm-stepping-control-flow
+test-vm-stepping-control-flow:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/020_vm_stepping_control_flow/vm_stepping_control_flow_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for FlatVm terminal failures and destruction at a yield boundary.
+.PHONY: test-vm-failure-lifecycle
+test-vm-failure-lifecycle:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/021_vm_failure_lifecycle/vm_failure_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for the first single-threaded cooperative FlatTask scheduler.
+.PHONY: test-cooperative-task-scheduler
+test-cooperative-task-scheduler:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/022_cooperative_task_scheduler/cooperative_task_scheduler_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for cooperative task wait/wakeup and safe-point cancellation.
+.PHONY: test-task-wait-cancel
+test-task-wait-cancel:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/023_task_wait_cancel/task_wait_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for FlatL task.spawn / task.wait native calls.
+.PHONY: test-task-native-integration
+test-task-native-integration:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/024_task_native_integration/task_native_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for task.spawn positional argument binding to named block parameters.
+.PHONY: test-task-spawn-args
+test-task-spawn-args:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/025_task_spawn_arguments/task_spawn_arguments_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for runtime-owned Channel storage, value-copy semantics and transactions.
+.PHONY: test-runtime-channels
+test-runtime-channels:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/026_runtime_channels/runtime_channels_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for Channel event logging and task-held Channel lifetime.
+.PHONY: test-channel-lifecycle
+test-channel-lifecycle:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/028_channel_lifecycle/channel_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for FlatL Channel natives shared across cooperative tasks.
+.PHONY: test-channel-native
+test-channel-native:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/027_channel_native/channel_native_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for a contended Channel lock, scheduler WAITING, and retrying OP_NATIVE.
+.PHONY: test-channel-lock-contention
+test-channel-lock-contention:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/029_channel_lock_contention/channel_lock_contention_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Stress runtime task scheduling and independent Channel storage.
+.PHONY: test-runtime-task-stress
+test-runtime-task-stress:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/030_runtime_task_stress/runtime_task_stress_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

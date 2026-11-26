@@ -149,7 +149,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_p
                 src/lib/mod_file.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(BYTES_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) src/lib/native_mods.c \
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
-VM_SRC = src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \
+VM_SRC = src/common/flat_host_config.c src/common/flat_runtime.c src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c src/common/flat_number.c src/common/value_pool.c \
          src/common/flat_file.c src/common/flat_csv.c src/common/flat_csv_runtime.c \
          src/common/flat_io_ctx.c src/common/flat_memstream.c \
          src/common/value_collection.c \

@@ -7,6 +7,7 @@
 #include "flat_time.h"
 #include "flat_runtime_log.h"
 #include "vm.h"
+#include "flat_port.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -68,6 +69,8 @@ int main(int argc, char **argv) {
     double t_load = 0.0;
     double t_run = 0.0;
 
+    /* Stdio mode is process configuration, not per-VM runtime state. */
+    flat_port_stdio_setup();
     report_time = flat_time_env_enabled();
 
     flat_env_reset();

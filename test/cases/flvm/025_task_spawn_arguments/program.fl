@@ -1,0 +1,25 @@
+use native task
+use native list
+use native obj
+
+#main
+  price = 12
+  label = 'hello, task'
+  values = [3, 5, 7]
+  metadata = { kind: 'demo', count: 3, nested: [1, 'x'] }
+  child = task.spawn(#worker, price, label, values, metadata)
+  task.wait(child)
+  childState = task.state(child)
+  io.outln(childState)
+  io.outln(values)
+  io.outln(metadata)
+  OK
+
+#worker(price, label, values, metadata)
+  list.set(values, 0, 99) -> values
+  obj.set(metadata, 'count', 9) -> metadata
+  io.outln(price)
+  io.outln(label)
+  io.outln(values)
+  io.outln(metadata)
+  OK

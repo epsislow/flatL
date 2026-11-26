@@ -381,6 +381,8 @@ use "lib/math.fl" as #math_
 
 Optional natives declared in source (`use native …`) are aggregated at link time; the manifest lists module IDs and optional `with` aliases. `flvm` uses it to allow lazy loading of optional native plugins (see [natives/README.md](./natives/README.md)).
 
+**Current bytecode extensions:** modern compiles use format v14. The existing versioned header/section offsets continue to identify the code, labels, native units, function metadata, schemas, jump limits, and panic-site map. Version v14 appends a **BPAR** section immediately after **JBMX**: `u32` magic (`BPAR` LE), `u16` block count, then one `u8` parameter count per block followed by `u8`-length-prefixed parameter names. This metadata preserves the names already accepted in source block headers such as `#worker(price, items)` and is used by `task.spawn(#worker, value1, value2)`. The loader remains compatible with v3–v13 files; those versions do not carry BPAR metadata.
+
 ### 3.2 Instruction packet
 
 ```text
@@ -547,4 +549,4 @@ Command reference for `flc`, `flvm`, `mkfb`, and `run_tests`: [TOOLCHAIN.md](./T
 
 **v0.2** — runtime value model — [LANGUAGE_TYPES.md](./LANGUAGE_TYPES.md) (limits, refs, slice views).
 
-**v0.4 (toolchain)** — user **`def`** and executors ([USER_FUNCTIONS.md](./USER_FUNCTIONS.md)); **`use fmod`** ([FMOD_MODULES.md](./FMOD_MODULES.md)); broad **native** catalog (`io`, `str`, `math`, `json`, `file`, `vcx`, `list`, `obj`, …). Examples in §1 that use **`form.*`**, **`kv.*`**, **`end.*`**, or **`call #block(args) -> var`** on plain blocks are **illustrative** (target application shape), not shipped APIs. Parameterized calls that work today use **`def`**; plain **`#block(param)`** headers are parsed but not bound at run time; **`return expr`** on blocks is not supported (bare **`return`** only). See the capability table in the root [README.md](../README.md).
+**v0.4 (toolchain)** — user **`def`** and executors ([USER_FUNCTIONS.md](./USER_FUNCTIONS.md)); **`use fmod`** ([FMOD_MODULES.md](./FMOD_MODULES.md)); broad **native** catalog (`io`, `str`, `math`, `json`, `file`, `vcx`, `list`, `obj`, …). Plain parameterized block headers such as **`#worker(price, items)`** are now serialized in `.fb` v14 and are bound by **`task.spawn(#worker, price, items)`**. This is an initial task-spawn entry mechanism, not a general replacement for `def` calls or `call #block(args)`. Block parameters currently support untyped variable names only; typed block parameters and general return-value binding remain unsupported. See the capability table in the root [README.md](../README.md).

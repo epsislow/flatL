@@ -1,4 +1,5 @@
 
+#include "flat_locale.h"
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_number.h"
@@ -78,7 +79,7 @@ static int jq_lex(const char *s, JqLex *l) {
             continue;
         }
         if(c=='-' || isdigit((unsigned char)c)) {
-            char *e; double v=strtod(s+i,&e);
+            char *e; double v=flat_strtod(s+i,&e);
             if(e==s+i || !isfinite(v)) return -1;
             i=(int)(e-s); if(jq_addtok(l,JT_NUM,s+st,(size_t)(i-st),st)) return -1;
             l->t[l->n-1].n=v; continue;

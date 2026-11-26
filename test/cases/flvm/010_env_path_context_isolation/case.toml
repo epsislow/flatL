@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 10
+desc = "environment and path configuration snapshots are isolated per VM context"
+kind = "exec"
+cmd = "gcc -std=c11 -Wall -Wextra -I{root}/include -o {tmp}/env_path_context_test {root}/test/cases/flvm/010_env_path_context_isolation/env_path_context_test.c {root}/src/common/flat_env.c {root}/src/common/flat_path.c {root}/src/common/flat_host_config.c && {tmp}/env_path_context_test"
+expect_exit = 0
+stdout_contains = "env-path-host-config-isolation-ok"

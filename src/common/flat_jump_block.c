@@ -1,15 +1,15 @@
 #include "flat_jump_block.h"
+#include "flat_ascii.h"
 #include "flat_number.h"
 #include "flat_str.h"
 
-#include <ctype.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 static const char *skip_ws(const char *p) {
-    while (p && *p && isspace((unsigned char)*p)) {
+    while (p && *p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     return p;
@@ -50,7 +50,7 @@ int flat_parse_jump_block_max_directive(const char *line, uint32_t *out_n, char 
     }
     p = skip_ws(line);
     if (strncmp(p, FLAT_JUMP_BLOCK_MAX_KW, kw) != 0 ||
-        (p[kw] != '\0' && !isspace((unsigned char)p[kw]))) {
+        (p[kw] != '\0' && !flat_ascii_is_space((unsigned char)p[kw]))) {
         return 0;
     }
     rest = skip_ws(p + kw);
@@ -83,7 +83,7 @@ int flat_block_header_strip_jump_block_max(char *line, int *out_override_set, ui
         uint32_t n;
         char ebuf[128];
 
-        if (q != p && !isspace((unsigned char)q[-1])) {
+        if (q != p && !flat_ascii_is_space((unsigned char)q[-1])) {
             p = q + kw;
             continue;
         }
@@ -99,7 +99,7 @@ int flat_block_header_strip_jump_block_max(char *line, int *out_override_set, ui
         if (out_override) {
             *out_override = n;
         }
-        while (q > line && isspace((unsigned char)q[-1])) {
+        while (q > line && flat_ascii_is_space((unsigned char)q[-1])) {
             q--;
         }
         *q = '\0';

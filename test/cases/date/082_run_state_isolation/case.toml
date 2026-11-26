@@ -1,0 +1,8 @@
+suite = "date"
+id = 82
+desc = "Date run configuration is isolated per VM context"
+kind = "exec"
+
+cmd = "gcc -std=c11 -D_POSIX_C_SOURCE=200809L -ffunction-sections -fdata-sections -I{root}/include -Wl,--gc-sections -o {tmp}/date_run_state_test {root}/test/cases/date/082_run_state_isolation/date_run_state_test.c {root}/src/lib/flat_date.c && {tmp}/date_run_state_test"
+expect_exit = 0
+stdout_contains = "date-run-state-isolation-ok"

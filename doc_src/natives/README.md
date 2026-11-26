@@ -37,7 +37,7 @@ Then use **`kit.push`**, **`kit.get`**, etc. If two modules expose the same func
 
 ## Reserved alias names
 
-The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `http`, `dom`, `env`, `path`, `fs`, `enc`, `re`, `hash`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`. Example: `use native list with math` → error.
+The token after **`with`** must **not** equal any **module id**: `io`, `str`, `json`, `date`, `clock`, `http`, `dom`, `env`, `path`, `fs`, `enc`, `re`, `hash`, `mem`, `file`, `math`, `math.trig`, `math.stats`, `math.mdim`, `list`, `obj`, `vcx`, `executor`, `csv`, `task`, `channel`. Example: `use native list with math` → error.
 
 ## Core vs optional
 
@@ -83,6 +83,8 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `executor` | [executor.md](./executor.md) |
 | `csv` | [csv.md](./csv.md) |
 | `bytes` | [bytes.md](./bytes.md) — binary buffer read/write/slice |
+| `task` | [task.md](./task.md) — cooperative task spawn/wait/state |
+| `channel` | [channel.md](./channel.md) — runtime-owned shared data and transactions |
 
 ## WASM availability
 
@@ -117,7 +119,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `vcx` / `executor` | ✅ | ✅ | |
 | `csv` | ✅ | ✅ | |
 
-**Not shipped yet** (out of this matrix): `net` / `ws`, `ui.*`, full async **task** — see [native-modules-roadmap](../../.cursor/plans/native-modules-roadmap.plan.md).
+**Not shipped yet** (out of this matrix): `net` / `ws`, `ui.*`, pthread task workers — see [native-modules-roadmap](../../.cursor/plans/native-modules-roadmap.plan.md).
 
 Build toggles and `mods=` test skips: [TOOLCHAIN.md](../TOOLCHAIN.md#optional-modules-http0).
 

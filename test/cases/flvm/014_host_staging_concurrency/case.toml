@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 14
+desc = "environment and path host staging snapshots are safe during concurrent updates"
+kind = "exec"
+cmd = "gcc -std=c11 -Wall -Wextra -pthread -I{root}/include -o {tmp}/host_staging_concurrency_test {root}/test/cases/flvm/014_host_staging_concurrency/host_staging_concurrency_test.c {root}/src/common/flat_env.c {root}/src/common/flat_path.c && {tmp}/host_staging_concurrency_test"
+expect_exit = 0
+stdout_contains = "host-staging-concurrency-ok"

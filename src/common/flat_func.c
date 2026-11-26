@@ -1,4 +1,5 @@
 #include "flat_func.h"
+#include "flat_ascii.h"
 #include "flat_func_tag.h"
 #include "flat_native.h"
 #include "flat_native_use.h"
@@ -9,7 +10,6 @@
 #include "flat_value.h"
 #include "flat_str.h"
 
-#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -44,7 +44,7 @@ static int concat2(char *out, size_t out_sz, const char *a, const char *b) {
 }
 
 static int is_ident_char(int c) {
-    return isalnum((unsigned char)c) || c == '_';
+    return flat_ascii_is_alnum((unsigned char)c) || c == '_';
 }
 
 static int is_simple_var_ref(const char *s) {
@@ -53,7 +53,7 @@ static int is_simple_var_ref(const char *s) {
     if (!s || !s[0]) {
         return 0;
     }
-    if (!isalpha((unsigned char)s[0]) && s[0] != '_') {
+    if (!flat_ascii_is_alpha((unsigned char)s[0]) && s[0] != '_') {
         return 0;
     }
     for (i = 0; s[i]; i++) {
@@ -67,7 +67,7 @@ static int is_simple_var_ref(const char *s) {
 static int starts_with_kw(const char *s, const char *kw) {
     size_t n = strlen(kw);
     return strncmp(s, kw, n) == 0 &&
-           (s[n] == '\0' || isspace((unsigned char)s[n]) || s[n] == '(' || s[n] == ':');
+           (s[n] == '\0' || flat_ascii_is_space((unsigned char)s[n]) || s[n] == '(' || s[n] == ':');
 }
 
 static int parse_call_inner(const char *line, char *name_out, size_t name_sz, char *args_out,
@@ -75,7 +75,7 @@ static int parse_call_inner(const char *line, char *name_out, size_t name_sz, ch
 
 static int line_starts_with(const char *s, const char *pfx) {
     size_t n = strlen(pfx);
-    return strncmp(s, pfx, n) == 0 && (s[n] == '\0' || isspace((unsigned char)s[n]));
+    return strncmp(s, pfx, n) == 0 && (s[n] == '\0' || flat_ascii_is_space((unsigned char)s[n]));
 }
 
 int flat_func_meta_init(FgirProgram *prog) {
@@ -99,7 +99,7 @@ static int parse_mod_line(const char *line, FgirProgram *prog, char *err, size_t
         return -1;
     }
     p++;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (*p != '\'') {
@@ -149,19 +149,19 @@ static int parse_export_line(const char *line, FgirProgram *prog, char *err, siz
     char *tok;
     char *ctx = NULL;
 
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     snprintf(buf, sizeof buf, "%s", p);
     tok = strtok_r(buf, ",", &ctx);
     while (tok) {
         char *t = tok;
-        while (*t && isspace((unsigned char)*t)) {
+        while (*t && flat_ascii_is_space((unsigned char)*t)) {
             t++;
         }
         {
             char *e = t + strlen(t);
-            while (e > t && isspace((unsigned char)*(e - 1))) {
+            while (e > t && flat_ascii_is_space((unsigned char)*(e - 1))) {
                 e--;
             }
             *e = '\0';
@@ -183,12 +183,12 @@ int flat_func_parse_header_line(const char *line, FgirProgram *prog, const char 
     (void)line_no;
     snprintf(buf, sizeof buf, "%s", line);
     p = buf;
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     if (line_starts_with(p, "func:executor")) {
         const char *lbl = p + 13;
-        while (*lbl && isspace((unsigned char)*lbl)) {
+        while (*lbl && flat_ascii_is_space((unsigned char)*lbl)) {
             lbl++;
         }
         if (*lbl != '#') {
@@ -203,11 +203,11 @@ int flat_func_parse_header_line(const char *line, FgirProgram *prog, const char 
         char *end = NULL;
         long v;
 
-        while (*n && isspace((unsigned char)*n)) {
+        while (*n && flat_ascii_is_space((unsigned char)*n)) {
             n++;
         }
         v = strtol(n, &end, 10);
-        if (end == n || (end && *end && !isspace((unsigned char)*end))) {
+        if (end == n || (end && *end && !flat_ascii_is_space((unsigned char)*end))) {
             snprintf(err, err_size, "func:varSlots requires a number");
             return -1;
         }
@@ -223,11 +223,11 @@ int flat_func_parse_header_line(const char *line, FgirProgram *prog, const char 
         char *end = NULL;
         long v;
 
-        while (*n && isspace((unsigned char)*n)) {
+        while (*n && flat_ascii_is_space((unsigned char)*n)) {
             n++;
         }
         v = strtol(n, &end, 10);
-        if (end == n || (end && *end && !isspace((unsigned char)*end))) {
+        if (end == n || (end && *end && !flat_ascii_is_space((unsigned char)*end))) {
             snprintf(err, err_size, "func:callVM requires 0 or 1");
             return -1;
         }
@@ -281,12 +281,12 @@ int flat_func_split_param_list(char *inner, char out[][64], int max_out, int *ou
                 tmp[seg_len] = '\0';
                 {
                     char *t = tmp;
-                    while (*t && isspace((unsigned char)*t)) {
+                    while (*t && flat_ascii_is_space((unsigned char)*t)) {
                         t++;
                     }
                     {
                         char *e = t + strlen(t);
-                        while (e > t && isspace((unsigned char)*(e - 1))) {
+                        while (e > t && flat_ascii_is_space((unsigned char)*(e - 1))) {
                             e--;
                         }
                         *e = '\0';
@@ -344,7 +344,7 @@ static int parse_formal_token(const char *tok, const FgirProgram *prog, char *na
         *has_type_out = 1;
         if (spec_out && spec_sz > 0) {
             const char *spec = strchr(tok, ':') + 1;
-            while (*spec && isspace((unsigned char)*spec)) {
+            while (*spec && flat_ascii_is_space((unsigned char)*spec)) {
                 spec++;
             }
             snprintf(spec_out, spec_sz, "%s", spec);
@@ -400,7 +400,7 @@ int flat_func_is_def_clause_line(const char *line) {
         return 0;
     }
     q = p + 1;
-    while (*q && isspace((unsigned char)*q)) {
+    while (*q && flat_ascii_is_space((unsigned char)*q)) {
         q++;
     }
     return (*q == ';');
@@ -513,7 +513,7 @@ int flat_func_parse_def_clause_line(const char *line, FgirFunction *fn, const Fg
         return -1;
     }
     arrow += 2;
-    while (*arrow && isspace((unsigned char)*arrow)) {
+    while (*arrow && flat_ascii_is_space((unsigned char)*arrow)) {
         arrow++;
     }
     {
@@ -525,7 +525,7 @@ int flat_func_parse_def_clause_line(const char *line, FgirFunction *fn, const Fg
         snprintf(ret_inner, sizeof ret_inner, "%s", arrow);
         {
             char *e = ret_inner + strlen(ret_inner);
-            while (e > ret_inner && isspace((unsigned char)*(e - 1))) {
+            while (e > ret_inner && flat_ascii_is_space((unsigned char)*(e - 1))) {
                 e--;
             }
             *e = '\0';
@@ -580,7 +580,7 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
     int pi;
 
     memset(fn, 0, sizeof *fn);
-    while (*p && isspace((unsigned char)*p)) {
+    while (*p && flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
     lp = strchr(p, '(');
@@ -651,7 +651,7 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
         return -1;
     }
     arrow += 2;
-    while (*arrow && isspace((unsigned char)*arrow)) {
+    while (*arrow && flat_ascii_is_space((unsigned char)*arrow)) {
         arrow++;
     }
     {
@@ -663,7 +663,7 @@ int flat_func_parse_def_header(const char *line, FgirFunction *fn, FgirProgram *
         snprintf(ret_inner, sizeof ret_inner, "%s", arrow);
         {
             char *e = ret_inner + strlen(ret_inner);
-            while (e > ret_inner && isspace((unsigned char)*(e - 1))) {
+            while (e > ret_inner && flat_ascii_is_space((unsigned char)*(e - 1))) {
                 e--;
             }
             *e = '\0';
@@ -789,12 +789,12 @@ static int parse_call_inner(const char *line, char *name_out, size_t name_sz, ch
         }
     }
     n = (size_t)(lp - line);
-    while (n > 0 && isspace((unsigned char)line[n - 1])) {
+    while (n > 0 && flat_ascii_is_space((unsigned char)line[n - 1])) {
         n--;
     }
     {
         size_t start = 0;
-        while (start < n && isspace((unsigned char)line[start])) {
+        while (start < n && flat_ascii_is_space((unsigned char)line[start])) {
             start++;
         }
         if (n - start == 0 || n - start >= name_sz) {
@@ -812,13 +812,13 @@ static int parse_call_inner(const char *line, char *name_out, size_t name_sz, ch
     if (arrow) {
         const char *r = arrow + 2;
         *arrow_form = 1;
-        while (*r && isspace((unsigned char)*r)) {
+        while (*r && flat_ascii_is_space((unsigned char)*r)) {
             r++;
         }
         snprintf(ret_out, ret_sz, "%s", r);
         {
             char *e = ret_out + strlen(ret_out);
-            while (e > ret_out && isspace((unsigned char)*(e - 1))) {
+            while (e > ret_out && flat_ascii_is_space((unsigned char)*(e - 1))) {
                 e--;
             }
             *e = '\0';

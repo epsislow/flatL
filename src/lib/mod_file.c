@@ -523,7 +523,7 @@ int flat_native_file_sep(FlatNativeCtx *ctx) {
     if (!ctx || !ctx->out) {
         return file_fail(ctx, "file.sep");
     }
-    sep[0] = flat_path_sep();
+    sep[0] = flat_path_context_sep(ctx->path);
     sep[1] = '\0';
     if (ctx->io_status) {
         *ctx->io_status = FLAT_IO_OK;

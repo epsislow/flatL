@@ -1,0 +1,3 @@
+#main
+  io.outln('before-fail')
+  FAIL

@@ -1,6 +1,7 @@
 #include "flat_number.h"
+#include "flat_ascii.h"
+#include "flat_locale.h"
 
-#include <ctype.h>
 #include <errno.h>
 #include <float.h>
 #include <inttypes.h>
@@ -551,7 +552,7 @@ static int parse_digits_u64(const char *s, uint64_t *out) {
         return -1;
     }
     while (*s) {
-        if (!isdigit((unsigned char)*s)) {
+        if (!flat_ascii_is_digit((unsigned char)*s)) {
             return -1;
         }
         {
@@ -623,10 +624,10 @@ int flat_number_parse_untyped(const char *token, FlatValue *out) {
     if (!token || !out) {
         return -1;
     }
-    while (isspace((unsigned char)*token)) {
+    while (flat_ascii_is_space((unsigned char)*token)) {
         token++;
     }
-    d = strtod(token, &end);
+    d = flat_strtod(token, &end);
     if (end == token || (end && *end != '\0')) {
         return -1;
     }
@@ -645,7 +646,7 @@ int flat_number_parse_for_slot_kind(const char *token, FlatSlotTypeKind kind, Fl
     if (!token || !out) {
         return -1;
     }
-    while (isspace((unsigned char)*p)) {
+    while (flat_ascii_is_space((unsigned char)*p)) {
         p++;
     }
 
@@ -685,7 +686,7 @@ int flat_number_parse_for_slot_kind(const char *token, FlatSlotTypeKind kind, Fl
         return flat_number_set_for_slot_kind(out, kind, 0, i, 0.0);
     case FLAT_SLOT_TYPE_F32:
     case FLAT_SLOT_TYPE_F64:
-        d = strtod(p, &end);
+        d = flat_strtod(p, &end);
         if (end == p || (end && *end != '\0')) {
             snprintf(panic, panic_sz, "type.io.expect");
             return -1;
@@ -828,13 +829,13 @@ int flat_number_is_negative_literal_token(const char *token) {
     if (!token) {
         return 0;
     }
-    while (isspace((unsigned char)*token)) {
+    while (flat_ascii_is_space((unsigned char)*token)) {
         token++;
     }
-    if (token[0] == '-' && isdigit((unsigned char)token[1])) {
+    if (token[0] == '-' && flat_ascii_is_digit((unsigned char)token[1])) {
         return 1;
     }
-    d = strtod(token, &end);
+    d = flat_strtod(token, &end);
     if (end != token && *end == '\0' && d < 0.0) {
         return 1;
     }
@@ -863,7 +864,7 @@ void flat_number_fprint_decimal(FILE *out, const FlatValue *v) {
         return;
     }
     if (flat_number_stor(v) == FLAT_NUM_STOR_F32) {
-        snprintf(buf, sizeof buf, "%.9g", (double)v->u.number.payload.f32);
+        flat_snprintf(buf, sizeof buf, "%.9g", (double)v->u.number.payload.f32);
     } else {
         d = v->u.number.payload.f64;
         if (isnan(d)) {
@@ -874,7 +875,7 @@ void flat_number_fprint_decimal(FILE *out, const FlatValue *v) {
             fputs(d > 0 ? "inf" : "-inf", out);
             return;
         }
-        snprintf(buf, sizeof buf, "%.17g", d);
+        flat_snprintf(buf, sizeof buf, "%.17g", d);
     }
     fputs(buf, out);
 }
@@ -898,13 +899,13 @@ int flat_number_format_decimal_string(const FlatValue *v, char *buf, size_t buf_
         return 0;
     }
     if (flat_number_stor(v) == FLAT_NUM_STOR_F32) {
-        snprintf(buf, buf_sz, "%.9g", (double)v->u.number.payload.f32);
+        flat_snprintf(buf, buf_sz, "%.9g", (double)v->u.number.payload.f32);
         return 0;
     }
     d = v->u.number.payload.f64;
     if (isnan(d) || isinf(d)) {
         return -1;
     }
-    snprintf(buf, buf_sz, "%.17g", d);
+    flat_snprintf(buf, buf_sz, "%.17g", d);
     return 0;
 }

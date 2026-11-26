@@ -11,7 +11,7 @@
 #define FLAT_FB_MAGIC_SIZE 4
 #define FLAT_FB_BLOCK_ID_MAIN 0u
 #define FLAT_FB_SENTINEL 0xffu
-#define FLAT_FB_FORMAT_VERSION 13u
+#define FLAT_FB_FORMAT_VERSION 14u
 #define FLAT_FB_HEADER_SIZE_V11 36 /* v11: jbmx_off at bytes 32–35 */
 #define FLAT_FB_HEADER_SIZE_V13 40 /* v13: plin_off at bytes 36–39 */
 #define FLAT_FB_PLIN_MAGIC 0x4e494c50u /* 'PLIN' LE */
@@ -22,6 +22,7 @@
 #define FLAT_FB_HEADER_SIZE_V3 20
 #define FLAT_FB_FFUN_MAGIC 0x4e554646u /* 'FFUN' LE */
 #define FLAT_FB_LABEL_MAGIC 0x424c424cu /* 'BLBL' LE */
+#define FLAT_FB_BPAR_MAGIC 0x52415042u /* 'BPAR' LE */
 #define FLAT_FB_FNUN_MAGIC 0x4e554e46u /* 'FNUN' LE */
 #define FLAT_FB_TAIL_MAGIC 0x54414e46u /* "FNAT" little-endian */
 
@@ -29,6 +30,11 @@ typedef struct {
     FlatOptionalNativeDecl decls[FGIR_MAX_OPTIONAL_NATIVES];
     int decl_count;
 } FlatFbNativeUnit;
+
+typedef struct {
+    uint8_t param_count;
+    char params[FGIR_MAX_PARAMS][64];
+} FlatFbBlockParams;
 
 typedef struct {
     uint32_t block_id;
@@ -70,6 +76,7 @@ typedef struct {
     FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
     int optional_native_count;
     char (*block_labels)[FGIR_MAX_LABEL]; /* heap; length block_count; from BLBL section */
+    FlatFbBlockParams *block_params; /* heap; length block_count; from BPAR section (v14+) */
     FlatFbNativeUnit *native_units;
     int native_unit_count;
     uint8_t *block_native_unit; /* heap; length block_count; FNUN section */
@@ -93,6 +100,11 @@ int flat_fb_parse_jbmx_section(const uint8_t *sec, size_t sec_len, uint16_t bloc
 size_t flat_fb_native_section_size(int decl_count, const FlatOptionalNativeDecl *decls);
 int flat_fb_write_label_section(FILE *f, uint16_t count, const char labels[][FGIR_MAX_LABEL]);
 size_t flat_fb_label_section_size(uint16_t count);
+size_t flat_fb_block_params_section_size(uint16_t count, const FlatFbBlockParams *params);
+int flat_fb_write_block_params_section(FILE *f, uint16_t count,
+                                       const FlatFbBlockParams *params);
+int flat_fb_parse_block_params_section(const uint8_t *sec, size_t sec_len, uint16_t expect_count,
+                                       FlatFbBlockParams **out_params);
 int flat_fb_write_native_section(FILE *f, int decl_count, const FlatOptionalNativeDecl *decls);
 size_t flat_fb_fnun_section_size(int unit_count, const FlatFbNativeUnit *units,
                                uint16_t block_count);

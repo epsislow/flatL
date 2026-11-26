@@ -126,7 +126,7 @@ Implementation: `src/lib/flat_math_calc.c`, handler in `src/lib/mod_math.c`.
 
 ## Random (`seed` / `random`)
 
-Shared process RNG (`flat_rng`) — also used later by `hash.randomBytes`. **Not** cryptographic. The VM **auto-seeds** at start; `seed` overrides.
+Per-VM RNG (`flat_rng`) — also used by `hash.randomBytes` in the same VM. **Not** cryptographic. Each VM **auto-seeds** at start; `seed` overrides its own VM RNG.
 
 | Call | Returns | Notes |
 |------|---------|--------|
@@ -196,7 +196,7 @@ Output:
 |------|------|
 | `src/lib/mod_math.c` | Handlers |
 | `src/lib/flat_math_calc.c` | `calc` expression parser |
-| `src/common/flat_rng.c` | Shared RNG for `seed` / `random` |
+| `src/common/flat_rng.c` | Per-VM RNG for `seed` / `random` |
 | `src/lib/plugin_math_entry.c` | Plugin entry |
 | `include/flat_native.h` | IDs `FLAT_NATIVE_MATH_*` |
 

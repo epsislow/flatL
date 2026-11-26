@@ -1,3 +1,4 @@
+#include "flat_executor.h"
 #include "flat_number.h"
 #include "flat_native_mod.h"
 #include "flat_number.h"
@@ -259,11 +260,11 @@ static FlatVcxRuntime *rt_from(FlatNativeCtx *ctx) {
     if (ctx && ctx->vcx) {
         return ctx->vcx;
     }
-    return flat_vcx_runtime_active();
+    return NULL;
 }
 
 int flat_native_vcx_call_instr(FlatNativeCtx *ctx) {
-    uint32_t id = flat_vcx_call_instr_ctx();
+    uint32_t id = ctx ? ctx->call_instr_id : 0u;
 
     if (id < 1u) {
         return vcx_fail(ctx, "vcx.callInstr");
@@ -551,7 +552,7 @@ int flat_native_vcx_destroy(FlatNativeCtx *ctx) {
                              sizeof ctx->panic_detail) != 0) {
         return vcx_fail(ctx, ctx->panic_detail[0] ? ctx->panic_detail : "vcx.destroy");
     }
-    (void)flat_vm_instr_stack_pop(id);
+    (void)flat_executor_instr_stack_pop(ctx ? ctx->executor : NULL, id);
     if (ctx->io_status) {
         *ctx->io_status = FLAT_IO_OK;
     }

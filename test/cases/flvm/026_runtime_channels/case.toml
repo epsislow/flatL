@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 26
+desc = "runtime-owned Channels deep-copy values and provide isolated explicit transactions"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/runtime_channels.fb {root}/test/cases/flvm/026_runtime_channels/program.fl && {root}/bin/flc -o {tmp}/runtime_channels_fail.fb {root}/test/cases/flvm/026_runtime_channels/fail.fl && make -s test-runtime-channels TEST_BIN={tmp}/runtime_channels_test && {tmp}/runtime_channels_test {tmp}/runtime_channels.fb {tmp}/runtime_channels_fail.fb"
+expect_exit = 0
+stdout_contains = "runtime-channels-ok"
