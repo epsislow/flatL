@@ -316,3 +316,8 @@ This version supports HTML parsing, document- and element-scoped CSS selection, 
 ## Worker-mode status
 
 DOM worker-mode support is currently `PENDING_THREAD_SAFETY_VALIDATION`; this does not mean the module is permanently unsupported. FlatL gives each VM its own DOM runtime and documents. Before enabling concurrent workers, the project must validate independent-context DOM operations on supported Lexbor builds. If that cannot be certified, the planned fallback is `SERIALIZED` through one process-wide gate covering both DOM native operations and Lexbor-backed document destruction during VM teardown. No worker-mode concurrency guarantee is currently made. See `plans/08_EXTERNAL_DEPENDENCY_AUDIT.md` in the source repository.
+
+
+### Concurrent independent-context validation (archive 295)
+
+The bundled Lexbor 3.0.0 amalgamation has a focused pthread regression in `test/cases/flvm/033_lexbor_concurrency/`. Eight threads independently create, parse, CSS-select, mutate, serialize and destroy 2,000 documents per run. The test passes normally and under ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer in the current validation environment. This is a direct Lexbor test, not a concurrent complete-VM test. DOM worker-mode status therefore remains `PENDING_THREAD_SAFETY_VALIDATION`; complete-VM and supported system-Lexbor validation are still required before selecting `THREAD_SAFE`. `SERIALIZED` remains the fallback and must include document destruction during VM teardown.

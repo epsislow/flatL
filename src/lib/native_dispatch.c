@@ -2,7 +2,7 @@
 #include "flat_native_mod.h"
 #include "flat_native_plugin.h"
 
-int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
+static int flat_native_invoke_inner(uint16_t id, FlatNativeCtx *ctx) {
     if (!ctx || id >= FLAT_NATIVE_COUNT) {
         return -1;
     }
@@ -108,4 +108,36 @@ int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
     default:
         return -1;
     }
+}
+
+
+int flat_native_invoke(uint16_t id, FlatNativeCtx *ctx) {
+    char module[FGIR_NATIVE_MODULE_LEN];
+    char err[256];
+    FlatNativeThreadCapability policy;
+    int gated = 0;
+    int result;
+
+    if (!ctx || id >= FLAT_NATIVE_COUNT) return -1;
+
+    /* Load/publish optional plugin metadata before selecting its invocation gate.
+     * Otherwise the first call could observe a built-in default and bypass a
+     * plugin's SERIALIZED declaration while the handler is being lazy-loaded. */
+    if (flat_native_is_optional_id(id) &&
+        flat_native_runtime_prepare(ctx->native_runtime, id, err, sizeof err) != 0) {
+        fprintf(stderr, "flvm: %s\n", err[0] ? err : "native preparation failed");
+        return -1;
+    }
+
+    if (flat_native_module_for_id(id, module, sizeof module) == 0) {
+        policy = flat_native_module_worker_policy(module);
+        if (policy == FLAT_NATIVE_THREAD_CAP_SERIALIZED) {
+            if (flat_native_module_gate_enter(module) != 0) return -1;
+            gated = 1;
+        }
+    }
+
+    result = flat_native_invoke_inner(id, ctx);
+    if (gated && flat_native_module_gate_leave(module) != 0) return -1;
+    return result;
 }

@@ -88,3 +88,17 @@ Acceptance sequence:
 If the independent-context path cannot be certified, classify DOM as `SERIALIZED`: a single process-wide DOM gate must surround every Lexbor entry point. This includes `flat_native_dom_*` handler calls and the Lexbor document-destruction path in `flat_dom_runtime_destroy()`, which is called during VM teardown outside the native handler. VM teardown must acquire the same gate before destroying DOM resources. The gate is held only for a bounded Lexbor operation/teardown; it is not held across a VM quantum, task wait, blocking I/O, or arbitrary host callback, and it is never nested with scheduler or Channel locks.
 
 `lexbor_memory_setup()` and any future process-global Lexbor configuration remain setup-only and immutable while workers or DOM runtimes are active. `UNSUPPORTED` is reserved for a demonstrated constraint that cannot be contained by independent contexts or the process-wide gate. Archive 294 changes this policy/documentation only: no gate is implemented and DOM is not yet enabled in worker mode.
+
+
+## 9. Archive 295 — bundled Lexbor concurrency probe
+
+A new `flvm[33]` pthread test compiles the same bundled Lexbor 3.0.0 amalgamation used by FlatL's `mod_dom.c`. Eight threads independently create, parse, CSS-select, mutate, serialize and destroy 2,000 documents in total. Each thread owns all document/parser/selector/callback/serialization state. The test passed in a normal run, a ThreadSanitizer run, and an AddressSanitizer/UndefinedBehaviorSanitizer run. Existing FlatL DOM integration cases `dom[1-18]` also pass.
+
+This is positive evidence for concurrent independent contexts in the bundled Lexbor build with its default allocator. It is not a complete-VM FlatL test and does not establish an upstream blanket thread-safety guarantee. The system-Lexbor variant was not tested because no system `lexbor` pkg-config package was available. FlatL does not call `lexbor_memory_setup()`; custom allocator setup must remain a pre-worker, immutable configuration step.
+
+**Updated assessment:** bundled Lexbor independent contexts are a credible `THREAD_SAFE` candidate. Keep the overall DOM capability `PENDING_THREAD_SAFETY_VALIDATION` until complete-VM tests can run after scheduler/lifetime synchronization and each supported system-Lexbor variant is validated. If those checks fail or cannot be satisfied, use `SERIALIZED` with the process-wide gate already specified, including VM/DOM teardown. The `flvm[33]` test does not remove any scheduler or runtime thread-safety blocker.
+
+
+## Archive 298 implementation update
+
+The fallback mechanism described above is now implemented: `dom` has an effective `SERIALIZED` policy while its audit status remains `PENDING_THREAD_SAFETY_VALIDATION`; DOM native dispatch and `flat_dom_runtime_destroy()` use the same process-wide per-module gate. This does not decide DOM's final worker capability. Complete-VM concurrent DOM validation remains pending until the scheduler and VM lifetime protocol support safe multi-worker execution.

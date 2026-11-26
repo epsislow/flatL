@@ -57,6 +57,11 @@
       "file": "TASK_RUNTIME_MODEL.md"
     },
     {
+      "id": "native-thread-capabilities",
+      "label": "Native module thread capabilities",
+      "file": "NATIVE_THREAD_CAPABILITIES.md"
+    },
+    {
       "id": "user-functions",
       "label": "User functions",
       "file": "USER_FUNCTIONS.md"

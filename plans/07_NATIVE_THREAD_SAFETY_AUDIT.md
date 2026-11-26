@@ -118,3 +118,43 @@ Archive 293 adds `flat_http_prepare()` (native libcurl global initialization; WA
 ## 8. Archive 294 — DOM capability status
 
 Lexbor/DOM is classified `PENDING_THREAD_SAFETY_VALIDATION`. The eventual native capability remains `THREAD_SAFE`, `SERIALIZED`, or `UNSUPPORTED`; pending is an audit state only. Prefer `THREAD_SAFE` if complete-VM independent-document concurrency and sanitizer tests pass for supported Lexbor builds. Otherwise prefer `SERIALIZED` with one process-wide gate around every Lexbor call, including `flat_dom_runtime_destroy()` during VM teardown. A handler-only gate is incomplete. `UNSUPPORTED` is reserved for a demonstrated constraint that cannot be contained by independent contexts or the gate. No worker-mode capability is enabled by this checkpoint.
+
+
+## 9. Archive 295 — Lexbor independent-context concurrency evidence
+
+`flvm[33]` directly compiles the bundled Lexbor 3.0.0 amalgamation and stresses eight independent pthread contexts. Each thread owns its document, CSS parser, selector engine, callbacks and buffers; 2,000 total document lifecycles cover parse, CSS selection, attribute mutation/readback, serialization and destruction. The test passed normally, under ThreadSanitizer, and under AddressSanitizer/UndefinedBehaviorSanitizer. Existing FlatL `dom[1-18]` integration tests also pass.
+
+The `src/lib/mod_dom.c` audit found only file-scope `static` functions, not mutable static data. `FlatDomRuntime` and its document/node tables are VM-owned. The process-global Lexbor allocator function pointers are initialized to the default C allocators and FlatL does not call `lexbor_memory_setup()`; hosts must not reconfigure them while DOM is active.
+
+This result does not test simultaneous complete FlatL VMs, system-Lexbor builds, scheduler/task/Channel concurrency, or concurrent host-triggered VM teardown. Keep DOM `PENDING_THREAD_SAFETY_VALIDATION`. `THREAD_SAFE` remains a candidate; `SERIALIZED` remains the fallback and must include both native DOM calls and document destruction. Do not interpret this test as enabling DOM in worker mode.
+
+## Archive 296 — plugin capability enforcement remains a pre-worker gate
+
+Archive 296 defines cancellation-request and shutdown behavior but does not yet implement plugin capability metadata. The previously proposed capability classes remain `THREAD_SAFE`, `SERIALIZED`, and `UNSUPPORTED`; plugins without explicit metadata remain denied in worker mode by default. The next architecture step is to settle metadata ownership, registration defaults, per-plugin serialization scope, and behavior when a plugin attempts to change capability after worker startup. No worker-mode plugin is enabled by this archive.
+
+
+## 6. Capability metadata implementation — archive 297
+
+The capability model is now represented in code rather than existing only in this audit:
+
+- `include/flat_native_capability.h` defines `FlatNativeThreadCapability`.
+- `src/lib/native_capability.c` owns the process-wide module table. Unknown module names resolve to `UNSUPPORTED`; `PENDING` resolves to the conservative worker policy `SERIALIZED`.
+- Capability declarations can be overridden before startup and then frozen. A future worker-pool startup must initialize the native registry and load/configure all permitted plugins first, call `flat_native_runtime_freeze_worker_capabilities()`, and only then create workers. After freeze, lazy loading of a not-yet-loaded plugin is rejected and search-directory changes are ignored.
+- Plugins retain the current `flat_native_plugin_init(reg)` ABI and may export `flat_native_plugin_thread_capability()`. The loader treats a missing or invalid symbol as `UNSUPPORTED`. All bundled optional plugin entrypoints now export an explicit declaration.
+- `flat_native_runtime_worker_policy()` is the preflight API: it resolves/prepares the module, rejects unsupported worker use, and returns `THREAD_SAFE` or `SERIALIZED`.
+
+The baseline table declares `io` serialized; `dom` pending with serialized fallback; `task` and `channel` unsupported until scheduler synchronization; and context-owned modules as thread-safe candidates subject to their external dependency and complete-VM gates. HTTP still requires `flat_http_prepare()` before worker creation and a supported libcurl resolver/backend.
+
+**Not implemented yet:** a per-module mutex gate and integration of the preflight into a worker dispatcher. In particular, a serialized DOM gate must protect both native DOM calls and `flat_dom_runtime_destroy()` during VM teardown. Do not interpret a `SERIALIZED` preflight result as if the handler is already locked.
+
+## Archive 298 — invocation-gate implementation
+
+The capability metadata now has an execution boundary for serialized calls:
+
+- `flat_native_invoke()` resolves the native's canonical module and acquires that module's process-wide gate for effective `SERIALIZED` policy. Audit `PENDING` maps to `SERIALIZED`, so DOM calls are gated.
+- Each module has its own gate. The implementation does not serialize all native calls behind one process-wide lock.
+- `THREAD_SAFE` calls do not acquire a gate. `UNSUPPORTED` remains available to the cooperative runtime but is rejected by worker preflight; the worker scheduler must perform admission before a task is dispatched.
+- `flat_dom_runtime_destroy()` acquires the same DOM gate before Lexbor document destruction, covering the teardown path outside the native dispatcher.
+- The gate is held for one synchronous native call or bounded DOM teardown only. No scheduler/Channel lock may be held while entering it, and a native handler must not suspend while holding it.
+
+`flvm[36]` validates per-module exclusion, independence between module gates, and DOM teardown protection. It is not a complete-VM concurrency test. Keep DOM `PENDING_THREAD_SAFETY_VALIDATION` and keep worker creation disabled until scheduler, task/VM lifetime and shutdown protocols are implemented.

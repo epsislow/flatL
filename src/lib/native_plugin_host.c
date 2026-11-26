@@ -602,10 +602,12 @@ static int load_module_plugin_static(const char *mod, char *err, size_t err_size
 }
 #endif
 
-static int try_dlopen_path(const char *path, char *err, size_t err_size) {
+static int try_dlopen_path(const char *path, const char *module, char *err, size_t err_size) {
 #ifdef FLAT_HAVE_DLOPEN
     void *h;
     FlatNativePluginInitFn init;
+    FlatNativePluginCapabilityFn capability_fn;
+    FlatNativeThreadCapability capability = FLAT_NATIVE_THREAD_CAP_UNSUPPORTED;
     if (!path || !path[0]) {
         return -1;
     }
@@ -628,11 +630,27 @@ static int try_dlopen_path(const char *path, char *err, size_t err_size) {
         return -1;
     }
     plugin_staging_end(1);
+    capability_fn = (FlatNativePluginCapabilityFn)dlsym(h, FLAT_NATIVE_PLUGIN_CAPABILITY_SYMBOL);
+    if (capability_fn) {
+        capability = capability_fn();
+        if (capability < FLAT_NATIVE_THREAD_CAP_THREAD_SAFE ||
+            capability > FLAT_NATIVE_THREAD_CAP_PENDING) {
+            capability = FLAT_NATIVE_THREAD_CAP_UNSUPPORTED;
+        }
+    }
+    /* A legacy plugin without explicit metadata is unsupported in worker mode. */
+    if (flat_native_module_set_thread_capability(module, capability) != 0) {
+        snprintf(err, err_size, "cannot publish thread capability for plugin module: %s", module);
+        /* Keep the loaded module resident: its handlers are already published. */
+        (void)h;
+        return -1;
+    }
     /* Keep a successful module resident for the process lifetime. */
     (void)h;
     return 0;
 #else
     (void)path;
+    (void)module;
     snprintf(err, err_size, "optional native plugins require dlopen (not built on this OS)");
     return -1;
 #endif
@@ -702,7 +720,7 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
                 char dir[512];
                 snprintf(dir, sizeof dir, "%.*s", (int)(k - start), buf + start);
                 snprintf(path, sizeof path, "%s/%s", dir, base);
-                if (try_dlopen_path(path, err, err_size) == 0) {
+                if (try_dlopen_path(path, mod, err, err_size) == 0) {
                     goto ok;
                 }
             }
@@ -715,13 +733,13 @@ static int load_module_plugin(const char *mod, char *err, size_t err_size) {
 
     if (g_search_dir[0]) {
         snprintf(path, sizeof path, "%s/%s", g_search_dir, base);
-        if (try_dlopen_path(path, err, err_size) == 0) {
+        if (try_dlopen_path(path, mod, err, err_size) == 0) {
             goto ok;
         }
     }
 
     snprintf(path, sizeof path, "bin/%s", base);
-    if (try_dlopen_path(path, err, err_size) == 0) {
+    if (try_dlopen_path(path, mod, err, err_size) == 0) {
         goto ok;
     }
 
@@ -817,6 +835,10 @@ void flat_native_runtime_init(void) {
 
 void flat_native_runtime_set_search_dir(const char *dir) {
     runtime_lock();
+    if (flat_native_module_capabilities_is_frozen()) {
+        runtime_unlock();
+        return;
+    }
     if (!dir) {
         g_search_dir[0] = '\0';
     } else {
@@ -895,6 +917,12 @@ int flat_native_runtime_prepare(const FlatNativeRuntimeContext *runtime, uint16_
         goto done;
     }
     if (!registry_get_handler(native_id)) {
+        if (flat_native_module_capabilities_is_frozen()) {
+            if (err && err_size) snprintf(err, err_size,
+                                          "native plugin module %s was not loaded before worker capability freeze",
+                                          mod);
+            goto done;
+        }
         if (load_module_plugin(mod, err, err_size) != 0) {
             goto done;
         }
@@ -909,6 +937,43 @@ int flat_native_runtime_prepare(const FlatNativeRuntimeContext *runtime, uint16_
 done:
     runtime_unlock();
     return result;
+}
+
+int flat_native_runtime_freeze_worker_capabilities(void) {
+    runtime_lock();
+    flat_native_runtime_init_locked();
+    flat_native_module_capabilities_freeze();
+    runtime_unlock();
+    return 0;
+}
+
+int flat_native_runtime_worker_policy(const FlatNativeRuntimeContext *runtime,
+                                      uint16_t native_id,
+                                      FlatNativeThreadCapability *policy_out,
+                                      char *err, size_t err_size) {
+    char module[FGIR_NATIVE_MODULE_LEN];
+    FlatNativeThreadCapability policy;
+
+    if (policy_out) *policy_out = FLAT_NATIVE_THREAD_CAP_UNSUPPORTED;
+    if (!policy_out) {
+        if (err && err_size) snprintf(err, err_size, "missing worker policy output");
+        return -1;
+    }
+    if (flat_native_runtime_prepare(runtime, native_id, err, err_size) != 0) return -1;
+    if (flat_native_module_for_id(native_id, module, sizeof module) != 0) {
+        if (err && err_size) snprintf(err, err_size, "unknown native module for id %u",
+                                      (unsigned)native_id);
+        return -1;
+    }
+    policy = flat_native_module_worker_policy(module);
+    if (policy != FLAT_NATIVE_THREAD_CAP_THREAD_SAFE &&
+        policy != FLAT_NATIVE_THREAD_CAP_SERIALIZED) {
+        if (err && err_size) snprintf(err, err_size,
+                                      "native module %s is not permitted in worker mode", module);
+        return -1;
+    }
+    *policy_out = policy;
+    return 0;
 }
 
 int flat_native_invoke_optional(uint16_t id, FlatNativeCtx *ctx) {

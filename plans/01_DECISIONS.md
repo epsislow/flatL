@@ -372,3 +372,63 @@ The exact public API for worker startup, cancellation requests, shutdown modes a
 - `lexbor_memory_setup()` and any other process-global Lexbor configuration are setup-only. They must be completed before workers start and remain immutable until every worker and DOM runtime has stopped. FlatL currently does not call `lexbor_memory_setup()`.
 - `UNSUPPORTED` is reserved for a demonstrated constraint that cannot be made safe through independent contexts or the process-wide DOM gate. Do not classify DOM as unsupported merely because the upstream docs reviewed do not state a blanket thread-safety guarantee.
 - No DOM worker capability is enabled by archive 294. The status remains pending until the specified concurrency and sanitizer acceptance tests exist and pass.
+
+
+## 20. Lexbor independent-context concurrency evidence (archive 295)
+
+- Archive 295 adds a focused pthread regression against the exact bundled Lexbor 3.0.0 amalgamation used by `mod_dom.c`. Eight threads independently create, parse, CSS-select, mutate, serialize and destroy 2,000 total HTML documents.
+- The focused regression passes normally and under ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer in the validation environment. Existing FlatL DOM integration cases also pass.
+- This is evidence for independent Lexbor document/parser/selector contexts with the bundled build and default allocator. It is not a complete-VM test, does not exercise `FlatRuntime`/`FlatVm` concurrently, does not validate the system-Lexbor build, and is not a blanket upstream thread-safety guarantee.
+- Keep the audit status `PENDING_THREAD_SAFETY_VALIDATION` until complete-VM DOM tests can run after the scheduler/lifetime protocol exists and supported system-Lexbor variants are tested. The evidence makes `THREAD_SAFE` a stronger candidate; it does not yet select that capability.
+- Keep `SERIALIZED` as the fallback if later integration evidence identifies a race or cannot establish safe independent contexts. The process-wide gate must cover every Lexbor call, including document destruction during `flat_dom_runtime_destroy()`/VM teardown. Do not implement the gate pre-emptively in the current single-thread runtime.
+- `lexbor_memory_setup()` remains setup-only and must not be called or changed while DOM operations are running. FlatL's current source does not call it.
+
+## 21. Cancellation request and worker shutdown contract (archive 296)
+
+Archive 296 separates the cooperative cancellation API that exists today from the request/cleanup protocol required by worker mode. The behavioral contract is recorded in [`09_CANCELLATION_SHUTDOWN_SPEC.md`](09_CANCELLATION_SHUTDOWN_SPEC.md); no asynchronous API or worker shutdown implementation is added in this archive.
+
+### 21.1 Cancellation request is not cancellation completion
+
+- Worker mode must introduce a request-only operation (proposed name: `flat_runtime_task_cancel_request`). The caller publishes cancellation intent; it must not call `flat_vm_cancel()`, destroy VM state, rollback Channel transactions, release VM resources, or publish `CANCELLED`.
+- A task's cancellation request is separate from `FlatTaskState`. Repeated requests are idempotent. A terminal task keeps its already-committed result.
+- The worker that owns a RUNNING task is the only thread allowed to step/cancel/destroy its VM. It observes cancellation at the next scheduler-visible safe boundary after `flat_vm_step()` returns (normally the configured quantum boundary); a long-running native call delays that boundary.
+- CREATED/RUNNABLE/WAITING tasks that are not worker-owned are claimed as cancellation-cleanup work. Cleanup still runs through the worker/scheduler ownership protocol, not on an arbitrary request caller.
+- `CANCELLED` is published only after Channel rollback, wait-edge removal, Channel-reference release, VM cleanup, and terminal result publication. Dependents wake after cleanup.
+- Cancellation is cooperative and best-effort. A long-running/blocking native call delays cancellation; `pthread_cancel()` and arbitrary C-stack unwinding are forbidden.
+- If a task reaches a terminal VM result before its owner observes the request, that terminal outcome wins. A request must never rewrite a completed/failed result.
+
+### 21.2 Shutdown modes
+
+- Worker-pool lifecycle is `UNINITIALIZED -> RUNNING -> DRAINING|CANCELLING -> STOPPED`.
+- `DRAIN` closes task submission and `task.spawn`, but allows already-started work to reach terminal states. It does not auto-start `CREATED` tasks; their records remain host-owned cleanup obligations.
+- If DRAIN reaches quiescence with unresolved WAITING tasks and no possible progress, it reports a blocked/deadlocked shutdown condition rather than silently discarding waiters or claiming success.
+- `CANCEL` closes submissions and requests cancellation for every nonterminal task. Workers remain alive until all cleanup jobs finish.
+- `CANCEL` may escalate `DRAIN`; downgrade is forbidden. Repeated same/stronger requests are idempotent.
+- Proposed API split: nonblocking `flat_runtime_shutdown_request(runtime, mode)` followed by `flat_runtime_join(runtime)`. Exact status/timeout reporting for blocked DRAIN remains to be settled before the API is exposed.
+- Worker join must complete before runtime/task/VM destruction. `flat_runtime_destroy()` remains the final host operation after workers are joined and all task records and Channels have been explicitly destroyed.
+
+### 21.3 Scope and implementation status
+
+These are the worker-mode design contracts, not current runtime capabilities. Existing `flat_runtime_task_cancel()` remains a cooperative host-thread API and the scheduler/task registry remain host-thread-confined. Archive 296 adds no pthread worker, cancellation-request flag/queue, shutdown state, or join implementation. Future implementation must pass the acceptance matrix in `09_CANCELLATION_SHUTDOWN_SPEC.md` before worker mode is enabled.
+
+
+## 22. Native module capability metadata and worker admission (archive 297)
+
+- Capability declarations are module-level, not handler-level. Handlers in one native module share dependencies and process-owned state; per-handler declarations could falsely imply isolation.
+- The eventual capability values are `THREAD_SAFE`, `SERIALIZED`, and `UNSUPPORTED`. `PENDING_THREAD_SAFETY_VALIDATION` is an audit status, not a fourth capability; its conservative worker policy is `SERIALIZED`.
+- Unknown modules and external plugins without an explicit capability declaration are `UNSUPPORTED` in worker mode. The existing cooperative plugin ABI remains compatible: `flat_native_plugin_init(reg)` is unchanged, and a plugin may additionally export `flat_native_plugin_thread_capability()`. Missing/invalid metadata is denied for worker admission.
+- `flat_native_runtime_worker_policy()` is the worker preflight: it prepares the module, rejects `UNSUPPORTED`, and returns the effective `THREAD_SAFE` or `SERIALIZED` policy. The future scheduler must enforce the returned policy before dispatch.
+- Capability metadata is process-wide setup state. It may be declared/overridden before worker startup and is frozen with `flat_native_runtime_freeze_worker_capabilities()` before the first worker is created. After freeze, lazy loading of a not-yet-loaded plugin is rejected and native search-directory changes are ignored. Plugin unloading and search-path changes are prohibited during worker lifetime.
+- Built-in defaults follow the source audit: context-owned modules are candidate `THREAD_SAFE`; `io` is `SERIALIZED`; `dom` remains `PENDING_THREAD_SAFETY_VALIDATION` and maps to `SERIALIZED`; `task` and `channel` remain `UNSUPPORTED` until scheduler/Channel synchronization is implemented. HTTP remains conditional on pre-initialized libcurl and supported resolver configuration.
+- A `SERIALIZED` module requires one process-wide per-module invocation gate around the entire native handler call. The gate must be released before scheduler/VM logic resumes. DOM's serialized boundary must additionally include Lexbor-backed document destruction during VM teardown. The actual gates and dispatcher integration are not implemented in archive 297.
+
+## 23. Native synchronization abstraction and per-module invocation gates (archive 298)
+
+- Use a small platform abstraction for native module gates: POSIX `pthread_mutex_t`, Windows `SRWLOCK`, and a no-op mutex for single-threaded Emscripten. Do not expose pthread types in public FlatL APIs.
+- Each canonical native module owns an independent process-wide invocation gate. Do not use one global native mutex: a serialized `io` call must not block `dom` or another serialized module.
+- The common `flat_native_invoke()` boundary consults the effective module policy. `SERIALIZED` and audit `PENDING` (effective serialized) acquire the module gate around the complete native dispatch; `THREAD_SAFE` does not.
+- `UNSUPPORTED` remains executable in the current cooperative runtime for backward compatibility. Worker-mode preflight rejects it before dispatch; invocation gates are not a substitute for worker admission.
+- The DOM gate covers both `dom.*` native dispatch and `flat_dom_runtime_destroy()`/VM teardown. A handler-only gate is insufficient because teardown calls Lexbor directly.
+- Never hold scheduler or Channel locks while acquiring a module gate. Never hold a module gate across a VM quantum, task suspension, or scheduler wait. Native handlers must remain synchronous while holding the gate.
+- Capability declarations must be frozen before worker creation. Plugin loading/unloading remains setup-only while worker execution is active. A serialized handler must not recursively dispatch into the same module while holding its non-recursive gate.
+- Archive 298 adds synchronization/gate infrastructure only. It does not add worker creation, condition variables, task scheduling locks, cancellation requests, or worker shutdown.

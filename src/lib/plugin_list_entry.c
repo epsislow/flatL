@@ -29,3 +29,8 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_LIST_VALUES_TO, flat_native_list_values_to);
     return 0;
 }
+
+/* All mutable execution state is supplied by the calling VM context. */
+FlatNativeThreadCapability flat_native_plugin_thread_capability(void) {
+    return FLAT_NATIVE_THREAD_CAP_THREAD_SAFE;
+}

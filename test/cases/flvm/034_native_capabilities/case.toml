@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 34
+desc = "native module worker capabilities are explicit, conservative, and immutable after freeze"
+kind = "exec"
+cmd = "gcc -std=c11 -Wall -Wextra -Werror -pthread -I{root}/include -o {tmp}/native_capabilities_test {root}/test/cases/flvm/034_native_capabilities/native_capabilities_test.c {root}/src/lib/native_capability.c && {tmp}/native_capabilities_test"
+expect_exit = 0
+stdout_contains = "native-capabilities-ok workers=8 queries=1600000"

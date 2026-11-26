@@ -162,7 +162,7 @@ The current cooperative API cancels only CREATED/RUNNABLE/WAITING tasks at safe 
 Proposed behavior:
 
 - cancellation request is recorded under the scheduler mutex;
-- a RUNNING task observes it after the current VM quantum/native call returns, at a documented safe boundary;
+- a RUNNING task observes it after `flat_vm_step()` returns at the next scheduler-visible safe boundary, normally the configured quantum boundary; a long native call delays it;
 - a WAITING or queued task is scheduled for cleanup by a worker (or a dedicated serialized cleanup path) so no other thread destroys its VM concurrently;
 - cancellation becomes publicly `CANCELLED` only after VM cancellation/teardown, Channel transaction rollback, Channel reference release and waiter wakeup have completed;
 - cancellation request and terminal completion race through one state transition winner; the losing operation receives a stable already-terminal/already-cancelled result.
@@ -191,19 +191,23 @@ The current native plugin host has process-wide runtime and registry spinlocks. 
 
 Archive 292 completes a source-level inventory of embedded native handlers and built-in optional plugin entry points; see `07_NATIVE_THREAD_SAFETY_AUDIT.md`. It also fixes the unsynchronized HTTP multipart sequence with an atomic process-wide allocator and adds a pthread regression for that allocator.
 
-The worker-mode capability contract is:
+The worker-mode capability contract is now represented by `include/flat_native_capability.h` and `src/lib/native_capability.c` (archive 297):
 
-- `THREAD_SAFE`: explicitly declared handler/module; may execute concurrently in independent VM contexts only when all dependencies and host resources satisfy the same guarantee.
-- `SERIALIZED`: explicitly declared handler/module; calls are serialized by a per-module invocation gate held only around the handler call.
-- `UNSUPPORTED`: handler/module is rejected in worker mode.
-- Unknown third-party plugins default to `UNSUPPORTED` until explicit capability metadata exists. Do not silently assume safety or serialize unknown code and claim that this covers all process-global interactions.
+- `THREAD_SAFE`: explicitly declared module; may execute concurrently in independent VM contexts only when all dependencies and host resources satisfy the same guarantee.
+- `SERIALIZED`: module calls must be serialized by one process-wide per-module invocation gate held only around the handler call.
+- `UNSUPPORTED`: module is rejected in worker mode.
+- `PENDING_THREAD_SAFETY_VALIDATION`: audit status, not a capability value; the effective worker policy is `SERIALIZED`.
+- Unknown third-party plugins default to `UNSUPPORTED`. Existing `flat_native_plugin_init(reg)` remains compatible; plugins may additionally export `flat_native_plugin_thread_capability()`.
+- `flat_native_runtime_worker_policy()` performs module preparation and admission preflight, rejects unsupported modules, and returns the effective `THREAD_SAFE`/`SERIALIZED` policy.
+- Capability declarations are process-wide setup state and must be frozen before worker creation.
 
 Remaining requirements:
 
-- implement capability metadata and worker-mode enforcement;
+- implement per-module mutex gates and integrate preflight into the worker dispatcher;
+- ensure DOM serialization covers Lexbor-backed VM teardown as well as native handlers;
 - verify external dependency concurrency guarantees (Lexbor, PCRE2, libcurl and supported platform C runtimes);
-- never hold registry/runtime locks while invoking plugin code;
-- freeze plugin search path before the first worker run and prohibit plugin unload while any VM can call its handler.
+- never hold registry/runtime/scheduler/Channel locks while invoking plugin code;
+- freeze plugin search path and prohibit plugin load/unload while any VM can call a handler.
 
 ### 8.2 Environment, path and locale
 
@@ -299,3 +303,33 @@ DOM remains `PENDING_THREAD_SAFETY_VALIDATION`; pending is not a fourth capabili
 If independent concurrent use cannot be certified, use `SERIALIZED` with one process-wide DOM gate. The gate covers all Lexbor calls, not just native `dom.*` handlers: `flat_dom_runtime_destroy()` iterates documents and calls `lxb_html_document_destroy()` during VM teardown, so this path must acquire the same gate. `flat_dom_runtime_create()` currently only allocates the FlatL wrapper, but any future Lexbor initialization added there must also be covered. The gate is acquired only around a bounded DOM handler or DOM teardown operation; never hold it across VM execution, task suspension, blocking I/O or host callbacks. Scheduler and Channel locks must be released before acquiring it.
 
 Use `UNSUPPORTED` only if a specific Lexbor/build/host constraint cannot be made safe through independent contexts or the serialized gate. Archive 294 does not implement the gate or enable DOM in worker mode.
+
+
+## Lexbor evidence and worker-mode gate (archive 295)
+
+The bundled Lexbor 3.0.0 amalgamation passed a focused independent-context pthread test: eight threads each created, parsed, selected, mutated, serialized and destroyed their own documents and parser/selector objects (2,000 document lifecycles total). The same test passed ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer in the validation environment. `mod_dom.c` has no mutable file-scope data declarations, and FlatL does not call `lexbor_memory_setup()`.
+
+This evidence is limited to direct bundled-Lexbor context isolation. It is not proof that concurrent `FlatRuntime`/`FlatVm` invocations are safe, and does not cover the system-Lexbor build. Therefore DOM remains `PENDING_THREAD_SAFETY_VALIDATION` for worker mode. After the runtime scheduler and lifetime protocol are implemented, add complete-VM tests before selecting `THREAD_SAFE`. If those tests or a supported build variant cannot be certified, use the previously specified process-wide `SERIALIZED` gate around every Lexbor call, including DOM teardown. No gate is implemented in archive 295.
+
+## 13. Cancellation request and shutdown amendment (archive 296)
+
+The detailed contract and future acceptance matrix are in [`09_CANCELLATION_SHUTDOWN_SPEC.md`](09_CANCELLATION_SHUTDOWN_SPEC.md). Key rules:
+
+- Worker mode uses a request-only cancellation API. The caller never destroys a running VM or performs task cleanup.
+- The task-owning worker observes the request at the next scheduler-visible safe boundary after `flat_vm_step()` returns (normally the configured quantum boundary); a long-running native call delays that boundary. Unowned CREATED/RUNNABLE/WAITING tasks are claimed as cleanup jobs.
+- `CANCELLED` is published only after Channel rollback, wait/reference cleanup, VM cleanup, and dependent wakeup publication.
+- DRAIN rejects new submissions but completes already-started work; CREATED tasks are not auto-started. An unresolved quiescent wait graph is a blocked drain.
+- CANCEL rejects submissions, requests cleanup for all nonterminal tasks, and keeps workers alive until cleanup jobs complete. It may escalate DRAIN but cannot be downgraded.
+- Worker join precedes all runtime/VM destruction. `flat_runtime_destroy()` remains the final host-owned step after join and explicit task/Channel destruction.
+
+These rules are specification only in archive 296. The current cooperative `flat_runtime_task_cancel()` is unchanged; no worker or asynchronous cancellation implementation exists.
+
+
+## 14. Native module capability metadata (archive 297)
+
+Capability declarations are module-level. The plugin initializer ABI remains unchanged and the optional `flat_native_plugin_thread_capability()` symbol carries the declaration. Legacy or invalid plugin metadata is denied in worker mode. `flat_native_runtime_worker_policy()` is the future scheduler's preflight and returns the effective policy. `PENDING` maps to `SERIALIZED`; DOM's eventual serialized gate must include VM teardown. Archive 297 does not yet implement module gates or worker-dispatch integration.
+
+
+## Archive 298 implementation update
+
+The common native invocation boundary now applies the module policy before returning to VM execution. `SERIALIZED`/effective `PENDING` calls use an independent per-module gate; `THREAD_SAFE` calls are ungated. The gate implementation is backed by POSIX pthread mutexes, Windows SRWLOCK, and a no-op single-thread Emscripten implementation. DOM VM teardown acquires the same DOM gate as DOM handlers. This closes the native invocation serialization boundary but does not implement worker admission in a scheduler, scheduler/Channel locks, condition variables, task ownership, cancellation, shutdown or worker creation. See `10_NATIVE_SYNC_GATES.md`.

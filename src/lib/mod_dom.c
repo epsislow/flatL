@@ -2,6 +2,7 @@
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_dom_runtime.h"
+#include "flat_native_capability.h"
 #include "flat_value.h"
 #include "flat_number.h"
 
@@ -71,8 +72,11 @@ static void dom_doc_clear(FlatDomDocument *doc) {
 void flat_dom_runtime_destroy(struct FlatDomRuntime *runtime) {
     size_t i;
     if (!runtime) return;
+    /* DOM handlers and VM teardown share the same process-wide Lexbor gate. */
+    if (flat_native_module_gate_enter("dom") != 0) return;
     for (i = 0; i < FLAT_DOM_MAX_DOCUMENTS; ++i) dom_doc_clear(&runtime->docs[i]);
     free(runtime);
+    (void)flat_native_module_gate_leave("dom");
 }
 static int dom_split_args(char *s, char **out, int max, int *argc) {
     int n = 0, depth = 0;

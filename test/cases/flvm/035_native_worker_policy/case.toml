@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 35
+desc = "worker preflight honors bundled, declared serialized, and legacy plugin capabilities"
+kind = "exec"
+cmd = "make test-native-worker-policy TEST_BIN={tmp}/native_worker_policy_test TEST_PLUGIN_DIR={tmp}/native_plugins && {tmp}/native_worker_policy_test {tmp}/native_plugins {root}/bin"
+expect_exit = 0
+stdout_contains = "native-worker-policy-ok bundled=thread-safe declared=serialized legacy=denied frozen=load-denied"

@@ -174,8 +174,9 @@ NATIVE_VM_MATH = src/lib/mod_math_trig.c src/lib/mod_math_stats.c src/lib/mod_ma
 VM_EXTRA_LIBS =
 PLUGIN_TARGET =
 else
+CFLAGS += -pthread
 NATIVE_VM_MATH =
-VM_EXTRA_LIBS = -ldl
+VM_EXTRA_LIBS = -ldl -pthread
 PLUGIN_TARGET = $(BINDIR)/libflat_math_trig.so $(BINDIR)/libflat_math_stats.so \
                 $(BINDIR)/libflat_math_mdim.so $(BINDIR)/libflat_math.so $(BINDIR)/libflat_list.so \
                 $(BINDIR)/libflat_obj.so $(BINDIR)/libflat_csv.so
@@ -242,7 +243,7 @@ FLAT_PATH_SRC = src/common/flat_path.c
 # flat_enc always linked (http.basic/form + optional enc); mod_enc optional
 FLAT_ENC_SRC = src/common/flat_enc.c
 NATIVE_MODS_SRC = src/lib/native_mods.c
-NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_util.c src/lib/native_parse_rhs.c \
+NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_capability.c src/lib/native_util.c src/lib/native_parse_rhs.c \
                 src/lib/native_dispatch.c \
                 src/lib/flat_date.c src/lib/mod_io.c src/lib/mod_str.c src/lib/mod_json.c src/lib/mod_json_query.c \
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
@@ -835,3 +836,23 @@ test-channel-lock-contention:
 test-runtime-task-stress:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/030_runtime_task_stress/runtime_task_stress_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for worker-mode native module capability preflight.
+.PHONY: test-native-worker-policy
+test-native-worker-policy: $(PLUGIN_TARGET)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	@test -n "$(TEST_PLUGIN_DIR)" || (echo "TEST_PLUGIN_DIR is required" >&2; exit 2)
+	@mkdir -p "$(TEST_PLUGIN_DIR)"
+	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/034_native_capabilities/serialized_plugin.c
+	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_obj.so test/cases/flvm/034_native_capabilities/legacy_plugin.c
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/034_native_capabilities/native_worker_policy_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+
+# Verify per-module invocation gates, independent-module progress, and DOM teardown gating.
+.PHONY: test-native-invocation-gates
+test-native-invocation-gates:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	@test -n "$(TEST_PLUGIN_DIR)" || (echo "TEST_PLUGIN_DIR is required" >&2; exit 2)
+	@mkdir -p "$(TEST_PLUGIN_DIR)"
+	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/034_native_capabilities/serialized_plugin.c
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/036_native_invocation_gates/native_invocation_gates_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

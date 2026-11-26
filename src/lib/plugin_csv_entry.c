@@ -39,3 +39,8 @@ int flat_native_plugin_init(FlatNativePluginRegisterFn reg) {
     reg(FLAT_NATIVE_CSV_WRITE_COLLECTION, flat_native_csv_write_collection);
     return 0;
 }
+
+/* All mutable execution state is supplied by the calling VM context. */
+FlatNativeThreadCapability flat_native_plugin_thread_capability(void) {
+    return FLAT_NATIVE_THREAD_CAP_THREAD_SAFE;
+}

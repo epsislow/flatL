@@ -12,6 +12,9 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [06 — Worker Pool Architecture Specification](06_WORKER_POOL_SPEC.md): inventarul ownership-ului curent și specificația propusă pentru worker pool-ul v2.0; nu reprezintă implementare pthread.
 - [07 — Native Module Thread-Safety Audit](07_NATIVE_THREAD_SAFETY_AUDIT.md): auditul stării globale a modulelor native, limitele de ownership și politica de capabilități pentru pluginuri.
 - [08 — External Dependency Concurrency Audit](08_EXTERNAL_DEPENDENCY_AUDIT.md): evaluarea documentației upstream și a modului concret de utilizare PCRE2, Lexbor și libcurl în FlatL.
+- [09 — Cancellation Request and Worker Shutdown Specification](09_CANCELLATION_SHUTDOWN_SPEC.md): contractul viitor pentru anulare request-only, cleanup deținut de worker, DRAIN/CANCEL și join; specificație, nu implementare pthread.
+- [10 — Native Synchronization and Invocation Gates](10_NATIVE_SYNC_GATES.md): mutex abstraction multiplatformă, gates per modul, integrarea policy în dispatcher și protecția DOM teardown.
+- [Native module thread capabilities](../doc_src/NATIVE_THREAD_CAPABILITIES.md): enum-ul de capabilități, declarația pluginurilor, fallback-ul conservator și preflight-ul worker-mode.
 
 ## Reguli pentru continuarea lucrului
 
@@ -25,6 +28,6 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima arhivă:** `flatL-main-294-lexbor-worker-mode-policy.zip`.
+**Ultima arhivă:** `flatL-main-298-native-sync-invocation-gates.zip`.
 
-**Ultimul checkpoint:** arhiva 294 clarifică statutul DOM ca `PENDING_THREAD_SAFETY_VALIDATION`, nu `UNSUPPORTED`, și consemnează `SERIALIZED` ca fallback preferat dacă utilizarea independentă a contextelor Lexbor nu poate fi certificată. Serializarea trebuie să includă și distrugerea documentelor în `flat_dom_runtime_destroy()`. Nu conține worker pool și nu implementează încă mutex-ul DOM. Citește `01_DECISIONS.md`, `02_ROADMAP.md`, `04_IMPLEMENTATION_STATUS.md`, `06_WORKER_POOL_SPEC.md`, `07_NATIVE_THREAD_SAFETY_AUDIT.md` și `08_EXTERNAL_DEPENDENCY_AUDIT.md`. Orice decizie nouă se consemnează în `01_DECISIONS.md` și roadmap înainte de implementare.
+**Ultimul checkpoint:** arhiva 298 adaugă `FlatMutex` (POSIX pthread mutex / Windows SRWLOCK / Emscripten single-thread no-op), câte un invocation gate per modul, aplicarea policy-ului `SERIALIZED`/`PENDING` la limita `flat_native_invoke()` și aceeași protecție pentru `flat_dom_runtime_destroy()`. `THREAD_SAFE` rămâne fără gate; `UNSUPPORTED` continuă să fie permis în runtime-ul cooperativ și este respins numai de worker preflight. Worker pool-ul, scheduler synchronization, cancellation request și shutdown-ul nu sunt implementate. Lexbor rămâne `PENDING_THREAD_SAFETY_VALIDATION`; DOM gate-ul implementează fallback-ul `SERIALIZED`, fără să schimbe încă statutul de audit. Orice decizie nouă se consemnează în `01_DECISIONS.md` și roadmap înainte de implementare.

@@ -428,3 +428,65 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 **Conclusion:** archive 294 is a documentation and architecture-decision checkpoint only. It does not add a DOM mutex, enable DOM in worker mode, or claim Lexbor thread safety. If the concurrent tests cannot establish safe independent-context use, the implementation fallback is one process-wide DOM gate around every Lexbor operation, including VM/DOM teardown.
 
 **Next:** settle cancellation-request and drain/cancel shutdown contracts plus plugin capability metadata, then implement the runtime synchronization/lifetime protocol. DOM remains pending; do not start pthread workers yet.
+
+
+## Lexbor independent-context concurrency checkpoint — archive 295
+
+- [x] Add a pthread regression using the bundled Lexbor 3.0.0 amalgamation used by `mod_dom.c`.
+- [x] Exercise independent document creation, HTML parsing, CSS parser/selector creation and lookup, attribute mutation/readback, HTML serialization, and document/parser/selector destruction.
+- [x] Run eight concurrent threads for 2,000 document lifecycles.
+- [x] Run the focused test under ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer.
+- [x] Re-run existing FlatL DOM integration regressions.
+- [ ] Run equivalent tests against each supported system-Lexbor build; no system Lexbor package was available in this validation environment.
+- [ ] Run complete-VM DOM concurrency tests after the worker scheduler and runtime lifetime protocol are implemented.
+- [ ] Decide `THREAD_SAFE` versus `SERIALIZED` from complete-VM, build-matrix and sanitizer evidence.
+
+**Conclusion:** bundled Lexbor's independent document/parser/selector contexts passed the focused pthread stress test and both sanitizer configurations. This supports, but does not complete, the `THREAD_SAFE` qualification. The test directly exercises Lexbor rather than concurrent FlatL VMs; scheduler, runtime, native bridge, and VM teardown concurrency remain untested. Keep DOM `PENDING_THREAD_SAFETY_VALIDATION` and retain `SERIALIZED` as the fallback.
+
+**Next:** continue resolving the pre-worker contracts (plugin capability metadata, cancellation-request API, shutdown drain/cancel modes, and runtime/task/Channel synchronization). Do not start worker creation until those contracts are implemented. Complete-VM DOM testing belongs after that scheduler milestone.
+
+## Cancellation and shutdown contract checkpoint — archive 296
+
+- [x] Separate cancellation request, worker-owned cancellation execution, and terminal `CANCELLED` publication.
+- [x] Define safe-boundary behavior: a running VM is never cancelled or destroyed by the requesting thread; cancellation waits until `flat_vm_step()` returns at the next scheduler-visible safe boundary, normally the configured quantum boundary.
+- [x] Define cancellation cleanup order across Channel rollback, outgoing wait-edge removal, Channel-reference release, VM cleanup, terminal publication and dependent wakeup.
+- [x] Define DRAIN and CANCEL pool lifecycle modes, including CREATED-task behavior, new-submission rejection, unresolved WAITING detection, escalation and worker join.
+- [x] Record a future worker acceptance matrix for request races, cancellation cleanup, DRAIN/CANCEL, join/destroy and sanitizer stress.
+- [x] Preserve the current cooperative API unchanged; no asynchronous cancellation API or pthread implementation is introduced.
+
+**Archive 296 result:** specification-only milestone. The existing `flvm[23]` and `flvm[29]` regressions cover cooperative cancellation and cleanup; selected regressions are rerun for this checkpoint. Future implementation must add real worker tests for the matrix in `09_CANCELLATION_SHUTDOWN_SPEC.md`.
+
+**Next:** settle plugin capability metadata and enforcement (`THREAD_SAFE`, `SERIALIZED`, `UNSUPPORTED`, with unknown plugins denied by default), then design the scheduler mutex/condition-variable and task dispatch ownership protocol. Only after those contracts are implemented should pthread workers be created. Complete-VM Lexbor testing remains a post-scheduler gate.
+
+
+## Native module capability metadata checkpoint — archive 297
+
+- [x] Add explicit module capability enum: `THREAD_SAFE`, `SERIALIZED`, `UNSUPPORTED`, plus audit-only `PENDING_THREAD_SAFETY_VALIDATION`.
+- [x] Add conservative built-in module defaults, including `dom` pending→serialized and `task`/`channel` unsupported.
+- [x] Preserve the existing plugin initializer ABI and add the optional `flat_native_plugin_thread_capability()` symbol.
+- [x] Mark bundled optional plugin shared objects explicitly; legacy external plugins without metadata default to `UNSUPPORTED`.
+- [x] Add metadata freeze API and worker preflight that rejects unsupported modules and returns the effective execution policy.
+- [x] Add `flvm[34]` for policy mapping, unknown-module rejection, capability freeze and concurrent metadata reads.
+- [ ] Implement per-module mutex gates for `SERIALIZED` modules and integrate policy preflight into the worker dispatcher.
+- [ ] Cover all Lexbor calls including `flat_dom_runtime_destroy()` with the DOM gate if DOM remains serialized.
+- [ ] Run complete-VM concurrency tests for each built-in module/dependency before upgrading any pending or conditional classification.
+
+**Archive 297 result:** capability metadata and worker-admission preflight are implemented, but there is still no worker pool. The preflight returns the effective policy; it does not yet serialize handler execution. The next milestone should implement the platform synchronization abstraction and module gates together with the worker dispatcher, rather than adding a spinlock around potentially blocking native handlers.
+
+## Native synchronization and invocation gates — archive 298
+
+- [x] Add `FlatMutex` platform abstraction: POSIX pthread mutex, Windows SRWLOCK, single-thread Emscripten no-op.
+- [x] Add independent process-wide invocation gates per canonical native module.
+- [x] Integrate effective `SERIALIZED`/`PENDING` policy at the common `flat_native_invoke()` boundary; keep `THREAD_SAFE` calls ungated.
+- [x] Preserve cooperative compatibility: `UNSUPPORTED` modules are still callable in the current cooperative runtime and remain rejected by worker preflight.
+- [x] Protect Lexbor-backed DOM destruction with the same gate as DOM native handlers.
+- [x] Add `flvm[36]` for serialized exclusion, independent module gates, and DOM teardown protection.
+- [ ] Add complete-VM concurrent DOM tests after scheduler/VM lifetime synchronization; keep DOM pending until then.
+- [ ] Implement worker admission enforcement at the scheduler boundary, including preflight of all natives reachable by a task.
+- [ ] Implement scheduler mutex/condition variables, ready queue, worker ownership and wake-pending protocol.
+- [ ] Implement cancellation request/safe-point cleanup, DRAIN/CANCEL shutdown, worker join and runtime teardown.
+- [ ] Validate Windows and Emscripten pthread builds and run sanitizer stress on complete VMs.
+
+**Archive 298 result:** `SERIALIZED` is now enforced by per-module mutex gates at native invocation, and DOM teardown shares the DOM gate. This is not a worker pool and does not certify all `THREAD_SAFE` declarations. `UNSUPPORTED` remains a worker admission restriction, not a restriction on the existing cooperative runtime.
+
+**Next:** implement the worker admission boundary and scheduler synchronization protocol. Do not create workers until task/VM ownership, cancellation and shutdown are implemented. The native invocation gates are now active, but the worker scheduler still has to perform worker-policy preflight before dispatch.

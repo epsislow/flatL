@@ -595,3 +595,67 @@ No runtime scheduler/task/Channel synchronization is added by archive 293.
 `FlatDomRuntime` is per-VM. `flat_dom_runtime_create()` currently allocates the FlatL wrapper; Lexbor documents are created later by DOM operations. `flat_dom_runtime_destroy()` iterates the owned documents and calls `lxb_html_document_destroy()`, so Lexbor is touched during VM teardown as well as inside `dom.*` native handlers.
 
 DOM is `PENDING_THREAD_SAFETY_VALIDATION`, not `UNSUPPORTED`. Independent-context concurrency must be tested on supported bundled/system Lexbor variants under ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer. If this cannot be certified, a process-wide `SERIALIZED` gate must cover both handler calls and the teardown path. A gate around handlers only would leave teardown unprotected. No Lexbor global allocator setup may occur after workers start. Archive 294 changes the design decision and acceptance plan only; no worker gate is implemented.
+
+
+## Lexbor concurrent-context probe — archive 295
+
+The new `flvm[33]` case compiles the same bundled `external/lexbor/lexbor.c` amalgamation used by `src/lib/mod_dom.c` and drives Lexbor directly from eight pthreads. Each thread owns its document, CSS parser, selector engine, callback state and serialization buffer. Each iteration performs:
+
+1. `lxb_html_document_create()` and `lxb_html_document_parse()`;
+2. independent CSS parser and selector engine creation/initialization;
+3. CSS selector parse and `lxb_selectors_find()`;
+4. mutation and readback of a document attribute;
+5. `lxb_html_serialize_tree_cb()`;
+6. selector-list, selector-engine, parser and document destruction.
+
+The test completed 2,000 document lifecycles with no reported failures. Normal, ThreadSanitizer, and AddressSanitizer/UndefinedBehaviorSanitizer runs passed in this environment. `src/lib/mod_dom.c` has no mutable file-scope data declarations; its `static` declarations are functions, while document tables, parser/selector handles, callbacks and buffers are context/local owned. FlatL does not call `lexbor_memory_setup()`; the bundled allocator function pointers remain the library's default process-wide configuration and must remain immutable during concurrent use.
+
+**Scope limitation:** this is a direct Lexbor context-isolation test, not a concurrent `FlatRuntime`/`FlatVm` test. It does not exercise `FlatNativeCtx`, VM-owned `FlatDomRuntime` teardown under concurrent host calls, scheduler/task/Channel state, optional system Lexbor, or other process-wide FlatL services. A system Lexbor package was not available in the validation environment. Therefore no complete FlatL DOM worker capability is declared from this result.
+
+## 24. Archive 296 — cancellation request and shutdown contract
+
+### Current implementation confirmed
+
+- `flat_runtime_task_cancel()` accepts only `CREATED`, `RUNNABLE`, or `WAITING` task records. It calls `flat_vm_cancel()` synchronously, clears the task's outgoing wait metadata, aborts task-owned Channel transactions, releases task-held Channel references, marks the task `CANCELLED`, and wakes dependents.
+- `flat_vm_cancel()` accepts only VM handles in `READY` or `YIELDED`; it destroys the VM execution state immediately and publishes the VM cancellation result.
+- `flat_runtime_schedule()` marks a task `RUNNING` around `flat_vm_step()` and performs terminal cleanup after the step returns. There is no cross-thread cancellation-request flag or worker ownership token.
+- `flat_runtime_destroy()` rejects destruction while `active_runs`, task records, or Channels remain. The host must prevent new API calls racing with destroy.
+
+This is correct for the existing cooperative host-thread contract but cannot be reused as a cross-thread worker cancellation API: an external caller must not destroy a VM while a worker is executing it.
+
+### Archive 296 design contract
+
+`plans/09_CANCELLATION_SHUTDOWN_SPEC.md` defines a request-only API, worker-owned cleanup, safe-boundary cancellation, DRAIN/CANCEL shutdown modes, join-before-destroy ordering, and the future acceptance matrix. The design explicitly distinguishes a cancellation request from a completed `CANCELLED` transition. It also defines the race rule: if the VM reaches a terminal result before its owner observes the request, the terminal result wins.
+
+DRAIN rejects new submissions and lets already-started tasks finish; CREATED tasks are not auto-started and remain host cleanup obligations. A quiescent wait graph containing unresolved WAITING tasks is a blocked shutdown, not a successful drain. CANCEL requests cleanup for every nonterminal task and keeps workers alive until cleanup is complete. DRAIN may escalate to CANCEL; downgrade is forbidden.
+
+### Limits / non-claims
+
+- Archive 296 adds no public cancellation-request API, request flag, cancellation queue, shutdown API, pool lifecycle state, pthread worker, or join implementation.
+- No test can yet prove cancellation of a task while a worker is executing it, because the runtime has no worker pool.
+- The current cooperative cancellation and teardown regressions remain the executable baseline; the worker acceptance matrix is future work.
+- The exact blocked-DRAIN status/timeout API remains open and must be settled before exposing the shutdown API.
+
+
+## 25. Native module capability metadata implementation (archive 297)
+
+- Added `include/flat_native_capability.h` and `src/lib/native_capability.c`. The process-wide table contains explicit built-in module defaults, conservative handling for unknown module names, metadata overrides before startup, and a freeze operation.
+- Added `FlatNativeThreadCapability`: `THREAD_SAFE`, `SERIALIZED`, `UNSUPPORTED`, and audit-only `PENDING`. `flat_native_module_worker_policy()` maps pending to serialized and unknown to unsupported.
+- Added optional plugin symbol `flat_native_plugin_thread_capability()`. The existing `flat_native_plugin_init(reg)` ABI is unchanged. The loader stores the declared capability; a plugin without the symbol or with an invalid value is marked unsupported for worker admission.
+- Updated all bundled optional plugin entrypoints (`math.trig`, `math.stats`, `math.mdim`, `math`, `list`, `obj`, `vcx`, `csv`) to export `THREAD_SAFE` declarations based on their VM/context-owned handler state. This is not a complete-VM certification.
+- Added `flat_native_runtime_worker_policy()`: it prepares the native module, rejects unsupported modules and returns the effective thread-safe/serialized policy. A future scheduler must call it before dispatch and must enforce the returned serialized policy.
+- Built-in baseline: `io` serialized; `dom` pending→serialized; `task`/`channel` unsupported; context-owned modules are declared thread-safe candidates subject to dependency and full-runtime gates.
+- Added `flvm[34]` with concurrent capability reads, pending→serialized mapping, unknown-module rejection, metadata override and freeze behavior.
+
+**Limit:** no module mutex gate or automatic dispatcher enforcement is added. `SERIALIZED` is currently a policy result for the future scheduler, not a lock already applied around native calls. The runtime remains cooperative and host-thread-confined.
+
+## 23. Native invocation gates and DOM teardown protection (archive 298)
+
+- Added `include/flat_sync.h`: POSIX pthread mutexes, Windows SRWLOCK, and no-op single-thread Emscripten mutexes. The abstraction currently covers mutex lock/unlock only; worker/thread and condition-variable APIs remain future work.
+- Added one static invocation mutex to each canonical module capability entry. The gates are independent per module.
+- Refactored native dispatch so `flat_native_invoke()` resolves the canonical module and wraps the full dispatch in its gate when the effective policy is `SERIALIZED`. `PENDING` maps to serialized and is gated. `THREAD_SAFE` remains ungated.
+- `UNSUPPORTED` is not rejected by the common invocation wrapper, because current cooperative execution remains backward-compatible. It continues to be rejected by `flat_native_runtime_worker_policy()` for worker admission.
+- `flat_dom_runtime_destroy()` now takes the same `dom` gate as DOM native invocations while destroying Lexbor documents. This protects the teardown path that runs outside the native dispatcher.
+- The gate is not held across VM stepping or task suspension. Scheduler and Channel lock integration is not implemented yet; future scheduler code must release those locks before native dispatch/VM teardown.
+- Added `flvm[36]`: eight concurrent callers prove exclusive entry for one serialized module; an independent module gate progresses concurrently; DOM runtime destruction waits for the DOM gate.
+- This targeted test does not prove full-VM concurrency or the safety of modules classified `THREAD_SAFE`. DOM remains `PENDING_THREAD_SAFETY_VALIDATION` until complete-VM and supported-build testing.

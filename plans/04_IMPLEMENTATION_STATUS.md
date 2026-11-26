@@ -1,8 +1,8 @@
 # Task Runtime — stadiul implementării
 
 **Ultima actualizare:** 2026-11-26  
-**Arhivă de referință:** `flatL-main-293-external-dependency-concurrency-audit.zip`
-**Arhivă curentă:** `flatL-main-293-external-dependency-concurrency-audit.zip`  
+**Arhivă de referință:** `flatL-main-296-cancellation-shutdown-contract.zip`
+**Arhivă curentă:** `flatL-main-297-native-module-capability-metadata.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 ## Ce este prezent în arhiva 252 (bază)
@@ -891,3 +891,129 @@ Complete the static mutable-state audit across embedded native modules and suppo
 ### Next
 
 Add deterministic concurrent complete-VM DOM tests after the scheduler exists, validate bundled and supported system-Lexbor variants under sanitizers, then choose `THREAD_SAFE` or `SERIALIZED` from evidence. Keep `UNSUPPORTED` only for a demonstrated uncontainable constraint. Continue with cancellation/shutdown and plugin capability contracts before pthread worker implementation.
+
+
+## Archive 295 — bundled Lexbor independent-context concurrency probe
+
+### Changes
+
+- Added `test/cases/flvm/033_lexbor_concurrency/lexbor_concurrency_test.c` and its `case.toml` to the existing `bin/run_tests` framework.
+- The C test compiles the exact bundled Lexbor 3.0.0 amalgamation and runs eight pthreads. Each thread repeatedly owns and destroys its own HTML document, CSS parser, selector engine, callback state and serialization buffer.
+- Each document lifecycle covers HTML parse, CSS selector parse/find, attribute mutation/readback, tree serialization, and cleanup. Total: 2,000 documents per run.
+- No production runtime or DOM wrapper code changed. No process-wide DOM mutex was added.
+- Updated decisions, roadmap, runtime audit, worker-pool specification, native/external dependency audits, DOM documentation, plans index and root README.
+
+### Validation
+
+- `bin/run_tests 'flvm[33]' -v -e` — 1/1 PASS.
+- Direct bundled Lexbor pthread regression — 8 threads / 2,000 documents PASS.
+- ThreadSanitizer build/run — PASS; no race reported in this test.
+- AddressSanitizer + UndefinedBehaviorSanitizer build/run — PASS; no error reported.
+- `bin/run_tests 'dom[1-18]' -v -e` — 18/18 PASS.
+- `make all -j2` — PASS (`done: all`).
+- `make docs` — PASS (49 sections).
+- System-Lexbor variant — NOT RUN; no `lexbor` pkg-config package was available.
+- Complete-VM concurrent DOM test — NOT RUN; current runtime/scheduler is not yet safe for concurrent host-driven VM runs.
+- Full default suite (1168 discovered tests) — NOT RUN.
+- Source snapshot has no `.git` metadata; branch/commit state cannot be verified.
+
+### Conclusion and remaining gates
+
+The bundled Lexbor independent-context test provides positive concurrency evidence and makes `THREAD_SAFE` a stronger candidate. It does not certify FlatL's full DOM integration or runtime. DOM remains `PENDING_THREAD_SAFETY_VALIDATION`; `SERIALIZED` remains the fallback if later complete-VM/build-matrix evidence requires it. Worker creation remains blocked by scheduler, task, Channel, cancellation, plugin and runtime-lifetime synchronization work.
+
+
+## Archive 296 — cancellation request and worker shutdown specification
+
+### Changes
+
+- Added `plans/09_CANCELLATION_SHUTDOWN_SPEC.md` with the proposed request-only cancellation API, cancellation state/ownership rules, safe-boundary semantics, cleanup order, DRAIN/CANCEL lifecycle modes, join-before-destroy ordering, and future worker acceptance matrix.
+- Updated `01_DECISIONS.md`, `02_ROADMAP.md`, `03_RUNTIME_AUDIT.md`, `06_WORKER_POOL_SPEC.md`, `07_NATIVE_THREAD_SAFETY_AUDIT.md`, `doc_src/TASK_RUNTIME_MODEL.md`, `plans/README.md`, and the root README.
+- Preserved the current cooperative `flat_runtime_task_cancel()` behavior and host-thread confinement.
+- No production C code, public API, asynchronous cancellation queue, shutdown implementation, pthread worker, or plugin metadata implementation was added. Archive 296 is specification-only.
+
+### Validation
+
+- `bin/run_tests 'flvm[23]' -v -e` — PASS (1/1); existing cooperative wait/wakeup/cancellation safe-point regression.
+- `bin/run_tests 'flvm[29]' -v -e` — PASS (1/1); existing Channel wait graph, cancellation/failure cleanup, task/Channel lifetime and teardown guards.
+- `bin/run_tests 'flvm[30]' -v -e` — PASS (1/1); cooperative task/Channel stress regression.
+- `bin/run_tests 'flvm[33]' -v -e` — PASS (1/1); independent bundled Lexbor context pthread regression.
+- `make all -j2` — PASS (`done: all`).
+- `make docs` — PASS (49 sections).
+- Test discovery reports 1168 tests; the full default suite was not run.
+- No new runtime/test API was implemented in this specification-only archive.
+- Source snapshot has no `.git` metadata; branch/commit state cannot be verified.
+
+### Remaining gates
+
+- Implement and test plugin capability metadata/enforcement.
+- Implement scheduler synchronization, worker ownership, cancellation request/cleanup queue, DRAIN/CANCEL, join and runtime lifetime protocol.
+- Add actual pthread tests for cancellation-vs-completion, cancellation of RUNNING/WAITING tasks, blocked DRAIN, CANCEL cleanup, and join/destroy ordering.
+- Run complete-VM Lexbor/PCRE2/HTTP concurrency tests after the scheduler exists.
+
+
+## Archive 297 — native module capability metadata and worker preflight
+
+### Implemented
+
+- Added the capability enum and process-wide module metadata table in `include/flat_native_capability.h` / `src/lib/native_capability.c`.
+- Added built-in defaults, unknown-module rejection, pre-start overrides, and `flat_native_runtime_freeze_worker_capabilities()` (which serializes the freeze against lazy plugin loading). `PENDING` maps conservatively to `SERIALIZED`.
+- Preserved `flat_native_plugin_init(reg)` and added optional plugin metadata symbol `flat_native_plugin_thread_capability()`. Bundled optional plugin entrypoints explicitly declare `THREAD_SAFE`; legacy external plugins without metadata are marked `UNSUPPORTED` for worker admission.
+- Added `flat_native_runtime_worker_policy()` to prepare a module, reject unsupported worker use, and return `THREAD_SAFE` or `SERIALIZED`.
+- Added `test/cases/flvm/034_native_capabilities/` (`flvm[34]`) for policy mapping, unknown-module rejection, override/freeze behavior and concurrent reads.
+- Added normative documentation `doc_src/NATIVE_THREAD_CAPABILITIES.md` and linked it in `doc_src/index.json`.
+
+### Not implemented
+
+- No per-module mutex gate exists yet; `SERIALIZED` is returned as policy, not automatically applied around calls.
+- The native dispatcher does not yet invoke worker preflight because worker mode and worker ownership do not exist.
+- No pthread worker pool, scheduler synchronization, cancellation request API, DRAIN/CANCEL or join implementation exists.
+- Built-in `THREAD_SAFE` declarations are source-audit admission baselines, not complete-VM concurrency certifications. DOM remains pending and task/channel remain unsupported.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `bin/run_tests 'flvm[34]' -v -e` — PASS (1/1; 8 threads, 1,600,000 capability-policy reads).
+- `nm -D` confirmed `flat_native_plugin_thread_capability` is exported by all seven bundled optional plugin shared objects.
+- `bin/run_tests 'flvm[31-35]' -v -e` — PASS (5/5).
+- `bin/run_tests native -v -e` — PASS (22/22).
+- `bin/run_tests native_use -v -e` — PASS (6/6).
+- `bin/run_tests 'dom[1-18]' -v -e` — PASS (18/18).
+- `flvm[34]` capability metadata test under ThreadSanitizer — PASS (8 threads, 1,600,000 policy reads).
+- `flvm[34]` capability metadata test under AddressSanitizer/UndefinedBehaviorSanitizer — PASS.
+- `make docs` — PASS (50 sections).
+- Full default suite (1170 discovered tests) — NOT RUN.
+
+## Archive 298 — platform mutex abstraction and native invocation gates
+
+### Implemented
+
+- Added `include/flat_sync.h` with POSIX `pthread_mutex_t`, Windows `SRWLOCK`, and single-threaded Emscripten no-op mutex implementations. The abstraction intentionally contains only mutex lock/unlock; thread create/join and condition variables remain future work.
+- Added one static process-wide invocation gate per canonical module in `src/lib/native_capability.c`, exposed through `flat_native_module_gate_enter()` / `flat_native_module_gate_leave()`.
+- Refactored `flat_native_invoke()` into a common wrapper and inner dispatcher. The wrapper resolves the canonical module and gates `SERIALIZED` and effective `PENDING` calls; `THREAD_SAFE` calls are not gated.
+- Kept `UNSUPPORTED` modules callable in the current cooperative runtime. Worker-mode rejection remains the responsibility of `flat_native_runtime_worker_policy()` and future worker admission.
+- Added the DOM teardown gate to `flat_dom_runtime_destroy()`, so Lexbor document destruction shares the same `dom` gate as DOM native calls.
+- Added `test/cases/flvm/036_native_invocation_gates/` (`flvm[36]`) for exclusive serialized access, independent per-module progress, and DOM teardown blocking behind the gate.
+- Added `plans/10_NATIVE_SYNC_GATES.md` and updated native capability documentation.
+
+### Not implemented
+
+- No pthread worker pool, scheduler mutex/condition-variable protocol, ready queue, worker ownership, or wake-pending protocol.
+- No asynchronous cancellation request, DRAIN/CANCEL shutdown, worker join, or worker-owned VM cleanup.
+- No worker admission enforcement in the scheduler. The existing worker preflight is available, but no worker dispatch boundary exists.
+- No complete-VM concurrency certification for modules classified `THREAD_SAFE`; DOM remains `PENDING_THREAD_SAFETY_VALIDATION`.
+- No Windows or Emscripten pthread runtime validation in this environment.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests 'flvm[31-36]' -v -e` — PASS (6/6).
+- `bin/run_tests 'flvm[23-25]' -v -e` — PASS (3/3); `flvm[26]` and `flvm[27]` also PASS individually; `flvm[28-30]` PASS (3/3).
+- `bin/run_tests native -v -e` — PASS (22/22).
+- `bin/run_tests native_use -v -e` — PASS (6/6).
+- `bin/run_tests 'dom[1-18]' -v -e` — PASS (18/18).
+- `flvm[36]` under ThreadSanitizer — PASS (serialized plugin first-use dispatch, independent gates and DOM teardown gate).
+- `flvm[36]` under AddressSanitizer/UndefinedBehaviorSanitizer — PASS.
+- A combined `flvm[23-36]` run encountered intermittent runner/build timeouts around rebuilding the `flvm[26]`/`flvm[27]` integration binaries. Those IDs were rerun separately and passed; no complete grouped-range pass is claimed.
+- Test discovery reports 1171 tests; the full default suite was NOT RUN.
+- Windows and Emscripten builds were not available for validation.

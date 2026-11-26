@@ -6,6 +6,8 @@
 
 **Strict types (T0):** [STRICT_TYPES.md](./STRICT_TYPES.md) (overview) · [TYPED_BIND.md](./TYPED_BIND.md) (normative draft) · tests `test/cases/types_t0/`.
 
+**Worker-mode native modules:** [NATIVE_THREAD_CAPABILITIES.md](./NATIVE_THREAD_CAPABILITIES.md) defines plugin capability declarations, conservative admission policy, and per-module invocation gates.
+
 **Browser playground (fleditor):** see **[FLEDITOR.md](./FLEDITOR.md)** — site in **`docs/fleditor_site/`**; full stack rebuild: **`make rebuild`** (includes **`make fleditor-wasm`**).
 
 **GitHub Pages:** publish folder **`docs/`** on branch `main` (see FLEDITOR.md).

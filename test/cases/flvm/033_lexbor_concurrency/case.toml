@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 33
+desc = "Bundled Lexbor supports independent document contexts under concurrent pthread use"
+kind = "exec"
+cmd = "gcc -std=c11 -D_GNU_SOURCE -Wall -Wextra -Werror -pthread -I{root}/external/lexbor -o {tmp}/lexbor_concurrency_test {root}/test/cases/flvm/033_lexbor_concurrency/lexbor_concurrency_test.c -lm && {tmp}/lexbor_concurrency_test"
+expect_exit = 0
+stdout_contains = "lexbor-concurrency-ok workers=8 documents=2000"
