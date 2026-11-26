@@ -31,6 +31,10 @@ typedef struct {
     int redirect_limit_hit; /* 1 when stopped because max_redirects was exceeded */
 } FlatHttpResponse;
 
+/* Initialize process-wide transport state before starting worker threads.
+ * Native libcurl builds perform curl_global_init here; WASM builds return success. */
+int flat_http_prepare(void);
+
 /* Transport errors do not turn HTTP 4xx/5xx into failures.
  * redirect_limit_hit may be set with a partial status_chain; caller may panic. */
 int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out);

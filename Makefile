@@ -205,7 +205,7 @@ HTTP_CFLAGS =
 HTTP_LIBS =
 ENSURE_LIBZ_1 =
 else
-HTTP_SRC = src/lib/mod_http.c src/http/flat_http_curl.c
+HTTP_SRC = src/lib/mod_http.c src/common/flat_http_boundary.c src/http/flat_http_curl.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 # MSYS2 UCRT64: libcurl PE imports libz-1.dll; mingw zlib package ships zlib1.dll.

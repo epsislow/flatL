@@ -8,10 +8,162 @@
 #include <stdio.h>
 #include <string.h>
 
+
+static int run_runtime_teardown_audit(const FlatBytecode *owner_bc,
+                                      const FlatBytecode *waiter_bc,
+                                      const FlatBytecode *fail_bc) {
+    FlatRuntime *runtime = NULL;
+    FlatTaskId task = 0, owner = 0, waiter = 0;
+    FlatChannelId channel = 0;
+    uint64_t turns = 0;
+    int i;
+    int rc = 0;
+
+    /* CREATED tasks and registered Channels both keep the runtime alive. */
+    runtime = flat_runtime_create(NULL);
+    if (!runtime || flat_runtime_channel_create(runtime, &channel) != 0 || channel != 1 ||
+        flat_runtime_task_create(runtime, owner_bc, NULL, &task) != 0 ||
+        flat_runtime_task_state(runtime, task) != FLAT_TASK_CREATED ||
+        flat_runtime_destroy(runtime) == 0 ||
+        flat_runtime_task_destroy(runtime, task) != 0 ||
+        flat_runtime_channel_destroy(runtime, channel) != 0 ||
+        flat_runtime_destroy(runtime) != 0) {
+        rc = 1;
+        goto done;
+    }
+    runtime = NULL;
+    task = 0;
+    channel = 0;
+
+    /* A RUNNABLE transaction owner cannot be destroyed with the runtime.
+     * Cancellation must abort the transaction before either record is removed. */
+    runtime = flat_runtime_create(NULL);
+    if (!runtime || flat_runtime_channel_create(runtime, &channel) != 0 || channel != 1 ||
+        flat_runtime_task_create(runtime, owner_bc, NULL, &owner) != 0 ||
+        flat_runtime_channel_lock(runtime, channel, owner) != 0 ||
+        flat_runtime_task_start(runtime, owner) != 0 ||
+        flat_runtime_task_state(runtime, owner) != FLAT_TASK_RUNNABLE ||
+        flat_runtime_destroy(runtime) == 0 ||
+        flat_runtime_channel_destroy(runtime, channel) == 0 ||
+        flat_runtime_task_destroy(runtime, owner) == 0 ||
+        flat_runtime_task_cancel(runtime, owner) != 0 ||
+        flat_runtime_task_state(runtime, owner) != FLAT_TASK_CANCELLED ||
+        flat_runtime_destroy(runtime) == 0 || /* Terminal records still belong to the registry. */
+        flat_runtime_task_destroy(runtime, owner) != 0 ||
+        flat_runtime_channel_destroy(runtime, channel) != 0 ||
+        flat_runtime_destroy(runtime) != 0) {
+        rc = 2;
+        goto done;
+    }
+    runtime = NULL;
+    owner = 0;
+    channel = 0;
+
+    /* COMPLETED and FAILED records also remain registered until explicit destroy.
+     * Completion commits/unlocks the transaction; failure rolls it back. */
+    runtime = flat_runtime_create(NULL);
+    if (!runtime || flat_runtime_channel_create(runtime, &channel) != 0 || channel != 1 ||
+        flat_runtime_task_create(runtime, owner_bc, NULL, &task) != 0 ||
+        flat_runtime_channel_lock(runtime, channel, task) != 0 ||
+        flat_runtime_task_start(runtime, task) != 0 ||
+        flat_runtime_schedule(runtime, 1, 0, &turns) != 0 ||
+        flat_runtime_task_state(runtime, task) != FLAT_TASK_COMPLETED ||
+        flat_runtime_destroy(runtime) == 0 ||
+        flat_runtime_task_destroy(runtime, task) != 0 ||
+        flat_runtime_channel_destroy(runtime, channel) != 0 ||
+        flat_runtime_destroy(runtime) != 0) {
+        rc = 7;
+        goto done;
+    }
+    runtime = NULL;
+    task = 0;
+    channel = 0;
+
+    runtime = flat_runtime_create(NULL);
+    if (!runtime || flat_runtime_channel_create(runtime, &channel) != 0 || channel != 1 ||
+        flat_runtime_task_create(runtime, fail_bc, NULL, &task) != 0 ||
+        flat_runtime_channel_lock(runtime, channel, task) != 0 ||
+        flat_runtime_task_start(runtime, task) != 0 ||
+        flat_runtime_schedule(runtime, 1, 0, &turns) != 0 ||
+        flat_runtime_task_state(runtime, task) != FLAT_TASK_FAILED ||
+        flat_runtime_destroy(runtime) == 0 ||
+        flat_runtime_task_destroy(runtime, task) != 0 ||
+        flat_runtime_channel_destroy(runtime, channel) != 0 ||
+        flat_runtime_destroy(runtime) != 0) {
+        rc = 8;
+        goto done;
+    }
+    runtime = NULL;
+    task = 0;
+    channel = 0;
+
+    /* WAITING tasks cannot be destroyed. Cancelling the owner wakes the waiter;
+     * cancelling the waiter before retry releases its Channel reference. */
+    runtime = flat_runtime_create(NULL);
+    if (!runtime || flat_runtime_channel_create(runtime, &channel) != 0 || channel != 1 ||
+        flat_runtime_task_create(runtime, owner_bc, NULL, &owner) != 0 ||
+        flat_runtime_task_create(runtime, waiter_bc, NULL, &waiter) != 0 ||
+        flat_runtime_channel_lock(runtime, channel, owner) != 0 ||
+        flat_runtime_task_start(runtime, waiter) != 0) {
+        rc = 3;
+        goto done;
+    }
+    for (i = 0; i < 16 && flat_runtime_task_state(runtime, waiter) != FLAT_TASK_WAITING; ++i) {
+        if (flat_runtime_schedule(runtime, 1, 1, &turns) != 0 || turns != 1) {
+            rc = 4;
+            goto done;
+        }
+    }
+    if (flat_runtime_task_state(runtime, waiter) != FLAT_TASK_WAITING ||
+        flat_runtime_destroy(runtime) == 0 ||
+        flat_runtime_task_destroy(runtime, waiter) == 0 ||
+        flat_runtime_task_cancel(runtime, owner) != 0 ||
+        flat_runtime_task_state(runtime, waiter) != FLAT_TASK_RUNNABLE ||
+        flat_runtime_destroy(runtime) == 0 || /* Wakeup does not remove the task record. */
+        flat_runtime_channel_destroy(runtime, channel) == 0 || /* Waiter still pins it. */
+        flat_runtime_task_cancel(runtime, waiter) != 0 ||
+        flat_runtime_task_state(runtime, waiter) != FLAT_TASK_CANCELLED ||
+        flat_runtime_task_destroy(runtime, waiter) != 0 ||
+        flat_runtime_task_destroy(runtime, owner) != 0 ||
+        flat_runtime_channel_destroy(runtime, channel) != 0 ||
+        flat_runtime_destroy(runtime) != 0) {
+        rc = 5;
+        goto done;
+    }
+    runtime = NULL;
+    owner = waiter = 0;
+    channel = 0;
+
+    /* A fresh runtime starts task and Channel IDs from one. */
+    runtime = flat_runtime_create(NULL);
+    if (!runtime || flat_runtime_channel_create(runtime, &channel) != 0 || channel != 1 ||
+        flat_runtime_task_create(runtime, owner_bc, NULL, &task) != 0 || task != 1 ||
+        flat_runtime_task_destroy(runtime, task) != 0 ||
+        flat_runtime_channel_destroy(runtime, channel) != 0 ||
+        flat_runtime_destroy(runtime) != 0) {
+        rc = 6;
+        goto done;
+    }
+    runtime = NULL;
+
+ done:
+    if (runtime) {
+        if (owner) (void)flat_runtime_task_cancel(runtime, owner);
+        if (waiter) (void)flat_runtime_task_cancel(runtime, waiter);
+        if (task) (void)flat_runtime_task_cancel(runtime, task);
+        if (waiter) (void)flat_runtime_task_destroy(runtime, waiter);
+        if (owner) (void)flat_runtime_task_destroy(runtime, owner);
+        if (task) (void)flat_runtime_task_destroy(runtime, task);
+        if (channel) (void)flat_runtime_channel_destroy(runtime, channel);
+        (void)flat_runtime_destroy(runtime);
+    }
+    return rc;
+}
+
 int main(int argc, char **argv) {
     static FlatBytecode owner_bc, writer_bc, reader_bc, locker_bc, fail_owner_bc;
     static FlatBytecode lock_while_holding_bc, set_while_holding_bc, var_while_holding_bc;
-    static FlatBytecode waiter_channel_two_bc;
+    static FlatBytecode waiter_channel_two_bc, waiter_fail_after_lock_bc;
     FlatRuntime *runtime = NULL;
     FlatTaskId owner = 0, writer = 0, reader = 0, locker = 0;
     FlatTaskId cancelled_owner = 0, cancel_waiter = 0;
@@ -23,6 +175,9 @@ int main(int argc, char **argv) {
     FlatTaskId multi_owner = 0, channel_one_waiter = 0, channel_two_waiter = 0;
     FlatTaskId graph_owner = 0, graph_channel_waiter = 0;
     FlatTaskId graph_waiter_on_channel = 0, graph_waiter_on_owner = 0;
+    FlatTaskId chain_owner = 0, chain_channel_waiter = 0, chain_downstream = 0, chain_owner_waiter = 0;
+    FlatTaskId chain_cancel_owner = 0, chain_cancel_waiter = 0, chain_cancel_downstream = 0;
+    FlatTaskId chain_fail_owner = 0, chain_fail_waiter = 0, chain_fail_downstream = 0;
     FlatChannelId channel = 0, second_channel = 0;
     FlatCollectionPool *coll = NULL;
     FlatStringPool *pool = NULL;
@@ -39,8 +194,9 @@ int main(int argc, char **argv) {
     memset(&set_while_holding_bc, 0, sizeof set_while_holding_bc);
     memset(&var_while_holding_bc, 0, sizeof var_while_holding_bc);
     memset(&waiter_channel_two_bc, 0, sizeof waiter_channel_two_bc);
+    memset(&waiter_fail_after_lock_bc, 0, sizeof waiter_fail_after_lock_bc);
     memset(&value, 0, sizeof value);
-    if (argc != 10 || flat_fb_load_file(argv[1], &owner_bc) != 0 ||
+    if (argc != 11 || flat_fb_load_file(argv[1], &owner_bc) != 0 ||
         flat_fb_load_file(argv[2], &writer_bc) != 0 ||
         flat_fb_load_file(argv[3], &reader_bc) != 0 ||
         flat_fb_load_file(argv[4], &locker_bc) != 0 ||
@@ -48,7 +204,8 @@ int main(int argc, char **argv) {
         flat_fb_load_file(argv[6], &lock_while_holding_bc) != 0 ||
         flat_fb_load_file(argv[7], &set_while_holding_bc) != 0 ||
         flat_fb_load_file(argv[8], &var_while_holding_bc) != 0 ||
-        flat_fb_load_file(argv[9], &waiter_channel_two_bc) != 0) return 2;
+        flat_fb_load_file(argv[9], &waiter_channel_two_bc) != 0 ||
+        flat_fb_load_file(argv[10], &waiter_fail_after_lock_bc) != 0) return 2;
     runtime = flat_runtime_create(NULL);
     coll = flat_coll_create();
     pool = flat_pool_create();
@@ -62,6 +219,96 @@ int main(int argc, char **argv) {
         flat_runtime_task_create(runtime, &writer_bc, NULL, &writer) != 0 ||
         flat_runtime_task_create(runtime, &reader_bc, NULL, &reader) != 0 ||
         flat_runtime_task_create(runtime, &locker_bc, NULL, &locker) != 0) { rc = 5; goto done; }
+
+    /* Cancellation/failure propagation through a mixed dependency chain.
+     * A Channel waiter (C) has a task.wait dependent (D), while another task
+     * (A) waits directly for the owner (B). */
+    if (flat_runtime_task_create(runtime, &owner_bc, NULL, &chain_cancel_owner) != 0 ||
+        flat_runtime_task_create(runtime, &locker_bc, NULL, &chain_cancel_waiter) != 0 ||
+        flat_runtime_task_create(runtime, &reader_bc, NULL, &chain_cancel_downstream) != 0 ||
+        flat_runtime_task_create(runtime, &reader_bc, NULL, &chain_owner_waiter) != 0 ||
+        flat_runtime_channel_lock(runtime, channel, chain_cancel_owner) != 0 ||
+        flat_runtime_task_start(runtime, chain_cancel_waiter) != 0) { rc = 60; goto done; }
+    for (i = 0; i < 16 && flat_runtime_task_state(runtime, chain_cancel_waiter) != FLAT_TASK_WAITING; ++i) {
+        if (flat_runtime_schedule(runtime, 1, 1, &turns) != 0 || turns != 1) { rc = 61; goto done; }
+    }
+    if (flat_runtime_task_state(runtime, chain_cancel_waiter) != FLAT_TASK_WAITING ||
+        flat_runtime_task_start(runtime, chain_cancel_downstream) != 0 ||
+        flat_runtime_task_start(runtime, chain_owner_waiter) != 0 ||
+        flat_runtime_task_wait(runtime, chain_cancel_downstream, chain_cancel_waiter) != 0 ||
+        flat_runtime_task_wait(runtime, chain_owner_waiter, chain_cancel_owner) != 0 ||
+        flat_runtime_task_cancel(runtime, chain_cancel_owner) != 0 ||
+        flat_runtime_task_state(runtime, chain_cancel_waiter) != FLAT_TASK_RUNNABLE ||
+        flat_runtime_task_state(runtime, chain_owner_waiter) != FLAT_TASK_RUNNABLE ||
+        flat_runtime_task_state(runtime, chain_cancel_downstream) != FLAT_TASK_WAITING ||
+        flat_runtime_schedule(runtime, 1, 0, &turns) != 0 || turns == 0 ||
+        flat_runtime_task_state(runtime, chain_cancel_waiter) != FLAT_TASK_COMPLETED ||
+        flat_runtime_task_state(runtime, chain_cancel_downstream) != FLAT_TASK_COMPLETED ||
+        flat_runtime_task_state(runtime, chain_owner_waiter) != FLAT_TASK_COMPLETED) {
+        fprintf(stderr, "cancel chain: owner=%d channel_waiter=%d downstream=%d owner_waiter=%d\n",
+                (int)flat_runtime_task_state(runtime, chain_cancel_owner),
+                (int)flat_runtime_task_state(runtime, chain_cancel_waiter),
+                (int)flat_runtime_task_state(runtime, chain_cancel_downstream),
+                (int)flat_runtime_task_state(runtime, chain_owner_waiter));
+        rc = 62; goto done;
+    }
+    if (flat_runtime_task_destroy(runtime, chain_cancel_downstream) != 0 ||
+        flat_runtime_task_destroy(runtime, chain_owner_waiter) != 0 ||
+        flat_runtime_task_destroy(runtime, chain_cancel_waiter) != 0 ||
+        flat_runtime_task_destroy(runtime, chain_cancel_owner) != 0) { rc = 63; goto done; }
+    chain_cancel_downstream = chain_owner_waiter = chain_cancel_waiter = chain_cancel_owner = 0;
+
+    /* Cancelling the intermediate Channel waiter must clear its outgoing
+     * Channel dependency and wake its own task.wait dependants immediately. */
+    if (flat_runtime_task_create(runtime, &owner_bc, NULL, &chain_owner) != 0 ||
+        flat_runtime_task_create(runtime, &locker_bc, NULL, &chain_channel_waiter) != 0 ||
+        flat_runtime_task_create(runtime, &reader_bc, NULL, &chain_downstream) != 0 ||
+        flat_runtime_channel_lock(runtime, channel, chain_owner) != 0 ||
+        flat_runtime_task_start(runtime, chain_channel_waiter) != 0) { rc = 64; goto done; }
+    for (i = 0; i < 16 && flat_runtime_task_state(runtime, chain_channel_waiter) != FLAT_TASK_WAITING; ++i) {
+        if (flat_runtime_schedule(runtime, 1, 1, &turns) != 0 || turns != 1) { rc = 65; goto done; }
+    }
+    if (flat_runtime_task_start(runtime, chain_downstream) != 0 ||
+        flat_runtime_task_wait(runtime, chain_downstream, chain_channel_waiter) != 0 ||
+        flat_runtime_task_cancel(runtime, chain_channel_waiter) != 0) { rc = 660; goto done; }
+    if (flat_runtime_task_state(runtime, chain_downstream) != FLAT_TASK_RUNNABLE) {
+        fprintf(stderr, "cancel intermediate did not wake dependent: %d\n", (int)flat_runtime_task_state(runtime, chain_downstream));
+        rc = 661; goto done;
+    }
+    if (flat_runtime_task_cancel(runtime, chain_owner) != 0 ||
+        flat_runtime_schedule(runtime, 1, 0, &turns) != 0 || turns == 0 ||
+        flat_runtime_task_state(runtime, chain_downstream) != FLAT_TASK_COMPLETED) {
+        fprintf(stderr, "cancel intermediate dependent did not complete: state=%d turns=%llu\n", (int)flat_runtime_task_state(runtime, chain_downstream), (unsigned long long)turns);
+        rc = 662; goto done;
+    }
+    if (flat_runtime_task_destroy(runtime, chain_downstream) != 0 ||
+        flat_runtime_task_destroy(runtime, chain_channel_waiter) != 0 ||
+        flat_runtime_task_destroy(runtime, chain_owner) != 0) { rc = 663; goto done; }
+    chain_downstream = chain_channel_waiter = chain_owner = 0;
+
+    /* If the Channel waiter is woken and then fails after retrying the lock,
+     * terminal cleanup must still wake task.wait dependants. */
+    if (flat_runtime_task_create(runtime, &owner_bc, NULL, &chain_fail_owner) != 0 ||
+        flat_runtime_task_create(runtime, &waiter_fail_after_lock_bc, NULL, &chain_fail_waiter) != 0 ||
+        flat_runtime_task_create(runtime, &reader_bc, NULL, &chain_fail_downstream) != 0 ||
+        flat_runtime_channel_lock(runtime, channel, chain_fail_owner) != 0 ||
+        flat_runtime_task_start(runtime, chain_fail_waiter) != 0) { rc = 67; goto done; }
+    for (i = 0; i < 16 && flat_runtime_task_state(runtime, chain_fail_waiter) != FLAT_TASK_WAITING; ++i) {
+        if (flat_runtime_schedule(runtime, 1, 1, &turns) != 0 || turns != 1) { rc = 68; goto done; }
+    }
+    if (flat_runtime_task_start(runtime, chain_fail_downstream) != 0 ||
+        flat_runtime_task_wait(runtime, chain_fail_downstream, chain_fail_waiter) != 0 ||
+        flat_runtime_channel_unlock(runtime, channel, chain_fail_owner) != 0 ||
+        flat_runtime_task_state(runtime, chain_fail_waiter) != FLAT_TASK_RUNNABLE ||
+        flat_runtime_schedule(runtime, 64, 1, &turns) != 0 || turns != 1 ||
+        flat_runtime_task_state(runtime, chain_fail_waiter) != FLAT_TASK_FAILED ||
+        flat_runtime_task_state(runtime, chain_fail_downstream) != FLAT_TASK_RUNNABLE ||
+        flat_runtime_schedule(runtime, 1, 0, &turns) != 0 || turns == 0 ||
+        flat_runtime_task_state(runtime, chain_fail_downstream) != FLAT_TASK_COMPLETED ||
+        flat_runtime_task_destroy(runtime, chain_fail_downstream) != 0 ||
+        flat_runtime_task_destroy(runtime, chain_fail_waiter) != 0 ||
+        flat_runtime_task_destroy(runtime, chain_fail_owner) != 0) { rc = 69; goto done; }
+    chain_fail_downstream = chain_fail_waiter = chain_fail_owner = 0;
 
     /* Mixed wait graph: a Channel waiter is itself the target of task.wait,
      * while another task waits directly for the Channel owner. Releasing the
@@ -348,11 +595,26 @@ int main(int argc, char **argv) {
     if (flat_runtime_destroy(runtime) != 0) { rc = 19; goto done; }
     runtime = NULL;
 
+    if ((rc = run_runtime_teardown_audit(&owner_bc, &locker_bc, &fail_owner_bc)) != 0) {
+        rc += 70;
+        goto done;
+    }
+
 done:
     if (value.tag != VAL_EMPTY) flat_value_release(coll, pool, &value);
     flat_pool_destroy(pool);
     flat_coll_destroy(coll);
     if (runtime) {
+        if (chain_fail_downstream) (void)flat_runtime_task_cancel(runtime, chain_fail_downstream);
+        if (chain_fail_waiter) (void)flat_runtime_task_cancel(runtime, chain_fail_waiter);
+        if (chain_fail_owner) (void)flat_runtime_task_cancel(runtime, chain_fail_owner);
+        if (chain_downstream) (void)flat_runtime_task_cancel(runtime, chain_downstream);
+        if (chain_channel_waiter) (void)flat_runtime_task_cancel(runtime, chain_channel_waiter);
+        if (chain_owner) (void)flat_runtime_task_cancel(runtime, chain_owner);
+        if (chain_cancel_downstream) (void)flat_runtime_task_cancel(runtime, chain_cancel_downstream);
+        if (chain_owner_waiter) (void)flat_runtime_task_cancel(runtime, chain_owner_waiter);
+        if (chain_cancel_waiter) (void)flat_runtime_task_cancel(runtime, chain_cancel_waiter);
+        if (chain_cancel_owner) (void)flat_runtime_task_cancel(runtime, chain_cancel_owner);
         if (graph_waiter_on_owner) (void)flat_runtime_task_cancel(runtime, graph_waiter_on_owner);
         if (graph_waiter_on_channel) (void)flat_runtime_task_cancel(runtime, graph_waiter_on_channel);
         if (graph_channel_waiter) (void)flat_runtime_task_cancel(runtime, graph_channel_waiter);
@@ -377,6 +639,16 @@ done:
         if (reader) (void)flat_runtime_task_cancel(runtime, reader);
         if (writer) (void)flat_runtime_task_cancel(runtime, writer);
         if (owner) (void)flat_runtime_task_cancel(runtime, owner);
+        if (chain_fail_downstream) (void)flat_runtime_task_destroy(runtime, chain_fail_downstream);
+        if (chain_fail_waiter) (void)flat_runtime_task_destroy(runtime, chain_fail_waiter);
+        if (chain_fail_owner) (void)flat_runtime_task_destroy(runtime, chain_fail_owner);
+        if (chain_downstream) (void)flat_runtime_task_destroy(runtime, chain_downstream);
+        if (chain_channel_waiter) (void)flat_runtime_task_destroy(runtime, chain_channel_waiter);
+        if (chain_owner) (void)flat_runtime_task_destroy(runtime, chain_owner);
+        if (chain_cancel_downstream) (void)flat_runtime_task_destroy(runtime, chain_cancel_downstream);
+        if (chain_owner_waiter) (void)flat_runtime_task_destroy(runtime, chain_owner_waiter);
+        if (chain_cancel_waiter) (void)flat_runtime_task_destroy(runtime, chain_cancel_waiter);
+        if (chain_cancel_owner) (void)flat_runtime_task_destroy(runtime, chain_cancel_owner);
         if (graph_waiter_on_owner) (void)flat_runtime_task_destroy(runtime, graph_waiter_on_owner);
         if (graph_waiter_on_channel) (void)flat_runtime_task_destroy(runtime, graph_waiter_on_channel);
         if (graph_channel_waiter) (void)flat_runtime_task_destroy(runtime, graph_channel_waiter);

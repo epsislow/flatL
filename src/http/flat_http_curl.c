@@ -326,6 +326,10 @@ static int ensure_curl_global(FlatHttpResponse *out) {
     return 0;
 }
 
+int flat_http_prepare(void) {
+    return ensure_curl_global(NULL);
+}
+
 int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     CURL *curl;
     CURLcode result;
@@ -345,6 +349,9 @@ int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     transfer.overflow = 0;
     curl_easy_setopt(curl, CURLOPT_URL, req->url);
     curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, req->method);
+    /* Required for threaded use: do not let libcurl install/restore process signal handlers.
+     * DNS lookup timeout behavior depends on the configured resolver backend when this is set. */
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     /* Never forward credentials to a different host across redirects. */
     curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 0L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, req->timeout_ms);

@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 31
+desc = "HTTP multipart boundary allocator is unique under concurrent callers"
+kind = "exec"
+cmd = "gcc -std=c11 -Wall -Wextra -Werror -pthread -I{root}/include -o {tmp}/http_boundary_concurrency_test {root}/test/cases/flvm/031_http_boundary_concurrency/http_boundary_concurrency_test.c {root}/src/common/flat_http_boundary.c && {tmp}/http_boundary_concurrency_test"
+expect_exit = 0
+stdout_contains = "http-boundary-concurrency-ok"

@@ -1,0 +1,5 @@
+use native channel
+
+#main
+  locked = channel.lock(1)
+  FAIL

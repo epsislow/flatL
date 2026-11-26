@@ -3,6 +3,7 @@
 #include "flat_native_mod.h"
 #include "flat_native_util.h"
 #include "flat_http_runtime.h"
+#include "flat_http_boundary.h"
 #include "flat_enc.h"
 #include "flat_value.h"
 #include "flat_number.h"
@@ -12,6 +13,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 static int http_fail(FlatNativeCtx *ctx, const char *why) {
     if (ctx && ctx->io_status) *ctx->io_status = FLAT_IO_ERR;
@@ -221,11 +223,11 @@ static void http_parts_reset_keep_mode(FlatHttpRequestSlot *s) {
 
 static int http_ensure_boundary(FlatHttpRequestSlot *s) {
     char buf[48];
-    static unsigned long seq;
+    uint64_t seq;
     if (!s) return -1;
     if (s->multipart_boundary) return 0;
-    seq++;
-    snprintf(buf, sizeof buf, "----flatL%08lx%08lx", (unsigned long)(uintptr_t)s, seq);
+    seq = flat_http_boundary_next_sequence();
+    snprintf(buf, sizeof buf, "----flatL%08" PRIxPTR "%016" PRIx64, (uintptr_t)s, seq);
     s->multipart_boundary = dup_n(buf, strlen(buf));
     return s->multipart_boundary ? 0 : -1;
 }

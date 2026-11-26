@@ -334,3 +334,27 @@ A Channel waiter may itself be the target of another task's `task.wait()`. A sep
 Wakeup is intentionally differentiated: Channel unlock wakes only waiters associated with that Channel. Completion/failure/cancellation of the Channel waiter wakes tasks waiting for that waiter. Completion/failure/cancellation of the transaction owner wakes tasks waiting directly for the owner. The `flvm[29]` regression verifies these transitions in order.
 
 Under the cooperative no-suspend-while-owning-transaction rule, an active Channel transaction owner cannot itself be WAITING on another task or Channel. Thus a valid Channel-owner edge terminates at that owner; a mixed cycle continuing through an active owner is excluded by this invariant. This is not a general deadlock-freedom claim and does not cover future synchronization primitives or host threads.
+
+## 19. Cancellation and failure in chained wait graphs (archive 289)
+
+Cancellation and failure resolve only the outgoing dependency of the affected task and the incoming dependencies that target that task. They do not recursively complete an entire chain.
+
+For a chain `D --task.wait--> C --Channel wait--> B`:
+
+- Cancelling B releases its Channel transaction and wakes C. A separate task waiting directly on B is also woken.
+- Cancelling C removes C's Channel wait metadata/reference and wakes D because C is now terminal. D is only RUNNABLE; its next instruction may independently contend on B's still-active Channel transaction and become WAITING on B.
+- If B is subsequently cancelled/failed/released, D can be woken through its own Channel dependency.
+- If C is woken by B, retries its original Channel operation, and then fails, C's terminal cleanup releases its transaction and wakes D through the `task.wait(C)` edge.
+
+Wakeup is a state transition, not a promise that the dependent's next operation completes without another wait or failure. `flvm[29]` covers owner cancellation, intermediate waiter cancellation, and failure after a successful Channel retry. These are cooperative single-thread guarantees only.
+
+
+## 20. Runtime teardown and resource ownership (archive 290)
+
+`flat_runtime_destroy()` is deliberately not a force-cleanup operation. It refuses to destroy a runtime while an execution is active, any task record remains registered, or any Channel remains registered. COMPLETED, FAILED, and CANCELLED task states do not remove the task record: the host must explicitly call `flat_runtime_task_destroy()`.
+
+A RUNNABLE or WAITING task must first be resolved or cancelled. A Channel waiter that becomes RUNNABLE after owner cancellation still holds its Channel reference until terminal cleanup/cancellation. Likewise, `flat_runtime_channel_destroy()` rejects active transactions and references held by other tasks. The host teardown order is: resolve/cancel tasks and dependencies; destroy CREATED/terminal task records; destroy unlocked and unreferenced Channels; then destroy the idle runtime.
+
+The `flvm[29]` teardown regression verifies CREATED, RUNNABLE-with-transaction, WAITING, woken-RUNNABLE, and terminal-task registry states; it also verifies Channel pinning and fresh-runtime ID/registry independence. Existing `flvm[15]` separately verifies rejection while a VM run is active.
+
+The host must prevent new API calls from racing with `flat_runtime_destroy()`. The active-run counter rejects destruction while an already-entered VM/scheduler call is in flight, but the runtime lock is not a general concurrent API lifetime gate. Task registry/scheduler APIs remain confined to the scheduler-driving host thread. No pthread or worker-pool safety is implied.

@@ -95,6 +95,10 @@ static int append_response_header(FlatHttpResponse *out, const char *line, size_
     out->headers = next; out->headers[out->header_count++] = copy; return 0;
 }
 
+int flat_http_prepare(void) {
+    return 0;
+}
+
 int flat_http_perform(const FlatHttpRequest *req, FlatHttpResponse *out) {
     char *headers = NULL; size_t headers_cap = 16384, i, used = 0, body_len = 0;
     const unsigned char *bodyp;

@@ -297,3 +297,78 @@ This remains a cooperative single-thread contract. It is not a cross-thread lock
 - Completion/failure/cancellation of the Channel waiter wakes its `task.wait()` dependants. Completion/failure/cancellation of the transaction owner independently wakes its own dependants.
 - The current no-suspend-while-owning-transaction rule means a task that owns a Channel transaction cannot itself add an outgoing wait edge. Consequently a Channel-owner edge terminates at a transaction owner under the cooperative contract; mixed cycles cannot be constructed through a valid active transaction owner. This is an invariant, not a general deadlock-detection guarantee for future synchronization primitives.
 - These semantics are cooperative and single-threaded. They do not establish atomic wait-graph updates or wakeups across host threads.
+
+## 14. Cancellation and failure propagation through chained dependencies (archive 289)
+
+- A Channel waiter may have incoming `task.wait()` dependants while it is itself WAITING on a transaction owner. Cancelling that intermediate waiter clears its outgoing Channel dependency/reference and transitions it to `CANCELLED`; the runtime then wakes tasks whose `waiting_on` targets that waiter.
+- Cancelling or failing a transaction owner performs rollback/release of its Channel transactions and wakes both Channel waiters and direct `task.wait()` dependants through their respective dependency metadata.
+- Wakeup is not transitive. When an intermediate task becomes RUNNABLE, its dependants remain WAITING until that intermediate task itself reaches a terminal state.
+- A dependent that is woken by intermediate cancellation may subsequently execute an operation on the same still-locked Channel and become WAITING on the owner. Tests must therefore distinguish the immediate wakeup transition from the dependent's later execution/retry result.
+- If a Channel waiter wakes, retries its original native instruction successfully, and then fails, terminal cleanup must wake its own `task.wait()` dependants. The original Channel transaction must also be released by failure cleanup.
+- These guarantees are tested in the cooperative single-thread scheduler only. They do not establish concurrent cancellation safety or pthread worker readiness.
+
+
+## 15. Explicit runtime teardown and resource ownership (archive 290)
+
+- `flat_runtime_destroy()` is a refusal-based finalizer, not a force-cleanup API. It returns busy/failure while `active_runs`, registered task records, or registered Channels remain.
+- Task records remain runtime-owned even after `COMPLETED`, `FAILED`, or `CANCELLED`; reaching a terminal state releases task-owned Channel transactions/references and resolves waiters, but does not remove the task record. The host must still call `flat_runtime_task_destroy()`.
+- A task in `RUNNABLE` or `WAITING` must first be allowed to resolve or be cancelled. A WAITING task must be cancelled/resolved before destruction; a woken RUNNABLE waiter still owns its Channel reference until terminal cleanup/cancellation.
+- `flat_runtime_channel_destroy()` rejects a Channel with an active transaction or references held by other tasks. Cancelling/completing/failing/destroying the referencing task releases its references; the host then explicitly destroys the Channel.
+- Correct teardown order is therefore: resolve/cancel tasks and wait dependencies; destroy terminal/CREATED task records; destroy unlocked, unreferenced Channels; then destroy the idle runtime.
+- `flat_runtime_destroy()` checks active VM/scheduler runs, but the host must prevent new API calls from racing with destroy. The runtime lock is not a lifetime-safe concurrent API gate. Task registry/scheduler APIs remain confined to the scheduler-driving host thread.
+- A newly created runtime has independent registries and starts its monotone task/Channel ID sequences from their initial values. This does not imply process-global VM/native services are reset or thread-safe.
+
+These are explicit cooperative lifecycle rules, not pthread synchronization guarantees.
+
+
+## 16. Worker-pool ownership and synchronization design baseline (archive 291)
+
+Archive 291 adds `06_WORKER_POOL_SPEC.md`. The document distinguishes verified archive-290 source facts from the proposed v2.0 design. It is a specification checkpoint, not a pthread implementation or thread-safety declaration.
+
+The design baseline is:
+
+- A `FlatRuntime` owns its worker pool, task registry, ready/cancel queues, wait graph and Channel registry. Task records remain runtime-owned until explicit destruction.
+- A RUNNING task has exactly one worker owner. Its `FlatVm` may be stepped, cancelled or destroyed by only one thread at a time. A task may migrate between workers only between completed VM quanta.
+- A runtime scheduler mutex protects task state/registry, queue membership, wait graph, lifecycle and Channel registry references. A per-Channel mutex protects Channel storage and logical transaction fields. The permitted nested order is scheduler mutex → Channel mutex; Channel code must not call back into scheduler code while holding the Channel mutex.
+- No runtime/Channel mutex may be held while stepping a VM, invoking native/plugin code, performing blocking IO or calling host callbacks.
+- Wakeup racing with the end of a worker quantum requires an internal dispatch-ownership / wake-pending protocol so a task is enqueued exactly once.
+- Cancellation in worker mode requires a request/safe-point protocol. The current synchronous cooperative cancellation semantics must not be silently changed.
+- Channel transaction ownership remains based on `FlatTaskId`, not `pthread_t`; the logical transaction lock is not a pthread mutex held across task turns. The no-suspend-while-owning-any-Channel-transaction invariant remains in force.
+- Unknown native plugins are not assumed thread-safe. Handler-table synchronization does not protect handler internals. The unsynchronized HTTP multipart sequence is a confirmed audit item to fix or serialize.
+- Shutdown must stop admission, drain or request cancellation, wait for safe-point cleanup, join all workers, and only then release task/Channel/runtime resources. `pthread_cancel()` is excluded.
+- Cooperative fallback remains available on platforms without pthread; WASM worker support is a separate design.
+
+The exact public API for worker startup, cancellation requests, shutdown modes and plugin concurrency declarations remains open until the implementation plan is reviewed. See `06_WORKER_POOL_SPEC.md` for the full inventory, lock ordering and acceptance gates.
+
+
+## 17. Native module concurrency classification and HTTP boundary sequence (archive 292)
+
+- Native handler-table synchronization and native handler execution safety are separate concerns. The registry locks protect handler publication/lookup and plugin preparation; they do not protect handler internals or host resources used by a handler.
+- Worker mode must classify each handler/module as `THREAD_SAFE`, `SERIALIZED`, or `UNSUPPORTED`. `THREAD_SAFE` requires independent VM state and thread-safe dependencies. `SERIALIZED` uses a per-module invocation gate held only around the handler call. `UNSUPPORTED` is rejected in worker mode.
+- Until explicit capability metadata exists, unknown third-party plugins default to `UNSUPPORTED`; they are not silently treated as safe or serialized. Plugin authors must explicitly declare a capability before worker mode can invoke them.
+- Built-in `task` and `channel` handlers remain blocked until the runtime scheduler/task/Channel synchronization protocol is implemented. Other built-ins are candidates only after their process-wide host and external dependency constraints are met and multi-VM tests pass.
+- The HTTP multipart boundary sequence is process-wide allocation state and must be atomic. Archive 292 replaces the unsynchronized function-static `seq++` with a dedicated `atomic_uint_fast64_t` allocator in `flat_http_boundary.c`. The boundary string itself remains request-slot-owned.
+- Environment mutation, plugin search-path changes, native registration/unload, logger reconfiguration, and legacy host path staging are setup-only operations and must be frozen while workers execute. Caller-owned streams, callbacks and handles remain single-owner unless separately synchronized.
+- The native source audit is not a general thread-safety certification. External library guarantees and complete-VM concurrency tests remain acceptance gates.
+
+
+## 18. External dependency and HTTP worker-preparation contract (archive 293)
+
+- A dependency's upstream thread-safety statement applies only to its documented handle/context ownership model; it does not certify FlatL wrappers or shared VM/runtime state.
+- PCRE2 bundled by FlatL is 10.49, 8-bit, without JIT. `mod_re.c` creates pattern and match-data objects per call and does not share mutable match state. It is a worker-mode candidate, pending complete-VM concurrency tests.
+- Lexbor documents independent document creation but does not provide an explicit general concurrent-use guarantee in the reviewed documentation. FlatL must keep each DOM runtime/document separate and must not call `lexbor_memory_setup()` while workers execute. `dom` remains not certified until concurrent-context tests pass.
+- Native libcurl calls use one easy handle and request-local callback/response state per request; handles are never shared concurrently. Every easy handle sets `CURLOPT_NOSIGNAL=1`.
+- `flat_http_prepare()` is the explicit host hook for native `curl_global_init()` before worker threads are created. WASM implements it as a no-op. A worker-pool startup implementation must call it before spawning workers and must not rely on first-use lazy initialization inside a worker.
+- Native HTTP worker eligibility remains conditional on the deployment libcurl build/runtime and resolver backend. `CURLOPT_NOSIGNAL` avoids process signal-handler manipulation but may limit DNS timeout enforcement when no asynchronous/threaded resolver is available.
+- These dependency findings do not change the current rule: no pthread worker pool is permitted until the runtime scheduler, task registry, wait graph, Channel registry and cancellation/lifetime protocol are synchronized.
+
+
+## 19. Lexbor worker-mode status and serialized fallback (archive 294)
+
+- Lexbor's worker-mode status is `PENDING_THREAD_SAFETY_VALIDATION`, not `UNSUPPORTED`. This is an audit status, not a fourth runtime capability value; the eventual capability remains one of `THREAD_SAFE`, `SERIALIZED`, or `UNSUPPORTED`.
+- First attempt to qualify DOM for `THREAD_SAFE`: each VM owns an independent `FlatDomRuntime` and documents; run concurrent complete-VM DOM regressions on the bundled Lexbor version and supported system-Lexbor variants, then run ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer. A pass is necessary but must be reconciled with upstream guarantees and source findings.
+- If independent concurrent use cannot be certified, the preferred fallback is `SERIALIZED`, not `UNSUPPORTED`: all Lexbor entry points must pass through one process-wide DOM invocation gate. This includes every `dom.*` native handler and Lexbor-backed document destruction during `flat_dom_runtime_destroy()`/VM teardown. Protecting handler calls alone is insufficient because teardown calls `lxb_html_document_destroy()` outside a native handler.
+- The DOM gate must not be held across a VM quantum, task suspension, blocking host I/O, or unrelated module calls. It is acquired only around a bounded Lexbor operation or teardown operation. It must never be nested with scheduler or Channel locks; scheduler/Channel locks are released before invoking native code or destroying a VM.
+- `lexbor_memory_setup()` and any other process-global Lexbor configuration are setup-only. They must be completed before workers start and remain immutable until every worker and DOM runtime has stopped. FlatL currently does not call `lexbor_memory_setup()`.
+- `UNSUPPORTED` is reserved for a demonstrated constraint that cannot be made safe through independent contexts or the process-wide DOM gate. Do not classify DOM as unsupported merely because the upstream docs reviewed do not state a blanket thread-safety guarantee.
+- No DOM worker capability is enabled by archive 294. The status remains pending until the specified concurrency and sanitizer acceptance tests exist and pass.

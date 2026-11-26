@@ -6,6 +6,10 @@
 > FGIR spec v1.0 · Binary & VM spec v1.2 (`.fb` v6 with FFUN and optional SCHM metadata)  
 > **Documentation is in English** — index: [doc_src/README.md](doc_src/README.md) · offline site: **`make docs`** + **`make fleditor-serve`** → [docs/doc_site/](docs/doc_site/index.html)
 
+## Task Runtime / Worker Pool status
+
+The cooperative Task Runtime, wait/retry and Channel transaction model are implemented and audited through archive 290. Archives 291–293 specify the proposed worker-pool architecture, audit native-module concurrency, and harden HTTP initialization. Archive 294 classifies Lexbor/DOM as `PENDING_THREAD_SAFETY_VALIDATION`, with a process-wide `SERIALIZED` fallback if independent-context concurrency cannot be certified; no pthread worker pool is implemented. Read [`plans/README.md`](plans/README.md) for the document order, [`plans/04_IMPLEMENTATION_STATUS.md`](plans/04_IMPLEMENTATION_STATUS.md) for the latest checkpoint, and [`plans/06_WORKER_POOL_SPEC.md`](plans/06_WORKER_POOL_SPEC.md) plus [`plans/08_EXTERNAL_DEPENDENCY_AUDIT.md`](plans/08_EXTERNAL_DEPENDENCY_AUDIT.md) for the worker and dependency contracts.
+
 ## Why flatL?
 
 Traditional block nesting (`if`, `try/catch`, deep indentation) hides where success, failure, and recovery actually go. flatL makes both ends of every branch visible:
@@ -187,4 +191,4 @@ MIT — see [LICENSE](LICENSE).
 [epsislow](https://github.com/epsislow)
 
 
-Task Runtime / Channel architecture plans and the latest implementation checkpoint are maintained in [`plans/`](plans/). Current checkpoint: archive 288 (`flatL-main-288-cooperative-chained-wait-graph-audit.zip`).
+Task Runtime / Channel architecture plans and the latest implementation checkpoint are maintained in [`plans/`](plans/). Current checkpoint: archive 294 (`flatL-main-294-lexbor-worker-mode-policy.zip`). Archive 294 sets Lexbor/DOM to `PENDING_THREAD_SAFETY_VALIDATION` and records a process-wide `SERIALIZED` fallback that must include VM/DOM teardown if independent-context concurrency cannot be certified. It does not add pthread workers or implement a DOM gate. See [`plans/06_WORKER_POOL_SPEC.md`](plans/06_WORKER_POOL_SPEC.md), [`plans/07_NATIVE_THREAD_SAFETY_AUDIT.md`](plans/07_NATIVE_THREAD_SAFETY_AUDIT.md), and [`plans/08_EXTERNAL_DEPENDENCY_AUDIT.md`](plans/08_EXTERNAL_DEPENDENCY_AUDIT.md).

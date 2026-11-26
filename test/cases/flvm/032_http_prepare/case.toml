@@ -1,0 +1,8 @@
+suite = "flvm"
+id = 32
+mods = "http"
+desc = "native HTTP transport can be explicitly initialized before worker startup"
+kind = "exec"
+cmd = "gcc -std=c11 -D_GNU_SOURCE -Wall -Wextra -Werror -I{root}/include -o {tmp}/http_prepare_test {root}/test/cases/flvm/032_http_prepare/http_prepare_test.c {root}/src/http/flat_http_curl.c $(pkg-config --cflags --libs libcurl) && {tmp}/http_prepare_test"
+expect_exit = 0
+stdout_contains = "http-prepare-ok"

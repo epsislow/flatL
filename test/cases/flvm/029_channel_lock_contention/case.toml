@@ -1,6 +1,6 @@
 suite = "flvm"
 id = 29
-desc = "Channel contention retries, owner cleanup, task destruction, and no-suspend while holding transactions"
+desc = "Channel contention retries, chained wait graph cancellation/failure, task/Channel cleanup, runtime teardown guards, and no-suspend while holding transactions"
 kind = "exec"
 cmd = "sh {case}/run.sh {root} {tmp}"
 expect_exit = 0

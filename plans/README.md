@@ -9,6 +9,9 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [03 — Audit inițial al runtime-ului](03_RUNTIME_AUDIT.md): constatările tehnice din arhiva 57 și limitele arhitecturii actuale.
 - [04 — Stadiul implementării](04_IMPLEMENTATION_STATUS.md): ce există în arhiva curentă, ce nu este încă implementat și următorul pas.
 - [05 — Roadmap original](05_SOURCE_ROADMAP.md): copia planului inițial furnizat pentru Task Channels, păstrată pentru trasabilitate.
+- [06 — Worker Pool Architecture Specification](06_WORKER_POOL_SPEC.md): inventarul ownership-ului curent și specificația propusă pentru worker pool-ul v2.0; nu reprezintă implementare pthread.
+- [07 — Native Module Thread-Safety Audit](07_NATIVE_THREAD_SAFETY_AUDIT.md): auditul stării globale a modulelor native, limitele de ownership și politica de capabilități pentru pluginuri.
+- [08 — External Dependency Concurrency Audit](08_EXTERNAL_DEPENDENCY_AUDIT.md): evaluarea documentației upstream și a modului concret de utilizare PCRE2, Lexbor și libcurl în FlatL.
 
 ## Reguli pentru continuarea lucrului
 
@@ -22,6 +25,6 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima arhivă:** `flatL-main-288-cooperative-chained-wait-graph-audit.zip`.
+**Ultima arhivă:** `flatL-main-294-lexbor-worker-mode-policy.zip`.
 
-**Ultima actualizare de implementare:** arhiva 288. Citește `04_IMPLEMENTATION_STATUS.md` pentru starea exactă și testele rulate. Documentele `01`–`04` sunt normative pentru contractele curente; orice decizie nouă se consemnează aici în aceeași arhivă cu implementarea și testele.
+**Ultimul checkpoint:** arhiva 294 clarifică statutul DOM ca `PENDING_THREAD_SAFETY_VALIDATION`, nu `UNSUPPORTED`, și consemnează `SERIALIZED` ca fallback preferat dacă utilizarea independentă a contextelor Lexbor nu poate fi certificată. Serializarea trebuie să includă și distrugerea documentelor în `flat_dom_runtime_destroy()`. Nu conține worker pool și nu implementează încă mutex-ul DOM. Citește `01_DECISIONS.md`, `02_ROADMAP.md`, `04_IMPLEMENTATION_STATUS.md`, `06_WORKER_POOL_SPEC.md`, `07_NATIVE_THREAD_SAFETY_AUDIT.md` și `08_EXTERNAL_DEPENDENCY_AUDIT.md`. Orice decizie nouă se consemnează în `01_DECISIONS.md` și roadmap înainte de implementare.

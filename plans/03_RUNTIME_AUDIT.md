@@ -474,3 +474,124 @@ A valid Channel wait edge points to a task that owns the contended transaction. 
 - `make all -j2`: PASS; `make docs`: PASS (49 sections).
 - Full default suite (1165 discovered tests) was not run. No runtime implementation change was needed; archive 288 adds regression coverage and clarifies the graph contract.
 - No pthread/thread-safety claim is made.
+
+## 19. Archive 289 — cancellation/failure across chained dependencies
+
+The `flvm[29]` regression now exercises three additional mixed wait-graph paths:
+
+1. **Owner cancellation:** B owns a Channel transaction; C waits on the Channel; D waits on C; A waits directly on B. Cancelling B makes C and A RUNNABLE while D remains WAITING. C retries/completes, which wakes D; all three dependants complete independently.
+2. **Intermediate waiter cancellation:** C waits on B's Channel and D waits on C. Cancelling C clears C's Channel dependency/reference and wakes D. D is then scheduled while B still owns the Channel, so D may itself enter Channel WAITING on B. The test cancels B before allowing D to complete. This explicitly separates a wakeup edge from successful completion of the dependent's subsequent operation.
+3. **Failure after Channel retry:** C waits on B's Channel. D waits on C. B commits/unlocks, C wakes and retries `channel.lock`, then deliberately executes `FAIL`. C reaches FAILED, its cleanup releases the transaction, and D becomes RUNNABLE and completes.
+
+No runtime source change was required. The existing `runtime_wake_waiters`, `runtime_wake_channel_waiters`, cancellation cleanup, and terminal task cleanup implement the tested behavior. The test now includes a dedicated `waiter_fail_after_lock.fl` program. All newly created tasks are destroyed before the final `flat_runtime_destroy()` call, which succeeds.
+
+### Validation and limits
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `flvm[23]` through `flvm[30]` — each PASS in an individual run. The first multi-case shell batch was interrupted during `flvm[26]` build; `flvm[26]` and the remaining cases were rerun individually and passed. A later `flvm[27-30]` batch was interrupted during `flvm[30]`; `flvm[30]` was rerun individually and passed.
+- `native` — 22/22 PASS.
+- `native_use` — 6/6 PASS.
+- Full default suite (1165 discovered tests) — NOT RUN.
+- Runtime implementation unchanged. No cross-host-thread cancellation guarantee, pthread safety, or worker-pool readiness is claimed.
+
+
+## 20. Runtime teardown and final resource ownership audit (archive 290)
+
+`flat_runtime_destroy()` checks three runtime-owned lifetime counters/conditions: active VM/scheduler runs, registered task count, and registered Channel count. It refuses destruction while any of these remain. It does not force-cancel tasks, resolve waiters, release Channel references, or destroy Channels on behalf of the host.
+
+The focused `flvm[29]` teardown regression exercises these states:
+
+1. **CREATED task:** runtime destruction is rejected while the task record and Channel exist. Destroying the CREATED task and then the Channel permits runtime destruction.
+2. **RUNNABLE transaction owner:** runtime destruction is rejected while the task owns a Channel transaction. Channel destruction is independently rejected while the transaction is active. The task cannot be destroyed while RUNNABLE; cancellation aborts/rolls back the transaction, after which task and Channel destruction succeed.
+3. **WAITING Channel waiter:** runtime and task destruction are rejected while the waiter is suspended. Cancelling the owner wakes the waiter, but wakeup alone neither removes the waiter record nor releases its Channel reference. Runtime destruction and Channel destruction remain rejected until the waiter is cancelled and its task record is destroyed.
+4. **Terminal task records:** completion, failure, and cancellation release task-owned transactions/references as appropriate, but each record remains registered and `task_count` remains nonzero until explicit task destruction. The regression checks all three terminal outcomes and confirms the runtime still refuses destruction.
+5. **Fresh runtime:** after successful teardown, a newly created runtime has independent task and Channel registries and starts both IDs at one.
+
+The surrounding existing coverage also checks active-run rejection (`flvm[15]`), registered task rejection (`flvm[22]`), Channel references (`flvm[28]`), and Channel transaction/waiter lifecycle (`flvm[29]`). The current API contract requires the host to prevent new calls from racing with `flat_runtime_destroy()`. `active_runs` protects an already-entered VM/scheduler run; it is not a general lifetime-safe concurrent entry gate. Task registry and scheduler APIs remain single-host-thread-only.
+
+**Conclusion:** the cooperative teardown order is explicit and passes the tested cases: resolve/cancel tasks, destroy task records, destroy unlocked/unreferenced Channels, then destroy the idle runtime. No runtime source change was required. This is not a thread-safety or worker-pool readiness claim. Process-owned native/plugin/logger/locale/network services still require a separate cross-worker ownership audit.
+
+
+## 21. Archive 291 — worker-pool ownership and synchronization audit
+
+The archive-290 source was inspected directly. The worker-pool design and its full ownership matrix are recorded in [`06_WORKER_POOL_SPEC.md`](06_WORKER_POOL_SPEC.md). This section records the most important source-level findings.
+
+### Runtime/task state is not protected as one protocol
+
+`FlatRuntime` contains an `atomic_bool lock`, task and Channel linked lists, counters and scheduler cursor. The lock is used in selected paths (for example Channel registry acquisition and active-run accounting), but task start/wait/cancel/state/result/destroy, scheduler selection, task state transitions, and waiter scans do not consistently acquire it. `runtime_wake_waiters()` and `runtime_wake_channel_waiters()` mutate task records while traversing the registry. This is acceptable only under the documented single scheduler-driving host thread; it is not a worker-pool synchronization protocol.
+
+`flat_runtime_schedule()` currently chooses a RUNNABLE task, marks it RUNNING, calls `flat_vm_step()`, reconciles the result, performs Channel cleanup and wakes dependants synchronously on one host thread. The worker-pool implementation must split this into a short locked claim, unlocked VM quantum, and short locked result publication. Separately, `include/flat_runtime.h` documents concurrent `flat_runtime_run()` calls on one live runtime; that API statement is not a blanket certification of all native handlers, as the unsynchronized HTTP multipart sequence demonstrates.
+
+### VM/task ownership is a useful starting point, not a concurrency guarantee
+
+Each `FlatTaskRecord` owns a persistent `FlatVm`. `FlatVm` owns a copied bytecode image, a host configuration snapshot, and a persistent VM execution state. The execution state contains the task's VM pools, VCX, executor, file/IO state, RNG/date/env/path contexts and continuation. Spawn arguments are deep-copied into the child VM; file handles are rejected. This gives a strong per-task ownership boundary, provided one worker exclusively owns a RUNNING task and no host thread concurrently cancels/destroys it.
+
+### Channel gates and logical transactions are distinct
+
+`FlatChannel` currently has an `atomic_flag gate` protecting its internal data. This is not a pthread mutex and does not protect the runtime Channel registry or the task wait graph. The transaction owner is a logical `FlatTaskId`; no OS mutex is held across VM instructions. Worker mode should retain that distinction while adding real short-lived mutex protection and a single lock-order rule.
+
+### Process-owned services
+
+- Native plugin registry: the source has separate runtime and registry spinlocks. Lazy preparation and handler publication/lookup are synchronized, and handlers are invoked after those locks are released. This protects registry lifecycle, not plugin handler internals or arbitrary static state inside native modules.
+- Environment staging: process staging is protected by an atomic lock and cloned into VM/runtime snapshots. External mutation of the host process environment remains outside that lock.
+- Legacy path separator: atomic process-wide setting exists; worker VM operations should use their per-VM `FlatPathContext` snapshot.
+- Numeric locale: shared C numeric locale initialization is synchronized and the POSIX helper selects it per thread with `uselocale()`; preserve this model and avoid process-global locale mutation.
+- Runtime logger: global sequence, configuration, buffer and stdout writes are serialized by a process-wide atomic lock. Configure/shutdown only outside active worker lifetime; stdout is a shared sink.
+- Fallback memory streams: the process lookup list is locked, but individual `FILE *` stream operations and caller-owned output pointers are not made generally shareable.
+- WASM bridge: `flat_wasm.c` still contains shared last-result, panic, run-limit and staging globals; this bridge remains outside the first native pthread worker target.
+- HTTP module: `http_ensure_boundary()` increments a function-static `unsigned long seq` without synchronization. This is a concrete race candidate under concurrent calls and must be fixed or serialized.
+
+### Proposed synchronization baseline
+
+The spec proposes a runtime scheduler mutex for task registry/state, queues, wait graph, IDs, pool lifecycle and Channel registry references; a per-Channel mutex for Channel storage and logical transaction metadata; and the only permitted nested order scheduler mutex → Channel mutex. No such lock may be held across VM execution, native/plugin handlers, blocking IO or host callbacks. Transient Channel references are required if a Channel pointer survives release of the registry lock.
+
+A dispatch token (`worker_owned` plus `wake_pending`, or equivalent) is required because a task can become logically WAITING inside a native callback before its current `flat_vm_step()` returns; another worker could resolve that dependency during the same interval. The implementation must avoid both lost wakeups and duplicate ready-queue entries.
+
+Cancellation must become a request handled at a safe VM boundary; a host thread must not call `flat_vm_cancel()` or destroy a VM that is still RUNNING on a worker. The exact public cancellation and shutdown API remains an open decision.
+
+**Conclusion:** the source has useful per-VM ownership and several process-wide atomic/spin locks, but no complete worker-safe task scheduler protocol. Archive 291 is specification-only and makes no pthread/thread-safety claim.
+
+
+## 21. Native module thread-safety audit (archive 292)
+
+Archive 292 adds `plans/07_NATIVE_THREAD_SAFETY_AUDIT.md`, which inventories embedded native handlers, built-in optional plugin entry points, process-owned helper state, and external-resource boundaries.
+
+### Source findings
+
+- Embedded native handlers are predominantly context-based: collection/string/object/JSON/math/encoding/hash state is passed through `FlatNativeCtx`, VM pools, VM-owned RNG state, or per-request/per-VM runtime structures. This is a useful isolation boundary, but not by itself a worker-mode certification.
+- `mod_task.c` and `mod_channel.c` call into the shared `FlatRuntime` task/Channel bridge. They remain blocked until the scheduler mutex, task registry, wait graph, Channel registry and cancellation protocol are implemented as one synchronized design.
+- `mod_http.c` had a function-static non-atomic multipart sequence. Archive 292 moves allocation to `src/common/flat_http_boundary.c` and uses `atomic_uint_fast64_t` with relaxed fetch-add. The boundary string remains owned by the individual request slot.
+- `mod_math_mdim.c` has a process-wide debug cache protected by atomic initialization. `flat_http_curl.c` protects libcurl global initialization with atomic state/lock. `flat_env.c`, `flat_path.c`, `flat_locale.c`, `flat_runtime_log.c`, and the fallback `flat_memstream.c` have explicit synchronization for their respective shared state, with the ownership limitations recorded in the new audit.
+- `flat_rng.c` stores mutable RNG state in the `FlatRngState` passed by the VM; no process-global RNG state was found.
+- The WASM bridge still contains mutable singleton globals and remains outside the worker-pool target.
+- Process environment mutation, plugin path/configuration changes, logger reconfiguration, native registration/unload, shared FILE/callback targets and external library internals remain host/dependency boundaries.
+
+### Changes
+
+- Added `include/flat_http_boundary.h` and `src/common/flat_http_boundary.c`.
+- Updated `src/lib/mod_http.c` to use the atomic sequence allocator.
+- Added `test/cases/flvm/031_http_boundary_concurrency/` with eight pthread callers and 40,000 uniqueness/completeness checks.
+- Added `plans/07_NATIVE_THREAD_SAFETY_AUDIT.md` with module-by-module inventory, process-global state table, plugin capability policy and acceptance status.
+- Worker-mode plugin policy is specified as `THREAD_SAFE`, `SERIALIZED`, or `UNSUPPORTED`; unknown third-party plugins default to `UNSUPPORTED` until explicit metadata exists.
+
+### Limitations
+
+This is a source-level inventory and a targeted atomic primitive test. It does not execute two complete VMs concurrently and does not prove third-party plugins or external dependencies thread-safe. Scheduler/task/Channel runtime synchronization remains the primary blocker.
+
+
+## 22. External dependency and HTTP transport preflight (archive 293)
+
+- PCRE2 bundled version is 10.49, 8-bit, without JIT. FlatL's regex handlers allocate and free compiled patterns and match data within each call; no cross-VM regex object is shared. This is a strong candidate, pending complete-VM concurrent tests.
+- Lexbor bundled version is 3.0.0. Each VM owns a `FlatDomRuntime`; document/parser objects are not shared across VMs. The amalgamation has process-global allocator function pointers configurable through `lexbor_memory_setup()`. FlatL does not call this setup API; host/plugin code must not change it while workers run. Upstream docs reviewed do not provide an explicit general thread-safety guarantee, so DOM remains not certified.
+- Native libcurl uses a distinct easy handle and request-local callback state per request. `CURLOPT_NOSIGNAL=1L` is now set on each handle. `flat_http_prepare()` exposes the once-only global init so worker startup can initialize libcurl before creating worker threads. Resolver behavior and libcurl thread-safety feature availability remain deployment checks.
+- WASM's `flat_http_prepare()` is a no-op and does not imply WASM worker support.
+
+No runtime scheduler/task/Channel synchronization is added by archive 293.
+
+
+## 23. Lexbor/DOM worker-mode status (archive 294)
+
+`FlatDomRuntime` is per-VM. `flat_dom_runtime_create()` currently allocates the FlatL wrapper; Lexbor documents are created later by DOM operations. `flat_dom_runtime_destroy()` iterates the owned documents and calls `lxb_html_document_destroy()`, so Lexbor is touched during VM teardown as well as inside `dom.*` native handlers.
+
+DOM is `PENDING_THREAD_SAFETY_VALIDATION`, not `UNSUPPORTED`. Independent-context concurrency must be tested on supported bundled/system Lexbor variants under ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer. If this cannot be certified, a process-wide `SERIALIZED` gate must cover both handler calls and the teardown path. A gate around handlers only would leave teardown unprotected. No Lexbor global allocator setup may occur after workers start. Archive 294 changes the design decision and acceptance plan only; no worker gate is implemented.

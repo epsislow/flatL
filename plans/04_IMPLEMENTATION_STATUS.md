@@ -1,8 +1,8 @@
 # Task Runtime — stadiul implementării
 
 **Ultima actualizare:** 2026-11-26  
-**Arhivă de referință:** `flatL-main-252-task-runtime-plans.zip`
-**Arhivă curentă:** `flatL-main-288-cooperative-chained-wait-graph-audit.zip`  
+**Arhivă de referință:** `flatL-main-293-external-dependency-concurrency-audit.zip`
+**Arhivă curentă:** `flatL-main-293-external-dependency-concurrency-audit.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 ## Ce este prezent în arhiva 252 (bază)
@@ -701,3 +701,193 @@ Comanda grupată `flvm[23-30]` a fost întreruptă în timpul build-ului la `flv
 ### Următorul pas
 
 Testarea cancellation/failure în fiecare poziție a lanțului: owner-ul Channel, waiter-ul Channel și task-ul care așteaptă waiter-ul. Apoi auditul teardown-ului runtime după eliminarea tuturor dependențelor și referințelor Channel.
+
+## Archive 289 — cooperative chained cancellation and failure audit
+
+### Modifications
+
+- Extended `test/cases/flvm/029_channel_lock_contention/channel_lock_contention_test.c` with owner-cancellation propagation through a Channel waiter and two distinct `task.wait()` dependants.
+- Added an intermediate-waiter cancellation case. It verifies the downstream dependent is woken immediately, then demonstrates that its own Channel operation can wait on the still-active owner until that owner is cancelled.
+- Added `waiter_fail_after_lock.fl`: a Channel waiter wakes, retries and acquires the lock, then deliberately fails. The test verifies terminal failure cleanup releases the transaction and wakes its downstream task waiter.
+- Updated `run.sh` to compile and pass the new bytecode program to the C harness.
+- Runtime source was not changed; the existing wakeup and cleanup paths passed the expanded regression.
+- Updated decisions, roadmap, runtime audit, this status, `plans/README.md`, `doc_src/TASK_RUNTIME_MODEL.md`, and the main README.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[23]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[24]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[25]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[26]' -v -e --time` — 1/1 PASS (individual rerun after a batch interruption).
+- `bin/run_tests 'flvm[27]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[28]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[29]' -v -e --time` — 1/1 PASS, including owner cancellation, intermediate waiter cancellation, and failure after Channel retry.
+- `bin/run_tests 'flvm[30]' -v -e --time` — 1/1 PASS (individual rerun after a batch interruption).
+- `bin/run_tests native -v -e` — 22/22 PASS.
+- `bin/run_tests native_use -v -e` — 6/6 PASS.
+
+The full default suite (1165 discovered tests) was not run. No pthread/thread-safety or worker-pool readiness is claimed. The source snapshot has no `.git` metadata, so branch/commit state cannot be verified.
+
+
+## Archive 290 — cooperative runtime teardown and resource ownership audit
+
+### Modifications
+
+- Extended `test/cases/flvm/029_channel_lock_contention/channel_lock_contention_test.c` with `run_runtime_teardown_audit()`.
+- Verified runtime destruction is rejected while a CREATED task and Channel remain registered.
+- Verified a RUNNABLE task holding a Channel transaction cannot be destroyed; runtime and Channel destruction are rejected until cancellation rolls back the transaction and explicit task/Channel destruction occurs.
+- Verified a WAITING Channel waiter prevents task/runtime destruction. Cancelling its owner wakes it, but the RUNNABLE waiter still pins the Channel and keeps the runtime alive until it is cancelled and destroyed.
+- Verified COMPLETED, FAILED, and CANCELLED task records remain in the runtime registry and keep the runtime alive until explicit `flat_runtime_task_destroy()`.
+- Verified the successful teardown sequence and that a newly created runtime starts independent task and Channel IDs at one.
+- No runtime implementation changes were required; the existing lifecycle guards and ownership cleanup satisfy the covered cooperative cases.
+- Updated `plans/01_DECISIONS.md`, `02_ROADMAP.md`, `03_RUNTIME_AUDIT.md`, this status, `plans/README.md`, `doc_src/TASK_RUNTIME_MODEL.md`, and the test case description.
+
+### Validation
+
+- `bin/run_tests 'flvm[29]' -v -e --time` — 1/1 PASS, including CREATED/RUNNABLE/WAITING/terminal teardown guards, Channel pinning, cancellation cleanup, and fresh-runtime reuse.
+- `bin/run_tests 'flvm[22]' -v -e --time` — 1/1 PASS (task registry/scheduler lifecycle).
+- `bin/run_tests 'flvm[28]' -v -e --time` — 1/1 PASS (Channel references and wait-cycle lifecycle).
+- `bin/run_tests 'flvm[30]' -v -e --time` — 1/1 PASS (cooperative runtime stress).
+- A combined command that ran `flvm[29]`, `[22]`, `[28]`, and `[30]` was interrupted by the command timeout while building/running `[30]`; `[30]` was rerun separately and passed.
+- `make all -j2` — PASS (`done: all`).
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[15]' -v -e --time` — 1/1 PASS (active VM run prevents runtime destruction).
+- `bin/run_tests 'flvm[17]' -v -e --time` — 1/1 PASS (runtime reuse after failed VM invocation).
+- Full default suite (1165 discovered tests) — NOT RUN. No pthread/thread-safety or worker-pool readiness is claimed. The source snapshot has no `.git` metadata, so branch/commit state cannot be verified.
+
+
+## Archive 291 — worker-pool architecture specification
+
+### Scope
+
+Specification/audit only. No runtime C implementation, pthread worker, public API, task lifecycle behavior, or Channel semantics were changed.
+
+### Source findings
+
+- Re-read `src/common/flat_runtime.c`, `include/flat_task.h`, `include/flat_channel.h`, `src/common/flat_channel.c`, `src/common/flat_vm_handle.c`, `src/common/vm.c`, native plugin host, logger, environment/path/locale helpers, memory stream fallback and WASM bridge.
+- Confirmed that task registry/state/wait graph/scheduler operations are not consistently protected by the existing runtime atomic gate.
+- Confirmed that the per-Channel atomic gate is not a pthread mutex and does not protect runtime registry/wakeup operations.
+- Confirmed that native plugin registry/lazy preparation has process-wide locks, but native handler internals are not thereby thread-safe.
+- Identified the mutable function-static HTTP multipart sequence in `src/lib/mod_http.c::http_ensure_boundary()` as a concrete unsynchronized shared-state item. The public `flat_runtime_run()` header permits concurrent runs on one runtime, but this does not certify every native handler for concurrent invocation.
+- Recorded per-task VM ownership, deep-copy spawn arguments, runtime-owned task/Channel registries, logger, env/path/locale, memory stream and WASM constraints.
+
+### Deliverables
+
+- Added `plans/06_WORKER_POOL_SPEC.md` with verified current ownership, blockers, proposed lock hierarchy, worker dispatch and wakeup-race handling, cancellation safe points, Channel transaction semantics, native/plugin policy, output, startup/shutdown, worker failures, platform fallback and acceptance gates.
+- Updated `plans/01_DECISIONS.md` with the worker-pool design baseline and explicit open API questions.
+- Updated `plans/02_ROADMAP.md` with archive-291 completion and remaining gates.
+- Updated `plans/03_RUNTIME_AUDIT.md` with source-level findings and the proposed synchronization baseline.
+- Updated `plans/README.md` and the main README checkpoint.
+
+### Validation
+
+- `make all -j2` — PASS (`done: all`).
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[22]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[28]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[29]' -v -e --time` — 1/1 PASS.
+- `bin/run_tests 'flvm[30]' -v -e --time` — 1/1 PASS (individual rerun).
+- `bin/run_tests native -v -e --time` — 22/22 PASS.
+- `bin/run_tests native_use -v -e --time` — 6/6 PASS.
+
+A later combined selected run passed DOM, FLVM, HTTP and regex regressions, then timed out during the native suite after 19/22 cases; the full `native` suite and `native_use` suite were rerun individually and passed. The full default suite was not run. No complete-VM worker test exists in this checkpoint and none is claimed as passing. No pthread worker pool or general thread-safety guarantee is introduced.
+
+### Next
+
+Complete the static mutable-state audit across embedded native modules and supported optional plugins; fix or serialize the HTTP multipart sequence; then settle plugin concurrency and cancellation/shutdown API contracts before implementing workers.
+
+
+## Archive 292 — native module thread-safety audit and HTTP boundary race fix
+
+### Modifications
+
+- Added `plans/07_NATIVE_THREAD_SAFETY_AUDIT.md`, covering all embedded native handler source files and built-in optional plugin entry points, plus directly shared process-owned helpers.
+- Classified the main native state boundaries: VM/context-owned state, runtime-shared task/Channel bridge state, process-wide synchronized helper state, host-owned resources, and external library state.
+- Replaced the unsynchronized function-static multipart boundary counter in `src/lib/mod_http.c` with `flat_http_boundary_next_sequence()`.
+- Added `include/flat_http_boundary.h` and `src/common/flat_http_boundary.c`; the process-wide sequence uses `atomic_uint_fast64_t` and relaxed atomic fetch-add because only uniqueness/allocation ordering is required.
+- Added `test/cases/flvm/031_http_boundary_concurrency/`: eight pthread callers allocate 40,000 sequence values and verify all are unique and present.
+- Added an explicit worker-mode plugin policy to the audit/specification: `THREAD_SAFE`, `SERIALIZED`, `UNSUPPORTED`; unknown third-party plugins default to `UNSUPPORTED` until explicit capability metadata is implemented.
+- Updated `Makefile` so the HTTP build links the new boundary allocator source.
+- Updated decisions, roadmap, runtime audit, `plans/README.md`, main README, and the worker-pool specification.
+
+### Validation
+
+- `make all -j2` — PASS (`done: all`).
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'flvm[31]' 'http[28-32]' 'flvm[12-14]' -v -e` — 9/9 PASS.
+  - `flvm[31]`: 8 pthread callers × 5,000 sequence allocations; uniqueness and complete range verified. A focused ThreadSanitizer build and an AddressSanitizer/UndefinedBehaviorSanitizer build of this C regression also passed.
+  - `http[28-32]`: 5/5 multipart integration regressions PASS.
+  - `flvm[12-14]`: existing logger, native registry and host staging concurrency regressions PASS.
+- Full default suite (1167 discovered tests) — NOT RUN.
+- No complete-VM worker test was added; no pthread worker pool or general thread-safety guarantee is claimed.
+- Source snapshot has no `.git` metadata, so branch/commit state cannot be verified.
+
+### Remaining gates
+
+- Confirm external dependency concurrency guarantees for Lexbor, PCRE2, libcurl and supported platform C runtimes.
+- Implement plugin capability metadata and enforcement.
+- Complete runtime scheduler/task/Channel synchronization and lifetime-safe API entry/teardown.
+- Add deterministic multi-worker VM tests and sanitizer validation.
+
+
+## Archive 293 — external dependency concurrency audit and HTTP preflight
+
+### Modifications
+
+- Added `plans/08_EXTERNAL_DEPENDENCY_AUDIT.md` with the upstream/documented concurrency contracts and FlatL integration assessment for bundled PCRE2 10.49, bundled Lexbor 3.0.0, native libcurl and platform C runtime boundaries.
+- Added `flat_http_prepare()` to `include/flat_http_transport.h`. The native curl implementation calls the existing once-only `curl_global_init()` path; the WASM Fetch implementation returns success as a no-op.
+- Added `CURLOPT_NOSIGNAL=1L` to each native libcurl easy handle to avoid libcurl signal-handler manipulation in threaded use. DNS timeout behavior depends on the configured resolver backend.
+- Updated worker-pool specification, native audit, runtime audit, decisions, roadmap, plans index and root README.
+- No pthread worker pool, scheduler lock protocol or complete-VM concurrency guarantee was added.
+
+### Validation
+
+- `make all -j2` — PASS after the source changes.
+- Selected regressions — 63/63 PASS across the following completed runs:
+  - `bin/run_tests 'http[28-32]' 'dom[1-18]' 're[1-8]' 'flvm[29]' 'flvm[31]' -v -e` — 32/32 PASS before adding `flvm[32]`.
+  - `bin/run_tests 'flvm[32]' -v -e` — 1/1 PASS (explicit transport initialization).
+  - `bin/run_tests 'flvm[29-32]' -v -e` — 4/4 PASS (rerun as part of the later grouped run).
+  - `bin/run_tests native -v -e` — 22/22 PASS (individual suite rerun after the grouped command timed out).
+  - `bin/run_tests native_use -v -e` — 6/6 PASS.
+  - DOM: 18/18; HTTP multipart mock regressions: 5/5; PCRE2 regex: 8/8.
+  - `flvm[31]`: eight pthread callers × 5,000 sequence allocations; uniqueness/completeness regression PASS.
+  - `flvm[32]`: `flat_http_prepare()` called twice and returns success both times.
+- Validation host reports libcurl 8.10.1 with `AsynchDNS` and `threadsafe` features; system PCRE2 reports 10.46. Bundled PCRE2 is 10.49 without JIT. These are environment observations, not a cross-platform matrix.
+- Full default suite (1167 discovered tests) — NOT RUN.
+- `make docs` — PASS (49 sections).
+- Source snapshot has no `.git` metadata; branch/commit state cannot be verified.
+
+### Remaining gates
+
+- Lexbor remains not certified until concurrent independent-document tests and sanitizer runs pass.
+- Run concurrent complete-VM tests for PCRE2, DOM and HTTP after the worker scheduler exists.
+- Validate libcurl runtime features and resolver behavior on each supported target; call `flat_http_prepare()` before worker creation.
+- Implement plugin capability metadata/enforcement, cancellation request semantics, shutdown modes, scheduler synchronization and worker lifecycle.
+
+
+## Archive 294 — Lexbor worker-mode status and serialized fallback
+
+### Decision / documentation changes
+
+- Changed Lexbor/DOM worker audit wording from an apparent exclusion/unsupported state to `PENDING_THREAD_SAFETY_VALIDATION`.
+- Kept the eventual capability set unchanged: `THREAD_SAFE`, `SERIALIZED`, `UNSUPPORTED`. Pending is a qualification status, not a runtime capability.
+- Agreed to attempt independent per-VM DOM concurrency first. If this cannot be certified, `SERIALIZED` is the preferred fallback; `UNSUPPORTED` is reserved for a demonstrated uncontainable constraint.
+- Explicitly included Lexbor-backed document destruction in `flat_dom_runtime_destroy()`/VM teardown in the serialized boundary. Serializing only `dom.*` handler calls would be incomplete.
+- Required the future DOM gate to be process-wide, bounded to a handler or teardown operation, and never nested with scheduler/Channel locks or held across task suspension, VM execution or blocking I/O.
+- Kept Lexbor global allocator configuration setup-only and immutable while workers are active.
+- No runtime code, mutex, worker pool, or DOM worker allowlist was added.
+
+### Validation
+
+- Documentation consistency checked across decisions, roadmap, runtime audit, worker-pool specification, native audit and external dependency audit.
+- `make all -j2` — PASS (`done: all`).
+- `make docs` — PASS (49 sections).
+- `bin/run_tests 'dom[1-18]' -v -e` — 18/18 PASS (existing single-runtime DOM regressions only).
+- Full default suite (1167 discovered tests) — NOT RUN.
+- No concurrent complete-VM DOM test exists yet; no Lexbor worker-mode capability is claimed.
+
+### Next
+
+Add deterministic concurrent complete-VM DOM tests after the scheduler exists, validate bundled and supported system-Lexbor variants under sanitizers, then choose `THREAD_SAFE` or `SERIALIZED` from evidence. Keep `UNSUPPORTED` only for a demonstrated uncontainable constraint. Continue with cancellation/shutdown and plugin capability contracts before pthread worker implementation.

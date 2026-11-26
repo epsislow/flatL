@@ -330,3 +330,101 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [x] Keep the regression in `flvm[29]` and the existing `bin/run_tests` framework; runtime implementation unchanged.
 
 **Next:** audit cancellation/failure at each point in a chained dependency (`owner`, Channel waiter, and downstream task waiter), then verify complete runtime teardown after all edges and Channel references have been cleared. Keep pthread workers blocked.
+
+## Cooperative chained cancellation/failure checkpoint — archive 289
+
+- [x] Verify cancellation of a Channel transaction owner wakes the Channel waiter and direct `task.wait()` dependants independently.
+- [x] Verify a task waiting on a Channel waiter is woken when that intermediate waiter is cancelled.
+- [x] Verify wakeup is not transitive: the dependent remains subject to its own next operation and may contend on the still-locked Channel until the owner releases it.
+- [x] Verify a Channel waiter that wakes, retries its lock successfully, and then fails still wakes its downstream `task.wait()` dependent through terminal cleanup.
+- [x] Keep the tests in `flvm[29]` and the existing `bin/run_tests` framework; runtime implementation unchanged.
+- [x] Destroy all tasks in the new chains before `flat_runtime_destroy()` and verify teardown succeeds.
+
+**Validation:** `flvm[23]`–`flvm[30]` PASS in individual runs; `native` 22/22 PASS; `native_use` 6/6 PASS; `make all -j2` PASS; `make docs` PASS (49 sections). Full default suite (1165 discovered tests) not run. No pthread/thread-safety claim.
+
+**Next:** audit runtime teardown and resource cleanup with unresolved WAITING/RUNNABLE tasks, retained Channel references, and invalid destroy ordering. Keep pthread workers blocked.
+
+
+## Cooperative runtime teardown checkpoint — archive 290
+
+- [x] Verify `flat_runtime_destroy()` rejects a runtime with a CREATED task and registered Channel.
+- [x] Verify a RUNNABLE task holding an active Channel transaction prevents runtime destruction; task cancellation rolls back the transaction before task/Channel removal.
+- [x] Verify a WAITING Channel waiter prevents task/runtime destruction and keeps the Channel pinned.
+- [x] Verify owner cancellation wakes the waiter but does not remove its task record or Channel reference; runtime and Channel destruction remain rejected until the waiter is cancelled/destroyed.
+- [x] Verify terminal task records still keep the runtime alive until explicit `flat_runtime_task_destroy()`.
+- [x] Verify successful teardown order: task cancellation/terminal cleanup → task record destruction → Channel destruction → runtime destruction.
+- [x] Recreate a fresh runtime and verify task/Channel IDs and registries start independently.
+- [x] Keep all regression coverage in the existing `bin/run_tests` framework (`flvm[29]`); no Python test runner or standalone test framework.
+
+**Audit conclusion:** no runtime implementation change was needed. Existing counters and ownership guards enforce the explicit teardown contract in the tested cooperative cases. `flat_runtime_destroy()` does not force-cancel tasks or destroy Channels. The host must prevent new API calls from starting concurrently with destroy; this remains outside the supported thread-safety contract.
+
+**Next:** perform a final cooperative-runtime readiness review: enumerate process-owned services still shared by VM invocations, classify which state can be per-worker versus process-wide, and write the worker-pool synchronization/ownership design before implementing pthread workers. Do not start pthread implementation in this checkpoint.
+
+
+## Worker-pool architecture specification checkpoint — archive 291
+
+- [x] Reinspect the archive-290 source rather than treating earlier chat summaries as proof.
+- [x] Classify runtime/task/VM/Channel ownership and identify which current structures are not protected by a complete cross-thread protocol.
+- [x] Specify worker ownership, queue/dispatch, wakeup races, cancellation safe points, Channel lock ordering, native/plugin policy, output behavior, shutdown and platform fallback in `plans/06_WORKER_POOL_SPEC.md`.
+- [x] Record the concrete unsynchronized mutable HTTP multipart sequence in `src/lib/mod_http.c` as a pre-worker blocker.
+- [ ] Complete the static mutable-state audit for every embedded native module and supported optional plugin.
+- [ ] Resolve worker-mode cancellation API semantics and drain/cancel shutdown API before coding.
+- [ ] Implement and test the runtime scheduler mutex/queue/worker ownership protocol.
+- [ ] Add deterministic multi-worker race tests and sanitizer validation.
+
+**Conclusion:** archive 291 is specification-only. It does not add pthread, change task API behavior, claim thread safety, or mark v2.0 complete. The current `FlatRuntime` atomic gate and per-Channel atomic gate protect selected critical sections only; task registry/state/wakeup/scheduler operations are not yet a complete concurrent protocol.
+
+**Next:** continue the pre-implementation audit by enumerating mutable static state across all embedded native modules and optional plugin entry points, then decide whether unknown plugins are serialized per module or rejected in worker mode. Fix the confirmed HTTP multipart sequence race before any concurrent-native test is treated as safe.
+
+
+## Native module thread-safety audit checkpoint — archive 292
+
+- [x] Inventory mutable file-scope state in embedded native modules and built-in optional plugin entry points.
+- [x] Classify native handler state as VM/context-owned, process-owned, runtime-shared, or externally owned.
+- [x] Audit process-wide native registry/plugin host, environment staging, path default, locale, logger, memory-stream fallback, timer initialization, HTTP/curl initialization, RNG ownership and WASM bridge state.
+- [x] Fix the HTTP multipart sequence race using a process-wide atomic sequence allocator.
+- [x] Add `flvm[31]`, a pthread regression that concurrently allocates 40,000 HTTP boundary sequence values and verifies uniqueness/completeness.
+- [x] Run the actual HTTP multipart cases `http[28-32]` after the refactor.
+- [x] Record worker-mode plugin capability semantics: `THREAD_SAFE`, `SERIALIZED`, `UNSUPPORTED`; unknown third-party plugins default to `UNSUPPORTED` until explicitly declared.
+- [ ] Verify external dependency thread-safety for Lexbor, PCRE2, libcurl and supported platform C runtimes.
+- [ ] Implement plugin capability metadata and worker-mode enforcement.
+- [ ] Add concurrent complete-VM tests after the worker scheduler is implemented.
+- [ ] Run ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer builds.
+
+**Conclusion:** archive 292 removes one confirmed native-side race and documents the mutable process-owned state. It does not make the runtime scheduler, task APIs, Channel registry, wait graph, cancellation or teardown thread-safe. Worker implementation remains blocked.
+
+**Next:** settle the exact public plugin capability declaration and host lifecycle/freeze API, then design the synchronization boundary for `task`/`channel` native bridges. Do not add pthread workers until the scheduler and runtime lifetime protocol are implemented and tested.
+
+
+## External dependency concurrency audit checkpoint — archive 293
+
+- [x] Review bundled PCRE2 10.49 configuration and compare FlatL per-call object ownership with upstream multithreading guarantees.
+- [x] Review bundled Lexbor 3.0.0 ownership and global allocator setup; classify DOM as `PENDING_THREAD_SAFETY_VALIDATION` with `SERIALIZED` as the preferred fallback if independent concurrency cannot be certified.
+- [x] Review libcurl easy-handle ownership, global initialization, signal behavior and resolver caveats.
+- [x] Add `flat_http_prepare()` for host-side libcurl initialization before worker creation (WASM no-op).
+- [x] Set `CURLOPT_NOSIGNAL=1L` on every native easy handle.
+- [x] Document deployment checks for `CURL_VERSION_THREADSAFE`, resolver backend, and system-library variants.
+- [ ] Add plugin capability metadata/enforcement and finalize worker output serialization policy.
+- [ ] Settle public cancellation-request and shutdown/drain API semantics.
+- [ ] Implement scheduler mutex/queue/worker ownership and task dispatch token.
+- [ ] Add complete-VM concurrency tests for independent PCRE2, DOM and HTTP operations.
+- [ ] Validate supported OS/C runtime and system dependency matrix under sanitizers.
+
+**Conclusion:** archive 293 hardens HTTP worker preflight and narrows external dependency uncertainty. PCRE2 is a strong candidate under the bundled no-JIT build; libcurl is conditionally compatible when preinitialized and configured as documented; Lexbor's status is pending validation, not unsupported. Archive 294 records a process-wide serialized DOM fallback if independent-context concurrency cannot be certified. This is not permission to start pthread workers: scheduler/task/Channel synchronization remains the primary blocker.
+
+**Next:** settle cancellation-request and shutdown semantics plus plugin capability metadata, then design the platform thread abstraction and runtime lock/lifetime protocol. Keep actual worker creation blocked until those contracts are implemented and tested.
+
+
+## Lexbor worker-mode classification checkpoint — archive 294
+
+- [x] Replace the ambiguous “DOM disabled/not certified” wording with the explicit audit status `PENDING_THREAD_SAFETY_VALIDATION` (not a runtime capability).
+- [x] Preserve `THREAD_SAFE`, `SERIALIZED`, and `UNSUPPORTED` as the only eventual capability values.
+- [x] Record `SERIALIZED` as the preferred fallback if independent per-VM Lexbor use cannot be certified.
+- [x] Include Lexbor-backed document destruction in the serialization boundary; a handler-only gate would miss `lxb_html_document_destroy()` called from `flat_dom_runtime_destroy()` during VM teardown.
+- [ ] Add deterministic concurrent complete-VM DOM tests for bundled Lexbor and each supported system-Lexbor build.
+- [ ] Run DOM concurrency tests under ThreadSanitizer and AddressSanitizer/UndefinedBehaviorSanitizer.
+- [ ] Decide `THREAD_SAFE` versus `SERIALIZED` from test results and dependency/source guarantees; reserve `UNSUPPORTED` for a demonstrated uncontainable constraint.
+
+**Conclusion:** archive 294 is a documentation and architecture-decision checkpoint only. It does not add a DOM mutex, enable DOM in worker mode, or claim Lexbor thread safety. If the concurrent tests cannot establish safe independent-context use, the implementation fallback is one process-wide DOM gate around every Lexbor operation, including VM/DOM teardown.
+
+**Next:** settle cancellation-request and drain/cancel shutdown contracts plus plugin capability metadata, then implement the runtime synchronization/lifetime protocol. DOM remains pending; do not start pthread workers yet.
