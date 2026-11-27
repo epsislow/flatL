@@ -963,7 +963,37 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [x] Add checked geometric reserve, cleanup in `flat_fgir_free()`, and allocation before parser/linker append.
 - [x] Add native tests for reserve/free/repeated lifecycle, 64-schema success, 65-schema rejection, and schema preservation through entry link merge.
 - [x] Run focused schema/type, linker, fmod and native-use tests; run parser/linker boundary cases under ASan/UBSan.
-- [ ] Run a complete `make test` to completion after the schema-storage change; the available full run stopped at 280/1,156 due to the outer execution limit.
-- [ ] Rebuild WASM with the user's Emscripten SDK and rerun `make fleditor-wasm-api-smoke` and `make fleditor-wasm-test`; confirm the compile high-water remains within the 128 MiB regression ceiling.
+- [x] Run a complete `make test` to completion after the schema-storage change; the user confirmed 1,156/1,156 PASS in 11:07.401.
+- [x] Rebuild WASM with the user's Emscripten SDK and rerun `make fleditor-wasm-api-smoke` and `make fleditor-wasm-test`; the user confirmed both pass and compile high-water remains 42,729,472 bytes after 100 runs.
 
-**Archive 341 result:** `FgirProgram.schemas` is now an owned pointer with `schema_count` and `schema_capacity`. Growth is geometric and capped at 64; `flat_fgir_free()` releases the allocation. The native `sizeof(FgirProgram)` decreases from 2,737,792 bytes to 1,160,584 bytes (a reduction of 1,577,208 bytes) while `sizeof(FgirSchemaDecl)` remains 24,644 bytes. Focused tests passed: `flc[1-9]` (8 selected; IDs 1–4 and 6–9), `types` (251/251), `fmod` (18/18), and `native_use` (6/6). The new reserve/free harness passed ASan/UBSan with leak detection; sanitized `flc` builds passed the 64-schema success case, 65-schema rejection case, and schema-through-link case without sanitizer reports. `make all -j2` and `make docs` passed (50 sections). A full `make test` was attempted but did not complete within the execution window (stopped at 280/1,156); it is deliberately left open rather than reported as passing. Fresh WASM rebuild and Node.js suite validation remain for the user's Emscripten environment. See `plans/51_FGIR_DYNAMIC_SCHEMA_STORAGE.md`.
+**Archive 341 result:** `FgirProgram.schemas` is now an owned pointer with `schema_count` and `schema_capacity`. Growth is geometric and capped at 64; `flat_fgir_free()` releases the allocation. The native `sizeof(FgirProgram)` decreases from 2,737,792 bytes to 1,160,584 bytes (a reduction of 1,577,208 bytes) while `sizeof(FgirSchemaDecl)` remains 24,644 bytes. Focused tests passed: `flc[1-9]` (8 selected; IDs 1–4 and 6–9), `types` (251/251), `fmod` (18/18), and `native_use` (6/6). The new reserve/free harness passed ASan/UBSan with leak detection; sanitized `flc` builds passed the 64-schema success case, 65-schema rejection case, and schema-through-link case without sanitizer reports. `make all -j2` and `make docs` passed (50 sections). The initial local full-suite attempt stopped at 280/1,156 due to the outer execution limit; the user subsequently completed `make test` on Termux with 1,156/1,156 PASS in 11:07.401. The user also rebuilt WASM and confirmed both WASM targets pass; compile high-water remained 42,729,472 bytes after 100 runs. See `plans/51_FGIR_DYNAMIC_SCHEMA_STORAGE.md`.
+
+## FGIR dynamic function-table audit — archive 342
+
+- [x] Confirm the user's archive 341 validation: full native `make test` passed 1,156/1,156 in 11:07.401; WASM API/lifecycle and all WASM Node.js smoke tests passed; compile high-water remained 42,729,472 bytes after 100 runs.
+- [x] Measure `FgirFunction` and the remaining fixed table on the native ABI: `sizeof(FgirFunction)=3,940 B`, `functions[256]=1,008,640 B`, `sizeof(FgirProgram)=1,160,584 B`.
+- [x] Audit all parser append paths, linker merge paths, metadata readers, compiler serialization and runtime boundary.
+- [x] Confirm `FgirFunction` contains only inline fields, so current value-copy operations remain safe without a deep-clone helper.
+- [x] Identify the `def` sugar pointer-invalidation hazard: reserve capacity before obtaining both the prototype and destination function pointers.
+- [x] Select only the outer function table for the next implementation; keep the 256-function limit and the separate `exports[256]` table unchanged.
+- [ ] Implement checked dynamic function reserve/free and parser/linker append updates in the next checkpoint.
+- [ ] Add lifecycle, 256/257 boundary, def-sugar-growth, module/entry link and sanitizer tests.
+- [ ] Run complete native and user-side Emscripten/Node.js suites after implementation.
+
+**Archive 342 result:** audit-only checkpoint; no C implementation or language behavior changed. The next candidate is the fixed `FgirProgram.functions[256]` table, occupying 1,008,640 bytes. `FgirFunction` has no pointer members, so its current assignment/copy semantics remain safe. The parser's sugar-clause path must reserve before taking either the prototype or destination pointer to avoid invalidation during `realloc`. The independent `exports[256]` table is explicitly out of scope. See `plans/52_FGIR_FUNCTION_STORAGE_AUDIT.md`.
+
+
+## FGIR dynamic function-table implementation — archive 343
+
+- [x] Replace the embedded `FgirProgram.functions[256]` table with an owned pointer, count and capacity.
+- [x] Add checked geometric growth capped at 256, zero-initialize new capacity and free/reset it in `flat_fgir_free()`.
+- [x] Reserve before both parser append paths; in particular, reserve before taking the `def` sugar prototype pointer.
+- [x] Reserve in both fmod-module and entry-program linker merge paths while preserving the existing 256-limit diagnostics.
+- [x] Keep `FgirFunction` self-contained and retain safe value-copy semantics. Keep `exports[256]` unchanged.
+- [x] Add reserve/free lifecycle, 256/257 parser, 256/257 cross-module linker and forced `def`-sugar-growth regression tests.
+- [x] Run focused function, fmod and native-use tests and the new parser/linker boundary cases under ASan/UBSan with leak detection.
+- [ ] Complete the full native `make test`; this local attempt reached 280/1,160 before the 300-second execution limit terminated it.
+- [x] Run `make docs` (50 sections).
+- [ ] Rebuild WASM with Emscripten and rerun the Node.js WASM suites on the user's environment.
+
+**Archive 343 implementation:** `FgirProgram.functions` is now dynamic and allocated on demand. Native `sizeof(FgirProgram)` decreases from 1,160,584 B to 151,960 B (1,008,624 B saved); `sizeof(FgirFunction)` remains 3,940 B. The 256-function language limit and independent fixed `exports[256]` table are unchanged. Focused tests passed: `flc[1-12]` (all 11 discovered cases), `func[1-9]` / `func[19-27]` and `func[38]`, `fmod` (18/18), and `native_use` (6/6). The new lifecycle harness, 256/257 parser boundary and 256/257 linker boundary passed ASan/UBSan with leak detection. The documentation build passed (50 sections). A local `make test` attempt reached 280/1,160 before the 300-second outer execution limit terminated it; this is incomplete, not a pass. Real Emscripten validation must be completed on the user's Termux environment. See `plans/53_FGIR_DYNAMIC_FUNCTION_STORAGE.md`.

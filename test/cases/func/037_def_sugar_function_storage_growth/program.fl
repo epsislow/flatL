@@ -1,0 +1,47 @@
+use "../../../../blocks/executor.fl" as #fl_
+use native math with m
+use native vcx with V
+
+func:executor #fl_executor.global.scope
+
+def before1(x) -> r
+  r = x
+  return
+
+def before2(x) -> r
+  r = x
+  return
+
+def before3(x) -> r
+  r = x
+  return
+
+def before4(x) -> r
+  r = x
+  return
+
+def before5(x) -> r
+  r = x
+  return
+
+def before6(x) -> r
+  r = x
+  return
+
+def before7(x) -> r
+  r = x
+  return
+
+def pick(x ; "fast") -> r
+  r = x
+  return
+  (; "slow") -> r
+  m.calc('x * 3') -> r
+  return
+
+#main
+  pick(2 ; "fast") -> a
+  pick(2 ; "slow") -> b
+  io.outln(a)
+  io.outln(b)
+  OK

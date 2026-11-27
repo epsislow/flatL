@@ -1,0 +1,8 @@
+suite = "flc"
+id = 12
+desc = "FGIR linker merges 256 functions and rejects 257 across fmod and entry"
+kind = "exec"
+
+cmd = "{root}/test/cases/flc/009_function_storage_link_boundary/check_link_boundary.sh {root} {tmp}"
+expect_exit = 0
+stdout_contains = "function-link-boundary-ok"

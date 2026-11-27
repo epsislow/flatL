@@ -136,8 +136,9 @@ typedef struct {
     int native_unit_count;
     FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
     int optional_native_count;
-    FgirFunction functions[FGIR_MAX_FUNCTIONS];
+    FgirFunction *functions; /* owned; capacity grows up to FGIR_MAX_FUNCTIONS */
     int function_count;
+    int function_capacity;
     char default_executor[FGIR_MAX_LABEL];
     int func_var_slots_manual; /* -1 = auto */
     int func_call_vm; /* header func:callVM for following defs */
@@ -152,12 +153,13 @@ typedef struct {
     int jump_block_max_global_set;
 } FgirProgram;
 
-/* FGIR owns dynamically allocated block, instruction and schema arrays.
+/* FGIR owns dynamically allocated block, instruction, function and schema arrays.
  * Zero-initialize a program before first use and release it with flat_fgir_free(). */
 void flat_fgir_free(FgirProgram *prog);
 int flat_fgir_reserve_blocks(FgirProgram *prog, size_t capacity);
 int flat_fgir_reserve_instr(FgirBlock *block, size_t capacity);
 int flat_fgir_reserve_schemas(FgirProgram *prog, size_t capacity);
+int flat_fgir_reserve_functions(FgirProgram *prog, size_t capacity);
 int flat_fgir_block_clone(FgirBlock *dst, const FgirBlock *src);
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);

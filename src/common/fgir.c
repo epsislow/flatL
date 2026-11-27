@@ -14,6 +14,7 @@ void flat_fgir_free(FgirProgram *prog) {
         prog->blocks[i].instr_capacity = 0;
     }
     free(prog->blocks);
+    free(prog->functions);
     free(prog->schemas);
     memset(prog, 0, sizeof(*prog));
     prog->main_index = -1;
@@ -67,6 +68,22 @@ int flat_fgir_reserve_instr(FgirBlock *block, size_t capacity) {
     return 0;
 }
 
+
+int flat_fgir_reserve_functions(FgirProgram *prog, size_t capacity) {
+    FgirFunction *next;
+    size_t grown;
+    if (!prog || capacity > FGIR_MAX_FUNCTIONS || prog->function_capacity < 0) return -1;
+    if (capacity <= (size_t)prog->function_capacity) return 0;
+    if (grow_capacity((size_t)prog->function_capacity, capacity, FGIR_MAX_FUNCTIONS, &grown) != 0 ||
+        grown > SIZE_MAX / sizeof(*next)) return -1;
+    next = (FgirFunction *)realloc(prog->functions, grown * sizeof(*next));
+    if (!next) return -1;
+    memset(next + prog->function_capacity, 0,
+           (grown - (size_t)prog->function_capacity) * sizeof(*next));
+    prog->functions = next;
+    prog->function_capacity = (int)grown;
+    return 0;
+}
 
 int flat_fgir_reserve_schemas(FgirProgram *prog, size_t capacity) {
     FgirSchemaDecl *next;

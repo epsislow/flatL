@@ -1071,6 +1071,11 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 fclose(f);
                 return -1;
             }
+            if (flat_fgir_reserve_functions(out, (size_t)out->function_count + 1u) != 0) {
+                snprintf(err, err_size, "%s:%d: out of memory while growing FGIR functions", path, line_no);
+                fclose(f);
+                return -1;
+            }
             fn = &out->functions[out->function_count];
             if (flat_func_parse_def_header(p, fn, out, err, err_size) != 0) {
                 char detail[FGIR_MAX_LINE];
@@ -1162,6 +1167,12 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 fclose(f);
                 return -1;
             }
+            if (flat_fgir_reserve_functions(out, (size_t)out->function_count + 1u) != 0) {
+                snprintf(err, err_size, "%s:%d: out of memory while growing FGIR functions", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            /* Reserve before taking either pointer: realloc may move the prototype. */
             proto = &out->functions[open_fn_sugar_base];
             fn = &out->functions[out->function_count];
             if (flat_func_parse_def_clause_line(p, fn, proto, out, err, err_size) != 0) {

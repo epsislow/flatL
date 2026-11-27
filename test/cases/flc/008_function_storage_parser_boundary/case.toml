@@ -1,0 +1,8 @@
+suite = "flc"
+id = 11
+desc = "FGIR parser accepts 256 functions and rejects the 257th"
+kind = "exec"
+
+cmd = "{root}/test/cases/flc/008_function_storage_parser_boundary/check_boundary.sh {root} {tmp}"
+expect_exit = 0
+stdout_contains = "function-parser-boundary-ok"

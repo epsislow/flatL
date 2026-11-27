@@ -1,0 +1,8 @@
+suite = "flc"
+id = 10
+desc = "FGIR dynamic function storage reserve/free lifecycle"
+kind = "exec"
+
+cmd = "gcc -std=c11 -Wall -Wextra -Werror -I{root}/include -o {tmp}/function_storage_test {root}/test/cases/flc/007_function_storage_lifecycle/function_storage_test.c {root}/src/common/fgir.c && {tmp}/function_storage_test"
+expect_exit = 0
+stdout_contains = "function-storage-test-ok"

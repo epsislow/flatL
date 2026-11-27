@@ -930,6 +930,10 @@ static int merge_fmod_unit(FgirProgram *out, const FgirProgram *mod, char *err, 
             snprintf(err, err_size, "too many functions after fmod link");
             return -1;
         }
+        if (flat_fgir_reserve_functions(out, (size_t)out->function_count + 1u) != 0) {
+            snprintf(err, err_size, "out of memory while growing FGIR functions after fmod link");
+            return -1;
+        }
         out->functions[out->function_count++] = mod->functions[i];
     }
     for (i = 0; i < mod->block_count; i++) {
@@ -943,6 +947,10 @@ static int merge_entry(FgirProgram *out, const FgirProgram *entry, char *err, si
     for (i = 0; i < entry->function_count; i++) {
         if (out->function_count >= FGIR_MAX_FUNCTIONS) {
             snprintf(err, err_size, "too many functions after link");
+            return -1;
+        }
+        if (flat_fgir_reserve_functions(out, (size_t)out->function_count + 1u) != 0) {
+            snprintf(err, err_size, "out of memory while growing FGIR functions after link");
             return -1;
         }
         out->functions[out->function_count++] = entry->functions[i];
