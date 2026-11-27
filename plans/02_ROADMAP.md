@@ -913,3 +913,17 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [ ] Rebuild and run the expanded ten-test WASM suite on the user's Emscripten SDK.
 
 **Archive 337 result:** all ten headless WASM tests pass in Node.js against the archived Emscripten artifacts. Run-limit, native panic, recovery and explicit memory-growth assertions pass. The first compile expands WASM linear memory from 25,559,040 to 845,021,184 bytes; the high-water mark remains stable over 100 subsequent runs. Source inspection points to the fixed-size `FgirProgram` layout (native `sizeof(FgirProgram)=418,121,328`) as the dominant working-set contributor. This is not classified as a per-run leak, but it is a significant browser/mobile memory issue and becomes the next optimization target. No production C/VM code changed. See `47_WASM_LIMITS_RECOVERY_MEMORY.md`.
+
+
+## FGIR linker peak-memory reduction — archive 338
+
+- [x] Reconcile the user's rebuilt Termux WASM measurement: 1,263,337,472-byte compile high-water, unchanged after 100 later runs.
+- [x] Trace the no-import linker peak to the output `FgirProgram`, an unconditional module scratch `FgirProgram`, and a separate entry `FgirProgram`.
+- [x] Parse no-import entries directly into the output program; reuse one scratch program as the entry program when imports exist.
+- [x] Add a Node.js WASM regression ceiling of 600 MiB for a simple no-import compile, without changing language limits.
+- [x] Build native targets and run focused link/import suites.
+- [ ] Rebuild WASM with Emscripten and confirm the new no-import high-water ceiling on Linux/Termux.
+- [ ] Run the complete default test suite after the linker allocation change.
+- [ ] Design a capacity-managed FGIR block/instruction representation; one `FgirProgram` still has a large fixed-capacity footprint.
+
+**Archive 338 scope:** reduces the no-import link path from three simultaneously live fixed-size `FgirProgram` objects to one, and the import path from three to two by reusing the module scratch object for the entry. Native build passed and the focused `fmod`, `native`, and `native_use` suites passed 46/46. Fresh WASM validation remains pending because `emcc` is unavailable in this environment. See `plans/48_FGIR_LINKER_PEAK_MEMORY.md`.

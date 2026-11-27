@@ -80,6 +80,14 @@ try {
   assert.match(readCString(M, M.ccall('flat_wasm_get_last_panic', 'number', [], [])),
     /vm\.jump_limit/);
   const heapAfterCompileWarmup = M.HEAPU8.byteLength;
+  // A no-import source should need only the final FGIR program. The linker
+  // must not allocate separate module/entry scratch programs for this case.
+  // Keep a generous ceiling for allocator/page-growth overhead while catching
+  // accidental reintroduction of multiple ~418 MB FgirProgram objects.
+  const simpleCompileHeapCeiling = 600 * 1024 * 1024;
+  assert.ok(heapAfterCompileWarmup < simpleCompileHeapCeiling,
+    `no-import compile used excessive linear memory: ${heapAfterCompileWarmup} bytes ` +
+    `(ceiling ${simpleCompileHeapCeiling})`);
 
   // max_steps is independent from max_jumps; disable jump budget so step limit wins.
   setLimits(M, 0, 8, 1);

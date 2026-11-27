@@ -996,7 +996,6 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     int mod_count = 0;
     int fmod_count = 0;
     int fmod_linked = 0;
-    FgirProgram *entry_prog = NULL;
     FgirProgram *mod = NULL;
     int i;
     int rc = -1;
@@ -1021,80 +1020,91 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     }
     fmod_linked = fmod_count;
 
-    mod = (FgirProgram *)calloc(1, sizeof(FgirProgram));
-    if (!mod) {
-        snprintf(err, err_size, "out of memory");
-        goto cleanup;
-    }
+    /*
+     * A source without imports can be parsed directly into the final output.
+     * The old path allocated two additional, fully-sized FgirProgram objects
+     * (one reusable module scratch and one entry program) even when neither
+     * was needed. FgirProgram is intentionally still fixed-capacity here, so
+     * avoiding those copies materially reduces the compiler's peak memory.
+     */
+    if (mod_count == 0 && fmod_count == 0) {
+        int unit_index;
+        if (flat_parse_unit(entry_path, 1, out, err, err_size) != 0) goto cleanup;
+        if (prepare_unit_decls(out, entry_path, &unit_index, err, err_size) != 0) goto cleanup;
+    } else {
+        mod = (FgirProgram *)calloc(1, sizeof(FgirProgram));
+        if (!mod) {
+            snprintf(err, err_size, "out of memory");
+            goto cleanup;
+        }
 
-    for (i = 0; i < fmod_count; i++) {
-        char canonical[FLAT_PORT_PATH_MAX];
-        char try_rel[FLAT_PORT_PATH_MAX];
-        char e2[256];
-        int local_ui;
-        int out_ui;
+        for (i = 0; i < fmod_count; i++) {
+            char canonical[FLAT_PORT_PATH_MAX];
+            char try_rel[FLAT_PORT_PATH_MAX];
+            char e2[256];
+            int local_ui;
+            int out_ui;
 
+            memset(mod, 0, sizeof *mod);
+            mod->main_index = -1;
+            if (resolve_use_path(entry_path, fmods[i].quoted, canonical, try_rel, sizeof try_rel, e2,
+                                 sizeof e2) != 0) {
+                snprintf(err, err_size, "%s:%d: use fmod: %s", entry_path, fmods[i].line_no, e2);
+                goto cleanup;
+            }
+            if (flat_parse_unit(canonical, 0, mod, err, err_size) != 0) goto cleanup;
+            if (!mod->mod_id_set) {
+                snprintf(err, err_size, "%s: mod('id') missing in fmod unit", canonical);
+                goto cleanup;
+            }
+            if (flat_func_prepare_fmod_unit(mod, fmods[i].ident, err, err_size) != 0) {
+                char detail[512];
+                snprintf(detail, sizeof detail, "%s", err);
+                snprintf(err, err_size, "%s: %s", canonical, detail);
+                goto cleanup;
+            }
+            if (prepare_unit_decls(mod, canonical, &local_ui, err, err_size) != 0) goto cleanup;
+            if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) goto cleanup;
+            for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
+                mod->blocks[local_ui].native_unit_index = out_ui;
+            }
+            if (merge_fmod_unit(out, mod, err, err_size) != 0) goto cleanup;
+        }
+
+        for (i = 0; i < mod_count; i++) {
+            int local_ui;
+            int out_ui;
+
+            memset(mod, 0, sizeof *mod);
+            mod->main_index = -1;
+            if (flat_parse_unit(mods[i].canonical, 0, mod, err, err_size) != 0) goto cleanup;
+            if (prepare_unit_decls(mod, mods[i].canonical, &local_ui, err, err_size) != 0) goto cleanup;
+            if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) goto cleanup;
+            for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
+                mod->blocks[local_ui].native_unit_index = out_ui;
+            }
+            if (merge_module(out, mod, mods[i].prefix, err, err_size) != 0) goto cleanup;
+        }
+
+        /* Reuse the module scratch for the entry instead of allocating a third
+         * full FgirProgram while both the output and scratch are live. */
         memset(mod, 0, sizeof *mod);
         mod->main_index = -1;
-        if (resolve_use_path(entry_path, fmods[i].quoted, canonical, try_rel, sizeof try_rel, e2,
-                             sizeof e2) != 0) {
-            snprintf(err, err_size, "%s:%d: use fmod: %s", entry_path, fmods[i].line_no, e2);
-            goto cleanup;
-        }
-        if (flat_parse_unit(canonical, 0, mod, err, err_size) != 0) goto cleanup;
-        if (!mod->mod_id_set) {
-            snprintf(err, err_size, "%s: mod('id') missing in fmod unit", canonical);
-            goto cleanup;
-        }
-        if (flat_func_prepare_fmod_unit(mod, fmods[i].ident, err, err_size) != 0) {
-            char detail[512];
-            snprintf(detail, sizeof detail, "%s", err);
-            snprintf(err, err_size, "%s: %s", canonical, detail);
-            goto cleanup;
-        }
-        if (prepare_unit_decls(mod, canonical, &local_ui, err, err_size) != 0) goto cleanup;
-        if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) goto cleanup;
-        for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
-            mod->blocks[local_ui].native_unit_index = out_ui;
-        }
-        if (merge_fmod_unit(out, mod, err, err_size) != 0) goto cleanup;
-    }
+        if (flat_parse_unit(entry_path, 1, mod, err, err_size) != 0) goto cleanup;
+        {
+            int local_ui;
+            int out_ui;
 
-    for (i = 0; i < mod_count; i++) {
-        int local_ui;
-        int out_ui;
-
-        memset(mod, 0, sizeof *mod);
-        mod->main_index = -1;
-        if (flat_parse_unit(mods[i].canonical, 0, mod, err, err_size) != 0) goto cleanup;
-        if (prepare_unit_decls(mod, mods[i].canonical, &local_ui, err, err_size) != 0) goto cleanup;
-        if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) goto cleanup;
-        for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
-            mod->blocks[local_ui].native_unit_index = out_ui;
+            if (prepare_unit_decls(mod, entry_path, &local_ui, err, err_size) != 0) goto cleanup;
+            if (attach_unit_to_out(out, mod, &out_ui, err, err_size) != 0) goto cleanup;
+            for (local_ui = 0; local_ui < mod->block_count; local_ui++) {
+                mod->blocks[local_ui].native_unit_index = out_ui;
+            }
         }
-        if (merge_module(out, mod, mods[i].prefix, err, err_size) != 0) goto cleanup;
+        if (merge_entry(out, mod, err, err_size) != 0) goto cleanup;
+        out->jump_block_max_global = mod->jump_block_max_global;
+        out->jump_block_max_global_set = mod->jump_block_max_global_set;
     }
-
-    entry_prog = (FgirProgram *)calloc(1, sizeof(FgirProgram));
-    if (!entry_prog) {
-        snprintf(err, err_size, "out of memory");
-        goto cleanup;
-    }
-    entry_prog->main_index = -1;
-    if (flat_parse_unit(entry_path, 1, entry_prog, err, err_size) != 0) goto cleanup;
-    {
-        int local_ui;
-        int out_ui;
-
-        if (prepare_unit_decls(entry_prog, entry_path, &local_ui, err, err_size) != 0) goto cleanup;
-        if (attach_unit_to_out(out, entry_prog, &out_ui, err, err_size) != 0) goto cleanup;
-        for (local_ui = 0; local_ui < entry_prog->block_count; local_ui++) {
-            entry_prog->blocks[local_ui].native_unit_index = out_ui;
-        }
-    }
-    if (merge_entry(out, entry_prog, err, err_size) != 0) goto cleanup;
-    out->jump_block_max_global = entry_prog->jump_block_max_global;
-    out->jump_block_max_global_set = entry_prog->jump_block_max_global_set;
 
     if (flat_native_use_build_fnat_union(out) != 0) {
         snprintf(err, err_size, "too many optional native modules in program");
@@ -1119,7 +1129,6 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     rc = 0;
 
 cleanup:
-    free(entry_prog);
     free(mod);
     free(fmods);
     free(mods);

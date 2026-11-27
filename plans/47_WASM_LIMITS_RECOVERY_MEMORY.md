@@ -40,3 +40,8 @@ Using Node.js v22.16.0 and the archived Emscripten artifacts in this source snap
 `-o fleditor-wasm` intentionally skips the Emscripten rebuild and reuses the archived `.js`/`.wasm` pair because `emcc` is not installed in this execution environment. The user has independently confirmed that `make rebuild` including `fleditor-wasm` succeeds on Linux and Termux, and that the nine-test WASM suite passes in Termux on archive 336. The new test must be rerun by the user after rebuilding with their SDK.
 
 No production C/VM source changed in this checkpoint. The change adds test coverage and records the compile-time memory issue for a dedicated follow-up.
+
+
+## Follow-up measurement from the user's rebuilt Termux artifact
+
+The user rebuilt WASM from source and reported `compile high-water 1,263,337,472` bytes, with the same value after 100 subsequent runs. This supersedes the earlier 845,021,184-byte measurement for the archived artifact; the two measurements came from different WASM builds/environments. The interpretation remains a large compile-time linear-memory high-water, not a live-allocation/leak measurement. Archive 338 traces the three simultaneously allocated `FgirProgram` objects in the no-import linker path and removes the two unnecessary scratch allocations for that case. See `48_FGIR_LINKER_PEAK_MEMORY.md`.
