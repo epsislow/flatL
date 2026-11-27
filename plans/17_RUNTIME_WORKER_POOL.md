@@ -56,9 +56,12 @@ Manifest preflight covers declared optional modules; runtime-generated native ca
 
 - Archive 306 (`flvm[43]`) exercises nested `task.wait()` and two contending Channel transaction children under four workers; see `18_WORKER_TASK_WAIT_CHANNEL_AUDIT.md`.
 - Archive 307 (`flvm[44]`) exercises a four-node wait chain, cycle rejection, cancellation of a middle waiter, and cancellation/cleanup of a Channel waiter under worker-mode CANCEL; see `19_WORKER_WAIT_GRAPH_CANCELLATION_AUDIT.md`.
-- These tests add evidence for specific interleavings only. HTTP/DOM worker lifecycle, plugin loading races, deterministic startup failure injection, Windows and actual Emscripten linking remain open.
+- These tests add evidence for specific interleavings only. HTTP/DOM worker lifecycle and deterministic startup failure injection remain open. Archive 316 adds concurrent first-use loading coverage for two different native plugin modules and a load-vs-capability-freeze race; see `28_NATIVE_PLUGIN_LOADING_RACE_AUDIT.md`. Windows and actual Emscripten linking remain open.
 
 
 - Archive 314 fixes a confirmed Android/Termux worker-thread stack overflow in `vm_state_execute()`: `OP_GUARD`'s `FLAT_MAX_VARS`-sized `FlatSlotType` and flag arrays are now persistent `VmState` heap scratch. See `26_VM_GUARD_STACK_SCRATCH.md`. Re-run `flvm[38]`–`flvm[46]` and the ASan reproduction on Termux before treating this regression as closed.
 - Archive 314 was validated by the user on Termux with `flvm[38-46]` and `port[2-5]` in one invocation: 13/13 selected tests passed (1185 discovered; the full discovery set was not executed).
 - Archive 315 closes a cleanup-ownership race: `flat_runtime_task_cancel_request()` no longer reports success for a nonterminal task whose cleanup is already owned by synchronous destruction/cancellation. It remains idempotent when scheduler-owned cancellation is already pending. `flvm[46]` now covers a destroy-vs-cancel-request interleaving while a worker is blocked in a DOM gate; see `27_WORKER_TASK_CLEANUP_RACE_AUDIT.md`.
+
+
+- Archive 316 extends `flvm[36]`: 16 simultaneous first-use callers load/invoke two distinct optional modules (`list` SERIALIZED and `obj` THREAD_SAFE), then a third plugin load races process-wide capability freeze. The test verifies handler results, published capabilities, and the only two valid load/freeze outcomes. `flvm[13]` continues to cover failed plugin-init rollback; `flvm[34-35]` cover capability policy and freeze rejection. The implementation's existing runtime/registry/capability locks were retained because the audit found no demonstrated race requiring a locking change. See `28_NATIVE_PLUGIN_LOADING_RACE_AUDIT.md`.

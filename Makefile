@@ -861,6 +861,8 @@ test-native-invocation-gates:
 	@test -n "$(TEST_PLUGIN_DIR)" || (echo "TEST_PLUGIN_DIR is required" >&2; exit 2)
 	@mkdir -p "$(TEST_PLUGIN_DIR)"
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/034_native_capabilities/serialized_plugin.c
+	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_obj.so test/cases/flvm/036_native_invocation_gates/concurrent_obj_plugin.c
+	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_csv.so test/cases/flvm/036_native_invocation_gates/freeze_race_plugin.c
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/036_native_invocation_gates/native_invocation_gates_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify FlatRuntime scheduler mutex, task registry queries, and single-driver exclusion.

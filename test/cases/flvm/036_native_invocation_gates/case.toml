@@ -1,7 +1,7 @@
 suite = "flvm"
 id = 36
-desc = "serialized native invocation gates are per-module and include DOM teardown"
+desc = "serialized native invocation gates are per-module, include DOM teardown, and publish concurrent first-use plugins correctly"
 kind = "exec"
 cmd = "make test-native-invocation-gates TEST_BIN={tmp}/native_invocation_gates_test TEST_PLUGIN_DIR={tmp}/native_plugins && {tmp}/native_invocation_gates_test {tmp}/native_plugins"
 expect_exit = 0
-stdout_contains = "native-invocation-gates-ok serialized=exclusive independent=parallel dom-teardown=guarded first-use-dispatch=serialized"
+stdout_contains = "native-invocation-gates-ok serialized=exclusive independent=parallel dom-teardown=guarded first-use-multi-module=ok load-freeze-race=atomic"

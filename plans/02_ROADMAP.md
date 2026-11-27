@@ -2,7 +2,7 @@
 
 **Versiune document:** 1.0 (plan)  
 **Data:** 2026-11-25  
-**Status (archive 315):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. This remains a staged concurrency validation effort, not blanket thread-safety certification; plugin lifecycle, startup failure injection and cross-platform validation remain open.
+**Status (archive 316):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. Archive 316 expands concurrent first-use loading coverage across distinct native plugin modules and tests plugin loading against capability freeze; the existing synchronization design remains unchanged. Deterministic worker-startup failure injection and cross-platform validation remain open. This remains a staged concurrency validation effort, not blanket thread-safety certification.
 
 ## Direcția generală
 
