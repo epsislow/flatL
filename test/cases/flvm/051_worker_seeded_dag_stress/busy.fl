@@ -1,0 +1,6 @@
+#main
+  for(5000, i, '#loop')
+  OK
+
+#loop
+  next

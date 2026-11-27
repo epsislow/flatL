@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 48
+desc = "worker pool stresses multi-channel transactions, concurrent cancellation and DRAIN-to-CANCEL cleanup"
+kind = "exec"
+cmd = "for i in 1 2 3 4; do sed \"s/@CHANNEL@/$i/g\" {root}/test/cases/flvm/048_worker_channel_shutdown_stress/writer_template.fl > {tmp}/writer_$i.fl || exit 1; {root}/bin/flc -o {tmp}/writer_$i.fb {tmp}/writer_$i.fl || exit 1; sed \"s/@CHANNEL@/$i/g\" {root}/test/cases/flvm/048_worker_channel_shutdown_stress/waiter_template.fl > {tmp}/waiter_$i.fl || exit 1; {root}/bin/flc -o {tmp}/waiter_$i.fb {tmp}/waiter_$i.fl || exit 1; done && make -s test-worker-channel-shutdown-stress TEST_BIN={tmp}/worker_channel_shutdown_stress_test && {tmp}/worker_channel_shutdown_stress_test {tmp}/writer_1.fb {tmp}/writer_2.fb {tmp}/writer_3.fb {tmp}/writer_4.fb {tmp}/waiter_1.fb {tmp}/waiter_2.fb {tmp}/waiter_3.fb {tmp}/waiter_4.fb"
+expect_exit = 0
+stdout_contains = "worker-channel-shutdown-stress-ok channels=4 writers-per-channel=8 workers=4 drain=blocked-then-complete cancel-requests=4 escalation=post-join-cleanup refs=released"

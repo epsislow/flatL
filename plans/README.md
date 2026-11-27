@@ -34,6 +34,13 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [28 — Native Plugin Loading Race Audit](28_NATIVE_PLUGIN_LOADING_RACE_AUDIT.md): covers concurrent first-use plugin loading and capability freeze.
 - [29 — Worker Startup Failure Injection](29_WORKER_STARTUP_FAILURE_INJECTION.md): deterministic partial worker creation and join-failure rollback coverage.
 - [30 — Multi-Runtime Worker-Mode Ownership](30_MULTI_RUNTIME_WORKER_MODE_OWNERSHIP.md): validates process-wide worker-mode reference ownership across independent runtimes.
+- [31 — FlatThread Join Ownership](31_FLAT_THREAD_JOIN_OWNERSHIP.md): serializes same-runtime join ownership and preserves native handles across join failures.
+- [32 — Worker Multi-Graph Cancellation Stress](32_WORKER_MULTI_GRAPH_CANCELLATION_STRESS.md): exercises independent wait graphs and simultaneous cancellation.
+- [33 — Worker Channel Shutdown Stress](33_WORKER_CHANNEL_SHUTDOWN_STRESS.md): covers Channel contention and shutdown cleanup.
+- [34 — Worker DAG Cancellation Stress](34_WORKER_DAG_CANCELLATION_STRESS.md): covers converging wait-graph cancellation.
+- [35 — Worker DAG Staged Cancellation](35_WORKER_DAG_STAGED_CANCELLATION.md): covers staged cancellation at RUNNING/WAITING safe points.
+- [36 — Worker Seeded DAG Stress](36_WORKER_SEEDED_DAG_STRESS.md): covers reproducible seeded wait-graph topologies.
+- [37 — Worker Mixed Shutdown Soak](37_WORKER_MIXED_SHUTDOWN_SOAK.md): exercises concurrent DRAIN/CANCEL escalation and repeated runtime cleanup.
 - [Native module thread capabilities](../doc_src/NATIVE_THREAD_CAPABILITIES.md): enum-ul de capabilități, declarația pluginurilor, fallback-ul conservator și enforcement-ul worker-mode.
 
 ## Reguli pentru continuarea lucrului
@@ -48,9 +55,9 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima arhivă:** `flatL-main-319-flat-thread-join-ownership.zip`.
+**Ultima arhivă:** `flatL-main-325-worker-mixed-shutdown-soak.zip`.
 
-**Ultimul checkpoint:** arhiva 305 adaugă primul worker pool pthread deținut de runtime: startup cu barrier/rollback, execuție concurentă a quantum-urilor, wait pe condition variable cu wake epoch, integrare DRAIN/CANCEL și join. `flvm[42]` validează 4 workers și 96 task-uri, inclusiv admission preflight pentru task-uri noi. 100 de execuții plain consecutive au trecut; 5 execuții TSAN au trecut pe forma anterioară a testului, dar rebuild-ul TSAN pentru forma finală nu a putut fi terminat în limita de execuție. Aceasta nu certifică încă întregul set de native modules/dependențe în worker mode. Arhiva 304 adaugă lifecycle-ul DRAIN/CANCEL, iar arhiva 303 adaugă `flat_runtime_task_cancel_request()` și cleanup la safe point. Arhiva 302 conectează MPMC ready queue la `FlatRuntime` și convertește gate-ul Channel la `FlatMutex`; `flat_vm_step()` rămâne în afara mutex-ului. Arhiva 301 repară fallback-ul de link pentru `flvm[32]` și completează sursele runtime/native din `Makefile.wasm`, dar build-ul Emscripten real trebuie confirmat într-un mediu cu `emcc`. Lexbor rămâne `PENDING_THREAD_SAFETY_VALIDATION`, cu `SERIALIZED` drept fallback. Orice decizie nouă se consemnează în `01_DECISIONS.md` și roadmap înainte de implementare.
+**Ultimul checkpoint:** arhiva 325 adaugă `flvm[52]` pentru escaladare concurentă DRAIN/CANCEL și 12 cicluri repetate de runtime/task cleanup; testul trece local și sub ASan. Utilizatorul a confirmat separat că arhiva 320 trece integral categoria FLVM pe Termux: 47/47. Arhiva 324 adaugă `flvm[51]` pentru topologii DAG generate determinist din seed-uri și cereri concurente de cancellation. Arhiva 323 acoperă separat anularea etapizată în stările RUNNING/WAITING. Arhivele 320–322 adaugă stress pe grafuri independente/convergente și Channel shutdown. Arhiva 305 adaugă primul worker pool pthread deținut de runtime: startup cu barrier/rollback, execuție concurentă a quantum-urilor, wait pe condition variable cu wake epoch, integrare DRAIN/CANCEL și join. `flvm[42]` validează 4 workers și 96 task-uri, inclusiv admission preflight pentru task-uri noi. 100 de execuții plain consecutive au trecut; 5 execuții TSAN au trecut pe forma anterioară a testului, dar rebuild-ul TSAN pentru forma finală nu a putut fi terminat în limita de execuție. Aceasta nu certifică încă întregul set de native modules/dependențe în worker mode. Arhiva 304 adaugă lifecycle-ul DRAIN/CANCEL, iar arhiva 303 adaugă `flat_runtime_task_cancel_request()` și cleanup la safe point. Arhiva 302 conectează MPMC ready queue la `FlatRuntime` și convertește gate-ul Channel la `FlatMutex`; `flat_vm_step()` rămâne în afara mutex-ului. Arhiva 301 repară fallback-ul de link pentru `flvm[32]` și completează sursele runtime/native din `Makefile.wasm`, dar build-ul Emscripten real trebuie confirmat într-un mediu cu `emcc`. Lexbor rămâne `PENDING_THREAD_SAFETY_VALIDATION`, cu `SERIALIZED` drept fallback. Orice decizie nouă se consemnează în `01_DECISIONS.md` și roadmap înainte de implementare.
 
 
 **Checkpoint archive 302:** queue publication/pop este integrat în runtime, cu `try_pop` nonblocking, eliminare FIFO a ID-urilor pentru WAITING/cancel și claim atomic sub `scheduler_mutex`. Channel folosește acum `FlatMutex`. `flvm[39]` validează accesul concurent la un Channel comun (8 thread-uri × 2.000 set/read), iar testele 037/039 trec sub ThreadSanitizer. Worker pool-ul este introdus în arhiva 305.
@@ -101,3 +108,12 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 - [31 — FlatThread Join Ownership Audit](31_FLAT_THREAD_JOIN_OWNERSHIP.md): contractul join pe POSIX/Windows, ownership exclusiv al join-ului per runtime și regresia pentru apelanți concurenți.
 - [32 — Worker Multi-Graph Cancellation Stress](32_WORKER_MULTI_GRAPH_CANCELLATION_STRESS.md): stres cu grafuri independente, cereri simultane de anulare și DRAIN/cleanup în worker pool.
+
+- [33 — Worker Channel / Shutdown Stress](33_WORKER_CHANNEL_SHUTDOWN_STRESS.md): four-Channel multi-writer transactions, concurrent waiter cancellation, DRAIN completion and post-join CANCEL cleanup.
+
+- [34 — Worker DAG Cancellation Stress](34_WORKER_DAG_CANCELLATION_STRESS.md): converging wait-graph DAGs with deterministic topology variants and simultaneous cancellation.
+- [35 — Worker DAG Staged Cancellation Stress](35_WORKER_DAG_STAGED_CANCELLATION.md): deeper fan-out/fan-in graphs with cancellation staged at RUNNING and WAITING states under real workers.
+
+- [35 — Worker DAG Staged Cancellation Stress](35_WORKER_DAG_STAGED_CANCELLATION.md): deeper fan-out/fan-in graphs with cancellation staged at RUNNING and WAITING states under real workers.
+
+- [36 — Worker Seeded DAG Stress](36_WORKER_SEEDED_DAG_STRESS.md): topologii DAG reproductibile cu seed fix, anulări concurente și verificarea cleanup-ului după DRAIN.

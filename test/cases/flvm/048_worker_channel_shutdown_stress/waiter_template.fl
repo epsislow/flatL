@@ -1,0 +1,7 @@
+use native channel
+
+#main
+  channel.lock(@CHANNEL@)
+  channel.set(@CHANNEL@, 'after_wait', 1)
+  channel.unlock(@CHANNEL@)
+  OK

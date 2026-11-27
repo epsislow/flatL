@@ -1,0 +1,10 @@
+use native channel
+use native math
+
+#main
+  channel.lock(@CHANNEL@)
+  value = channel.var(@CHANNEL@, 'counter')
+  math.calc('value + 1') -> value
+  channel.set(@CHANNEL@, 'counter', value)
+  channel.unlock(@CHANNEL@)
+  OK

@@ -928,3 +928,33 @@ test-worker-dom:
 test-worker-multi-graph-cancel:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/047_worker_multi_graph_cancel/worker_multi_graph_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Stress Channel transactions, concurrent cancellation and DRAIN-to-CANCEL under real workers.
+.PHONY: test-worker-channel-shutdown-stress
+test-worker-channel-shutdown-stress:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/048_worker_channel_shutdown_stress/worker_channel_shutdown_stress_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Converging wait-graph DAG cancellation regression (archive 322).
+.PHONY: test-worker-dag-cancel
+test-worker-dag-cancel:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/049_worker_dag_cancel/worker_dag_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Stress deeper wait-graph fan-out with cancellation at RUNNING and WAITING phases.
+.PHONY: test-worker-dag-staged-cancel
+test-worker-dag-staged-cancel:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/050_worker_dag_staged_cancel/worker_dag_staged_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Reproducible seeded DAG topologies with concurrent request-only cancellation.
+.PHONY: test-worker-seeded-dag-stress
+test-worker-seeded-dag-stress:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/051_worker_seeded_dag_stress/worker_seeded_dag_stress_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Repeated seeded mixed DRAIN/CANCEL escalation and worker-pool cleanup soak.
+.PHONY: test-worker-mixed-shutdown-soak
+test-worker-mixed-shutdown-soak:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/052_worker_mixed_shutdown_soak/worker_mixed_shutdown_soak_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

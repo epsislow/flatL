@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 50
+desc = "worker pool handles deeper fan-out DAGs and staged cancellation during execution"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/worker_dag_staged_cancel.fb {case}/busy.fl && make -s test-worker-dag-staged-cancel TEST_BIN={tmp}/worker_dag_staged_cancel_test && {tmp}/worker_dag_staged_cancel_test {tmp}/worker_dag_staged_cancel.fb"
+expect_exit = 0
+stdout_contains = "worker-dag-staged-cancel-ok rounds=3 graphs=4 tasks=40 fanout=7 staged-cancel=running-waiting drain=complete cleanup=complete"

@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 52
+desc = "worker pool survives seeded concurrent DRAIN and CANCEL escalation across repeated runtime cycles"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/mixed_shutdown.fb {case}/mixed_shutdown.fl && make -s test-worker-mixed-shutdown-soak TEST_BIN={tmp}/mixed_shutdown_test && {tmp}/mixed_shutdown_test {tmp}/mixed_shutdown.fb"
+expect_exit = 0
+stdout_contains = "worker-mixed-shutdown-soak-ok rounds=12 tasks=24 started=18 workers=4 shutdown=drain+cancel join=complete cleanup=complete"

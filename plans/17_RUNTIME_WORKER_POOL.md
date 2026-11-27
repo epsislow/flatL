@@ -95,3 +95,26 @@ The host must still prevent `flat_runtime_destroy()` from racing any API entry. 
 `flvm[47]` adds eight independent A→B→C→D wait graphs in one runtime. Eight host threads synchronize on a barrier and concurrently publish request-only cancellation for each graph's B task. A four-worker pool then drains the runtime. Each round checks A/C/D COMPLETED, B CANCELLED, joins workers, and destroys all task/runtime state. The harness repeats five rounds (40 graphs and 160 task instances per invocation).
 
 Local POSIX validation: `flvm[47]` passed normally, in five consecutive completed invocations, under ASan, and under UBSan. Existing `flvm[39-46]` relevant Channel, scheduler, wait-graph, HTTP, and DOM tests also passed individually. No production scheduler change was made because the added interleaving did not demonstrate a defect. This is focused evidence only; broader stress, Windows execution, actual Emscripten linking, and the complete test suite remain open. See `plans/32_WORKER_MULTI_GRAPH_CANCELLATION_STRESS.md`.
+
+
+## Channel / shutdown stress checkpoint — archive 321
+
+`flvm[48]` adds four independent Channels with eight transaction writers each under four workers, asserting exact read-modify-write totals after DRAIN. A second scenario parks four waiters behind four CREATED Channel-transaction owners, verifies DRAIN BLOCKED, publishes simultaneous cancellation requests for the waiters, and checks DRAIN completion. The pool is joined after STOPPED; the host then escalates to CANCEL and uses cooperative scheduling to clean the still-CREATED owners. This ordering is required by the existing lifecycle contract: workers exit at STOPPED, and CREATED tasks are excluded from DRAIN.
+
+The harness passed five consecutive direct executions and ASan, UBSan and TSAN on the local POSIX host. No production synchronization change was justified. This does not validate arbitrary topologies or cross-platform worker behavior.
+
+## Archive 322 — converging DAG cancellation checkpoint
+
+`flvm[49]` adds deterministic fan-in DAGs, simultaneous cancellation requests, worker DRAIN, terminal-state verification, join and cleanup. No production synchronization change. See `34_WORKER_DAG_CANCELLATION_STRESS.md`.
+
+
+## Staged wait-graph cancellation — archive 323
+
+`flvm[50]` adds four independent 10-task DAGs per round. Seven leaf tasks fan out across two intermediate waiters, both converging on one sink; deterministic fan-out split varies by graph and round. Eight workers start the sinks, and the harness observes RUNNING before issuing staged cancellation: sink while RUNNING, intermediate while WAITING, then intermediate/leaf while RUNNING. A fourth graph is left untouched as a DRAIN control. The test checks all 40 terminal states, worker join, task destruction and runtime destruction over three rounds.
+
+Local POSIX validation: `flvm[47–50]` passed individually; `flvm[50]` passed six consecutive direct harness executions and ASan, UBSan and TSAN. No production scheduler change was needed. This remains deterministic stress coverage, not randomized soak or cross-platform validation. See `plans/35_WORKER_DAG_STAGED_CANCELLATION.md`.
+
+
+## Archive 325 — mixed DRAIN/CANCEL escalation soak
+
+`flvm[52]` starts 18 of 24 tasks and leaves six CREATED tasks. A forced wait edge from started work into the CREATED suffix ensures DRAIN has an outstanding dependency. Eight host callers synchronize and concurrently request both DRAIN and CANCEL (at least one of each per round), exercising escalation and the invariant that DRAIN cannot downgrade CANCELLING. The test accepts CANCELLING or STOPPED after request publication depending on whether cleanup has already completed, then requires every task to be CANCELLED, joins workers, and destroys all task/runtime state. Twelve seeded runtime cycles run per invocation. Ten additional direct executions passed (120 cycles / 2,880 task instances); ASan passed. UBSan build exceeded the command limit and TSAN was not run. This is bounded stress evidence, not a long-duration certification. No production synchronization change was justified. See `plans/37_WORKER_MIXED_SHUTDOWN_SOAK.md`.

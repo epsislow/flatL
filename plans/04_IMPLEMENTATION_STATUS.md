@@ -1,8 +1,8 @@
 # Task Runtime — stadiul implementării
 
 **Ultima actualizare:** 2026-11-27  
-**Arhivă de referință:** `flatL-main-319-flat-thread-join-ownership.zip`
-**Arhivă curentă:** `flatL-main-320-worker-multi-graph-cancellation-stress.zip`  
+**Arhivă de referință:** `flatL-main-323-worker-dag-staged-cancellation.zip`
+**Arhivă curentă:** `flatL-main-324-worker-seeded-dag-stress.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 ## Ce este prezent în arhiva 252 (bază)
@@ -1425,3 +1425,35 @@ Audit plugin loading/preflight races and add deterministic worker-thread creatio
 A fost adăugat testul `flvm[47]`, care creează opt grafuri independente de câte patru task-uri, lansează simultan opt cereri de anulare din thread-uri host și verifică DRAIN, join, stările terminale și cleanup-ul complet. Harness-ul repetă scenariul de cinci ori per execuție.
 
 Verificări locale POSIX: `make all -j2`, `make docs`, `flvm[39]`, `flvm[40-47]` PASS în rulări individuale; `flvm[47]` a trecut și cinci execuții consecutive, ASan și UBSan. Nu a fost necesară modificarea codului de producție. Matricea generală de stress rămâne deschisă; Windows, build-ul Emscripten real și suita completă de 1186 teste nu sunt validate în această etapă.
+
+
+## Arhiva 321 — worker Channel / shutdown stress
+
+A fost adăugat `flvm[48]` cu două scenarii: (1) 32 de writer tasks pe patru Channels, opt tranzacții per Channel, sub patru workers, cu verificarea valorilor finale; (2) patru Channel waiters cu patru owner tasks CREATED, DRAIN BLOCKED, patru cereri concurente de anulare, DRAIN până la STOPPED, join al worker pool-ului și apoi CANCEL cooperativ pentru owner tasks. Testul verifică stările terminale și distrugerea task-urilor/Channel-urilor după eliberarea referințelor.
+
+Validare locală POSIX: `make all -j2`, `make docs`, `flvm[48]`, cinci execuții directe consecutive și harness-ul sub ASan, UBSan și TSAN — PASS. Testele `[39]`, `[41]`, `[42]`, `[44]`–`[48]` au trecut în rulări finalizate individuale; rularea grupată `[39] [41-48]` a depășit limita după `[43]`, iar `[44]`–`[48]` au fost reluate separat. Nu a fost necesară modificarea codului de producție. Suita completă de 1187 teste, Windows și linking Emscripten real rămân neverificate.
+
+Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress. The worker pool implementation is unchanged; platform validation remains open.
+
+
+## Archive 323 — staged worker DAG cancellation
+
+`flvm[50]` extends the converging DAG coverage with four independent 10-task graphs, deterministic 2–4 / 5–3 leaf fan-out splits, eight real workers and cancellation staged at RUNNING and WAITING states. One graph drains untouched as a control. Three rounds validate exact terminal states, worker join and full task/runtime cleanup. `flvm[47–50]`, `make all -j2`, and `make docs` passed locally; `flvm[50]` also passed six consecutive direct executions and ASan/UBSan/TSAN. No production runtime change was needed. The full suite and Windows/Emscripten worker gates remain open.
+
+
+## Archive 324 — seeded worker DAG stress
+
+- Added `flvm[51]` with reproducible seeded DAG generation (16 tasks, acyclic forward-only wait edges, variable fan-in/disconnected components) and four concurrent request-only cancellation callers.
+- Six deterministic seeds run twice; the test compares topology/cancellation signatures, then checks exact terminal states after six-worker DRAIN, joins workers and destroys all resources.
+- No production scheduler or public API change was required. The case complements `flvm[50]`, which continues to cover cancellation during live RUNNING/WAITING execution.
+- Validation: `flvm[51]` runner PASS, three additional direct executions PASS, ASan PASS, UBSan PASS, direct TSAN harness PASS. The TSAN runner invocation exceeded the command limit and is not counted. `flvm[47-49]` passed before a grouped command timeout; `flvm[50]` and `[51]` passed separately. `make all -j2` and `make docs` PASS (50 sections).
+- User-reported Termux validation of archive 320: `bin/run_tests flvm` passed 47/47 with 1186 discovered overall in 7:40.819. This is Android validation of archive 320 only, not tests added later.
+- Windows worker execution, actual Emscripten linking and the full default suite remain open. See `plans/36_WORKER_SEEDED_DAG_STRESS.md`.
+
+
+## Archive 325 — mixed worker shutdown escalation and bounded soak
+
+- Added `flvm[52]`: 24 tasks per runtime (18 started, six CREATED), a forced wait edge from started work into the CREATED suffix, and eight host threads concurrently publishing a deterministic mix of DRAIN and CANCEL requests. Every round requires CANCEL escalation, all 24 tasks terminal as CANCELLED, worker join, and complete task/runtime destruction.
+- Repeats 12 runtime lifecycles with distinct deterministic seeds.
+- Validation: `bin/run_tests 'flvm[52]' -v -e` PASS; ten additional direct harness executions PASS (120 runtime cycles / 2,880 task instances); ASan PASS. Normal harness compilation PASS. UBSan compilation exceeded the available command limit and is not counted; TSAN not run. No production scheduler change was required.
+- User-reported archive-320 Android baseline remains 47/47 FLVM tests PASS; archive 325 and tests 48–52 have not yet been validated on Termux. Windows worker execution and actual Emscripten linking remain open. See `plans/37_WORKER_MIXED_SHUTDOWN_SOAK.md`.

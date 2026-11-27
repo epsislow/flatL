@@ -2,7 +2,7 @@
 
 **Versiune document:** 1.0 (plan)  
 **Data:** 2026-11-25  
-**Status (archive 320):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. Archive 316 expands concurrent first-use loading coverage across distinct native plugin modules and tests plugin loading against capability freeze. Archive 317 adds deterministic worker-create and worker-join failure injection, covering every partial-start index and retryable join cleanup. Archive 318 validates process-wide worker-mode reference ownership across multiple runtimes. Archive 319 serializes same-runtime join ownership and clarifies POSIX/Windows native handle semantics. Archive 320 adds a repeated multi-graph worker cancellation stress case (`flvm[47]`) with eight concurrent cancellation callers and DRAIN/cleanup validation. Cross-platform validation remains open. This remains a staged concurrency validation effort, not blanket thread-safety certification.
+**Status (archive 325):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. Archive 316 expands concurrent first-use loading coverage across distinct native plugin modules and tests plugin loading against capability freeze. Archive 317 adds deterministic worker-create and worker-join failure injection, covering every partial-start index and retryable join cleanup. Archive 318 validates process-wide worker-mode reference ownership across multiple runtimes. Archive 319 serializes same-runtime join ownership and clarifies POSIX/Windows native handle semantics. Archive 320 adds a repeated multi-graph worker cancellation stress case (`flvm[47]`) with eight concurrent cancellation callers and DRAIN/cleanup validation. Archive 321 adds multi-Channel transaction contention and concurrent cancellation across DRAIN completion plus post-join CANCEL cleanup (`flvm[48]`). Archive 322 adds converging DAG cancellation (`flvm[49]`), archive 323 adds live staged cancellation on deeper DAGs (`flvm[50]`), and archive 324 adds reproducible seeded DAG topology/cancellation coverage (`flvm[51]`). Cross-platform validation remains open. This remains a staged concurrency validation effort, not blanket thread-safety certification.
 
 ## Direcția generală
 
@@ -125,7 +125,7 @@ Livrabile:
 4. [x] Ownership logic bazat pe `flat_task_id`, niciodată exclusiv pe `pthread_t`.
 5. [x] Principal global-state ownership audit and native worker capability preflight/gates implemented; per-module and dependency validation remains in progress.
 6. [x] DRAIN/CANCEL shutdown, waiting-task blocked status, worker error escalation and join implemented; expanded wait-graph cancellation regression added in archive 307.
-7. [ ] Broader stress matrix for multi-writer, arbitrary wait graphs, simultaneous cancellation, deadlock and cleanup. Archive 320 adds eight independent wait graphs and simultaneous cancellation batches in `flvm[47]`; `flvm[39]` and `flvm[43–46]` cover adjacent contention/HTTP/DOM dimensions. Randomized topologies and broader mixed shutdown stress remain open.
+7. [ ] Broader stress matrix for multi-writer, arbitrary wait graphs, simultaneous cancellation, deadlock and cleanup. Archives 320–322 add independent/converging graphs and Channel contention (`flvm[47–49]`); archive 323 adds deterministic varied fan-out and staged cancellation at RUNNING/WAITING safe points (`flvm[50]`). Seeded reproducible DAG topologies are now covered by archive 324 (`flvm[51]`); mixed DRAIN/CANCEL escalation under randomized load and long-duration soak remain open.
 8. [ ] Validate Windows worker execution and actual Emscripten build; single-thread Emscripten worker startup must fail cleanly.
 
 Criterii de acceptare:
@@ -742,3 +742,47 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 **Archive 320 validation (local POSIX host):** `make all -j2`, `make docs`, `flvm[39]`, `flvm[40-47]` completed as PASS in individual runs; `flvm[47]` also passed five consecutive completed invocations, ASan, and UBSan. A grouped `flvm[42-47]` command was stopped by the execution limit after reporting through `flvm[45]`; tests 46 and 47 passed separately. The full 1186-test suite, Windows worker execution, and actual Emscripten linking remain unverified. See `32_WORKER_MULTI_GRAPH_CANCELLATION_STRESS.md`.
 
 **Next:** continue the v2.0 stress matrix with mixed DRAIN/CANCEL escalation and Channel transaction contention under concurrent cancellation. Keep Windows and Emscripten toolchain validation as explicit platform gates. Do not begin UI Runtime v2.5 until v2.0 acceptance criteria and platform boundaries are reviewed.
+
+
+## Worker Channel / shutdown stress checkpoint — archive 321
+
+- [x] Exercise eight transaction writers on each of four independent Channels under four real workers; assert the final read-modify-write counter on every Channel (`flvm[48]`).
+- [x] Hold four Channels with CREATED owner tasks and park one started waiter on each Channel transaction.
+- [x] Verify worker-mode DRAIN reports BLOCKED while the Channel waiters remain unresolved.
+- [x] Publish four request-only cancellation operations concurrently from host threads; verify DRAIN completes and leaves CREATED owners untouched.
+- [x] Join the stopped worker pool, escalate to CANCEL, and complete CREATED-task cleanup through the cooperative scheduler.
+- [x] Verify all task terminal states and release every Channel reference before destruction.
+- [ ] Continue broader/randomized wait-graph and mixed dependency stress; validate Windows worker execution and actual Emscripten linking.
+
+**Archive 321 result:** `flvm[48]` passes on the local POSIX host, including five consecutive direct harness executions and ASan, UBSan and TSAN runs. No production scheduler or Channel change was required. The test explicitly preserves the DRAIN contract: CREATED tasks are outside the DRAIN set; after DRAIN reaches STOPPED, join workers before post-DRAIN CANCEL cleanup is driven cooperatively. See `33_WORKER_CHANNEL_SHUTDOWN_STRESS.md`. The full 1187-test suite, Windows and Emscripten remain unverified.
+
+## Converging DAG cancellation stress — archive 322
+
+- [x] Add `flvm[49]` with converging wait graphs (multiple waiters sharing one target), deterministic topology variants, concurrent cancellation, DRAIN, join and cleanup.
+- [ ] Expand deterministic graph families further, including deeper fan-in/fan-out and varied cancellation timing during execution.
+- [ ] Validate Windows worker execution and actual Emscripten linking; run complete-VM sanitizer matrix on supported platforms.
+
+**Archive 322:** `flvm[49]` exercises eight six-node DAGs over five rounds, with eight simultaneous cancellation requests per round. A waiter has only one outgoing wait edge under the existing API. See `34_WORKER_DAG_CANCELLATION_STRESS.md`.
+
+
+## Staged wait-graph cancellation — archive 323
+
+- [x] Add `flvm[50]`: four independent 10-task DAGs with seven leaves split across two intermediate nodes converging on a sink; fan-out varies deterministically by round and graph.
+- [x] Start eight workers and wait until each sink is observably RUNNING before cancellation begins.
+- [x] Exercise cancellation of RUNNING sinks, RUNNING intermediate nodes, a RUNNING leaf, and a WAITING intermediate node; leave one graph untouched as a normal DRAIN control.
+- [x] Assert all 40 terminal task states, join workers, destroy all tasks and destroy the runtime; repeat three rounds per invocation.
+- [ ] Continue longer-duration randomized/seeded stress and mixed shutdown escalation; validate Windows worker execution and actual Emscripten linking.
+
+**Archive 323 validation (local POSIX host):** `make all -j2` and `make docs` passed (50 sections). `flvm[47–50]` passed individually. The `flvm[50]` harness passed six consecutive direct executions and passed ASan, UBSan and TSAN. No production scheduler change was required. The full 1189-test suite, Windows workers and actual Emscripten linking remain unverified. See `35_WORKER_DAG_STAGED_CANCELLATION.md`.
+
+
+## Seeded worker DAG stress — archive 324
+
+- [x] Add `flvm[51]` with 16-task DAGs generated by a fixed xorshift32 seed; edges point only toward higher node indices, guaranteeing acyclicity while varying fan-in and disconnected components.
+- [x] Select four distinct cancellation targets from the same deterministic PRNG stream and publish their request-only cancellation concurrently from host threads.
+- [x] Run six seeds twice each and compare topology/cancellation signatures to verify reproducibility.
+- [x] Start six real workers, DRAIN, assert exact terminal states for all 16 tasks, join workers and destroy all task/runtime resources.
+- [ ] Add broader mixed DRAIN-to-CANCEL escalation under concurrent randomized load and longer-duration soak.
+- [ ] Validate Windows worker execution and actual Emscripten linking.
+
+**Archive 324 validation (local POSIX host):** `flvm[51]` passed via `bin/run_tests`, three additional direct harness repetitions, ASan and UBSan. The dedicated TSAN harness binary passed directly; the `bin/run_tests` TSAN invocation exceeded the command limit and is not counted. `flvm[47-49]` passed in a grouped invocation before timeout; `[50]` and `[51]` passed separately. `make all -j2` and `make docs` passed (50 sections). User-reported Termux validation for archive 320: all 47 `flvm` tests passed (1186 discovered overall, 7:40.819); this does not cover later cases 48–51. Windows, actual Emscripten linking and the full default suite remain unverified. See `36_WORKER_SEEDED_DAG_STRESS.md`.
