@@ -983,16 +983,12 @@ static int prepare_unit_decls(FgirProgram *mod, const char *path, int *unit_inde
                                   err_size) != 0) {
         return -1;
     }
-    mod->native_unit_count = 1;
-    mod->native_units[0].decl_count = decl_count;
-    if (decl_count > 0) {
-        memcpy(mod->native_units[0].decls, decls,
-               (size_t)decl_count * sizeof(FlatOptionalNativeDecl));
+    if (flat_native_use_add_unit(mod, decls, decl_count, unit_index_out, err, err_size) != 0) {
+        return -1;
     }
     for (i = 0; i < mod->block_count; i++) {
-        mod->blocks[i].native_unit_index = 0;
+        mod->blocks[i].native_unit_index = *unit_index_out;
     }
-    *unit_index_out = 0;
     return 0;
 }
 

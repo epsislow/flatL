@@ -1,0 +1,8 @@
+suite = "flc"
+id = 14
+desc = "FGIR linker accepts 32 native units and rejects 33"
+kind = "exec"
+
+cmd = "{root}/test/cases/flc/011_native_unit_link_boundary/check_native_unit_boundary.sh {root} {tmp}"
+expect_exit = 0
+stdout_contains = "native-unit-link-boundary-ok"

@@ -365,16 +365,22 @@ int flat_native_use_add_unit(FgirProgram *prog, const FlatOptionalNativeDecl *de
         snprintf(err, err_size, "too many linked native units");
         return -1;
     }
-    if (decl_count > FGIR_MAX_OPTIONAL_NATIVES) {
+    if (decl_count < 0 || decl_count > FGIR_MAX_OPTIONAL_NATIVES) {
         snprintf(err, err_size, "too many use native directives in one file");
         return -1;
     }
-    ui = prog->native_unit_count++;
+    ui = prog->native_unit_count;
+    if (flat_fgir_reserve_native_units(prog, (size_t)ui + 1u) != 0) {
+        snprintf(err, err_size, "out of memory while growing FGIR native units");
+        return -1;
+    }
     u = &prog->native_units[ui];
+    memset(u, 0, sizeof(*u));
     u->decl_count = decl_count;
     if (decl_count > 0 && decls) {
         memcpy(u->decls, decls, (size_t)decl_count * sizeof(FlatOptionalNativeDecl));
     }
+    prog->native_unit_count++;
     *unit_index_out = ui;
     return 0;
 }

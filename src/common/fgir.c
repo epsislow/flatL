@@ -16,6 +16,7 @@ void flat_fgir_free(FgirProgram *prog) {
     free(prog->blocks);
     free(prog->functions);
     free(prog->schemas);
+    free(prog->native_units);
     memset(prog, 0, sizeof(*prog));
     prog->main_index = -1;
     prog->func_var_slots_manual = -1;
@@ -82,6 +83,32 @@ int flat_fgir_reserve_functions(FgirProgram *prog, size_t capacity) {
            (grown - (size_t)prog->function_capacity) * sizeof(*next));
     prog->functions = next;
     prog->function_capacity = (int)grown;
+    return 0;
+}
+
+int flat_fgir_reserve_native_units(FgirProgram *prog, size_t capacity) {
+    FgirNativeUnit *next;
+    size_t grown;
+    size_t current;
+    if (!prog || capacity > FGIR_MAX_NATIVE_UNITS || prog->native_unit_capacity < 0) return -1;
+    current = (size_t)prog->native_unit_capacity;
+    if (capacity <= current) return 0;
+    /* Native-unit records are relatively large (4 KiB); allocate the first
+     * slot on demand instead of reserving eight records up front. */
+    grown = current ? current : 1u;
+    while (grown < capacity) {
+        if (grown > FGIR_MAX_NATIVE_UNITS / 2u) {
+            grown = FGIR_MAX_NATIVE_UNITS;
+            break;
+        }
+        grown *= 2u;
+    }
+    if (grown < capacity || grown > SIZE_MAX / sizeof(*next)) return -1;
+    next = (FgirNativeUnit *)realloc(prog->native_units, grown * sizeof(*next));
+    if (!next) return -1;
+    memset(next + current, 0, (grown - current) * sizeof(*next));
+    prog->native_units = next;
+    prog->native_unit_capacity = (int)grown;
     return 0;
 }
 

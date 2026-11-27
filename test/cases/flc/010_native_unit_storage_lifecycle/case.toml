@@ -1,0 +1,8 @@
+suite = "flc"
+id = 13
+desc = "FGIR dynamic native-unit storage reserve/free lifecycle"
+kind = "exec"
+
+cmd = "gcc -std=c11 -Wall -Wextra -Werror -I{root}/include -o {tmp}/native_unit_storage_test {root}/test/cases/flc/010_native_unit_storage_lifecycle/native_unit_storage_test.c {root}/src/common/fgir.c && {tmp}/native_unit_storage_test"
+expect_exit = 0
+stdout_contains = "native-unit-storage-test-ok"

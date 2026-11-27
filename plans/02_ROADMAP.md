@@ -1012,3 +1012,27 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [ ] Have the user validate the cold-cache and warm-cache behavior on Termux/Android.
 
 **Archive 344 implementation:** repeated native integration harness compilation is replaced with configuration-specific reusable objects under `bin/test-obj/`. On the available host, the first harness paid a one-time 7.476 s shared-object build; the other 40 harnesses reused those objects. The cold 41-case selection passed in 28.652 s and the warm selection in 20.975 s. A later full `make test` attempt reached 320/1,160 before the 300-second outer execution limit; this is incomplete, not a pass. `make docs` passed (50 sections). The 34 affected Makefile targets continue to compile their own harness source and link the common runtime objects. The runtime-worker-pool test uses a separately compiled `flat_runtime_testing.o` because it requires `FLAT_RUNTIME_TESTING`. No runtime or test semantics changed. See `plans/54_NATIVE_TEST_HARNESS_OBJECT_CACHE.md`.
+
+
+## FGIR native-unit storage audit — archive 345
+
+- [x] Measure the remaining native-unit, optional-native and export metadata on the native ABI.
+- [x] Audit all FGIR native-unit append, initialization, reader, bytecode conversion and cleanup paths.
+- [x] Confirm `FgirNativeUnit` and `FlatOptionalNativeDecl` are self-contained inline records and no whole-`FgirProgram` shallow-copy path exists.
+- [x] Select only the outer `FgirProgram.native_units[32]` table for the next implementation; keep the per-unit declaration array and all bytecode structures unchanged.
+
+**Archive 345 result:** audit-only checkpoint; no C implementation or runtime behavior changed. The fixed `native_units[32]` table occupies 131,200 bytes (`sizeof(FgirNativeUnit)=4,100 B`) out of the 151,960-byte `FgirProgram`. See `plans/55_FGIR_NATIVE_UNIT_STORAGE_AUDIT.md`.
+
+## FGIR dynamic native-unit storage — archive 346
+
+- [x] Replace only the outer `FgirProgram.native_units[32]` table with an owned pointer, count and capacity; keep each unit's `decls[32]` inline.
+- [x] Add checked geometric reserve capped at 32, with an initial capacity of one large record, and free/reset lifecycle.
+- [x] Route both `flat_native_use_add_unit()` and linker `prepare_unit_decls()` through the reserve/append path.
+- [x] Preserve the 32-unit limit, existing overflow diagnostic, native aliases, FNUN serialization and bytecode representation.
+- [x] Add lifecycle and linker 32/33 boundary regressions.
+- [x] Run focused FGIR, fmod and native-use tests (37/37 PASS).
+- [x] Run lifecycle and 32/33 linker boundary tests under ASan/UBSan with leak detection.
+- [x] Run `make all -j2` and `make docs` (50 sections).
+- [ ] Complete the full default native test suite and user-side Emscripten/WASM validation.
+
+**Archive 346 implementation:** `sizeof(FgirProgram)` decreases from 151,960 B to 20,776 B (131,184 B saved). `FgirNativeUnit` remains 4,100 B; its outer table starts with one record and grows geometrically to the unchanged 32-unit maximum. The focused `flc[1-14]`, `fmod` and `native_use` selections pass 37/37. The lifecycle harness and 32/33 linker boundary both pass ASan/UBSan with leak detection. A full-suite attempt used a stale `flc` binary from a DOM-disabled sanitizer build and timed out at 286/1,162; after a clean default rebuild, the DOM suite (18/18), the affected FLVM cases (3/3), and `flc[13-14]` (2/2) passed. Full native and WASM validation remain pending on the user's Termux/Emscripten environment. See `plans/56_FGIR_DYNAMIC_NATIVE_UNIT_STORAGE.md`.
