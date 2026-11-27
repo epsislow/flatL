@@ -186,7 +186,7 @@ static void capture_tail_append(char *dst, size_t capacity, size_t *used,
 }
 
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size) {
-    char shell_cmd[4096];
+    char shell_cmd[16384];
     FILE *fp;
 
     if (!cmd || !exit_code) {

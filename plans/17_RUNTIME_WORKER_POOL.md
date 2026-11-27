@@ -118,3 +118,8 @@ Local POSIX validation: `flvm[47–50]` passed individually; `flvm[50]` passed s
 ## Archive 325 — mixed DRAIN/CANCEL escalation soak
 
 `flvm[52]` starts 18 of 24 tasks and leaves six CREATED tasks. A forced wait edge from started work into the CREATED suffix ensures DRAIN has an outstanding dependency. Eight host callers synchronize and concurrently request both DRAIN and CANCEL (at least one of each per round), exercising escalation and the invariant that DRAIN cannot downgrade CANCELLING. The test accepts CANCELLING or STOPPED after request publication depending on whether cleanup has already completed, then requires every task to be CANCELLED, joins workers, and destroys all task/runtime state. Twelve seeded runtime cycles run per invocation. Ten additional direct executions passed (120 cycles / 2,880 task instances); ASan passed. UBSan build exceeded the command limit and TSAN was not run. This is bounded stress evidence, not a long-duration certification. No production synchronization change was justified. See `plans/37_WORKER_MIXED_SHUTDOWN_SOAK.md`.
+
+
+## Emscripten single-thread contract — archive 327
+
+The `__EMSCRIPTEN__ && !__EMSCRIPTEN_PTHREADS__` branch is now covered by `flvm[54]`: mutex operations are inert, condition wait and thread create/join reject, `flat_threads_supported()` is false, and runtime worker startup rejects before allocating or changing runtime lifecycle. The regression compiles the complete runtime source set with a host compiler and `-D__EMSCRIPTEN__` without `-pthread`; this validates the selected preprocessor branch and runtime contract only. It is not a WASM link or browser execution. Actual `emcc` build/smoke and Windows worker validation remain open. See `39_EMSCRIPTEN_SINGLE_THREAD_WORKER_GATE.md`.

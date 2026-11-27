@@ -475,6 +475,9 @@ Use **`crun`** or **`compile`+`run`**, not both. An empty/incomplete **`[flatl]`
 | `{tmp}` | Temp dir (pipeline only) |
 | `{src}` | Path to `program.fl` (pipeline) |
 
+Expanded shell commands (including placeholder substitutions) support up to **8191 bytes**.
+The runner reports an explicit expansion-limit error rather than executing a truncated command.
+
 ### Case kinds
 
 | kind | Fields |

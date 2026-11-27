@@ -20,7 +20,7 @@
 
 typedef struct { SRWLOCK native; } FlatMutex;
 typedef struct { CONDITION_VARIABLE native; } FlatCond;
-typedef struct { uintptr_t native; void *result; } FlatThread;
+typedef struct { uintptr_t native; } FlatThread;
 typedef void *(*FlatThreadFn)(void *);
 #define FLAT_MUTEX_INITIALIZER { SRWLOCK_INIT }
 #define FLAT_COND_INITIALIZER { CONDITION_VARIABLE_INIT }
@@ -62,29 +62,29 @@ static inline int flat_cond_broadcast(FlatCond *cond) {
     return 0;
 }
 typedef struct FlatThreadStart {
-    FlatThread *thread;
     FlatThreadFn fn;
     void *arg;
 } FlatThreadStart;
 static inline unsigned __stdcall flat_thread_trampoline(void *opaque) {
     FlatThreadStart *start = (FlatThreadStart *)opaque;
-    FlatThread *thread = start->thread;
     FlatThreadFn fn = start->fn;
     void *arg = start->arg;
     free(start);
-    thread->result = fn(arg);
+    (void)fn(arg); /* POSIX flat_thread_join() also discards the return value. */
     return 0;
 }
 static inline int flat_thread_create(FlatThread *thread, FlatThreadFn fn, void *arg) {
     FlatThreadStart *start;
     uintptr_t handle;
-    if (!thread || !fn) return -1;
+    if (!thread) return -1;
+    /* A FlatThread must be fresh or successfully joined before reuse. Clear its
+     * state first so every failed create leaves a safely non-joinable object. */
+    thread->native = 0;
+    if (!fn) return -1;
     start = (FlatThreadStart *)malloc(sizeof *start);
     if (!start) return -1;
-    start->thread = thread;
     start->fn = fn;
     start->arg = arg;
-    thread->result = NULL;
     handle = _beginthreadex(NULL, 0, flat_thread_trampoline, start, 0, NULL);
     if (!handle) {
         free(start);
@@ -170,8 +170,10 @@ static inline int flat_cond_broadcast(FlatCond *cond) {
 }
 static inline int flat_thread_create(FlatThread *thread, FlatThreadFn fn, void *arg) {
     int rc;
-    if (!thread || !fn) return -1;
+    if (!thread) return -1;
+    /* A FlatThread must be fresh or successfully joined before reuse. */
     thread->valid = 0;
+    if (!fn) return -1;
     rc = pthread_create(&thread->native, NULL, fn, arg);
     if (rc == 0) thread->valid = 1;
     return rc;

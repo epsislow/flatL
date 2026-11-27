@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 53
+desc = "worker pool isolates failed tasks across 100 runtime create drain join destroy cycles"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/worker_ok.fb {root}/test/cases/flvm/019_vm_stepping/program.fl && {root}/bin/flc -o {tmp}/worker_fail.fb {root}/test/cases/flvm/021_vm_failure_lifecycle/fail.fl && make -s test-worker-failure-isolation-soak TEST_BIN={tmp}/worker_failure_isolation_soak_test && {tmp}/worker_failure_isolation_soak_test {tmp}/worker_ok.fb {tmp}/worker_fail.fb"
+expect_exit = 0
+stdout_contains = "worker-failure-isolation-soak-ok rounds=100 tasks_per_round=8 failed=2 completed=6 workers=4 drain=complete join=complete cleanup=complete"

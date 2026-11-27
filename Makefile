@@ -848,6 +848,14 @@ test-native-worker-policy: $(PLUGIN_TARGET)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/034_native_capabilities/native_worker_policy_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 
+# Verify the cross-platform FlatThread/FlatMutex/FlatCond lifecycle contract.
+# Override THREAD_FLAGS= on native Windows toolchains; POSIX defaults to -pthread.
+THREAD_FLAGS ?= -pthread
+.PHONY: test-flat-thread-contract
+test-flat-thread-contract:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) $(THREAD_FLAGS) -o $(TEST_BIN) test/cases/flvm/055_flat_thread_contract/flat_thread_contract_test.c $(LDFLAGS)
+
 # Verify scheduler synchronization primitives, MPMC ready queue and dispatch ownership state.
 .PHONY: test-scheduler-sync-primitives
 test-scheduler-sync-primitives:
@@ -958,3 +966,16 @@ test-worker-seeded-dag-stress:
 test-worker-mixed-shutdown-soak:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/052_worker_mixed_shutdown_soak/worker_mixed_shutdown_soak_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Verify worker failure isolation and repeated runtime lifecycle cleanup (archive 326).
+.PHONY: test-worker-failure-isolation-soak
+test-worker-failure-isolation-soak:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/053_worker_failure_isolation_soak/worker_failure_isolation_soak_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Compile the runtime against the single-thread Emscripten synchronization branch
+# using the host compiler. This is a branch/contract test, not an Emscripten WASM build.
+.PHONY: test-emscripten-no-pthreads
+test-emscripten-no-pthreads:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(filter-out -pthread,$(CFLAGS)) -D__EMSCRIPTEN__ -o $(TEST_BIN) test/cases/flvm/054_emscripten_no_pthreads/emscripten_no_pthreads_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(filter-out -pthread,$(VM_EXTRA_LIBS)) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

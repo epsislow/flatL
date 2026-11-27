@@ -2,7 +2,7 @@
 
 **Versiune document:** 1.0 (plan)  
 **Data:** 2026-11-25  
-**Status (archive 325):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. Archive 316 expands concurrent first-use loading coverage across distinct native plugin modules and tests plugin loading against capability freeze. Archive 317 adds deterministic worker-create and worker-join failure injection, covering every partial-start index and retryable join cleanup. Archive 318 validates process-wide worker-mode reference ownership across multiple runtimes. Archive 319 serializes same-runtime join ownership and clarifies POSIX/Windows native handle semantics. Archive 320 adds a repeated multi-graph worker cancellation stress case (`flvm[47]`) with eight concurrent cancellation callers and DRAIN/cleanup validation. Archive 321 adds multi-Channel transaction contention and concurrent cancellation across DRAIN completion plus post-join CANCEL cleanup (`flvm[48]`). Archive 322 adds converging DAG cancellation (`flvm[49]`), archive 323 adds live staged cancellation on deeper DAGs (`flvm[50]`), and archive 324 adds reproducible seeded DAG topology/cancellation coverage (`flvm[51]`). Cross-platform validation remains open. This remains a staged concurrency validation effort, not blanket thread-safety certification.
+**Status (archive 327):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. Archive 316 expands concurrent first-use loading coverage across distinct native plugin modules and tests plugin loading against capability freeze. Archive 317 adds deterministic worker-create and worker-join failure injection, covering every partial-start index and retryable join cleanup. Archive 318 validates process-wide worker-mode reference ownership across multiple runtimes. Archive 319 serializes same-runtime join ownership and clarifies POSIX/Windows native handle semantics. Archive 320 adds a repeated multi-graph worker cancellation stress case (`flvm[47]`) with eight concurrent cancellation callers and DRAIN/cleanup validation. Archive 321 adds multi-Channel transaction contention and concurrent cancellation across DRAIN completion plus post-join CANCEL cleanup (`flvm[48]`). Archive 322 adds converging DAG cancellation (`flvm[49]`), archive 323 adds live staged cancellation on deeper DAGs (`flvm[50]`), and archive 324 adds reproducible seeded DAG topology/cancellation coverage (`flvm[51]`), archive 325 adds mixed DRAIN/CANCEL escalation soak (`flvm[52]`), archive 326 adds task-failure isolation across 100 runtime lifecycles (`flvm[53]`), and archive 327 adds a host-compiler regression for the single-thread Emscripten synchronization branch and clean worker-start rejection (`flvm[54]`). Cross-platform validation remains open. This remains a staged concurrency validation effort, not blanket thread-safety certification.
 
 ## Direcția generală
 
@@ -126,7 +126,7 @@ Livrabile:
 5. [x] Principal global-state ownership audit and native worker capability preflight/gates implemented; per-module and dependency validation remains in progress.
 6. [x] DRAIN/CANCEL shutdown, waiting-task blocked status, worker error escalation and join implemented; expanded wait-graph cancellation regression added in archive 307.
 7. [ ] Broader stress matrix for multi-writer, arbitrary wait graphs, simultaneous cancellation, deadlock and cleanup. Archives 320–322 add independent/converging graphs and Channel contention (`flvm[47–49]`); archive 323 adds deterministic varied fan-out and staged cancellation at RUNNING/WAITING safe points (`flvm[50]`). Seeded reproducible DAG topologies are now covered by archive 324 (`flvm[51]`); mixed DRAIN/CANCEL escalation under randomized load and long-duration soak remain open.
-8. [ ] Validate Windows worker execution and actual Emscripten build; single-thread Emscripten worker startup must fail cleanly.
+8. [ ] Validate Windows worker execution and actual Emscripten build; [x] single-thread Emscripten worker startup rejection is covered by a host-compiler branch simulation in archive 327.
 
 Criterii de acceptare:
 
@@ -786,3 +786,49 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [ ] Validate Windows worker execution and actual Emscripten linking.
 
 **Archive 324 validation (local POSIX host):** `flvm[51]` passed via `bin/run_tests`, three additional direct harness repetitions, ASan and UBSan. The dedicated TSAN harness binary passed directly; the `bin/run_tests` TSAN invocation exceeded the command limit and is not counted. `flvm[47-49]` passed in a grouped invocation before timeout; `[50]` and `[51]` passed separately. `make all -j2` and `make docs` passed (50 sections). User-reported Termux validation for archive 320: all 47 `flvm` tests passed (1186 discovered overall, 7:40.819); this does not cover later cases 48–51. Windows, actual Emscripten linking and the full default suite remain unverified. See `36_WORKER_SEEDED_DAG_STRESS.md`.
+
+
+## Worker failure isolation and lifecycle soak — archive 326
+
+- [x] Add `flvm[53]`: 100 fresh runtime cycles per invocation, each with eight tasks and four real workers; two tasks intentionally fail while six complete normally.
+- [x] Assert FAILED/COMPLETED task states and `FlatVmResult` values independently; require DRAIN completion, worker join, explicit task destruction and runtime destruction every round.
+- [x] Validate `flvm[53]` under ASan, UBSan and TSAN on the local POSIX host.
+- [ ] Continue broader randomized shutdown/failure interleavings and longer soak beyond 100 cycles.
+- [ ] Validate Windows worker execution and actual Emscripten linking; the single-thread Emscripten worker-startup rejection remains a platform gate.
+
+**Archive 326 validation (local POSIX host):** `make all -j2` and `make docs` passed (50 sections). `flvm[53]` passed once plus four additional completed runner invocations; a fifth repeat attempt was interrupted by the outer command time limit and is not counted. ASan, UBSan and TSAN runs of `flvm[53]` passed. `flvm[51]` and `[52]` passed separately. A grouped `[47-53]` run passed `[47-50]` before timing out; remaining tests were run individually. The full 1192-test suite, Windows worker execution, actual Emscripten linking and Termux validation of archives 321–326 remain open. See `plans/38_WORKER_FAILURE_ISOLATION_SOAK.md`.
+
+
+## Emscripten single-thread worker gate — archive 327
+
+- [x] Audit `include/flat_sync.h`'s `__EMSCRIPTEN__ && !__EMSCRIPTEN_PTHREADS__` branch: no-op mutex operations, rejected blocking condition wait, rejected thread create/join, and `flat_threads_supported() == 0`.
+- [x] Confirm `flat_runtime_workers_start()` rejects unsupported thread mode before mutating runtime state or allocating worker resources.
+- [x] Add `flvm[54]`, compiling the complete runtime source set with the host compiler and `-D__EMSCRIPTEN__` (without `-pthread`) to exercise the single-thread branch and verify clean runtime destruction after rejected worker startup.
+- [ ] Build `Makefile.wasm` with a real Emscripten SDK and run generated WASM smoke tests.
+- [ ] Validate Windows worker execution on a Windows host.
+
+**Archive 327 validation:** `test-emscripten-no-pthreads` and `flvm[54]` passed using the host compiler to select the Emscripten single-thread preprocessor branch. This is a branch/contract simulation, not a WASM build. `emcc`/`emcmake` and a Windows toolchain are unavailable in the current environment, so the actual Emscripten and Windows gates remain open. No production runtime code changed. See `39_EMSCRIPTEN_SINGLE_THREAD_WORKER_GATE.md`.
+
+## Windows FlatSync / FlatThread audit — archive 328
+
+- [x] Audit the Windows `SRWLOCK` / `CONDITION_VARIABLE` wrappers and ready-queue predicate loops at source level.
+- [x] Make failed `flat_thread_create()` leave a safely non-joinable wrapper on both Windows and POSIX, including a null function argument.
+- [x] Remove the Windows-only trampoline write into `FlatThread`; the trampoline now owns only its `{fn,arg}` start record and discards the function result, matching POSIX join semantics.
+- [x] Add `flvm[55]` for failed-create state, condition-variable wakeup, successful join and repeated-join rejection.
+- [ ] Compile and execute `flvm[37]`, `[42]` and `[55]` with a real Windows SDK/toolchain; verify the configured `_WIN32_WINNT` is at least `0x0600`.
+- [ ] Build and execute the real Emscripten target with `emcc`/`emcmake`.
+
+**Archive 328 validation (local POSIX host):** `make all -j2`, `make docs` (50 sections), `flvm[37]`, `flvm[42]`, and `flvm[55]` passed individually. The dedicated `flvm[55]` harness also passed under ASan and UBSan. Windows compilation/execution was not possible because no Windows SDK, MinGW/MSVC toolchain or runtime is available. Emscripten remains unverified because `emcc`/`emcmake` are unavailable. The Windows source audit identifies the required Vista-or-newer API target but does not silently set a process-wide `_WIN32_WINNT` value. See `40_WINDOWS_FLAT_SYNC_AUDIT.md`.
+
+
+## Test runner expanded-command capacity — archive 329
+
+- [x] Increase the `case.toml` command field and line parser capacity so placeholder-expanded commands can exceed 1 KiB.
+- [x] Make placeholder expansion fail explicitly on overflow instead of silently executing a truncated command.
+- [x] Increase POSIX/Windows shell-capture command buffers to accommodate the expanded command and wrapper prefixes.
+- [x] Use the existing `flvm[48]` case as a regression for long `{root}` / `{tmp}` placeholder expansion on Termux.
+- [ ] Validate `flvm[48]` through `bin/run_tests` on Termux and run the broader test suite.
+
+**Archive 329 scope:** fixes a test-runner command-buffer truncation that caused long `case.toml` `cmd` values to be silently truncated after placeholder expansion. No VM, Channel, or worker-pool behavior is changed.
+
+**Archive 329 validation (local POSIX host):** `make all -j2`, `make docs`, `port` (5/5), and isolated `flvm[48]` runs passed. The full `flvm` suite exceeded the available command window after reporting 17/55 cases, so it is not counted as complete. One multi-repeat shell invocation also timed out while starting its third repetition; a subsequent isolated `flvm[48]` run passed. Termux validation of archive 329 remains pending.

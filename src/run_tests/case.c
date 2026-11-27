@@ -212,7 +212,8 @@ static void apply_kv(FlatCase *c, const char *key, char *val) {
 
 int flat_case_load(const char *case_toml_path, FlatCase *out) {
     FILE *f;
-    char line[1024];
+    /* A quoted case.toml command can occupy the full command field plus key syntax. */
+    char line[FLAT_CASE_MAX_CMD + 128];
     char section[64] = "";
 
     if (!case_toml_path || !out) {
@@ -239,7 +240,14 @@ int flat_case_load(const char *case_toml_path, FlatCase *out) {
     }
 
     while (fgets(line, sizeof line, f)) {
-        char *p = trim(line);
+        size_t line_len = strlen(line);
+        char *p;
+        /* Do not parse a silently truncated TOML line as multiple records. */
+        if (line_len == sizeof line - 1 && line[line_len - 1] != '\n' && !feof(f)) {
+            fclose(f);
+            return -1;
+        }
+        p = trim(line);
         if (*p == '\0' || *p == '#') {
             continue;
         }
@@ -293,67 +301,75 @@ static int path_exists_at(const char *repo, const char *rel) {
     return flat_port_path_exists(full);
 }
 
-static void expand_placeholders(char *dst, int dst_size, const char *repo, const char *case_dir,
-                                const char *tmp, const char *src_path, const char *cmd) {
+static int expand_append(char **dst, size_t *left, const char *value) {
+    size_t n;
+    if (!dst || !*dst || !left || !value) {
+        return -1;
+    }
+    n = strlen(value);
+    if (n > *left) {
+        return -1;
+    }
+    memcpy(*dst, value, n);
+    *dst += n;
+    *left -= n;
+    return 0;
+}
+
+static int expand_placeholders(char *dst, size_t dst_size, const char *repo, const char *case_dir,
+                               const char *tmp, const char *src_path, const char *cmd) {
     const char *src = cmd;
     char *d = dst;
-    int left = dst_size - 1;
+    size_t left;
 
-    (void)src_path;
-    while (*src && left > 0) {
+    if (!dst || dst_size == 0 || !repo || !cmd) {
+        return -1;
+    }
+    dst[0] = '\0';
+    left = dst_size - 1;
+    while (*src) {
+        const char *replacement = NULL;
+        size_t token_len = 0;
+        char tmp_fallback[FLAT_CASE_MAX_PATH];
+
         if (strncmp(src, "{root}", 6) == 0) {
-            int n = snprintf(d, (size_t)left + 1, "%s", repo);
-            if (n > left) {
-                break;
-            }
-            d += n;
-            left -= n;
-            src += 6;
-            continue;
-        }
-        if (strncmp(src, "{case}", 6) == 0) {
-            int n = snprintf(d, (size_t)left + 1, "%s", case_dir ? case_dir : "");
-            if (n > left) {
-                break;
-            }
-            d += n;
-            left -= n;
-            src += 6;
-            continue;
-        }
-        if (strncmp(src, "{tmp}", 5) == 0) {
-            char tmp_fallback[FLAT_CASE_MAX_PATH];
-            const char *t = tmp;
-            if (!t) {
+            replacement = repo;
+            token_len = 6;
+        } else if (strncmp(src, "{case}", 6) == 0) {
+            replacement = case_dir ? case_dir : "";
+            token_len = 6;
+        } else if (strncmp(src, "{tmp}", 5) == 0) {
+            replacement = tmp;
+            token_len = 5;
+            if (!replacement) {
                 if (flat_port_temp_parent(tmp_fallback, sizeof tmp_fallback, repo) == 0) {
-                    t = tmp_fallback;
+                    replacement = tmp_fallback;
                 } else {
-                    t = "/tmp";
+                    replacement = "/tmp";
                 }
             }
-            int n = snprintf(d, (size_t)left + 1, "%s", t);
-            if (n > left) {
-                break;
-            }
-            d += n;
-            left -= n;
-            src += 5;
-            continue;
+        } else if (strncmp(src, "{src}", 5) == 0) {
+            replacement = src_path ? src_path : "";
+            token_len = 5;
         }
-        if (strncmp(src, "{src}", 5) == 0) {
-            int n = snprintf(d, (size_t)left + 1, "%s", src_path ? src_path : "");
-            if (n > left) {
-                break;
+
+        if (replacement) {
+            if (expand_append(&d, &left, replacement) != 0) {
+                dst[0] = '\0';
+                return -1;
             }
-            d += n;
-            left -= n;
-            src += 5;
-            continue;
+            src += token_len;
+        } else {
+            if (left == 0) {
+                dst[0] = '\0';
+                return -1;
+            }
+            *d++ = *src++;
+            left--;
         }
-        *d++ = *src++;
-        left--;
     }
     *d = '\0';
+    return 0;
 }
 
 static int check_output(const char *hay, const char *needle, char *err, int err_size) {
@@ -654,7 +670,13 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         int code = -1;
         double exec_ms = 0.0;
 
-        expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd);
+        if (expand_placeholders(cmd, sizeof cmd, repo_root, c->case_dir, NULL, NULL, c->cmd) != 0) {
+            snprintf(err, (size_t)err_size,
+                     "expanded exec command exceeds limit (%u bytes)",
+                     (unsigned)(sizeof cmd - 1));
+            timing_finish(timing, t_case, measure);
+            return -1;
+        }
         {
             /* Detect before unwrap; rewrite after prepare_shell so we don't break sh -c '...'. */
             int need_node = (strncmp(cmd, "node ", 5) == 0 || strncmp(cmd, "node.exe ", 9) == 0 ||
@@ -781,8 +803,12 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
                 timing_finish(timing, t_case, measure);
                 return -1;
             }
-            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
-                                src_path, c->flatl_crun);
+            if (expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                                    src_path, c->flatl_crun) != 0) {
+                snprintf(err, (size_t)err_size, "expanded flatl crun command exceeds limit");
+                timing_finish(timing, t_case, measure);
+                return -1;
+            }
             inject_http_mock(compile_cmd, sizeof compile_cmd, c);
             inject_case_env(compile_cmd, sizeof compile_cmd, c);
             if (inject) {
@@ -825,10 +851,14 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         if (use_flatl && c->flatl_compile[0] != '\0' && c->flatl_run[0] != '\0') {
             double compile_ms = 0.0;
             double run_ms = 0.0;
-            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
-                                src_path, c->flatl_compile);
-            expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
-                                c->flatl_run);
+            if (expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                                    src_path, c->flatl_compile) != 0 ||
+                expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
+                                    c->flatl_run) != 0) {
+                snprintf(err, (size_t)err_size, "expanded flatl compile/run command exceeds limit");
+                timing_finish(timing, t_case, measure);
+                return -1;
+            }
             inject_http_mock(run_cmd, sizeof run_cmd, c);
             inject_case_env(run_cmd, sizeof run_cmd, c);
             if (inject) {
@@ -891,14 +921,24 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
         }
 
         if (use_flatl) {
-            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
-                                src_path, FLATL_COMPILE);
-        } else {
-            expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
-                                src_path, c->pipeline_compile);
+            if (expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir, tmpdir,
+                                    src_path, FLATL_COMPILE) != 0) {
+                snprintf(err, (size_t)err_size, "expanded flatl compile command exceeds limit");
+                timing_finish(timing, t_case, measure);
+                return -1;
+            }
+        } else if (expand_placeholders(compile_cmd, sizeof compile_cmd, repo_root, c->case_dir,
+                                       tmpdir, src_path, c->pipeline_compile) != 0) {
+            snprintf(err, (size_t)err_size, "expanded pipeline compile command exceeds limit");
+            timing_finish(timing, t_case, measure);
+            return -1;
         }
-        expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
-                            c->pipeline_run);
+        if (expand_placeholders(run_cmd, sizeof run_cmd, repo_root, c->case_dir, tmpdir, src_path,
+                                c->pipeline_run) != 0) {
+            snprintf(err, (size_t)err_size, "expanded pipeline run command exceeds limit");
+            timing_finish(timing, t_case, measure);
+            return -1;
+        }
         inject_http_mock(run_cmd, sizeof run_cmd, c);
         inject_case_env(run_cmd, sizeof run_cmd, c);
         if (use_flatl) {

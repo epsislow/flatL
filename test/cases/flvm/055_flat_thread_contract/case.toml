@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 55
+desc = "FlatThread failed-create state, condition wakeup, join ownership and repeated-join rejection"
+kind = "exec"
+cmd = "make -s test-flat-thread-contract TEST_BIN={tmp}/flat_thread_contract_test && {tmp}/flat_thread_contract_test"
+expect_exit = 0
+stdout_contains = "flat-thread-contract-ok failed-create=nonjoinable cond-wakeup=joined repeated-join=rejected"

@@ -4,7 +4,7 @@
 #include <stddef.h>
 
 #define FLAT_CASE_MAX_PATH 512
-#define FLAT_CASE_MAX_CMD 1024
+#define FLAT_CASE_MAX_CMD 8192
 #define FLAT_CASE_MAX_CHECKS 16
 #define FLAT_CASE_MAX_STDOUT_EXTRA 7
 #define FLAT_CASE_MAX_DESC 256

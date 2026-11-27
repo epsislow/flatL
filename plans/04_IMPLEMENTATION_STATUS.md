@@ -1457,3 +1457,18 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Repeats 12 runtime lifecycles with distinct deterministic seeds.
 - Validation: `bin/run_tests 'flvm[52]' -v -e` PASS; ten additional direct harness executions PASS (120 runtime cycles / 2,880 task instances); ASan PASS. Normal harness compilation PASS. UBSan compilation exceeded the available command limit and is not counted; TSAN not run. No production scheduler change was required.
 - User-reported archive-320 Android baseline remains 47/47 FLVM tests PASS; archive 325 and tests 48–52 have not yet been validated on Termux. Windows worker execution and actual Emscripten linking remain open. See `plans/37_WORKER_MIXED_SHUTDOWN_SOAK.md`.
+
+
+**Archive 326 — worker failure isolation and lifecycle soak:** added `flvm[53]` with 100 runtime create/start/DRAIN/join/destroy cycles per invocation. Each cycle runs two intentional failing tasks alongside six healthy tasks on four workers and verifies that failure remains task-local. The harness passed the normal runner, four additional completed repetitions, and ASan/UBSan/TSAN. `make all -j2` and `make docs` passed. A fifth extra repeat and the grouped `[47-53]` command hit the outer execution limit; those incomplete attempts are not counted. Windows and actual Emscripten validation remain open.
+
+
+**Archive 327 — Emscripten single-thread worker gate:** audited `flat_sync.h`'s no-pthreads branch and added `flvm[54]`. The test builds the runtime source set with the host compiler, `-D__EMSCRIPTEN__`, and no `-pthread`; it verifies inert mutex operations, rejected blocking wait/thread operations, `flat_threads_supported() == 0`, clean rejection of `flat_runtime_workers_start()`, unchanged RUNNING lifecycle, and successful runtime destruction. The target and runner test passed (1/1). This is a host-compiler branch simulation, not an actual Emscripten build. `emcc`/`emcmake` and Windows execution remain unavailable; no production scheduler change was made. See `plans/39_EMSCRIPTEN_SINGLE_THREAD_WORKER_GATE.md`.
+
+
+## Archive 328 — Windows FlatSync / FlatThread audit
+
+- Audited the Windows synchronization wrappers and the ready-queue condition-variable predicate loops.
+- Corrected `flat_thread_create()` in the Windows and POSIX branches so a fresh wrapper is marked non-joinable before function validation/native creation; callers must pass a fresh or successfully joined wrapper, never overwrite a live handle.
+- Removed the Windows-only trampoline write to `FlatThread.result`; the trampoline now owns only its `{fn,arg}` start record and discards the function return value, matching POSIX behavior.
+- Added `flvm[55]` and `make test-flat-thread-contract` for failed-create state, condition wakeup, join, and repeated-join rejection.
+- Validation on local POSIX host: `make all -j2`, `make docs` (50 sections), `flvm[37]`, `flvm[42]`, `flvm[55]`, and the dedicated `flvm[55]` harness under ASan/UBSan PASS. Windows compile/run remains unavailable; `_WIN32_WINNT >= 0x0600` must be configured for SRWLOCK/CONDITION_VARIABLE APIs. Actual Emscripten build remains unavailable.

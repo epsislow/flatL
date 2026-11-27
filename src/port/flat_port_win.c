@@ -396,7 +396,7 @@ fail:
 
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size) {
     char shpath[FLAT_PORT_PATH_MAX];
-    char prefixed[16576];
+    char prefixed[16384];
     char script_win[FLAT_PORT_PATH_MAX];
     char script_posix[FLAT_PORT_PATH_MAX];
     char *cmdline = NULL;

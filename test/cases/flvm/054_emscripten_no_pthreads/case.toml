@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 54
+desc = "single-thread Emscripten synchronization shim rejects blocking and worker startup cleanly"
+kind = "exec"
+cmd = "make -s test-emscripten-no-pthreads TEST_BIN={tmp}/emscripten_no_pthreads_test && {tmp}/emscripten_no_pthreads_test"
+expect_exit = 0
+stdout_contains = "emscripten-no-pthreads-ok sync=noop blocking=rejected worker-start=rejected runtime=clean"
