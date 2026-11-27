@@ -2,6 +2,6 @@ suite = "flvm"
 id = 43
 desc = "real worker pool executes nested task.wait with contended runtime Channel transactions"
 kind = "exec"
-cmd = "{root}/bin/flc -o {tmp}/worker_channel.fb {root}/test/cases/flvm/027_channel_native/program.fl && make -s test-worker-task-wait-channel TEST_BIN={tmp}/worker_task_wait_channel_test && {tmp}/worker_task_wait_channel_test {tmp}/worker_channel.fb"
+cmd = "printf '[stage:flc-channel]\n' >&2 && {root}/bin/flc -o {tmp}/worker_channel.fb {root}/test/cases/flvm/027_channel_native/program.fl && printf '[stage:make-harness]\n' >&2 && make -s test-worker-task-wait-channel TEST_BIN={tmp}/worker_task_wait_channel_test && printf '[stage:run-harness]\n' >&2 && {tmp}/worker_task_wait_channel_test {tmp}/worker_channel.fb"
 expect_exit = 0
 stdout_contains = "worker-task-wait-channel-ok runs=20 workers=4 children=2 channel-contention=serialized wait=completed transaction-suspend=rejected"

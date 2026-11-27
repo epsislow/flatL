@@ -1,0 +1,7 @@
+suite = "port"
+id = 4
+desc = "shell capture preserves stderr stage markers when a command exits nonzero"
+kind = "exec"
+cmd = "printf '[stage:expected-failure]\\n' >&2; exit 7"
+expect_exit = 7
+stdout_contains = "[stage:expected-failure]"

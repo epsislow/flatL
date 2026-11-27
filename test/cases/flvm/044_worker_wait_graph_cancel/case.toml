@@ -2,6 +2,6 @@ suite = "flvm"
 id = 44
 desc = "worker pool cancellation cleans wait-graph chains and Channel waiters without orphaned dependencies"
 kind = "exec"
-cmd = "{root}/bin/flc -o {tmp}/wait_graph_simple.fb {root}/test/cases/flvm/019_vm_stepping/program.fl && {root}/bin/flc -o {tmp}/wait_graph_channel_waiter.fb {root}/test/cases/flvm/044_worker_wait_graph_cancel/channel_waiter.fl && make -s test-worker-wait-graph-cancel TEST_BIN={tmp}/worker_wait_graph_cancel_test && {tmp}/worker_wait_graph_cancel_test {tmp}/wait_graph_simple.fb {tmp}/wait_graph_channel_waiter.fb"
+cmd = "printf '[stage:flc-simple]\\n' >&2 && {root}/bin/flc -o {tmp}/wait_graph_simple.fb {root}/test/cases/flvm/019_vm_stepping/program.fl && printf '[stage:flc-channel-waiter]\\n' >&2 && {root}/bin/flc -o {tmp}/wait_graph_channel_waiter.fb {root}/test/cases/flvm/044_worker_wait_graph_cancel/channel_waiter.fl && printf '[stage:make-harness]\\n' >&2 && make -s test-worker-wait-graph-cancel TEST_BIN={tmp}/worker_wait_graph_cancel_test && printf '[stage:run-harness]\\n' >&2 && {tmp}/worker_wait_graph_cancel_test {tmp}/wait_graph_simple.fb {tmp}/wait_graph_channel_waiter.fb"
 expect_exit = 0
 stdout_contains = "worker-wait-graph-cancel-ok chain=4 cycle=rejected cancelled-middle=woke-dependent channel-waiter=cancelled refs=released drain=joined cancel=joined"

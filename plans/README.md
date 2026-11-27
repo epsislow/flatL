@@ -27,6 +27,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [21 — Worker HTTP and DOM Lifecycle Audit](21_WORKER_HTTP_DOM_LIFECYCLE_AUDIT.md): real concurrent libcurl requests and DOM VM lifecycle/cancellation under the worker pool; DOM remains serialized pending broader validation.
 - [22 — Termux Worker-Test Failure Diagnostics](22_TERMUX_WORKER_FAILURE_DIAGNOSTICS.md): corrects stale task/channel capability expectations and makes `run_tests` include captured output when an exec command fails; six Termux-specific failures remain to be diagnosed on device.
 - [23 — Shell Capture Diagnostics](23_SHELL_CAPTURE_DIAGNOSTICS.md): captures stderr from complete compound commands and retains the actual final output tail on POSIX and Windows.
+- [24 — Worker Test Stage Diagnostics](24_WORKER_TEST_STAGE_DIAGNOSTICS.md): adds explicit markers before FlatL compilation, C harness compilation, and harness execution for the seven Termux worker-test failures; `port[4]` verifies markers survive nonzero exits.
 - [Native module thread capabilities](../doc_src/NATIVE_THREAD_CAPABILITIES.md): enum-ul de capabilități, declarația pluginurilor, fallback-ul conservator și enforcement-ul worker-mode.
 
 ## Reguli pentru continuarea lucrului
@@ -41,7 +42,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima arhivă:** `flatL-main-311-shell-capture-tail.zip`.
+**Ultima arhivă:** `flatL-main-312-worker-test-stage-diagnostics.zip`.
 
 **Ultimul checkpoint:** arhiva 305 adaugă primul worker pool pthread deținut de runtime: startup cu barrier/rollback, execuție concurentă a quantum-urilor, wait pe condition variable cu wake epoch, integrare DRAIN/CANCEL și join. `flvm[42]` validează 4 workers și 96 task-uri, inclusiv admission preflight pentru task-uri noi. 100 de execuții plain consecutive au trecut; 5 execuții TSAN au trecut pe forma anterioară a testului, dar rebuild-ul TSAN pentru forma finală nu a putut fi terminat în limita de execuție. Aceasta nu certifică încă întregul set de native modules/dependențe în worker mode. Arhiva 304 adaugă lifecycle-ul DRAIN/CANCEL, iar arhiva 303 adaugă `flat_runtime_task_cancel_request()` și cleanup la safe point. Arhiva 302 conectează MPMC ready queue la `FlatRuntime` și convertește gate-ul Channel la `FlatMutex`; `flat_vm_step()` rămâne în afara mutex-ului. Arhiva 301 repară fallback-ul de link pentru `flvm[32]` și completează sursele runtime/native din `Makefile.wasm`, dar build-ul Emscripten real trebuie confirmat într-un mediu cu `emcc`. Lexbor rămâne `PENDING_THREAD_SAFETY_VALIDATION`, cu `SERIALIZED` drept fallback. Orice decizie nouă se consemnează în `01_DECISIONS.md` și roadmap înainte de implementare.
 
@@ -85,3 +86,6 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 
 **Checkpoint archive 311:** fixes shell-capture diagnostics left incomplete in archive 310. POSIX capture redirects stderr for the whole compound command, drains all output and retains the final 4095 bytes; Windows capture also retains the final bytes. New `port[2-3]` regressions validate early-stage stderr and large-output tail retention. All `flvm[34-46]` cases passed individually on the available POSIX host, but the full grouped invocation did not complete within the command limit. Termux confirmation is still required. See `23_SHELL_CAPTURE_DIAGNOSTICS.md`.
+
+
+**Checkpoint archive 312:** `flvm[38]`, `[40]`, `[42]`, `[43]`, `[44]`, `[45]`, and `[46]` now emit explicit stderr markers before each command stage (FlatL compile, C harness build, harness execution). This is diagnostic-only: no runtime behavior changed. On the available POSIX host, `make all -j2`, `port[2-4]`, and all seven focused worker tests passed individually. The Termux rerun remains pending; the last stage marker should distinguish compilation from harness/runtime failure. See `24_WORKER_TEST_STAGE_DIAGNOSTICS.md`.

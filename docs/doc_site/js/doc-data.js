@@ -3,7 +3,7 @@
   'use strict';
   root.FlatDocData = {
     "title": "flatL documentation",
-    "generatedAt": "2026-11-26T22:06:15Z",
+    "generatedAt": "2026-11-27T01:01:16Z",
     "sections": [
       {
         "id": "specification",

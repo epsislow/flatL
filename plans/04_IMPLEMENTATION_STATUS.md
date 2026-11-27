@@ -1358,7 +1358,7 @@ Audit plugin loading/preflight races and add deterministic worker-thread creatio
 
 - Corrected `flvm[34-35]` to match the implemented worker capability policy: `task` and `channel` are `SERIALIZED`; legacy plugin and post-freeze lazy loading remain rejected.
 - Improved `bin/run_tests` exec failure messages to include the tail of captured command output.
-- `make all -j2`, `flvm[34-35]`, and individual `flvm[38]`, `[40]`, `[42]`, `[43]`, `[45]`, `[46]` passed on the available POSIX host. `flvm[43]` also passed five direct repeated runs.
+- `make all -j2`, `flvm[34-35]`, and individual `flvm[38]`, `[40]`, `[42]`, `[43]`, `[44]`, `[45]`, `[46]` passed on the available POSIX host. `flvm[43]` also passed five direct repeated runs.
 - The six failures originally observed on Termux are not yet diagnosed. No runtime behavior was changed; use the improved output in the next Termux run before making platform-specific changes.
 
 
@@ -1375,7 +1375,16 @@ Audit plugin loading/preflight races and add deterministic worker-thread creatio
 ### Validation
 
 - `make all -j2` — PASS.
-- `bin/run_tests 'port[2-3]' -v -e` — PASS.
+- `bin/run_tests 'port[2-4]' -v -e` — PASS.
 - `flvm[34-46]` — every case passed in an individually completed invocation.
 - Grouped `flvm[34-46]` did not complete within the available command limit; this is recorded as NOT PASS rather than inferred from individual runs.
 - Termux rerun — PENDING.
+
+
+## Archive 312 — worker-test stage markers
+
+- Added stderr stage markers to the compound commands for `flvm[38]`, `[40]`, `[42]`, `[43]`, `[44]`, `[45]`, and `[46]`. The markers identify FlatL compilation, harness compilation, and harness execution.
+- `make all -j2` — PASS.
+- `bin/run_tests 'port[2-4]' -v -e` — PASS.
+- Each of the seven focused worker tests passed individually on the available POSIX host. One combined shell loop hit its overall time limit while running `[45]`; `[45]` and `[46]` then passed in separate invocations.
+- Termux validation — PENDING. No runtime implementation or semantics changed.

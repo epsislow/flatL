@@ -216,3 +216,6 @@ Archive 310 corrects stale worker-capability assertions (`task`/`channel` are se
 
 
 Archive 311 completes the command-output diagnostics: POSIX capture now redirects stderr for the entire compound command and drains the complete stream while retaining the final output tail; Windows capture also retains the final bytes. New `port[2-3]` cases verify compound stderr and large-output tail retention. See [`plans/23_SHELL_CAPTURE_DIAGNOSTICS.md`](plans/23_SHELL_CAPTURE_DIAGNOSTICS.md). The worker/runtime code is unchanged; Termux confirmation remains pending.
+
+
+Archive 312 adds explicit stage markers to the seven worker/runtime regression commands that still failed with empty tails on Termux. The markers distinguish FlatL bytecode compilation, C harness compilation, and harness execution. No runtime code changed; see [`plans/24_WORKER_TEST_STAGE_DIAGNOSTICS.md`](plans/24_WORKER_TEST_STAGE_DIAGNOSTICS.md).

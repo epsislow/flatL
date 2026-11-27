@@ -660,6 +660,13 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [x] Drain the full command output and preserve the last 4095 bytes instead of retaining only the prefix.
 - [x] Apply equivalent rolling-tail retention to the Windows process capture.
 - [x] Add `port[2]` for compound-command stderr and `port[3]` for output larger than the capture buffer.
-- [ ] Re-run the grouped worker test selection on Termux and use the now-complete tail to identify the six reported failures.
+- [ ] Re-run the grouped worker test selection on Termux and use the now-complete tail to identify the seven reported failures.
 
 **Archive 311 result:** `port[2-3]` pass; each `flvm[34-46]` case passed individually on the available POSIX host. A grouped `flvm[34-46]` invocation did not finish within the command limit, so grouped completion is not claimed. No runtime scheduling or worker semantics changed.
+
+
+## Termux worker-test diagnosis — archive 312
+
+- [x] Add stage markers to `flvm[38]`, `[40]`, `[42]`, `[43]`, `[44]`, `[45]`, and `[46]` so empty-output failures reveal the last completed command stage.
+- [ ] Re-run the focused tests on Termux and capture the last `[stage:...]` marker for every failure.
+- [ ] Fix only the identified failing compile/harness/runtime stage; do not change scheduler synchronization or timeouts without evidence.
