@@ -1,0 +1,14 @@
+suite = "panic"
+id = 9
+desc = "explicit PANIC compiles to the block-scoped .any handler"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "explicit worker panic"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "explicit worker panic"

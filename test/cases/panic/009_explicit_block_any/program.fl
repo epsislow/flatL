@@ -1,0 +1,11 @@
+#main
+  call #worker
+  OK
+
+#worker
+  PANIC
+  OK
+
+#panic.#worker.any
+  io.outln('explicit worker panic')
+  OK

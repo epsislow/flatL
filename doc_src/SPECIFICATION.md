@@ -212,7 +212,26 @@ On an **infrastructure** fault at index *n* in block `#target`, the runtime rout
 
 (or `#panic.#target.<lineLabel>` when the faulting instruction has a line label and a matching handler block exists).
 
-If no handler exists for that index, control falls through to **`#panic.any`** (e.g. transaction rollback via `tstop()`).
+If no handler exists for that index, routing checks the block-scoped wildcard **`#panic.#target.any`** and then the global **`#panic.any`** (e.g. transaction rollback via `tstop()`).
+
+For a panic raised inside a called block, the runtime first checks the exact handler and `.any` handler for the faulting block, then checks `.any` handlers for caller blocks from the nearest caller outward, and finally checks `#panic.any`. Thus a called block can handle its own panic, while the task/worker block can provide a final block-local recovery handler. The handler may `jump` to another block; recovery continues in the same VM/task and VCX.
+
+Example:
+
+```flat
+#worker
+  call #load_record
+  OK
+
+#load_record
+  raw = 'invalid'
+  str.to_num(raw) -> n
+  OK
+
+#panic.#worker.any
+  io.outln('worker recovered')
+  OK
+```
 
 **Panic reason intrinsics** (language builtins, not optional natives):
 

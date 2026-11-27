@@ -1,0 +1,16 @@
+suite = "panic"
+id = 7
+desc = "block-scoped #panic.#worker.any catches panic from worker"
+kind = "pipeline"
+source = "program.fl"
+compile = "{root}/bin/flc -o {tmp}/out.fb {src}"
+run = "{root}/bin/flvm {tmp}/out.fb"
+expect_exit = 0
+stdout_contains = "worker recovered"
+stdout_contains_2 = "#worker.2"
+
+[flatl]
+crun = "{root}/bin/flatl crun -o {tmp}/out.fb {src}"
+expect_exit = 0
+stdout_contains = "worker recovered"
+stdout_contains_2 = "#worker.2"

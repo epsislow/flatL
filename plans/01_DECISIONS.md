@@ -91,6 +91,10 @@ Semantica agreată:
 5. Jump-ul de recuperare continuă în contextul aceluiași task și cu același VCX.
 6. Dacă nu există handler `.any` aplicabil, se continuă mecanismul general de panic handling existent.
 7. `.any` trebuie să fie o extensie generală a mecanismului block panic, nu o funcționalitate specială exclusiv task-urilor.
+8. Ordinea de rezolvare este: handler-ul exact al instrucțiunii din block-ul faulting; `.any` al block-ului faulting; `.any` pentru block-urile apelante, de la cel mai apropiat spre exterior; apoi `#panic.any` global.
+9. Handler-ele block-scoped se aplică și în VM-urile task-urilor; recuperarea păstrează VM-ul/task-ul și VCX-ul curent.
+
+**Implementat în arhiva 352:** `#panic.#target.any` este recunoscut de parser/linker/compiler și runtime. Sunt acoperite panics native în block-ul curent, panic-uri în block-uri apelate, `PANIC` explicit și execuția într-un child task VM.
 
 De verificat în mini-spec: comportamentul când panic-ul apare într-un block apelat din block-ul task-ului, identificarea block-ului de origine, ordinea handler-elor specifice și fallback-ul existent.
 

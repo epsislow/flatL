@@ -1,0 +1,15 @@
+use native task
+
+#main
+  child = task.spawn(#worker)
+  task.wait(child)
+  OK
+
+#worker
+  raw = 'bad'
+  str.to_num(raw) -> n
+  OK
+
+#panic.#worker.any
+  io.outln('task worker recovered')
+  OK

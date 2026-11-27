@@ -179,7 +179,8 @@ int flat_line_label_resolve_handler(const FgirProgram *prog, const char *handler
     }
     snprintf(target, sizeof target, "%.*s", (int)(dot - rest), rest);
     suffix = dot + 1;
-    if (flat_line_label_suffix_is_index(suffix)) {
+    /* The block-scoped panic wildcard is a handler, not a line-label alias. */
+    if (strcmp(suffix, "any") == 0 || flat_line_label_suffix_is_index(suffix)) {
         return 0;
     }
     idx = flat_line_label_instr_index(prog, target, suffix);

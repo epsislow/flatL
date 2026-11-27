@@ -45,7 +45,7 @@ Runtime-ul cooperativ inițial trebuie să aibă un model clar single-thread și
 
 În arhiva 254, drain-ul nu mai este cuplat la un executor global: este scoped la contextul VM curent. Când va exista un task persistent, ownership-ul contextului și cleanup-ul trebuie să rămână scoped la task-ul care a eșuat. Un panic într-un task nu trebuie să golească frame-urile altui task sau să distrugă VCX-ul lui.
 
-Extinderea dorită `#panic.#worker.any` este documentată în [01_DECISIONS.md](01_DECISIONS.md); implementarea trebuie să respecte mecanismul actual și să fie acoperită de teste.
+Extinderea `#panic.#target.any` este implementată în arhiva 352; ordinea de rezolvare și testele sunt documentate în [62_BLOCK_SCOPED_PANIC_ANY.md](62_BLOCK_SCOPED_PANIC_ANY.md).
 
 ## 7. Concluzie
 

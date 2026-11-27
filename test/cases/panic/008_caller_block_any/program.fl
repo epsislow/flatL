@@ -1,0 +1,20 @@
+
+#main
+  call #worker
+  OK
+
+#worker
+  call #inner
+  io.outln('unreachable worker continuation')
+  OK
+
+#inner
+  raw = 'bad'
+  str.to_num(raw) -> n
+  OK
+
+#panic.#worker.any
+  panicLoc() -> loc
+  io.outln(loc)
+  io.outln('worker recovered nested panic')
+  OK

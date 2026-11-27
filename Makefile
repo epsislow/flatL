@@ -856,6 +856,12 @@ test-task-native-integration: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/024_task_native_integration/task_native_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
+# Integration test for block-scoped panic .any inside a spawned task VM.
+.PHONY: test-task-panic-any
+test-task-panic-any: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/057_task_panic_block_any/task_panic_any_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
 # Integration test for task.spawn positional argument binding to named block parameters.
 .PHONY: test-task-spawn-args
 test-task-spawn-args: $(FLVM_TEST_COMMON_OBJ)

@@ -1,9 +1,18 @@
 # Task Runtime — stadiul implementării
 
-**Ultima actualizare:** 2026-11-27  
-**Arhivă de referință:** `flatL-main-323-worker-dag-staged-cancellation.zip`
-**Arhivă curentă:** `flatL-main-324-worker-seeded-dag-stress.zip`  
+**Ultima actualizare:** 2026-11-28  
+**Arhivă de referință:** `flatL-main-351-fleditor-wasm-task-channel.zip`
+**Arhivă curentă:** `flatL-main-352-panic-block-any.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
+
+
+## Current checkpoint — archive 352 (2026-11-28)
+
+- Archive 351 FLEditor WASM Task/Channel integration is validated by the user: `make fleditor-wasm-test` passed on Termux, including the Node.js WASM Task/Channel smoke for inventory, rollback and task results; the user also ran all three examples successfully in the FLEditor browser UI.
+- Archive 352 implements general block-scoped panic wildcard handlers (`#panic.#target.any`). Resolution order is exact fault-site handler, faulting block `.any`, caller-block `.any` handlers from nearest outward, then global `#panic.any`.
+- Added `panic[7-9]` for current-block native panic, nested-call caller recovery and explicit `PANIC`; added `flvm[57]` to validate recovery inside a spawned task VM.
+- Focused validation: `make all -j2` PASS; `bin/run_tests 'panic[1-9]' -v -e` PASS (9/9); `bin/run_tests 'flvm[57]' -v -e` PASS (1/1). Full default suite is not claimed.
+- Planned work is paused after stage B as requested. No UI Runtime or further worker-pool expansion is started in this checkpoint.
 
 ## Ce este prezent în arhiva 252 (bază)
 
@@ -49,19 +58,14 @@ Refactorul structural F0.3 este implementat: **execution context per VM**.
 - `bin/run_tests vcx -v -e` — 30/30 PASS.
 - Suita completă (1141 teste default descoperite) nu a fost rulată în această etapă.
 
-## Ce NU este implementat încă
+## Ce NU este implementat încă (după arhiva 352)
 
-- `task.spawn()` / `task.wait()` natives;
-- scheduler-level `WAITING` / wakeup și dependency handling;
-- cancellation request și safe-point cancellation;
-- API pentru configurarea logger-ului TASKS din scheduler;
-- Channels și worker pool pthread;
-- VCX separat per task (fiecare task deține deja un VM/VCX independent, dar nu există API de partajare);
-- panic wildcard `.any` în forma `#panic.#worker.any`;
-- Channel event producers / `channel.log()`;
-- `task.log()` / `channel.log()`;
-- worker pool pthread și execuție paralelă;
-- integrare UI thread.
+- Helper-ele de diagnostic `task.log()` / `channel.log()`; logger-ul lifecycle și opțiunile de afișare există deja.
+- Validarea reală a worker pool-ului pe Windows.
+- O certificare generală de thread-safety pentru toate modulele native și dependențele externe; modulele cu statut pending rămân protejate prin politica SERIALIZED.
+- v2.5 UI Runtime: ownership UI thread și bridge UI ↔ task prin Channel.
+
+Task/Channel cooperative, Channel transactions, POSIX worker pool, DRAIN/CANCEL și block-scoped panic `.any` sunt implementate. Execuția FLEditor WASM rămâne cooperativă și single-threaded.
 
 ## Stadiul curent
 

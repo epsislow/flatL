@@ -1,0 +1,21 @@
+
+#main
+  call #worker
+  io.outln('main continued')
+  OK
+
+#worker
+  raw = 'not-a-number'
+  str.to_num(raw) -> n
+  io.outln('unreachable')
+  OK
+
+#panic.#worker.any
+  panicLoc() -> loc
+  io.outln(loc)
+  io.outln('worker recovered')
+  jump #after_worker
+
+#after_worker
+  io.outln('main continued')
+  OK

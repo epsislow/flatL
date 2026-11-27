@@ -508,6 +508,9 @@ static int find_panic_handler(const FgirProgram *prog, const FgirBlock *b, const
             return find_block_idx(prog, lab);
         }
     }
+    snprintf(lab, sizeof lab, "#panic.%s.any", b->label);
+    idx = find_block_idx(prog, lab);
+    if (idx >= 0) return idx;
     return -1;
 }
 

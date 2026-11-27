@@ -377,6 +377,23 @@ static void vm_log_unmapped_guard_stderr(const FlatBytecode *bc, uint32_t fault_
     vm_write_stderr(line);
 }
 
+static int vm_panic_any_for_loc(const FlatBytecode *bc, const char *loc, uint32_t *target) {
+    char owner[FLAT_PANIC_LOC_MAX];
+    char handler[FLAT_PANIC_LOC_MAX + 16];
+    const char *dot;
+    size_t n;
+
+    if (!bc || !loc || !loc[0] || !target) return -1;
+    dot = strrchr(loc, '.');
+    if (!dot || dot == loc) return -1;
+    n = (size_t)(dot - loc);
+    if (n >= sizeof owner) return -1;
+    memcpy(owner, loc, n);
+    owner[n] = '\0';
+    snprintf(handler, sizeof handler, "#panic.%s.any", owner);
+    return vm_ip_for_block_label(bc, handler, target);
+}
+
 static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, const char *reason,
                              int trace) {
     size_t i;
@@ -447,6 +464,45 @@ static int vm_jump_panic_any(VmState *st, const FlatBytecode *bc, uint32_t *ip, 
                     *ip = target;
                     return 0;
                 }
+            }
+        }
+    }
+
+    /* Resolve block-scoped .any handlers from the faulting block outward
+     * through the active CALL stack. The nearest owning block wins. */
+    if (loc[0] != '\0' && bc) {
+        if (vm_panic_any_for_loc(bc, loc, &target) == 0) {
+            snprintf(handler, sizeof handler, "#panic.%.*s.any",
+                     (int)(strrchr(loc, '.') - loc), loc);
+            if (trace) {
+                char tbuf[VM_PANIC_TRACE_BUFLEN];
+                snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=%s loc=%s\n",
+                         reason, handler, loc);
+                vm_write_stderr(tbuf);
+            }
+            *ip = target;
+            return 0;
+        }
+    }
+    if (st && bc) {
+        for (ci = st->call_sp - 1; ci >= 0; ci--) {
+            char caller_loc[FLAT_PANIC_LOC_MAX];
+            uint32_t call_ip = st->calls[ci].return_ip ? st->calls[ci].return_ip - 1u : 0u;
+            caller_loc[0] = '\0';
+            if (call_ip && flat_fb_panic_loc_at_ip(bc, call_ip, caller_loc,
+                                                   sizeof caller_loc) == 0 && caller_loc[0] &&
+                vm_panic_any_for_loc(bc, caller_loc, &target) == 0) {
+                const char *last = strrchr(caller_loc, '.');
+                snprintf(handler, sizeof handler, "#panic.%.*s.any",
+                         last ? (int)(last - caller_loc) : (int)strlen(caller_loc), caller_loc);
+                if (trace) {
+                    char tbuf[VM_PANIC_TRACE_BUFLEN];
+                    snprintf(tbuf, sizeof tbuf, "[trace] panic reason=%s handler=%s loc=%s\n",
+                             reason, handler, loc);
+                    vm_write_stderr(tbuf);
+                }
+                *ip = target;
+                return 0;
             }
         }
     }
