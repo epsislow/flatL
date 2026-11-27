@@ -992,8 +992,23 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [x] Keep `FgirFunction` self-contained and retain safe value-copy semantics. Keep `exports[256]` unchanged.
 - [x] Add reserve/free lifecycle, 256/257 parser, 256/257 cross-module linker and forced `def`-sugar-growth regression tests.
 - [x] Run focused function, fmod and native-use tests and the new parser/linker boundary cases under ASan/UBSan with leak detection.
-- [ ] Complete the full native `make test`; this local attempt reached 280/1,160 before the 300-second execution limit terminated it.
+- [x] Complete the full native `make test`; the user confirmed 1,160/1,160 PASS in 10:28.253.
 - [x] Run `make docs` (50 sections).
-- [ ] Rebuild WASM with Emscripten and rerun the Node.js WASM suites on the user's environment.
+- [x] Rebuild WASM with Emscripten and rerun the Node.js WASM suites; the user confirmed all WASM tests pass and compile high-water remains 42,729,472 bytes after 100 runs.
 
-**Archive 343 implementation:** `FgirProgram.functions` is now dynamic and allocated on demand. Native `sizeof(FgirProgram)` decreases from 1,160,584 B to 151,960 B (1,008,624 B saved); `sizeof(FgirFunction)` remains 3,940 B. The 256-function language limit and independent fixed `exports[256]` table are unchanged. Focused tests passed: `flc[1-12]` (all 11 discovered cases), `func[1-9]` / `func[19-27]` and `func[38]`, `fmod` (18/18), and `native_use` (6/6). The new lifecycle harness, 256/257 parser boundary and 256/257 linker boundary passed ASan/UBSan with leak detection. The documentation build passed (50 sections). A local `make test` attempt reached 280/1,160 before the 300-second outer execution limit terminated it; this is incomplete, not a pass. Real Emscripten validation must be completed on the user's Termux environment. See `plans/53_FGIR_DYNAMIC_FUNCTION_STORAGE.md`.
+**Archive 343 implementation:** `FgirProgram.functions` is now dynamic and allocated on demand. Native `sizeof(FgirProgram)` decreases from 1,160,584 B to 151,960 B (1,008,624 B saved); `sizeof(FgirFunction)` remains 3,940 B. The 256-function language limit and independent fixed `exports[256]` table are unchanged. Focused tests passed: `flc[1-12]` (all 11 discovered cases), `func[1-9]` / `func[19-27]` and `func[38]`, `fmod` (18/18), and `native_use` (6/6). The new lifecycle harness, 256/257 parser boundary and 256/257 linker boundary passed ASan/UBSan with leak detection. The documentation build passed (50 sections). The user subsequently completed the full native `make test` on Termux with 1,160/1,160 PASS in 10:28.253. The user also rebuilt WASM and confirmed the full WASM suite passes; compile high-water remains 42,729,472 bytes after 100 runs. See `plans/53_FGIR_DYNAMIC_FUNCTION_STORAGE.md`.
+
+
+## Native test harness object reuse — archive 344
+
+- [x] Audit the slow native FLVM integration cases and their `make test-*` recipes; confirm repeated compilation of the same `FB_SRC`, `VM_SRC` and `PORT_SRC` source lists.
+- [x] Add a configuration-keyed shared object cache for the 34 native C integration harness targets.
+- [x] Track header dependencies with compiler-generated `.d` files and isolate different compiler/feature/sanitizer flag configurations.
+- [x] Keep `FLAT_RUNTIME_TESTING` isolated in a dedicated `flat_runtime_testing.o`; retain the Emscripten no-pthreads and small standalone harnesses on their existing paths.
+- [x] Preserve every test case, assertion, stress iteration and timeout; no runtime behavior changed.
+- [x] Build all native tools and run the focused `flvm[13-53]` selection cold-cache and warm-cache (41/41 PASS in 28.652 s and 20.975 s respectively on the available x86-64 host).
+- [x] Run `make docs` (50 sections).
+- [ ] Complete the full default native test suite after the Makefile optimization; the local attempt reached 320/1,160 before the 300-second execution limit.
+- [ ] Have the user validate the cold-cache and warm-cache behavior on Termux/Android.
+
+**Archive 344 implementation:** repeated native integration harness compilation is replaced with configuration-specific reusable objects under `bin/test-obj/`. On the available host, the first harness paid a one-time 7.476 s shared-object build; the other 40 harnesses reused those objects. The cold 41-case selection passed in 28.652 s and the warm selection in 20.975 s. A later full `make test` attempt reached 320/1,160 before the 300-second outer execution limit; this is incomplete, not a pass. `make docs` passed (50 sections). The 34 affected Makefile targets continue to compile their own harness source and link the common runtime objects. The runtime-worker-pool test uses a separately compiled `flat_runtime_testing.o` because it requires `FLAT_RUNTIME_TESTING`. No runtime or test semantics changed. See `plans/54_NATIVE_TEST_HARNESS_OBJECT_CACHE.md`.

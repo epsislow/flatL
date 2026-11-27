@@ -263,6 +263,33 @@ VM_SRC  = src/common/flat_locale.c src/common/flat_time.c src/common/flat_runtim
           src/common/value_json.c           src/common/flat_file.c src/common/flat_csv.c src/common/flat_csv_runtime.c \
           src/common/flat_io_ctx.c src/common/flat_memstream.c \
           $(STR_SRC) $(NATIVE_VM_SRC)
+
+# Reuse the native VM/runtime objects across the many C integration harnesses.
+# Each harness still compiles and links its own test source; only the identical
+# FB/VM/platform translation units are shared. The config stamp invalidates the
+# cache when compiler or feature flags change (including sanitizer builds).
+FLVM_TEST_EXTRA_CPPFLAGS = $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS)
+# A flag-specific object directory avoids stale sanitizer/feature builds without
+# touching a stamp on every recursive `make test-*` invocation.
+FLVM_TEST_CONFIG_KEY := $(shell { printf '%s\n' '$(CC)|$(CPPFLAGS)|$(CFLAGS)|$(LDFLAGS)|$(FLVM_TEST_EXTRA_CPPFLAGS)|$(VM_EXTRA_LIBS)|$(http),$(dom),$(dom_compile),$(env),$(path),$(fs),$(enc),$(re),$(re_compile),$(hash),$(bytes)'; cksum Makefile; } | cksum | awk '{print $$1 "_" $$2}')
+FLVM_TEST_OBJDIR = $(BINDIR)/test-obj/$(FLVM_TEST_CONFIG_KEY)
+FLVM_TEST_COMMON_SRC = $(FB_SRC) $(VM_SRC) $(PORT_SRC)
+FLVM_TEST_COMMON_OBJ = $(patsubst %.c,$(FLVM_TEST_OBJDIR)/%.o,$(FLVM_TEST_COMMON_SRC))
+FLVM_TEST_COMMON_OBJ_TESTING = $(filter-out $(FLVM_TEST_OBJDIR)/src/common/flat_runtime.o,$(FLVM_TEST_COMMON_OBJ)) $(FLVM_TEST_OBJDIR)/src/common/flat_runtime_testing.o
+
+$(FLVM_TEST_OBJDIR):
+	@mkdir -p "$@"
+
+$(FLVM_TEST_OBJDIR)/%.o: %.c | $(FLVM_TEST_OBJDIR)
+	@mkdir -p "$(@D)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(FLVM_TEST_EXTRA_CPPFLAGS) -MMD -MP -MF "$(@:.o=.d)" -c "$<" -o "$@"
+
+$(FLVM_TEST_OBJDIR)/src/common/flat_runtime_testing.o: src/common/flat_runtime.c | $(FLVM_TEST_OBJDIR)
+	@mkdir -p "$(@D)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(FLVM_TEST_EXTRA_CPPFLAGS) -DFLAT_RUNTIME_TESTING -MMD -MP -MF "$(@:.o=.d)" -c "$<" -o "$@"
+
+-include $(FLVM_TEST_COMMON_OBJ:.o=.d) $(FLVM_TEST_OBJDIR)/src/common/flat_runtime_testing.d
+
 FLAT_TIME_SRC = src/common/flat_time.c
 FGIR_SRC = src/common/fgir.c src/common/flat_locale.c src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
                src/common/flat_func_tag.c src/common/flat_assign.c src/common/flat_slot_type.c \
@@ -766,112 +793,112 @@ clean:
 
 # Integration test for process-wide native plugin registry synchronization.
 .PHONY: test-native-registry-concurrency
-test-native-registry-concurrency: $(PLUGIN_TARGET)
+test-native-registry-concurrency: $(PLUGIN_TARGET) $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	@test -n "$(TEST_PLUGIN_DIR)" || (echo "TEST_PLUGIN_DIR is required" >&2; exit 2)
 	@mkdir -p "$(TEST_PLUGIN_DIR)"
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/013_native_registry_concurrency/bad_plugin.c
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/013_native_registry_concurrency/native_registry_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/013_native_registry_concurrency/native_registry_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for the public FlatRuntime -> real VM execution boundary.
 .PHONY: test-runtime-run-integration
-test-runtime-run-integration:
+test-runtime-run-integration: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/015_runtime_lifecycle/runtime_run_integration_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/015_runtime_lifecycle/runtime_run_integration_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for sequential VM lifecycle reuse within one FlatRuntime.
 .PHONY: test-runtime-reuse
-test-runtime-reuse:
+test-runtime-reuse: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/017_runtime_reuse/runtime_reuse_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/017_runtime_reuse/runtime_reuse_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for the owned FlatVm handle and bytecode/config snapshots.
 .PHONY: test-vm-owned-lifecycle
-test-vm-owned-lifecycle:
+test-vm-owned-lifecycle: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/018_vm_owned_lifecycle/vm_owned_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/018_vm_owned_lifecycle/vm_owned_lifecycle_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for cooperative FlatVm instruction-budget stepping/resume.
 .PHONY: test-vm-stepping
-test-vm-stepping:
+test-vm-stepping: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/019_vm_stepping/vm_stepping_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/019_vm_stepping/vm_stepping_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for stepping through nested calls, loops and panic recovery.
 .PHONY: test-vm-stepping-control-flow
-test-vm-stepping-control-flow:
+test-vm-stepping-control-flow: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/020_vm_stepping_control_flow/vm_stepping_control_flow_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/020_vm_stepping_control_flow/vm_stepping_control_flow_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for FlatVm terminal failures and destruction at a yield boundary.
 .PHONY: test-vm-failure-lifecycle
-test-vm-failure-lifecycle:
+test-vm-failure-lifecycle: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/021_vm_failure_lifecycle/vm_failure_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/021_vm_failure_lifecycle/vm_failure_lifecycle_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for the first single-threaded cooperative FlatTask scheduler.
 .PHONY: test-cooperative-task-scheduler
-test-cooperative-task-scheduler:
+test-cooperative-task-scheduler: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/022_cooperative_task_scheduler/cooperative_task_scheduler_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/022_cooperative_task_scheduler/cooperative_task_scheduler_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for cooperative task wait/wakeup and safe-point cancellation.
 .PHONY: test-task-wait-cancel
-test-task-wait-cancel:
+test-task-wait-cancel: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/023_task_wait_cancel/task_wait_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/023_task_wait_cancel/task_wait_cancel_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for FlatL task.spawn / task.wait native calls.
 .PHONY: test-task-native-integration
-test-task-native-integration:
+test-task-native-integration: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/024_task_native_integration/task_native_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/024_task_native_integration/task_native_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for task.spawn positional argument binding to named block parameters.
 .PHONY: test-task-spawn-args
-test-task-spawn-args:
+test-task-spawn-args: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/025_task_spawn_arguments/task_spawn_arguments_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/025_task_spawn_arguments/task_spawn_arguments_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for runtime-owned Channel storage, value-copy semantics and transactions.
 .PHONY: test-runtime-channels
-test-runtime-channels:
+test-runtime-channels: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/026_runtime_channels/runtime_channels_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/026_runtime_channels/runtime_channels_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for Channel event logging and task-held Channel lifetime.
 .PHONY: test-channel-lifecycle
-test-channel-lifecycle:
+test-channel-lifecycle: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/028_channel_lifecycle/channel_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/028_channel_lifecycle/channel_lifecycle_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for FlatL Channel natives shared across cooperative tasks.
 .PHONY: test-channel-native
-test-channel-native:
+test-channel-native: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/027_channel_native/channel_native_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/027_channel_native/channel_native_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for a contended Channel lock, scheduler WAITING, and retrying OP_NATIVE.
 .PHONY: test-channel-lock-contention
-test-channel-lock-contention:
+test-channel-lock-contention: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/029_channel_lock_contention/channel_lock_contention_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/029_channel_lock_contention/channel_lock_contention_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Stress runtime task scheduling and independent Channel storage.
 .PHONY: test-runtime-task-stress
-test-runtime-task-stress:
+test-runtime-task-stress: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/030_runtime_task_stress/runtime_task_stress_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/030_runtime_task_stress/runtime_task_stress_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for worker-mode native module capability preflight.
 .PHONY: test-native-worker-policy
-test-native-worker-policy: $(PLUGIN_TARGET)
+test-native-worker-policy: $(PLUGIN_TARGET) $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	@test -n "$(TEST_PLUGIN_DIR)" || (echo "TEST_PLUGIN_DIR is required" >&2; exit 2)
 	@mkdir -p "$(TEST_PLUGIN_DIR)"
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/034_native_capabilities/serialized_plugin.c
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_obj.so test/cases/flvm/034_native_capabilities/legacy_plugin.c
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/034_native_capabilities/native_worker_policy_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/034_native_capabilities/native_worker_policy_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 
 # Verify the cross-platform FlatThread/FlatMutex/FlatCond lifecycle contract.
@@ -890,56 +917,56 @@ test-scheduler-sync-primitives:
 
 # Verify per-module invocation gates, independent-module progress, and DOM teardown gating.
 .PHONY: test-native-invocation-gates
-test-native-invocation-gates:
+test-native-invocation-gates: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	@test -n "$(TEST_PLUGIN_DIR)" || (echo "TEST_PLUGIN_DIR is required" >&2; exit 2)
 	@mkdir -p "$(TEST_PLUGIN_DIR)"
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_list.so test/cases/flvm/034_native_capabilities/serialized_plugin.c
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_obj.so test/cases/flvm/036_native_invocation_gates/concurrent_obj_plugin.c
 	$(CC) $(CFLAGS) -fPIC -shared -o $(TEST_PLUGIN_DIR)/libflat_csv.so test/cases/flvm/036_native_invocation_gates/freeze_race_plugin.c
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/036_native_invocation_gates/native_invocation_gates_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/036_native_invocation_gates/native_invocation_gates_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify FlatRuntime scheduler mutex, task registry queries, and single-driver exclusion.
 .PHONY: test-runtime-scheduler-mutex
-test-runtime-scheduler-mutex:
+test-runtime-scheduler-mutex: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/038_runtime_scheduler_mutex/runtime_scheduler_mutex_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/038_runtime_scheduler_mutex/runtime_scheduler_mutex_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify request-only cancellation and scheduler-owned cleanup at safe points.
 .PHONY: test-task-cancel-request
-test-task-cancel-request:
+test-task-cancel-request: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/040_task_cancel_request/task_cancel_request_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/040_task_cancel_request/task_cancel_request_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify that a shared runtime Channel serializes concurrent set/read operations.
 .PHONY: test-channel-mutex-concurrency
-test-channel-mutex-concurrency:
+test-channel-mutex-concurrency: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/039_channel_mutex_concurrency/channel_mutex_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/039_channel_mutex_concurrency/channel_mutex_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify cooperative DRAIN/CANCEL admission, blocked-wait detection and escalation.
 .PHONY: test-runtime-shutdown
-test-runtime-shutdown:
+test-runtime-shutdown: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/041_runtime_shutdown/runtime_shutdown_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/041_runtime_shutdown/runtime_shutdown_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify task.wait and Channel transaction contention under the real worker pool.
 .PHONY: test-worker-task-wait-channel
-test-worker-task-wait-channel:
+test-worker-task-wait-channel: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/043_worker_task_wait_channel/worker_task_wait_channel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/043_worker_task_wait_channel/worker_task_wait_channel_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify the runtime-owned worker pool, concurrent dispatch, DRAIN/CANCEL exit and join.
 .PHONY: test-runtime-worker-pool
-test-runtime-worker-pool:
+test-runtime-worker-pool: $(FLVM_TEST_COMMON_OBJ_TESTING)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -DFLAT_RUNTIME_TESTING -pthread -o $(TEST_BIN) test/cases/flvm/042_runtime_worker_pool/runtime_worker_pool_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -DFLAT_RUNTIME_TESTING -pthread -o $(TEST_BIN) test/cases/flvm/042_runtime_worker_pool/runtime_worker_pool_test.c $(FLVM_TEST_COMMON_OBJ_TESTING) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify wait-graph chain cancellation and Channel waiter cleanup under workers.
 .PHONY: test-worker-wait-graph-cancel
-test-worker-wait-graph-cancel:
+test-worker-wait-graph-cancel: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/044_worker_wait_graph_cancel/worker_wait_graph_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/044_worker_wait_graph_cancel/worker_wait_graph_cancel_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify real libcurl requests from multiple runtime workers after startup preflight.
 # Focused regression for POSIX pclose() signal-status preservation.
@@ -948,56 +975,56 @@ test-port-shell-signal:
 	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/port/005_shell_capture_signal/shell_capture_signal_test.c $(PORT_SRC) $(STR_SRC) $(LDFLAGS)
 
 .PHONY: test-worker-http
-test-worker-http:
+test-worker-http: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/045_worker_http_transport/worker_http_transport_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/045_worker_http_transport/worker_http_transport_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify isolated DOM documents and VM teardown/cancellation under the serialized Lexbor gate.
 .PHONY: test-worker-dom
-test-worker-dom:
+test-worker-dom: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/046_worker_dom_lifecycle/worker_dom_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/046_worker_dom_lifecycle/worker_dom_lifecycle_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 .PHONY: test-worker-multi-graph-cancel
-test-worker-multi-graph-cancel:
+test-worker-multi-graph-cancel: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/047_worker_multi_graph_cancel/worker_multi_graph_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/047_worker_multi_graph_cancel/worker_multi_graph_cancel_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Stress Channel transactions, concurrent cancellation and DRAIN-to-CANCEL under real workers.
 .PHONY: test-worker-channel-shutdown-stress
-test-worker-channel-shutdown-stress:
+test-worker-channel-shutdown-stress: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/048_worker_channel_shutdown_stress/worker_channel_shutdown_stress_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/048_worker_channel_shutdown_stress/worker_channel_shutdown_stress_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Converging wait-graph DAG cancellation regression (archive 322).
 .PHONY: test-worker-dag-cancel
-test-worker-dag-cancel:
+test-worker-dag-cancel: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/049_worker_dag_cancel/worker_dag_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/049_worker_dag_cancel/worker_dag_cancel_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Stress deeper wait-graph fan-out with cancellation at RUNNING and WAITING phases.
 .PHONY: test-worker-dag-staged-cancel
-test-worker-dag-staged-cancel:
+test-worker-dag-staged-cancel: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/050_worker_dag_staged_cancel/worker_dag_staged_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/050_worker_dag_staged_cancel/worker_dag_staged_cancel_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Reproducible seeded DAG topologies with concurrent request-only cancellation.
 .PHONY: test-worker-seeded-dag-stress
-test-worker-seeded-dag-stress:
+test-worker-seeded-dag-stress: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/051_worker_seeded_dag_stress/worker_seeded_dag_stress_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/051_worker_seeded_dag_stress/worker_seeded_dag_stress_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Repeated seeded mixed DRAIN/CANCEL escalation and worker-pool cleanup soak.
 .PHONY: test-worker-mixed-shutdown-soak
-test-worker-mixed-shutdown-soak:
+test-worker-mixed-shutdown-soak: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/052_worker_mixed_shutdown_soak/worker_mixed_shutdown_soak_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/052_worker_mixed_shutdown_soak/worker_mixed_shutdown_soak_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify worker failure isolation and repeated runtime lifecycle cleanup (archive 326).
 .PHONY: test-worker-failure-isolation-soak
-test-worker-failure-isolation-soak:
+test-worker-failure-isolation-soak: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/053_worker_failure_isolation_soak/worker_failure_isolation_soak_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/053_worker_failure_isolation_soak/worker_failure_isolation_soak_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Compile the runtime against the single-thread Emscripten synchronization branch
 # using the host compiler. This is a branch/contract test, not an Emscripten WASM build.
