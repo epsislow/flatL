@@ -64,6 +64,17 @@ static int request_cancel(FlatRuntime *runtime, FlatTaskId id, const char *label
     return 0;
 }
 
+static void dump_task_states(FlatRuntime *runtime, FlatTaskId ids[TASKS], unsigned round) {
+    unsigned i, j;
+    fprintf(stderr, "round %u: task states by graph (A..G,X,Y,Z):\n", round);
+    for (i = 0; i < GRAPHS; ++i) {
+        fprintf(stderr, "  graph %u:", i);
+        for (j = 0; j < NODES; ++j)
+            fprintf(stderr, " %d", (int)flat_runtime_task_state(runtime, task_id(ids, i, j)));
+        fputc('\n', stderr);
+    }
+}
+
 static int run_round(const FlatBytecode *bc, unsigned round) {
     FlatRuntime *runtime = flat_runtime_create(NULL);
     FlatTaskId ids[TASKS];
@@ -108,7 +119,7 @@ static int run_round(const FlatBytecode *bc, unsigned round) {
         }
     }
 
-    if (flat_runtime_workers_start(runtime, WORKERS, 1) != 0) {
+    if (flat_runtime_workers_start(runtime, WORKERS, 16) != 0) {
         fprintf(stderr, "round %u worker startup failed\n", round);
         goto done;
     }
@@ -159,6 +170,7 @@ static int run_round(const FlatBytecode *bc, unsigned round) {
         fprintf(stderr, "round %u DRAIN did not complete (status=%d lifecycle=%d)\n",
                 round, (int)flat_runtime_shutdown_status(runtime),
                 (int)flat_runtime_lifecycle(runtime));
+        dump_task_states(runtime, ids, round);
         goto done;
     }
 
@@ -181,11 +193,13 @@ static int run_round(const FlatBytecode *bc, unsigned round) {
     }
 
     fprintf(stderr, "round %u: states-verified\n", round);
+    fprintf(stderr, "round %u: workers-join-start\n", round);
     if (flat_runtime_workers_join(runtime) != 0) {
         fprintf(stderr, "round %u workers join failed\n", round);
         goto done;
     }
     workers_started = 0;
+    fprintf(stderr, "round %u: workers-join-complete\n", round);
     for (i = 0; i < TASKS; ++i) {
         if (flat_runtime_task_destroy(runtime, ids[i]) != 0) {
             fprintf(stderr, "round %u task destroy failed at %u\n", round, i);
@@ -193,12 +207,15 @@ static int run_round(const FlatBytecode *bc, unsigned round) {
         }
         ids[i] = 0;
     }
+    fprintf(stderr, "round %u: tasks-destroyed\n", round);
+    fprintf(stderr, "round %u: runtime-destroy-start\n", round);
     if (flat_runtime_destroy(runtime) != 0) {
         runtime = NULL;
         fprintf(stderr, "round %u runtime destroy failed\n", round);
         return -1;
     }
     runtime = NULL;
+    fprintf(stderr, "round %u: runtime-destroy-complete\n", round);
     rc = 0;
 
 done:
@@ -233,8 +250,13 @@ int main(int argc, char **argv) {
     if (argc != 2) return 2;
     memset(&bc, 0, sizeof bc);
     if (flat_fb_load_file(argv[1], &bc) != 0) return 2;
-    for (round = 0; round < 3; ++round)
-        if (run_round(&bc, round) != 0) return 1;
+    for (round = 0; round < 3; ++round) {
+        if (run_round(&bc, round) != 0) {
+            flat_fb_free(&bc);
+            return 1;
+        }
+    }
+    flat_fb_free(&bc);
     puts("worker-dag-staged-cancel-ok rounds=3 graphs=4 tasks=40 fanout=7 staged-cancel=running-waiting drain=complete cleanup=complete");
     return 0;
 }

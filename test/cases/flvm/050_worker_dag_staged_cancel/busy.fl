@@ -1,5 +1,6 @@
 #main
-  for(5000, i, '#loop')
+  -- Keep RUNNING observable while the host polls state between cancellation phases.
+  for(50000, i, '#loop')
   OK
 
 #loop

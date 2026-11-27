@@ -211,8 +211,13 @@ int main(int argc, char **argv) {
     if (argc != 2) return 2;
     memset(&bc, 0, sizeof bc);
     if (flat_fb_load_file(argv[1], &bc) != 0) return 2;
-    for (round = 0; round < ROUNDS; ++round)
-        if (run_round(&bc, round) != 0) return 1;
+    for (round = 0; round < ROUNDS; ++round) {
+        if (run_round(&bc, round) != 0) {
+            flat_fb_free(&bc);
+            return 1;
+        }
+    }
+    flat_fb_free(&bc);
     puts("worker-multi-graph-cancel-ok rounds=5 graphs=8 tasks=32 simultaneous-cancel=8 drain=joined cleanup=complete");
     return 0;
 }

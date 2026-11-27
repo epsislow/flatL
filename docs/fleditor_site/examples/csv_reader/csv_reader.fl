@@ -1,7 +1,19 @@
+use native fs
 use native csv
 use native list
 
 #main
+  fs.mkdir('examples')
+  fs.mkdir('examples/csv_reader')
+
+  source = file.readCtx('stock.csv')
+  body = file.read(source)
+  file.close(source)
+
+  target = file.createCtx('examples/csv_reader/stock.csv')
+  file.write(target, body)
+  file.close(target)
+
   fp = file.readCtx('examples/csv_reader/stock.csv')
   rid = csv.reader(fp)
   csv.rows(rid) -> nrows

@@ -251,14 +251,19 @@ int main(int argc, char **argv) {
         unsigned seed = 0x13579bdfu ^ (0x9e3779b9u * (seed_index + 1u));
         for (repeat = 0; repeat < REPEATS; ++repeat) {
             unsigned signature = 0;
-            if (run_case(&bc, seed, &signature) != 0) return 1;
+            if (run_case(&bc, seed, &signature) != 0) {
+                flat_fb_free(&bc);
+                return 1;
+            }
             if (repeat == 0) signatures[seed_index] = signature;
             else if (signature != signatures[seed_index]) {
                 fprintf(stderr, "seed %08x: topology was not reproducible\n", seed);
+                flat_fb_free(&bc);
                 return 1;
             }
         }
     }
+    flat_fb_free(&bc);
     puts("worker-seeded-dag-stress-ok seeds=6 repeats=2 graphs=1 tasks=16 concurrent-cancel=4 drain=joined cleanup=complete");
     return 0;
 }

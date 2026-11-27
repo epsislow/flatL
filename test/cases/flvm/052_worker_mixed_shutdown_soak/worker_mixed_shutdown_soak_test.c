@@ -220,7 +220,10 @@ int main(int argc, char **argv) {
     if (flat_fb_load_file(argv[1], &bc) != 0) return 2;
     for (round = 0; round < ROUNDS; ++round) {
         unsigned seed = 0xa5a50001u ^ (0x9e3779b9u * (round + 1u));
-        if (run_round(&bc, seed) != 0) return 1;
+        if (run_round(&bc, seed) != 0) {
+            flat_fb_free(&bc);
+            return 1;
+        }
     }
     flat_fb_free(&bc);
     puts("worker-mixed-shutdown-soak-ok rounds=12 tasks=24 started=18 workers=4 shutdown=drain+cancel join=complete cleanup=complete");

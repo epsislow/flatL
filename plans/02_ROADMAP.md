@@ -827,8 +827,66 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [x] Make placeholder expansion fail explicitly on overflow instead of silently executing a truncated command.
 - [x] Increase POSIX/Windows shell-capture command buffers to accommodate the expanded command and wrapper prefixes.
 - [x] Use the existing `flvm[48]` case as a regression for long `{root}` / `{tmp}` placeholder expansion on Termux.
-- [ ] Validate `flvm[48]` through `bin/run_tests` on Termux and run the broader test suite.
+- [x] Validate `flvm[48]` through `bin/run_tests` on Termux.
+- [ ] Run the broader FLVM/default suite on the current snapshot.
 
 **Archive 329 scope:** fixes a test-runner command-buffer truncation that caused long `case.toml` `cmd` values to be silently truncated after placeholder expansion. No VM, Channel, or worker-pool behavior is changed.
 
-**Archive 329 validation (local POSIX host):** `make all -j2`, `make docs`, `port` (5/5), and isolated `flvm[48]` runs passed. The full `flvm` suite exceeded the available command window after reporting 17/55 cases, so it is not counted as complete. One multi-repeat shell invocation also timed out while starting its third repetition; a subsequent isolated `flvm[48]` run passed. Termux validation of archive 329 remains pending.
+**Archive 329 validation (local POSIX host):** `make all -j2`, `make docs`, `port` (5/5), and isolated `flvm[48]` runs passed. The full `flvm` suite exceeded the available command window after reporting 17/55 cases, so it is not counted as complete. One multi-repeat shell invocation also timed out while starting its third repetition; a subsequent isolated `flvm[48]` run passed.
+
+**Archive 329 follow-up validation (archive 330):** the user confirmed `bin/run_tests 'flvm[48]' -v -e` on Termux: PASS (1/1, 18,092 ms). On the local POSIX host, the clean-source `flvm[48]` harness passed three consecutive AddressSanitizer runs with leak detection enabled and three consecutive UndefinedBehaviorSanitizer runs. `flvm[54]` also passed once under AddressSanitizer. See `41_VM_WORKER_ASAN_REGRESSION.md`. The complete `flvm` suite, Windows worker execution and actual Emscripten linking remain unverified.
+
+
+## Focused FLVM regression sweep — archive 331
+
+- [x] Run all cases `flvm[1-55]` through completed grouped or isolated invocations on the local POSIX host; each case passed at least once.
+- [x] Repeat the `flvm[43]` direct harness 10 times (200 runtime lifecycle rounds); all passed.
+- [x] Repeat the `flvm[43]` runner case three times in isolated invocations; all passed.
+- [ ] Complete one full `flvm[1-55]` invocation, or identify and resolve why some larger grouped selections exceed the outer execution limit even though the affected cases pass in isolation.
+
+**Archive 331 result:** all 55 focused FLVM cases have passing evidence on the archive-329 source snapshot, but not as one completed suite invocation. Several larger grouped commands exceeded the outer execution limit after partial progress; completed cases passed, and isolated reruns passed. The full-suite/grouped-run gate remains open. Detailed results are in `41_VM_WORKER_ASAN_REGRESSION.md`.
+
+
+## Worker DAG test determinism and bytecode cleanup — archive 332
+
+- [x] Make `flvm[50]`'s RUNNING-state observation robust by using a longer controlled workload and a worker quantum appropriate to this test's purpose.
+- [x] Emit the per-graph task-state matrix when DRAIN does not complete.
+- [x] Release the loaded `FlatBytecode` on both success and failure paths in the `flvm[50]` harness.
+- [x] Verify `flvm[50]` with direct repeated runs, AddressSanitizer with leak detection, and UndefinedBehaviorSanitizer.
+- [ ] Complete a full `flvm[1-55]` run and the Windows/Emscripten platform gates.
+
+**Archive 332 result:** the previous 5,000-iteration workload could complete between 1 ms state polls, making a transient RUNNING-state assertion flaky. The test now uses 50,000 iterations and worker quantum 16; its direct harness passed eight consecutive repetitions, and the runner case passed. The first ASan pass exposed a 5,909-byte leak because the test harness did not free its loaded `FlatBytecode`; adding `flat_fb_free()` to both exit paths removed the leak, and final ASan/UBSan runs passed. No production runtime code changed. See `42_WORKER_DAG_TEST_DETERMINISM.md`.
+
+## Worker harness bytecode ownership audit — archive 333
+
+- [x] Audit worker DAG/shutdown harnesses for `FlatBytecode` ownership after `flat_fb_load_file()`.
+- [x] Add `flat_fb_free()` on success and every post-load failure path in `flvm[47]`, `[49]`, `[51]`, and `[52]`.
+- [x] Add `flvm[050]` lifecycle-stage diagnostics around worker join, task destruction, and runtime destruction.
+- [x] Run the focused worker regression group `flvm[47-55]` as one invocation.
+- [x] Verify the seeded DAG harness `flvm[51]` under ASan with leak detection across five consecutive repetitions.
+- [ ] Complete a full `flvm[1-55]` invocation and the Windows/Emscripten platform gates.
+
+**Archive 333 result:** the first ASan run of `flvm[51]` exposed a 5,908-byte test-harness bytecode ownership leak. The harnesses `flvm[47]`, `[49]`, `[51]`, and `[52]` now free their loaded bytecode on success and post-load failure paths. `flvm[51]` passed five consecutive ASan/leak-detection repetitions. `flvm[47-55]` passed as one grouped runner invocation (9/9, 1:14.220), followed by `flvm[42-55]` (14/14, 1:55.645). `make all -j2` and `make docs` also passed. A source scan found no FLVM C harness loading bytecode without a corresponding free call. No production runtime code changed. See `plans/43_WORKER_HARNESS_BYTECODE_OWNERSHIP.md`.
+
+
+## Worker lifecycle sanitizer sweep — archive 334
+
+- [x] Run every focused `flvm[1-55]` case on the current snapshot in completed groups: 20/20, 20/20, and 15/15.
+- [x] Run `flvm[47]`, `[49]`, `[50]`, `[52]`, and `[53]` harnesses under combined ASan/UBSan with leak detection and halt-on-error.
+- [x] Run the mixed DRAIN/CANCEL soak `flvm[52]` under GCC ThreadSanitizer.
+- [ ] Complete one single-process `flvm[1-55]` invocation; the three completed groups establish per-case PASS, not single-invocation completion.
+- [ ] Validate Windows worker execution and a real Emscripten SDK build/link/run.
+
+**Archive 334 result:** all 55 focused FLVM cases passed in three completed groups. ASan/UBSan passed for the multi-graph, converging-DAG, staged-DAG, mixed-shutdown, and failure-isolation harnesses; the mixed-shutdown harness also passed TSAN. The first `flvm[50]` sanitizer command hit the outer execution limit during its third round, while a subsequent bounded rerun completed all three rounds and cleanup without a sanitizer report. No source/runtime changes were required; this is a validation/documentation checkpoint. See `plans/44_WORKER_LIFECYCLE_SANITIZER_SWEEP.md`.
+
+
+## WASM API and filesystem/CSV lifecycle tests — archive 335
+
+- [x] Add a Node.js headless test for the exported WASM C API: compile, run, invalid source/bytecode, logical FAIL vs API failure, entry compilation, disassembly, termination/panic accessors, and 40 repeated runs in one module instance.
+- [x] Correct the CSV reader example so directory creation is explicit through FlatL `fs.mkdir()`; stage the CSV fixture at project root, copy it with `file`, then pass the nested file to `csv.reader()`. The CSV module does not create directories.
+- [x] Add `fleditor-wasm-api-smoke` and aggregate `fleditor-wasm-test` Make targets; all tests are `.mjs` executed by Node.js.
+- [x] Run all nine headless WASM smoke tests against the archived Emscripten module with Node.js.
+- [ ] Rebuild the module and rerun `make fleditor-wasm-test` on the user's Linux/Termux Emscripten SDK, because `emcc` is not installed in this execution environment.
+- [ ] Extend API lifecycle checks for run-limit/error recovery and observable memory-growth behavior without treating linear-memory high-water size as proof of a leak.
+
+**Archive 335 result:** all nine Node.js WASM tests passed against the archived `flatl.js`/`flatl.wasm`. The CSV reader now creates its nested project path using FlatL `fs.mkdir()` before writing and reading the CSV; the Node.js harness only stages root-level fixtures in MEMFS. `make fleditor-wasm-test` was added but could not be invoked end-to-end here because the recursive Emscripten build attempted to call unavailable `emcc`. No production C/VM code changed. See `plans/45_WASM_API_LIFECYCLE_TESTING.md`.

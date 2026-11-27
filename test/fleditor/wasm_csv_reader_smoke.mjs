@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * CSV6: run examples/csv_reader.fl on MEMFS with stock.csv via WASM (use native csv).
+ * CSV6: create the project directory with FlatL's fs module, then read stock.csv
+ * through the native CSV module on MEMFS. The CSV module does not create folders.
  */
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
@@ -34,6 +35,8 @@ async function runEntry(files) {
   const M = await FlatLModule(cfg);
   M.FS.mkdirTree(MEMFS_ROOT);
   for (const [rel, content] of Object.entries(files)) {
+    // Only root-level fixtures are staged by the harness. The FlatL program
+    // itself creates the nested project directories with fs.mkdir().
     M.FS.writeFile(MEMFS_ROOT + '/' + rel, content);
   }
   const errBuf = M._malloc(4096);
@@ -41,7 +44,7 @@ async function runEntry(files) {
     'flat_wasm_run_entry',
     'number',
     ['string', 'number', 'number'],
-    [MEMFS_ROOT + '/examples/csv_reader/csv_reader.fl', errBuf, 4096],
+    [MEMFS_ROOT + '/csv_reader.fl', errBuf, 4096],
     { async: true }
   );
   if (rc && typeof rc.then === 'function') rc = await rc;
@@ -51,8 +54,8 @@ async function runEntry(files) {
 }
 
 const r = await runEntry({
-  'examples/csv_reader/csv_reader.fl': mainFl,
-  'examples/csv_reader/stock.csv': stockCsv,
+  'csv_reader.fl': mainFl,
+  'stock.csv': stockCsv,
 });
 if (r.rc !== 0) {
   console.error('wasm_csv_reader_smoke: run failed', r.rc, r.err);
@@ -67,4 +70,4 @@ if (
   process.exit(1);
 }
 
-console.log('OK: wasm_csv_reader_smoke');
+console.log('OK: wasm_csv_reader_smoke (FlatL fs.mkdir + CSV reader)');

@@ -283,7 +283,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-env-smoke fleditor-wasm-multifile-smoke fleditor-rebuild ensure-libz-1
+.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-wasm-api-smoke fleditor-wasm-test fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-env-smoke fleditor-wasm-multifile-smoke fleditor-rebuild ensure-libz-1
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -705,6 +705,26 @@ fleditor-wasm-csv-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-csv-smoke)
 	$(NODE) test/fleditor/wasm_csv_smoke.mjs
 	$(NODE) test/fleditor/wasm_csv_reader_smoke.mjs
+	@$(call step_end)
+
+fleditor-wasm-api-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-api-smoke)
+	$(NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
+	@$(call step_end)
+
+# Complete headless WASM regression suite. All tests run in Node.js against
+# the generated Emscripten module; no browser or Python test runner is used.
+fleditor-wasm-test: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-test)
+	$(NODE) test/fleditor/wasm_smoke.mjs
+	$(NODE) test/fleditor/wasm_env_smoke.mjs
+	$(NODE) test/fleditor/wasm_multifile_smoke.mjs
+	$(NODE) test/fleditor/wasm_csv_smoke.mjs
+	$(NODE) test/fleditor/wasm_csv_reader_smoke.mjs
+	$(NODE) test/fleditor/wasm_file_smoke.mjs
+	$(NODE) test/fleditor/wasm_order_flow_smoke.mjs
+	$(NODE) test/fleditor/wasm_var_smoke.mjs
+	$(NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-smoke: fleditor-wasm
