@@ -60,3 +60,5 @@ Manifest preflight covers declared optional modules; runtime-generated native ca
 
 
 - Archive 314 fixes a confirmed Android/Termux worker-thread stack overflow in `vm_state_execute()`: `OP_GUARD`'s `FLAT_MAX_VARS`-sized `FlatSlotType` and flag arrays are now persistent `VmState` heap scratch. See `26_VM_GUARD_STACK_SCRATCH.md`. Re-run `flvm[38]`–`flvm[46]` and the ASan reproduction on Termux before treating this regression as closed.
+- Archive 314 was validated by the user on Termux with `flvm[38-46]` and `port[2-5]` in one invocation: 13/13 selected tests passed (1185 discovered; the full discovery set was not executed).
+- Archive 315 closes a cleanup-ownership race: `flat_runtime_task_cancel_request()` no longer reports success for a nonterminal task whose cleanup is already owned by synchronous destruction/cancellation. It remains idempotent when scheduler-owned cancellation is already pending. `flvm[46]` now covers a destroy-vs-cancel-request interleaving while a worker is blocked in a DOM gate; see `27_WORKER_TASK_CLEANUP_RACE_AUDIT.md`.

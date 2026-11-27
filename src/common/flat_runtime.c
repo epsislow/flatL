@@ -878,6 +878,10 @@ int flat_runtime_task_cancel_request(FlatRuntime *runtime, FlatTaskId id) {
         rc = -1;
     } else if (runtime_task_is_terminal(task)) {
         rc = 1; /* A terminal outcome already won; never rewrite its result. */
+    } else if (task->cleanup_owned && !task->cancel_requested) {
+        /* Destruction or another cleanup operation already owns this task.
+         * Do not publish a cancellation request that can no longer be acted on. */
+        rc = -1;
     } else {
         /* Idempotent publication only. VM teardown is always scheduler-owned. */
         task->cancel_requested = 1;

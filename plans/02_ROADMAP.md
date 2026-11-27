@@ -2,7 +2,7 @@
 
 **Versiune document:** 1.0 (plan)  
 **Data:** 2026-11-25  
-**Status (archive 307):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation. This remains a staged concurrency validation effort, not blanket thread-safety certification; HTTP/DOM/plugin lifecycle, startup failure injection and cross-platform validation remain open.
+**Status (archive 315):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. This remains a staged concurrency validation effort, not blanket thread-safety certification; plugin lifecycle, startup failure injection and cross-platform validation remain open.
 
 ## Direcția generală
 
@@ -675,3 +675,18 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 ## Signal-aware shell status checkpoint — archive 313
 
 The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven failing tests. The POSIX capture layer previously flattened `pclose()` signal termination into exit code 1, obscuring whether a harness returned normally or died from a signal. Archive 313 preserves signal termination as a negative signal number and formats it explicitly in `run_tests`. This is diagnostic-only; no runtime or worker semantics changed. The next Termux run must establish whether the harnesses exit normally or are terminated by a signal.
+
+
+## VM stack and worker cleanup ownership checkpoint — archives 314–315
+
+- [x] Confirm the Termux worker-thread crash with ASan: `vm_state_execute()` overflowed the secondary thread stack due to fixed-size `OP_GUARD` scratch arrays.
+- [x] Move `OP_GUARD` scratch arrays into heap-backed `VmState` storage sized by `var_slots_max`; release them in `vm_teardown()` (archive 314).
+- [x] User validated `flvm[38-46]` and `port[2-5]` on Termux in one invocation: 13/13 selected tests PASS; 1185 tests were discovered, not all executed.
+- [x] Audit worker-mode VM destruction and cleanup ownership; keep VM teardown outside `scheduler_mutex` and retain the task record until teardown completes.
+- [x] Reject a cancellation request for a nonterminal task whose cleanup is already owned by synchronous destruction/cancellation, while preserving idempotent scheduler-owned cancellation (archive 315).
+- [x] Extend `flvm[46]` with a worker-mode destroy-vs-cancel-request race blocked on the serialized DOM gate.
+- [ ] Re-run `flvm[46]` on Termux and rerun the `flvm[38-46]` / `port[2-5]` selection after archive 315.
+- [ ] Continue the separate plugin preflight/load race audit and deterministic partial worker-start failure injection.
+- [ ] Validate Windows worker execution and actual Emscripten linking.
+
+**Archive 315 result:** `make all -j2`, `make docs`, `flvm[46]`, and 10 consecutive direct executions of the final worker DOM harness passed on the available Linux host. A combined 13-test validation invocation exceeded the command time limit after `flvm[40]`; it is not recorded as a complete pass. Termux validation of archive 315 remains pending.
