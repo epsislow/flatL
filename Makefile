@@ -899,7 +899,7 @@ test-worker-task-wait-channel:
 .PHONY: test-runtime-worker-pool
 test-runtime-worker-pool:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
-	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/042_runtime_worker_pool/runtime_worker_pool_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+	$(CC) $(CFLAGS) -DFLAT_RUNTIME_TESTING -pthread -o $(TEST_BIN) test/cases/flvm/042_runtime_worker_pool/runtime_worker_pool_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify wait-graph chain cancellation and Channel waiter cleanup under workers.
 .PHONY: test-worker-wait-graph-cancel
@@ -923,3 +923,8 @@ test-worker-http:
 test-worker-dom:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/046_worker_dom_lifecycle/worker_dom_lifecycle_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+.PHONY: test-worker-multi-graph-cancel
+test-worker-multi-graph-cancel:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/047_worker_multi_graph_cancel/worker_multi_graph_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

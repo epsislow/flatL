@@ -6,12 +6,18 @@
 #include "flat_native.h"
 
 #include <stdio.h>
+#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
 #define TASKS 96
 #define WORKERS 4
+
+/* Test-only hooks compiled into this harness via FLAT_RUNTIME_TESTING. */
+void flat_runtime_test_worker_fail_create_after(int successful_creates);
+void flat_runtime_test_worker_fail_join_after(int successful_joins);
+void flat_runtime_test_worker_join_delay_ms(int delay_ms);
 
 static int load_bytecode(const char *path, FlatBytecode *bc) {
     memset(bc, 0, sizeof *bc);
@@ -136,6 +142,312 @@ done:
     return rc;
 }
 
+static int run_worker_startup_failure_case(void) {
+    size_t fail_index;
+    for (fail_index = 0; fail_index < WORKERS; ++fail_index) {
+        FlatRuntime *runtime = flat_runtime_create(NULL);
+        int start_rc;
+        if (!runtime) return -1;
+        flat_runtime_test_worker_fail_create_after((int)fail_index);
+        start_rc = flat_runtime_workers_start(runtime, WORKERS, 1);
+        if (start_rc == 0 || flat_runtime_destroy(runtime) != 0) {
+            fprintf(stderr, "worker create failure at index %zu did not roll back cleanly\n", fail_index);
+            if (start_rc == 0) {
+                (void)flat_runtime_shutdown_request(runtime, FLAT_RUNTIME_SHUTDOWN_CANCEL);
+                (void)flat_runtime_workers_join(runtime);
+            }
+            return -1;
+        }
+    }
+
+    /* A failed join during partial-start rollback must retain the worker array
+     * and the unjoined handle so workers_join() can retry safely. */
+    {
+        FlatRuntime *runtime = flat_runtime_create(NULL);
+        if (!runtime) return -1;
+        flat_runtime_test_worker_fail_create_after(2);
+        flat_runtime_test_worker_fail_join_after(0);
+        if (flat_runtime_workers_start(runtime, WORKERS, 1) == 0 ||
+            flat_runtime_destroy(runtime) == 0 ||
+            flat_runtime_workers_join(runtime) != 0 ||
+            flat_runtime_destroy(runtime) != 0) {
+            fprintf(stderr, "partial-start join retry/retained ownership failed\n");
+            return -1;
+        }
+    }
+
+    /* A transient join failure after a successful startup must not discard any
+     * still-joinable handle; a second workers_join() completes cleanup. */
+    {
+        FlatRuntime *runtime = flat_runtime_create(NULL);
+        if (!runtime || flat_runtime_workers_start(runtime, 3, 1) != 0 ||
+            flat_runtime_shutdown_request(runtime, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0) {
+            if (runtime) (void)flat_runtime_destroy(runtime);
+            return -1;
+        }
+        flat_runtime_test_worker_fail_join_after(1);
+        if (flat_runtime_workers_join(runtime) == 0 ||
+            flat_runtime_destroy(runtime) == 0 ||
+            flat_runtime_workers_join(runtime) != 0 ||
+            flat_runtime_destroy(runtime) != 0) {
+            fprintf(stderr, "worker join retry after transient failure failed\n");
+            return -1;
+        }
+    }
+    return 0;
+}
+
+typedef struct {
+    FlatRuntime *runtime;
+    int result;
+} RuntimeJoinProbe;
+
+static void *runtime_join_main(void *arg) {
+    RuntimeJoinProbe *probe = (RuntimeJoinProbe *)arg;
+    probe->result = flat_runtime_workers_join(probe->runtime);
+    return NULL;
+}
+
+static int wait_runtime_stopped(FlatRuntime *runtime) {
+    size_t i;
+    for (i = 0; i < 10000; ++i) {
+        if (flat_runtime_shutdown_status(runtime) == FLAT_RUNTIME_SHUTDOWN_COMPLETE)
+            return 0;
+        pause_one_ms();
+    }
+    return -1;
+}
+
+static int run_multi_runtime_worker_mode_case(void) {
+    FlatRuntime *first = NULL;
+    FlatRuntime *second = NULL;
+    int rc = -1;
+
+    /* A failed second pool must release only its own process-wide worker-mode
+     * reference; the first runtime continues to keep worker mode active. */
+    first = flat_runtime_create(NULL);
+    second = flat_runtime_create(NULL);
+    if (!first || !second ||
+        flat_runtime_workers_start(first, 2, 1) != 0 ||
+        !flat_native_worker_mode_is_active()) goto done;
+
+    flat_runtime_test_worker_fail_create_after(1);
+    if (flat_runtime_workers_start(second, 3, 1) == 0 ||
+        !flat_native_worker_mode_is_active() ||
+        flat_runtime_destroy(second) != 0) {
+        fprintf(stderr, "second runtime partial-start rollback corrupted worker-mode ownership\n");
+        goto done;
+    }
+    second = NULL;
+
+    if (flat_runtime_shutdown_request(first, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0 ||
+        wait_runtime_stopped(first) != 0 ||
+        flat_runtime_workers_join(first) != 0 ||
+        flat_native_worker_mode_is_active()) {
+        fprintf(stderr, "single runtime worker-mode reference was not released\n");
+        goto done;
+    }
+    if (flat_runtime_destroy(first) != 0) goto done;
+    first = NULL;
+
+    /* Two live runtimes hold independent references. Joining one must not
+     * disable the process-wide worker guard while the other is still active. */
+    first = flat_runtime_create(NULL);
+    second = flat_runtime_create(NULL);
+    if (!first || !second ||
+        flat_runtime_workers_start(first, 2, 1) != 0 ||
+        flat_runtime_workers_start(second, 2, 1) != 0 ||
+        !flat_native_worker_mode_is_active()) {
+        fprintf(stderr, "overlapping runtime worker startup failed\n");
+        goto done;
+    }
+    if (flat_runtime_shutdown_request(first, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0 ||
+        wait_runtime_stopped(first) != 0 ||
+        flat_runtime_workers_join(first) != 0 ||
+        !flat_native_worker_mode_is_active()) {
+        fprintf(stderr, "joining first runtime disabled worker mode for second runtime\n");
+        goto done;
+    }
+    if (flat_runtime_destroy(first) != 0) goto done;
+    first = NULL;
+
+    if (flat_runtime_shutdown_request(second, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0 ||
+        wait_runtime_stopped(second) != 0 ||
+        flat_runtime_workers_join(second) != 0 ||
+        flat_native_worker_mode_is_active()) {
+        fprintf(stderr, "last runtime did not release process-wide worker mode\n");
+        goto done;
+    }
+    if (flat_runtime_destroy(second) != 0) goto done;
+    second = NULL;
+
+    /* Concurrent joins on distinct runtimes race the process-wide reference
+     * decrement. The atomic guard must remain balanced regardless of order. */
+    first = flat_runtime_create(NULL);
+    second = flat_runtime_create(NULL);
+    if (!first || !second ||
+        flat_runtime_workers_start(first, 2, 1) != 0 ||
+        flat_runtime_workers_start(second, 2, 1) != 0 ||
+        flat_runtime_shutdown_request(first, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0 ||
+        flat_runtime_shutdown_request(second, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0 ||
+        wait_runtime_stopped(first) != 0 || wait_runtime_stopped(second) != 0) {
+        fprintf(stderr, "concurrent runtime join setup failed\n");
+        goto done;
+    }
+    {
+        RuntimeJoinProbe probes[2];
+        pthread_t joiners[2];
+        int created = 0;
+        probes[0].runtime = first; probes[0].result = -99;
+        probes[1].runtime = second; probes[1].result = -99;
+        if (pthread_create(&joiners[0], NULL, runtime_join_main, &probes[0]) != 0)
+            goto done;
+        created = 1;
+        if (pthread_create(&joiners[1], NULL, runtime_join_main, &probes[1]) != 0) {
+            (void)pthread_join(joiners[0], NULL);
+            goto done;
+        }
+        created = 2;
+        if (created == 2) {
+            (void)pthread_join(joiners[0], NULL);
+            (void)pthread_join(joiners[1], NULL);
+        }
+        if (probes[0].result != 0 || probes[1].result != 0 ||
+            flat_native_worker_mode_is_active()) {
+            fprintf(stderr, "concurrent runtime joins left worker-mode references active\n");
+            goto done;
+        }
+    }
+    if (flat_runtime_destroy(first) != 0) goto done;
+    first = NULL;
+    if (flat_runtime_destroy(second) != 0) goto done;
+    second = NULL;
+    rc = 0;
+
+done:
+    if (first) {
+        (void)flat_runtime_shutdown_request(first, FLAT_RUNTIME_SHUTDOWN_CANCEL);
+        if (wait_runtime_stopped(first) == 0) (void)flat_runtime_workers_join(first);
+        (void)flat_runtime_destroy(first);
+    }
+    if (second) {
+        (void)flat_runtime_shutdown_request(second, FLAT_RUNTIME_SHUTDOWN_CANCEL);
+        if (wait_runtime_stopped(second) == 0) (void)flat_runtime_workers_join(second);
+        (void)flat_runtime_destroy(second);
+    }
+    return rc;
+}
+
+typedef struct {
+    FlatRuntime *runtime;
+    pthread_mutex_t *gate_mutex;
+    pthread_cond_t *gate_cond;
+    int *ready_count;
+    int *released;
+    int result;
+} SameRuntimeJoinProbe;
+
+static void *same_runtime_join_main(void *arg) {
+    SameRuntimeJoinProbe *probe = (SameRuntimeJoinProbe *)arg;
+    pthread_mutex_lock(probe->gate_mutex);
+    ++*probe->ready_count;
+    pthread_cond_broadcast(probe->gate_cond);
+    while (!*probe->released)
+        pthread_cond_wait(probe->gate_cond, probe->gate_mutex);
+    pthread_mutex_unlock(probe->gate_mutex);
+    probe->result = flat_runtime_workers_join(probe->runtime);
+    return NULL;
+}
+
+static int run_same_runtime_concurrent_join_case(void) {
+    enum { JOINERS = 4, WORKERS_FOR_JOIN = 16 };
+    FlatRuntime *runtime = flat_runtime_create(NULL);
+    pthread_mutex_t gate_mutex;
+    pthread_cond_t gate_cond;
+    pthread_t joiners[JOINERS];
+    SameRuntimeJoinProbe probes[JOINERS];
+    int ready_count = 0;
+    int released = 0;
+    int created = 0;
+    int successes = 0;
+    int failures = 0;
+    int rc = -1;
+    int i;
+
+    if (!runtime || pthread_mutex_init(&gate_mutex, NULL) != 0) goto done;
+    if (pthread_cond_init(&gate_cond, NULL) != 0) {
+        pthread_mutex_destroy(&gate_mutex);
+        goto done;
+    }
+    if (flat_runtime_workers_start(runtime, WORKERS_FOR_JOIN, 1) != 0 ||
+        flat_runtime_shutdown_request(runtime, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0 ||
+        wait_runtime_stopped(runtime) != 0) {
+        fprintf(stderr, "same-runtime concurrent join setup failed\n");
+        goto release_and_cleanup;
+    }
+
+    /* Hold the first join after it claims ownership so the other callers
+     * deterministically contend while workers_joining is set. */
+    flat_runtime_test_worker_join_delay_ms(100);
+    for (i = 0; i < JOINERS; ++i) {
+        probes[i].runtime = runtime;
+        probes[i].gate_mutex = &gate_mutex;
+        probes[i].gate_cond = &gate_cond;
+        probes[i].ready_count = &ready_count;
+        probes[i].released = &released;
+        probes[i].result = -99;
+        if (pthread_create(&joiners[i], NULL, same_runtime_join_main, &probes[i]) != 0) {
+            fprintf(stderr, "same-runtime joiner creation failed at %d\n", i);
+            goto release_and_cleanup;
+        }
+        ++created;
+    }
+
+    pthread_mutex_lock(&gate_mutex);
+    while (ready_count != created)
+        pthread_cond_wait(&gate_cond, &gate_mutex);
+    released = 1;
+    pthread_cond_broadcast(&gate_cond);
+    pthread_mutex_unlock(&gate_mutex);
+
+    for (i = 0; i < created; ++i) pthread_join(joiners[i], NULL);
+    created = 0;
+    for (i = 0; i < JOINERS; ++i) {
+        if (probes[i].result == 0) ++successes;
+        else if (probes[i].result == -1) ++failures;
+    }
+    if (successes != 1 || failures != JOINERS - 1 ||
+        flat_runtime_destroy(runtime) != 0) {
+        fprintf(stderr,
+                "same-runtime concurrent join ownership failed success=%d rejected=%d\n",
+                successes, failures);
+        goto release_and_cleanup;
+    }
+    runtime = NULL;
+    rc = 0;
+
+release_and_cleanup:
+    if (created) {
+        pthread_mutex_lock(&gate_mutex);
+        released = 1;
+        pthread_cond_broadcast(&gate_cond);
+        pthread_mutex_unlock(&gate_mutex);
+        for (i = 0; i < created; ++i) pthread_join(joiners[i], NULL);
+    }
+    if (runtime) {
+        (void)flat_runtime_shutdown_request(runtime, FLAT_RUNTIME_SHUTDOWN_CANCEL);
+        if (wait_runtime_stopped(runtime) == 0) (void)flat_runtime_workers_join(runtime);
+        (void)flat_runtime_destroy(runtime);
+    }
+    pthread_cond_destroy(&gate_cond);
+    pthread_mutex_destroy(&gate_mutex);
+    return rc;
+
+done:
+    if (runtime) (void)flat_runtime_destroy(runtime);
+    return -1;
+}
+
 static int run_unsupported_native_case(const FlatBytecode *bc) {
     FlatRuntime *runtime = flat_runtime_create(NULL);
     FlatTaskId id = 0;
@@ -194,6 +506,18 @@ int main(int argc, char **argv) {
         rc = run_unsupported_native_case(&unsupported_bc);
         if (rc != 0) fprintf(stderr, "worker pool unsupported-native preflight case failed\n");
         if (rc == 0) {
+            rc = run_worker_startup_failure_case();
+            if (rc != 0) fprintf(stderr, "worker startup failure-injection case failed\n");
+        }
+        if (rc == 0) {
+            rc = run_multi_runtime_worker_mode_case();
+            if (rc != 0) fprintf(stderr, "multi-runtime worker-mode ownership case failed\n");
+        }
+        if (rc == 0) {
+            rc = run_same_runtime_concurrent_join_case();
+            if (rc != 0) fprintf(stderr, "same-runtime concurrent join case failed\n");
+        }
+        if (rc == 0) {
             rc = run_drain_case(&bc);
             if (rc != 0) fprintf(stderr, "worker pool DRAIN case failed\n");
         }
@@ -209,6 +533,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "runtime worker pool test failed: %d\n", rc);
         return 1;
     }
-    puts("runtime-worker-pool-ok workers=4 tasks=96 drain=joined cancel=joined unsupported-native=preflight-rejected");
+    puts("runtime-worker-pool-ok workers=4 tasks=96 drain=joined cancel=joined unsupported-native=preflight-rejected multi-runtime-worker-mode=balanced");
     return 0;
 }

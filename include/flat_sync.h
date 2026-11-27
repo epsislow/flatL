@@ -94,12 +94,15 @@ static inline int flat_thread_create(FlatThread *thread, FlatThreadFn fn, void *
     return 0;
 }
 static inline int flat_threads_supported(void) { return 1; }
+/* Join consumes the thread handle only after both the wait and handle close
+ * succeed. On failure the handle is retained so the owner can diagnose or
+ * retry; callers must serialize join attempts for one FlatThread. */
 static inline int flat_thread_join(FlatThread *thread) {
     HANDLE handle;
     if (!thread || !thread->native) return -1;
     handle = (HANDLE)thread->native;
     if (WaitForSingleObject(handle, INFINITE) != WAIT_OBJECT_0) return -1;
-    CloseHandle(handle);
+    if (!CloseHandle(handle)) return -1;
     thread->native = 0;
     return 0;
 }
@@ -174,6 +177,8 @@ static inline int flat_thread_create(FlatThread *thread, FlatThreadFn fn, void *
     return rc;
 }
 static inline int flat_threads_supported(void) { return 1; }
+/* pthread_join() consumes the joinable thread only on success. Preserve the
+ * valid bit on error; callers must serialize join attempts for one FlatThread. */
 static inline int flat_thread_join(FlatThread *thread) {
     int rc;
     if (!thread || !thread->valid) return -1;

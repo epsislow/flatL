@@ -1,8 +1,8 @@
 # Task Runtime — stadiul implementării
 
-**Ultima actualizare:** 2026-11-26  
-**Arhivă de referință:** `flatL-main-296-cancellation-shutdown-contract.zip`
-**Arhivă curentă:** `flatL-main-303-cancellation-request-runtime.zip`  
+**Ultima actualizare:** 2026-11-27  
+**Arhivă de referință:** `flatL-main-319-flat-thread-join-ownership.zip`
+**Arhivă curentă:** `flatL-main-320-worker-multi-graph-cancellation-stress.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 ## Ce este prezent în arhiva 252 (bază)
@@ -1399,3 +1399,29 @@ Audit plugin loading/preflight races and add deterministic worker-thread creatio
 - [ ] Re-run `flvm[38-46]` on Termux and determine whether each failing harness exits normally or is killed by a signal.
 
 **Archive 313 result:** a local POSIX `popen()`/`pclose()` reproduction confirmed that a child terminated by SIGSEGV is observable as `WIFSIGNALED` with signal 11. The change is diagnostic-only. Termux validation is pending.
+
+
+## Archive 318 — multi-runtime worker-mode ownership
+
+- Extended `flvm[42]` with independent-runtime worker-mode reference tests: second-runtime partial-start rollback, overlapping pools, one-runtime join while another remains active, last-runtime release, and concurrent joins on two distinct runtimes.
+- Audited `g_worker_mode_users`: the existing atomic reference count and each runtime's `worker_mode_entered` ownership flag satisfy the tested interleavings; no production synchronization change was justified.
+- Added `plans/30_MULTI_RUNTIME_WORKER_MODE_OWNERSHIP.md` and updated the worker-pool plan and roadmap.
+- Validation: `make all -j2`, `make docs`, all 13 selected tests (`flvm[13]`, `[34-36]`, `[38-46]`) passed individually; final expanded `flvm[42]` passed under AddressSanitizer and UndefinedBehaviorSanitizer. A grouped 13-test run and a later loop exceeded the execution limit, so only completed individual test runs are counted. Full 1185-test suite, Windows worker execution and actual Emscripten linking remain unverified.
+
+
+## Archive 319 — FlatThread join ownership
+
+- Added `workers_joining`, protected by `scheduler_mutex`, so only one caller can join a given runtime's worker handles at a time. Concurrent same-runtime join callers are rejected; a failed join clears the operation claim but preserves unjoined handles for retry.
+- `flat_runtime_destroy()` now also rejects while the join operation owns worker state. Concurrent destroy/API entry remains unsupported and must be excluded by the host.
+- Windows `flat_thread_join()` now checks `CloseHandle()` and preserves the stored handle if closing fails. POSIX `pthread_join()` keeps the valid marker on error and clears it only on success; native error codes are preserved.
+- Extended `flvm[42]` with four simultaneous callers joining the same stopped runtime; exactly one caller must succeed.
+- Validation: `make all -j2` PASS; `flvm[42]` PASS; dedicated worker-pool harness 20/20 PASS. Windows execution, actual Emscripten linking and the full 1185-test suite remain unverified.
+
+**Next:** follow `plans/02_ROADMAP.md`: broaden worker-mode stress coverage for multiple wait graphs and simultaneous cancellation/cleanup interleavings, while tracking Windows and Emscripten as separate platform validation gates.
+
+
+## Arhiva 320 — worker multi-graph cancellation stress
+
+A fost adăugat testul `flvm[47]`, care creează opt grafuri independente de câte patru task-uri, lansează simultan opt cereri de anulare din thread-uri host și verifică DRAIN, join, stările terminale și cleanup-ul complet. Harness-ul repetă scenariul de cinci ori per execuție.
+
+Verificări locale POSIX: `make all -j2`, `make docs`, `flvm[39]`, `flvm[40-47]` PASS în rulări individuale; `flvm[47]` a trecut și cinci execuții consecutive, ASan și UBSan. Nu a fost necesară modificarea codului de producție. Matricea generală de stress rămâne deschisă; Windows, build-ul Emscripten real și suita completă de 1186 teste nu sunt validate în această etapă.

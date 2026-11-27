@@ -2,7 +2,7 @@
 
 **Versiune document:** 1.0 (plan)  
 **Data:** 2026-11-25  
-**Status (archive 316):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. Archive 316 expands concurrent first-use loading coverage across distinct native plugin modules and tests plugin loading against capability freeze; the existing synchronization design remains unchanged. Deterministic worker-startup failure injection and cross-platform validation remain open. This remains a staged concurrency validation effort, not blanket thread-safety certification.
+**Status (archive 320):** F0, persistent stepping, cooperative task runtime, Channels, transaction contention/retry, request-only cancellation, DRAIN/CANCEL shutdown, and the POSIX runtime-owned worker pool are implemented. Archives 306–307 add focused real-worker audits for task.wait/Channel contention and wait-graph/Channel-waiter cancellation; archives 309 and 315 extend HTTP/DOM lifecycle and task-cleanup race coverage. Archive 316 expands concurrent first-use loading coverage across distinct native plugin modules and tests plugin loading against capability freeze. Archive 317 adds deterministic worker-create and worker-join failure injection, covering every partial-start index and retryable join cleanup. Archive 318 validates process-wide worker-mode reference ownership across multiple runtimes. Archive 319 serializes same-runtime join ownership and clarifies POSIX/Windows native handle semantics. Archive 320 adds a repeated multi-graph worker cancellation stress case (`flvm[47]`) with eight concurrent cancellation callers and DRAIN/cleanup validation. Cross-platform validation remains open. This remains a staged concurrency validation effort, not blanket thread-safety certification.
 
 ## Direcția generală
 
@@ -125,7 +125,7 @@ Livrabile:
 4. [x] Ownership logic bazat pe `flat_task_id`, niciodată exclusiv pe `pthread_t`.
 5. [x] Principal global-state ownership audit and native worker capability preflight/gates implemented; per-module and dependency validation remains in progress.
 6. [x] DRAIN/CANCEL shutdown, waiting-task blocked status, worker error escalation and join implemented; expanded wait-graph cancellation regression added in archive 307.
-7. [ ] Broader stress matrix for multi-writer, arbitrary wait graphs, simultaneous cancellation, deadlock and cleanup; focused cases 42–44 exist.
+7. [ ] Broader stress matrix for multi-writer, arbitrary wait graphs, simultaneous cancellation, deadlock and cleanup. Archive 320 adds eight independent wait graphs and simultaneous cancellation batches in `flvm[47]`; `flvm[39]` and `flvm[43–46]` cover adjacent contention/HTTP/DOM dimensions. Randomized topologies and broader mixed shutdown stress remain open.
 8. [ ] Validate Windows worker execution and actual Emscripten build; single-thread Emscripten worker startup must fail cleanly.
 
 Criterii de acceptare:
@@ -592,8 +592,8 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [x] Promote built-in `task` and `channel` policies to SERIALIZED based on scheduler/Channel mutex protection.
 - [x] Add `flvm[42]` for four-worker dispatch, 96 tasks, DRAIN/join, CANCEL/join and unsupported-native rejection.
 - [x] Add multi-worker task.wait/Channel contention tests and verify transaction retry/wakeup ordering (`flvm[43]`, archive 306).
-- [ ] Add concurrent HTTP/DOM lifecycle tests in worker mode and validate all dependency initialization constraints.
-- [ ] Add worker startup failure injection and test each partial thread-creation rollback point.
+- [x] Add concurrent HTTP/DOM lifecycle tests in worker mode and validate all dependency initialization constraints (`flvm[45-46]`).
+- [x] Add worker startup failure injection and test each partial thread-creation rollback point, including retry after a transient join failure (`flvm[42]`, archive 317).
 - [ ] Validate Windows worker implementation and run supported Emscripten build (single-thread worker creation must fail cleanly).
 - [ ] Add timed shutdown/join policy only if a real caller requirement emerges; do not detach workers or destroy runtime while any worker can access it.
 
@@ -608,8 +608,8 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [x] Verify a task cannot suspend via `task.wait()` while it owns a Channel transaction.
 - [x] Repeat worker startup, nested task execution, DRAIN, join and runtime teardown 20 times in one process.
 - [x] Add wait-graph chain/cycle and cancellation regression, including a cancelled Channel waiter (`flvm[44]`, archive 307).
-- [ ] Add worker-mode HTTP/DOM lifecycle tests and plugin-load race tests.
-- [ ] Add deterministic worker-creation failure injection and validate every partial-start rollback point.
+- [x] Add worker-mode HTTP/DOM lifecycle tests and plugin-load race tests (archives 309, 316).
+- [x] Add deterministic worker-creation failure injection and validate every partial-start rollback point (archive 317).
 - [ ] Validate Windows worker execution and the actual Emscripten build on supported toolchains.
 
 **Archive 306 result:** no runtime synchronization semantics changed. `flvm[43]` reuses `027_channel_native/program.fl` and executes it with four runtime workers; two children contend on one Channel, the parent waits for both, and the transaction-held wait attempt fails as designed. Twenty independent runtime lifecycles pass in one process. This validates this concrete wait/Channel interaction only; it does not certify all wait-graph or native-module concurrency.
@@ -647,8 +647,8 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [x] Verify worker startup preflight initializes curl before task execution and each request uses an independent easy handle.
 - [x] Add DOM worker-mode document isolation and cancellation/teardown test (`flvm[46]`).
 - [x] Retain DOM's PENDING declaration and SERIALIZED effective policy.
-- [ ] Audit optional native plugin load/preflight races and runtime-wide worker-mode guard transitions.
-- [ ] Add deterministic failure injection for worker creation and verify partial startup rollback.
+- [x] Audit optional native plugin load/preflight races and runtime-wide worker-mode guard transitions (archive 316).
+- [x] Add deterministic failure injection for worker creation and verify partial startup rollback (archive 317).
 - [ ] Complete platform/sanitizer matrix: Windows, actual Emscripten, TSAN final test shape, ASan/UBSan.
 
 **Archive 309:** HTTP and DOM lifecycle tests pass on the available POSIX host; see `21_WORKER_HTTP_DOM_LIFECYCLE_AUDIT.md`.
@@ -686,7 +686,59 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [x] Reject a cancellation request for a nonterminal task whose cleanup is already owned by synchronous destruction/cancellation, while preserving idempotent scheduler-owned cancellation (archive 315).
 - [x] Extend `flvm[46]` with a worker-mode destroy-vs-cancel-request race blocked on the serialized DOM gate.
 - [ ] Re-run `flvm[46]` on Termux and rerun the `flvm[38-46]` / `port[2-5]` selection after archive 315.
-- [ ] Continue the separate plugin preflight/load race audit and deterministic partial worker-start failure injection.
+- [x] Complete the plugin preflight/load race audit (archive 316) and deterministic partial worker-start failure injection (archive 317).
 - [ ] Validate Windows worker execution and actual Emscripten linking.
 
 **Archive 315 result:** `make all -j2`, `make docs`, `flvm[46]`, and 10 consecutive direct executions of the final worker DOM harness passed on the available Linux host. A combined 13-test validation invocation exceeded the command time limit after `flvm[40]`; it is not recorded as a complete pass. Termux validation of archive 315 remains pending.
+
+
+## Deterministic worker startup failure injection — archive 317
+
+- [x] Add test-only wrappers around runtime worker `flat_thread_create()` and `flat_thread_join()`; injection hooks are compiled only into the `flvm[42]` harness with `FLAT_RUNTIME_TESTING` and are not part of the public API or normal build.
+- [x] Fail worker creation at every index in a four-worker startup (first, intermediate positions, and final position). Verify startup returns failure and runtime destruction succeeds after rollback.
+- [x] Inject a transient join failure during partial-start rollback. Verify the runtime retains worker state/handles, rejects destruction, and completes cleanup through a subsequent `flat_runtime_workers_join()` retry.
+- [x] Inject a transient join failure after successful startup and shutdown. Verify already-joined workers are not joined twice, the failed handle is retained, and a retry completes cleanup.
+- [x] Keep production worker synchronization and lifecycle behavior unchanged; the change is a narrow test seam and regression coverage.
+
+**Archive 317 validation (local POSIX host):** `make all -j2` and `make docs` passed (50 sections). `flvm[13]`, `flvm[34-36]`, and `flvm[38-46]` passed in completed individual runs; `flvm[42]` passed three consecutive additional runs with the injected failure matrix. One grouped command exceeded the execution limit after `flvm[38]`, and a later loop command timed out after `flvm[41]` before reaching `flvm[42]`; these incomplete grouped commands are not counted as suite passes. `flvm[43-46]` subsequently passed individually. The full 1185-test discovery set, Windows worker execution, and actual Emscripten linking remain unverified.
+
+
+## Multi-runtime worker-mode ownership — archive 318
+
+- [x] Audit the process-wide `g_worker_mode_users` atomic reference count against independently owned runtime worker pools.
+- [x] Verify partial startup rollback in a second runtime releases only its own worker-mode reference while the first runtime remains active.
+- [x] Verify joining one of two active runtimes does not disable process-wide worker-mode restrictions while the other pool remains active.
+- [x] Verify concurrent joins on two distinct stopped runtimes return the process-wide worker-mode count to inactive.
+- [x] Keep production locking and lifecycle behavior unchanged; add regression coverage for the existing atomic ownership contract.
+- [x] Review `FlatThread` join-error semantics across POSIX and Windows, and explicitly document same-runtime concurrent join/destroy limitations (archive 319).
+
+**Archive 318 validation (local POSIX host):** `make all -j2` and `flvm[42]` passed with the multi-runtime regressions. The repeat batch before the concurrent-join extension completed four repetitions and was interrupted during the fifth by the execution limit; it is not counted as a complete 10-run stress pass. The expanded final test has one completed PASS. Full 1185-test suite, sanitizers on the final expanded harness, Windows worker execution, and actual Emscripten linking remain unverified. See `30_MULTI_RUNTIME_WORKER_MODE_OWNERSHIP.md`.
+
+
+## FlatThread join ownership — archive 319
+
+- [x] Review POSIX `pthread_join()` ownership: preserve `FlatThread.valid` on failure and clear it only after success; do not treat every native error as guaranteed retryable.
+- [x] Review Windows wait/close as separate operations; report `CloseHandle()` failure and retain the handle value unless close succeeds.
+- [x] Add a per-runtime `workers_joining` claim under `scheduler_mutex`; reject concurrent `flat_runtime_workers_join()` callers for the same runtime.
+- [x] Release the join claim after an error while retaining unjoined handles, allowing a later retry.
+- [x] Prevent runtime destruction while the join operation owns the worker handles.
+- [x] Add a four-caller same-runtime concurrent-join regression to `flvm[42]`; exactly one caller may complete the join.
+- [x] Document that concurrent join on distinct runtimes is supported by the existing ownership model, while concurrent destroy/API entry remains the host's responsibility.
+- [ ] Validate Windows worker execution and actual Emscripten linking on supported toolchains.
+
+**Archive 319 validation (local POSIX host):** `make all -j2` passed; `flvm[42]` passed, including 20 consecutive executions of the dedicated harness. The full 1185-test suite was not run. Windows worker execution and actual Emscripten linking remain unverified. See `31_FLAT_THREAD_JOIN_OWNERSHIP.md`.
+
+**Next:** continue the v2.0 roadmap's broader worker stress matrix (multiple independent wait graphs, simultaneous cancellation and cleanup interleavings), while keeping Windows/Emscripten toolchain validation as a separate open platform gate. Do not move to UI Runtime v2.5 until the v2.0 worker acceptance criteria and platform boundaries are explicitly reviewed.
+
+
+## Multi-graph cancellation stress — archive 320
+
+- [x] Add `flvm[47]`: eight independent four-task wait graphs in one runtime.
+- [x] Release eight host-thread cancellation requests simultaneously through a test barrier.
+- [x] Start a four-worker pool, DRAIN, join, verify A/B/C/D terminal states, and destroy every task/runtime.
+- [x] Repeat five rounds per harness execution (40 graphs / 160 task instances per invocation).
+- [ ] Continue the broader stress matrix: varied/random graph shapes, mixed DRAIN-to-CANCEL escalation under load, and multi-writer Channel transactions with cancellation.
+
+**Archive 320 validation (local POSIX host):** `make all -j2`, `make docs`, `flvm[39]`, `flvm[40-47]` completed as PASS in individual runs; `flvm[47]` also passed five consecutive completed invocations, ASan, and UBSan. A grouped `flvm[42-47]` command was stopped by the execution limit after reporting through `flvm[45]`; tests 46 and 47 passed separately. The full 1186-test suite, Windows worker execution, and actual Emscripten linking remain unverified. See `32_WORKER_MULTI_GRAPH_CANCELLATION_STRESS.md`.
+
+**Next:** continue the v2.0 stress matrix with mixed DRAIN/CANCEL escalation and Channel transaction contention under concurrent cancellation. Keep Windows and Emscripten toolchain validation as explicit platform gates. Do not begin UI Runtime v2.5 until v2.0 acceptance criteria and platform boundaries are reviewed.

@@ -65,3 +65,33 @@ Manifest preflight covers declared optional modules; runtime-generated native ca
 
 
 - Archive 316 extends `flvm[36]`: 16 simultaneous first-use callers load/invoke two distinct optional modules (`list` SERIALIZED and `obj` THREAD_SAFE), then a third plugin load races process-wide capability freeze. The test verifies handler results, published capabilities, and the only two valid load/freeze outcomes. `flvm[13]` continues to cover failed plugin-init rollback; `flvm[34-35]` cover capability policy and freeze rejection. The implementation's existing runtime/registry/capability locks were retained because the audit found no demonstrated race requiring a locking change. See `28_NATIVE_PLUGIN_LOADING_RACE_AUDIT.md`.
+
+
+## Deterministic startup failure injection — archive 317
+
+The `flvm[42]` harness is compiled with `FLAT_RUNTIME_TESTING`, which enables private test hooks in `flat_runtime.c`. The hooks wrap only the worker pool's calls to `flat_thread_create()` and `flat_thread_join()` and are absent from ordinary builds. They fail once after a configured number of successful operations, then automatically disable themselves. No public header/API is added.
+
+The regression matrix covers: (1) `pthread_create`-equivalent failure at each of four worker indexes; (2) a transient join failure while rolling back a partially created pool; and (3) a transient join failure after a normally started pool reaches STOPPED. In both join-failure cases, the runtime must retain the worker array and every still-joinable handle, reject destruction, and allow a later `flat_runtime_workers_join()` to finish cleanup. Already joined handles are marked not-started and are not joined again.
+
+This is deterministic validation of the POSIX abstraction's failure paths, not proof of Windows behavior. The production implementation continues to call the same `flat_thread_create()`/`flat_thread_join()` primitives through thin internal wrappers; no scheduling, locking, or lifecycle policy was changed. See `29_WORKER_STARTUP_FAILURE_INJECTION.md`.
+
+
+## Process-wide worker-mode ownership across runtimes — archive 318
+
+The native worker-mode guard is a process-wide atomic reference count, while each runtime owns its own worker pool and records whether it acquired a guard reference. Archive 318 extends `flvm[42]` to cover partial-start rollback in a second runtime, overlapping worker pools, release of one runtime while another remains active, and concurrent joins on two distinct stopped runtimes. No production synchronization change was needed: each tested runtime releases exactly its own reference, and the process-wide guard remains active until the last pool has joined. Same-runtime concurrent join and concurrent runtime destruction remain unsupported and are not covered by this regression. See `30_MULTI_RUNTIME_WORKER_MODE_OWNERSHIP.md`.
+
+
+## Join ownership update — archive 319
+
+`flat_runtime_workers_join()` now claims `workers_joining` under `scheduler_mutex` before it touches any worker handle. A second caller for the same runtime is rejected while that claim is active. Native join errors clear only the operation claim; handles that did not join successfully remain marked started for a later retry. The runtime cannot be destroyed while the join claim is active.
+
+`FlatThread` preserves its native handle/valid marker on join failure and consumes it only after successful native join/close. POSIX `pthread_join()` errors are returned unchanged and are not all assumed to be transient. On Windows, `WaitForSingleObject()` success is not treated as handle release: `CloseHandle()` must also succeed before the stored handle is cleared.
+
+The host must still prevent `flat_runtime_destroy()` from racing any API entry. Same-runtime concurrent join is explicitly rejected; distinct-runtime joins remain independent. `flvm[42]` covers four simultaneous join callers on one stopped runtime and asserts exactly one successful join. See `plans/31_FLAT_THREAD_JOIN_OWNERSHIP.md`.
+
+
+## Multi-graph cancellation stress — archive 320
+
+`flvm[47]` adds eight independent A→B→C→D wait graphs in one runtime. Eight host threads synchronize on a barrier and concurrently publish request-only cancellation for each graph's B task. A four-worker pool then drains the runtime. Each round checks A/C/D COMPLETED, B CANCELLED, joins workers, and destroys all task/runtime state. The harness repeats five rounds (40 graphs and 160 task instances per invocation).
+
+Local POSIX validation: `flvm[47]` passed normally, in five consecutive completed invocations, under ASan, and under UBSan. Existing `flvm[39-46]` relevant Channel, scheduler, wait-graph, HTTP, and DOM tests also passed individually. No production scheduler change was made because the added interleaving did not demonstrate a defect. This is focused evidence only; broader stress, Windows execution, actual Emscripten linking, and the complete test suite remain open. See `plans/32_WORKER_MULTI_GRAPH_CANCELLATION_STRESS.md`.

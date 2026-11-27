@@ -13,6 +13,10 @@
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
+#ifdef FLAT_RUNTIME_TESTING
+#include <stdatomic.h>
+#include <time.h>
+#endif
 
 typedef struct FlatRuntimeWorker {
     FlatThread thread;
@@ -46,6 +50,7 @@ struct FlatRuntime {
     int worker_launch;
     int worker_starting;
     int workers_joined;
+    int workers_joining;
     int worker_mode_entered;
     int worker_start_failed;
     int worker_stop;
@@ -65,6 +70,59 @@ static int runtime_schedule_internal(FlatRuntime *runtime, uint64_t quantum,
                                      uint64_t max_quanta, uint64_t *out_quanta,
                                      int worker_mode);
 static void *runtime_worker_main(void *opaque);
+
+#ifdef FLAT_RUNTIME_TESTING
+static int runtime_test_create_fail_after = -1;
+static int runtime_test_join_fail_after = -1;
+static atomic_int runtime_test_join_delay_ms = ATOMIC_VAR_INIT(0);
+
+void flat_runtime_test_worker_fail_create_after(int successful_creates) {
+    runtime_test_create_fail_after = successful_creates;
+}
+
+void flat_runtime_test_worker_fail_join_after(int successful_joins) {
+    runtime_test_join_fail_after = successful_joins;
+}
+
+void flat_runtime_test_worker_join_delay_ms(int delay_ms) {
+    atomic_store(&runtime_test_join_delay_ms, delay_ms > 0 ? delay_ms : 0);
+}
+#endif
+
+static int runtime_worker_thread_create(FlatThread *thread, FlatThreadFn fn, void *arg) {
+#ifdef FLAT_RUNTIME_TESTING
+    if (runtime_test_create_fail_after >= 0) {
+        if (runtime_test_create_fail_after == 0) {
+            runtime_test_create_fail_after = -1;
+            return -1;
+        }
+        runtime_test_create_fail_after--;
+    }
+#endif
+    return flat_thread_create(thread, fn, arg);
+}
+
+static int runtime_worker_thread_join(FlatThread *thread) {
+#ifdef FLAT_RUNTIME_TESTING
+    {
+        int delay_ms = atomic_exchange(&runtime_test_join_delay_ms, 0);
+        if (delay_ms > 0) {
+            struct timespec delay;
+            delay.tv_sec = delay_ms / 1000;
+            delay.tv_nsec = (long)(delay_ms % 1000) * 1000000L;
+            (void)nanosleep(&delay, NULL);
+        }
+    }
+    if (runtime_test_join_fail_after >= 0) {
+        if (runtime_test_join_fail_after == 0) {
+            runtime_test_join_fail_after = -1;
+            return -1;
+        }
+        runtime_test_join_fail_after--;
+    }
+#endif
+    return flat_thread_join(thread);
+}
 static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode *bc,
                                         const FlatVmOptions *opts, const char *entry_label,
                                         FlatTaskState initial_state, const FlatValue *args,
@@ -1303,8 +1361,8 @@ int flat_runtime_workers_start(FlatRuntime *runtime, size_t worker_count,
     runtime->worker_mode_entered = 1;
     runtime_unlock(runtime);
     for (i = 0; i < worker_count; ++i) {
-        if (flat_thread_create(&runtime->workers[i].thread, runtime_worker_main,
-                               &runtime->workers[i]) != 0) goto fail;
+        if (runtime_worker_thread_create(&runtime->workers[i].thread, runtime_worker_main,
+                                         &runtime->workers[i]) != 0) goto fail;
         runtime->workers[i].started = 1;
     }
     runtime_lock(runtime);
@@ -1324,7 +1382,7 @@ fail:
         int join_failed = 0;
         for (i = 0; i < worker_count; ++i) {
             if (runtime->workers[i].started) {
-                if (flat_thread_join(&runtime->workers[i].thread) != 0) join_failed = 1;
+                if (runtime_worker_thread_join(&runtime->workers[i].thread) != 0) join_failed = 1;
                 else runtime->workers[i].started = 0;
             }
         }
@@ -1360,20 +1418,29 @@ int flat_runtime_workers_join(FlatRuntime *runtime) {
     if (!runtime) return -1;
     runtime_lock(runtime);
     runtime_refresh_lifecycle_locked(runtime);
-    if (!runtime->workers_started || runtime->workers_joined ||
+    if (runtime->workers_joining || !runtime->workers_started || runtime->workers_joined ||
         (!runtime->worker_start_failed && runtime->lifecycle != FLAT_RUNTIME_STOPPED &&
          !runtime->worker_error) || runtime->schedule_active != 0) {
         runtime_unlock(runtime);
         return -1;
     }
+    /* Exactly one host caller owns this runtime's worker handles at a time. */
+    runtime->workers_joining = 1;
     runtime_unlock(runtime);
     for (i = 0; i < runtime->worker_count; ++i) {
         if (runtime->workers[i].started) {
-            if (flat_thread_join(&runtime->workers[i].thread) != 0) join_error = 1;
+            if (runtime_worker_thread_join(&runtime->workers[i].thread) != 0) join_error = 1;
             else runtime->workers[i].started = 0;
         }
     }
-    if (join_error) return -1; /* Preserve failed handles and pool state for retry. */
+    if (join_error) {
+        /* Preserve failed handles and pool state for retry, but release the
+         * operation claim so a later caller can retry the remaining handles. */
+        runtime_lock(runtime);
+        runtime->workers_joining = 0;
+        runtime_unlock(runtime);
+        return -1;
+    }
 
     runtime_lock(runtime);
     worker_error = runtime->worker_error;
@@ -1383,6 +1450,7 @@ int flat_runtime_workers_join(FlatRuntime *runtime) {
     runtime->worker_count = 0;
     runtime->workers_started = 0;
     runtime->workers_joined = 1;
+    runtime->workers_joining = 0;
     runtime->worker_launch = 0;
     runtime->worker_starting = 0;
     runtime->worker_stop = 0;
@@ -1784,7 +1852,8 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
     runtime_lock(runtime);
     runtime_refresh_lifecycle_locked(runtime);
     busy = runtime->active_runs != 0 || runtime->task_count != 0 || runtime->channel_count != 0 ||
-           runtime->workers_started || runtime->worker_starting || runtime->worker_count != 0 ||
+           runtime->workers_started || runtime->worker_starting || runtime->workers_joining ||
+           runtime->worker_count != 0 ||
            (runtime->lifecycle != FLAT_RUNTIME_RUNNING &&
             runtime->lifecycle != FLAT_RUNTIME_STOPPED);
     runtime_unlock(runtime);

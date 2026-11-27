@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 47
+desc = "worker pool drains multiple independent wait graphs after simultaneous cancellation requests"
+kind = "exec"
+cmd = "printf '[stage:flc-main]\\n' >&2 && {root}/bin/flc -o {tmp}/worker_multi_graph.fb {root}/test/cases/flvm/019_vm_stepping/program.fl && printf '[stage:make-harness]\\n' >&2 && make -s test-worker-multi-graph-cancel TEST_BIN={tmp}/worker_multi_graph_cancel_test && printf '[stage:run-harness]\\n' >&2 && {tmp}/worker_multi_graph_cancel_test {tmp}/worker_multi_graph.fb"
+expect_exit = 0
+stdout_contains = "worker-multi-graph-cancel-ok rounds=5 graphs=8 tasks=32 simultaneous-cancel=8 drain=joined cleanup=complete"
