@@ -901,3 +901,15 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [ ] User reruns `make fleditor-wasm-test` and `make fleditor-wasm-api-smoke` after their successful `make rebuild`.
 
 **Archive 336 result:** the user's native `make test` passed 1,151/1,151 and `make rebuild` succeeded, including `fleditor-wasm`. Their two WASM test targets then failed before Node started because the shared `NODE` Make variable was empty under the Linux-Node detection policy. The WASM targets now use independent `WASM_NODE ?= node`, leaving FLEditor server behavior unchanged. All nine WASM scripts passed through Node.js v22.16.0 in the available environment; the complete Make targets also passed while reusing the archived WASM artifacts (`make -o fleditor-wasm ...`). A fresh Emscripten rebuild was not possible in this environment because `emcc` is unavailable. See `plans/46_WASM_NODE_RUNNER_FIX.md`.
+
+
+## WASM run-limit, panic recovery and memory validation — archive 337
+
+- [x] Add Node.js API tests for explicit `vm.jump_limit` and `vm.step_limit` failures, including `FLAT_TERM_PANIC` and diagnostic accessors.
+- [x] Verify successful execution after both limit panics and after an unhandled native panic; ensure `last_panic` is cleared by the next successful run.
+- [x] Force a bounded Emscripten linear-memory growth and verify execution continues after growth.
+- [x] Run 100 repeated compile/run cycles and assert the linear-memory high-water mark remains bounded after warm-up.
+- [ ] Reduce the WASM compile-time memory working set without introducing platform-specific FlatL/FGIR limits.
+- [ ] Rebuild and run the expanded ten-test WASM suite on the user's Emscripten SDK.
+
+**Archive 337 result:** all ten headless WASM tests pass in Node.js against the archived Emscripten artifacts. Run-limit, native panic, recovery and explicit memory-growth assertions pass. The first compile expands WASM linear memory from 25,559,040 to 845,021,184 bytes; the high-water mark remains stable over 100 subsequent runs. Source inspection points to the fixed-size `FgirProgram` layout (native `sizeof(FgirProgram)=418,121,328`) as the dominant working-set contributor. This is not classified as a per-run leak, but it is a significant browser/mobile memory issue and becomes the next optimization target. No production C/VM code changed. See `47_WASM_LIMITS_RECOVERY_MEMORY.md`.

@@ -714,6 +714,7 @@ fleditor-wasm-csv-smoke: fleditor-wasm
 fleditor-wasm-api-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-api-smoke)
 	$(WASM_NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_api_limits_memory_smoke.mjs
 	@$(call step_end)
 
 # Complete headless WASM regression suite. All tests run in Node.js against
@@ -729,6 +730,7 @@ fleditor-wasm-test: fleditor-wasm
 	$(WASM_NODE) test/fleditor/wasm_order_flow_smoke.mjs
 	$(WASM_NODE) test/fleditor/wasm_var_smoke.mjs
 	$(WASM_NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_api_limits_memory_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-smoke: fleditor-wasm
