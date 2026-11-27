@@ -701,55 +701,59 @@ fleditor-block-map-smoke:
 	$(NODE) test/fleditor/local_blocks.mjs
 	@$(call step_end)
 
+# WASM headless tests use their own Node command. NODE is reserved for the
+# FLEditor server/smoke targets and may intentionally be empty on WSL.
+WASM_NODE ?= node
+
 fleditor-wasm-csv-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-csv-smoke)
-	$(NODE) test/fleditor/wasm_csv_smoke.mjs
-	$(NODE) test/fleditor/wasm_csv_reader_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_csv_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_csv_reader_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-api-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-api-smoke)
-	$(NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
 	@$(call step_end)
 
 # Complete headless WASM regression suite. All tests run in Node.js against
 # the generated Emscripten module; no browser or Python test runner is used.
 fleditor-wasm-test: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-test)
-	$(NODE) test/fleditor/wasm_smoke.mjs
-	$(NODE) test/fleditor/wasm_env_smoke.mjs
-	$(NODE) test/fleditor/wasm_multifile_smoke.mjs
-	$(NODE) test/fleditor/wasm_csv_smoke.mjs
-	$(NODE) test/fleditor/wasm_csv_reader_smoke.mjs
-	$(NODE) test/fleditor/wasm_file_smoke.mjs
-	$(NODE) test/fleditor/wasm_order_flow_smoke.mjs
-	$(NODE) test/fleditor/wasm_var_smoke.mjs
-	$(NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_env_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_multifile_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_csv_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_csv_reader_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_file_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_order_flow_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_var_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-smoke)
-	$(NODE) test/fleditor/wasm_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-env-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-env-smoke)
-	$(NODE) test/fleditor/wasm_env_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_env_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-multifile-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-multifile)
-	$(NODE) test/fleditor/wasm_multifile_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_multifile_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-order-flow-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-order-flow)
-	$(NODE) test/fleditor/wasm_order_flow_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_order_flow_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-var-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-var-smoke)
-	$(NODE) test/fleditor/wasm_var_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_var_smoke.mjs
 	@$(call step_end)
 
 clean:

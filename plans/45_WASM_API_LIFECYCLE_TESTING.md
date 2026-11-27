@@ -22,7 +22,7 @@ The focused test is available as `make fleditor-wasm-api-smoke`; `make fleditor-
 
 ## Existing test-harness correction
 
-`test/fleditor/wasm_csv_reader_smoke.mjs` previously attempted to write `examples/csv_reader/csv_reader.fl` and `stock.csv` into MEMFS without creating their nested parent directory. It now creates each parent directory before writing the file. This was a test setup failure (`ErrnoError`, errno 44), not a FlatL VM or CSV runtime failure.
+`test/fleditor/wasm_csv_reader_smoke.mjs` stages only the root-level `csv_reader.fl` and `stock.csv` fixtures in MEMFS. The FlatL program creates `examples/` and `examples/csv_reader/` with the native `fs.mkdir()` module, copies the CSV with the `file` module, and only then opens it with `csv.reader()`. The CSV module does not create directories. This keeps directory ownership in `fs`, file operations in `file`, and parsing in `csv`.
 
 ## Validation evidence
 
@@ -53,4 +53,4 @@ The current execution container does not have `emcc` installed, so it could not 
 
 The CSV reader itself must not create project directories. The example now explicitly uses FlatL's `fs.mkdir()` to create `examples/` and `examples/csv_reader/`, then uses the `file` module to place the staged `stock.csv` fixture at the expected path, and only then opens it with `csv.reader()`. The Node.js harness stages only root-level input files in MEMFS; it does not pre-create the nested fixture directory. This makes the ownership clear and tests the actual FlatL `fs` + `file` + `csv` path.
 
-The Makefile now exposes `fleditor-wasm-api-smoke` for the focused C API/lifecycle test and `fleditor-wasm-test` for all nine headless WASM tests. Both execute `.mjs` tests with Node.js.
+The Makefile exposes `fleditor-wasm-api-smoke` for the focused C API/lifecycle test and `fleditor-wasm-test` for all nine headless WASM tests. Both execute `.mjs` tests with Node.js through `WASM_NODE` (default: `node`), independently of the `NODE` variable used by FLEditor server targets.

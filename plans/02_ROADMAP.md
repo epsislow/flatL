@@ -890,3 +890,14 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [ ] Extend API lifecycle checks for run-limit/error recovery and observable memory-growth behavior without treating linear-memory high-water size as proof of a leak.
 
 **Archive 335 result:** all nine Node.js WASM tests passed against the archived `flatl.js`/`flatl.wasm`. The CSV reader now creates its nested project path using FlatL `fs.mkdir()` before writing and reading the CSV; the Node.js harness only stages root-level fixtures in MEMFS. `make fleditor-wasm-test` was added but could not be invoked end-to-end here because the recursive Emscripten build attempted to call unavailable `emcc`. No production C/VM code changed. See `plans/45_WASM_API_LIFECYCLE_TESTING.md`.
+
+
+## WASM Node.js test runner correction — archive 336
+
+- [x] Separate the Node executable used by headless WASM tests (`WASM_NODE`, default `node`) from the FLEditor server/UI `NODE` selection policy.
+- [x] Change all `fleditor-wasm-*` smoke recipes to invoke `.mjs` files through `$(WASM_NODE)` rather than attempting direct execution when `NODE` is empty.
+- [x] Preserve non-executable source-file permissions; no chmod workaround is needed.
+- [x] Validate all nine Node.js WASM tests, the focused API target, and the CSV target against the archived WASM module.
+- [ ] User reruns `make fleditor-wasm-test` and `make fleditor-wasm-api-smoke` after their successful `make rebuild`.
+
+**Archive 336 result:** the user's native `make test` passed 1,151/1,151 and `make rebuild` succeeded, including `fleditor-wasm`. Their two WASM test targets then failed before Node started because the shared `NODE` Make variable was empty under the Linux-Node detection policy. The WASM targets now use independent `WASM_NODE ?= node`, leaving FLEditor server behavior unchanged. All nine WASM scripts passed through Node.js v22.16.0 in the available environment; the complete Make targets also passed while reusing the archived WASM artifacts (`make -o fleditor-wasm ...`). A fresh Emscripten rebuild was not possible in this environment because `emcc` is unavailable. See `plans/46_WASM_NODE_RUNNER_FIX.md`.

@@ -128,3 +128,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [45 — WASM API and Lifecycle Testing](45_WASM_API_LIFECYCLE_TESTING.md): Node.js headless coverage of the exported WASM C API, repeated execution lifecycle, and explicit `fs.mkdir()` setup before CSV reading.
 
 **Ultimul checkpoint:** arhiva 335 adaugă testarea headless a API-ului WASM și lifecycle-ului în Node.js, precum și un scenariu FlatL `fs.mkdir()` + `file` + `csv`; toate cele nouă teste Node.js trec cu artefactele WASM din snapshot. Rebuild-ul prin Emscripten SDK trebuie reconfirmat de utilizator pe Linux/Termux. Arhiva 334 confirmă PASS pentru toate cele 55 de cazuri `flvm` în trei invocări grupate și validare ASan/UBSan pentru testele worker selectate, plus TSAN pentru `flvm[52]`. O singură invocare completă `flvm[1-55]` și execuția workerilor pe Windows rămân porți deschise.
+
+- [46 — WASM Node.js Test Runner Fix](46_WASM_NODE_RUNNER_FIX.md): separă `WASM_NODE` de selecția `NODE` a serverului FLEditor și repară invocarea testelor `.mjs`.
+
+**Ultimul checkpoint:** arhiva 336 repară targeturile WASM care încercau să execute direct fișiere `.mjs` atunci când `NODE` era gol. Testele WASM folosesc acum `WASM_NODE` (implicit `node`), fără modificarea politicii Node pentru FLEditor server/UI. Utilizatorul a confirmat 1.151/1.151 teste native și rebuild complet, inclusiv WASM; rerularea targeturilor WASM cu Makefile-ul corectat rămâne confirmarea următoare.
