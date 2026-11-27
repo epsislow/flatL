@@ -1,0 +1,8 @@
+suite = "port"
+id = 2
+desc = "shell capture includes stderr from every command in a compound command list"
+kind = "exec"
+cmd = "printf 'EARLY_STDERR_CAPTURE_OK\\n' >&2; printf 'LAST_STDERR_CAPTURE_OK\\n' >&2"
+expect_exit = 0
+stdout_contains = "EARLY_STDERR_CAPTURE_OK"
+stdout_contains_2 = "LAST_STDERR_CAPTURE_OK"

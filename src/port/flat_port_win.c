@@ -245,6 +245,24 @@ static int write_temp_sh_script(const char *body, char *path_out, size_t path_ou
     return 0;
 }
 
+static void capture_tail_append(char *dst, size_t capacity, size_t *used,
+                                const char *src, size_t length) {
+    size_t drop;
+    if (!dst || !used || capacity == 0 || !src || length == 0) return;
+    if (length >= capacity) {
+        memcpy(dst, src + length - capacity, capacity);
+        *used = capacity;
+    } else {
+        if (*used + length > capacity) {
+            drop = *used + length - capacity;
+            memmove(dst, dst + drop, *used - drop);
+            *used -= drop;
+        }
+        memcpy(dst + *used, src, length);
+        *used += length;
+    }
+}
+
 static int run_create_process_capture(char *cmdline_mut, char *out_buf, int out_buf_size,
                                       int *exit_code) {
     HANDLE rd = NULL;
@@ -310,7 +328,8 @@ static int run_create_process_capture(char *cmdline_mut, char *out_buf, int out_
     wr = NULL;
 
     if (out_buf && out_buf_size > 0) {
-        int total = 0;
+        size_t used = 0;
+        size_t capacity = (size_t)out_buf_size - 1;
         out_buf[0] = '\0';
         for (;;) {
             if (!ReadFile(rd, buf, sizeof buf, &nread, NULL)) {
@@ -323,16 +342,9 @@ static int run_create_process_capture(char *cmdline_mut, char *out_buf, int out_
             if (nread == 0) {
                 break;
             }
-            {
-                int add = (int)nread;
-                if (total + add >= out_buf_size) {
-                    add = out_buf_size - 1 - total;
-                }
-                if (add > 0) {
-                    memcpy(out_buf + total, buf, (size_t)add);
-                    total += add;
-                    out_buf[total] = '\0';
-                }
+            if (capacity > 0) {
+                capture_tail_append(out_buf, capacity, &used, buf, (size_t)nread);
+                out_buf[used] = '\0';
             }
         }
     } else {

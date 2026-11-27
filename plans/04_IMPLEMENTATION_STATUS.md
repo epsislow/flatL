@@ -1360,3 +1360,22 @@ Audit plugin loading/preflight races and add deterministic worker-thread creatio
 - Improved `bin/run_tests` exec failure messages to include the tail of captured command output.
 - `make all -j2`, `flvm[34-35]`, and individual `flvm[38]`, `[40]`, `[42]`, `[43]`, `[45]`, `[46]` passed on the available POSIX host. `flvm[43]` also passed five direct repeated runs.
 - The six failures originally observed on Termux are not yet diagnosed. No runtime behavior was changed; use the improved output in the next Termux run before making platform-specific changes.
+
+
+## Archive 311 — complete shell-capture tails
+
+### Implemented
+
+- POSIX `flat_port_shell_capture()` now wraps the entire command list in `( ... ) 2>&1`, ensuring stderr from an earlier failed compile/build stage is captured, not only stderr from the final command.
+- POSIX capture drains the pipe fully and stores a rolling tail of up to 4095 bytes.
+- Windows capture also drains the child pipe while retaining the final output bytes.
+- Added `port[2]` and `port[3]` regression cases for compound-command stderr and large-output tail retention.
+- Added `plans/23_SHELL_CAPTURE_DIAGNOSTICS.md`. No runtime or worker implementation changed.
+
+### Validation
+
+- `make all -j2` — PASS.
+- `bin/run_tests 'port[2-3]' -v -e` — PASS.
+- `flvm[34-46]` — every case passed in an individually completed invocation.
+- Grouped `flvm[34-46]` did not complete within the available command limit; this is recorded as NOT PASS rather than inferred from individual runs.
+- Termux rerun — PENDING.

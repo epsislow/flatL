@@ -652,3 +652,14 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [ ] Complete platform/sanitizer matrix: Windows, actual Emscripten, TSAN final test shape, ASan/UBSan.
 
 **Archive 309:** HTTP and DOM lifecycle tests pass on the available POSIX host; see `21_WORKER_HTTP_DOM_LIFECYCLE_AUDIT.md`.
+
+
+## Shell-capture diagnostics checkpoint — archive 311
+
+- [x] Redirect stderr for the complete POSIX compound command, including earlier failing stages of `&&` chains.
+- [x] Drain the full command output and preserve the last 4095 bytes instead of retaining only the prefix.
+- [x] Apply equivalent rolling-tail retention to the Windows process capture.
+- [x] Add `port[2]` for compound-command stderr and `port[3]` for output larger than the capture buffer.
+- [ ] Re-run the grouped worker test selection on Termux and use the now-complete tail to identify the six reported failures.
+
+**Archive 311 result:** `port[2-3]` pass; each `flvm[34-46]` case passed individually on the available POSIX host. A grouped `flvm[34-46]` invocation did not finish within the command limit, so grouped completion is not claimed. No runtime scheduling or worker semantics changed.

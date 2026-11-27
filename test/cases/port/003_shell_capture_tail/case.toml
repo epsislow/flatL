@@ -1,0 +1,7 @@
+suite = "port"
+id = 3
+desc = "shell capture drains both streams and retains the final output tail"
+kind = "exec"
+cmd = "i=0; while [ $i -lt 2000 ]; do printf '0123456789abcdef'; i=$((i + 1)); done; printf '\\nTAIL_STDERR_CAPTURE_OK\\n' >&2"
+expect_exit = 0
+stdout_contains = "TAIL_STDERR_CAPTURE_OK"

@@ -167,6 +167,24 @@ int flat_port_make_temp_fb_path(char *out, size_t out_size, const char *repo_roo
     return 0;
 }
 
+static void capture_tail_append(char *dst, size_t capacity, size_t *used,
+                                const char *src, size_t length) {
+    size_t drop;
+    if (!dst || !used || capacity == 0 || !src || length == 0) return;
+    if (length >= capacity) {
+        memcpy(dst, src + length - capacity, capacity);
+        *used = capacity;
+    } else {
+        if (*used + length > capacity) {
+            drop = *used + length - capacity;
+            memmove(dst, dst + drop, *used - drop);
+            *used -= drop;
+        }
+        memcpy(dst + *used, src, length);
+        *used += length;
+    }
+}
+
 int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int out_buf_size) {
     char shell_cmd[4096];
     FILE *fp;
@@ -174,19 +192,31 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
     if (!cmd || !exit_code) {
         return -1;
     }
-    snprintf(shell_cmd, sizeof shell_cmd, "%s 2>&1", cmd);
+    /* Group the complete command list so stderr from an earlier failed stage
+     * in an `&&` chain is captured too (not only stderr from the last command). */
+    if (snprintf(shell_cmd, sizeof shell_cmd, "( %s ) 2>&1", cmd) >= (int)sizeof shell_cmd) {
+        return -1;
+    }
     fp = popen(shell_cmd, "r");
     if (!fp) {
         return -1;
     }
     if (out_buf && out_buf_size > 0) {
-        int n = 0;
-        int c;
+        char chunk[1024];
+        size_t used = 0;
+        size_t capacity = (size_t)out_buf_size - 1;
         out_buf[0] = '\0';
-        while (n < out_buf_size - 1 && (c = fgetc(fp)) != EOF) {
-            out_buf[n++] = (char)c;
+        while (capacity > 0) {
+            size_t n = fread(chunk, 1, sizeof chunk, fp);
+            if (n > 0) {
+                capture_tail_append(out_buf, capacity, &used, chunk, n);
+                out_buf[used] = '\0';
+            }
+            if (n < sizeof chunk) {
+                if (feof(fp)) break;
+                if (ferror(fp)) break;
+            }
         }
-        out_buf[n] = '\0';
     } else {
         while (fgetc(fp) != EOF) {
         }
