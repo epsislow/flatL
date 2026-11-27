@@ -717,8 +717,14 @@ int flat_case_run_ex(const FlatCase *c, const char *repo_root, int use_flatl,
             size_t output_len = strlen(out);
             const char *output_tail = out;
             if (output_len > 420) output_tail = out + output_len - 420;
-            snprintf(err, (size_t)err_size, "exit %d want %d; output tail:\n%.420s",
-                     code, c->expect_exit, output_tail);
+            if (code < 0) {
+                snprintf(err, (size_t)err_size,
+                         "terminated by signal %d; want exit %d; output tail:\n%.420s",
+                         -code, c->expect_exit, output_tail);
+            } else {
+                snprintf(err, (size_t)err_size, "exit %d want %d; output tail:\n%.420s",
+                         code, c->expect_exit, output_tail);
+            }
             if (timing && measure) {
                 timing->exec_ms = exec_ms;
                 timing->have_exec = 1;

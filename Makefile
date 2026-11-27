@@ -906,6 +906,11 @@ test-worker-wait-graph-cancel:
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/044_worker_wait_graph_cancel/worker_wait_graph_cancel_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Verify real libcurl requests from multiple runtime workers after startup preflight.
+# Focused regression for POSIX pclose() signal-status preservation.
+.PHONY: test-port-shell-signal
+test-port-shell-signal:
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/port/005_shell_capture_signal/shell_capture_signal_test.c $(PORT_SRC) $(STR_SRC) $(LDFLAGS)
+
 .PHONY: test-worker-http
 test-worker-http:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)

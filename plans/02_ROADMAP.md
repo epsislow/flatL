@@ -670,3 +670,8 @@ Channel transaction contention is now scheduler-aware for FlatL task natives. A 
 - [x] Add stage markers to `flvm[38]`, `[40]`, `[42]`, `[43]`, `[44]`, `[45]`, and `[46]` so empty-output failures reveal the last completed command stage.
 - [ ] Re-run the focused tests on Termux and capture the last `[stage:...]` marker for every failure.
 - [ ] Fix only the identified failing compile/harness/runtime stage; do not change scheduler synchronization or timeouts without evidence.
+
+
+## Signal-aware shell status checkpoint — archive 313
+
+The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven failing tests. The POSIX capture layer previously flattened `pclose()` signal termination into exit code 1, obscuring whether a harness returned normally or died from a signal. Archive 313 preserves signal termination as a negative signal number and formats it explicitly in `run_tests`. This is diagnostic-only; no runtime or worker semantics changed. The next Termux run must establish whether the harnesses exit normally or are terminated by a signal.

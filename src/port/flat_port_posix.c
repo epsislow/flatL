@@ -238,8 +238,12 @@ int flat_port_shell_capture(const char *cmd, int *exit_code, char *out_buf, int 
 #else
         if (WIFEXITED(st)) {
             *exit_code = WEXITSTATUS(st);
+        } else if (WIFSIGNALED(st)) {
+            /* Preserve signal termination instead of flattening it to exit 1.
+             * Negative values are reserved for this API's signal result. */
+            *exit_code = -WTERMSIG(st);
         } else {
-            *exit_code = 1;
+            *exit_code = -1;
         }
 #endif
     }

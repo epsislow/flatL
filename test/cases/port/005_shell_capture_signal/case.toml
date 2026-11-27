@@ -1,0 +1,7 @@
+suite = "port"
+id = 5
+desc = "shell capture distinguishes signal termination from normal exit codes"
+kind = "exec"
+cmd = "make -s test-port-shell-signal TEST_BIN={tmp}/shell_capture_signal_test && {tmp}/shell_capture_signal_test"
+expect_exit = 0
+stdout_contains = "shell-signal-capture-ok signal=11"

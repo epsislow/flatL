@@ -1388,3 +1388,14 @@ Audit plugin loading/preflight races and add deterministic worker-thread creatio
 - `bin/run_tests 'port[2-4]' -v -e` — PASS.
 - Each of the seven focused worker tests passed individually on the available POSIX host. One combined shell loop hit its overall time limit while running `[45]`; `[45]` and `[46]` then passed in separate invocations.
 - Termux validation — PENDING. No runtime implementation or semantics changed.
+
+
+## Archive 313 — signal-aware process status
+
+- [x] Preserve POSIX `pclose()` signal termination as a negative signal number rather than mapping it to exit code 1.
+- [x] Format signal termination distinctly in `bin/run_tests` error output.
+- [x] Keep normal exit codes unchanged and leave Windows process capture unchanged.
+- [x] Add `port[5]` to validate POSIX signal status preservation.
+- [ ] Re-run `flvm[38-46]` on Termux and determine whether each failing harness exits normally or is killed by a signal.
+
+**Archive 313 result:** a local POSIX `popen()`/`pclose()` reproduction confirmed that a child terminated by SIGSEGV is observable as `WIFSIGNALED` with signal 11. The change is diagnostic-only. Termux validation is pending.
