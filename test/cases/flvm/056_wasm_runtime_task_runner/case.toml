@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 56
+desc = "one-shot cooperative runtime runner executes Task and Channel natives and cleans up child VMs"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/inventory.fb {root}/docs/fleditor_site/examples/task_channel/parallel_inventory.fl && {root}/bin/flc -o {tmp}/rollback.fb {root}/docs/fleditor_site/examples/task_channel/transaction_rollback.fl && {root}/bin/flc -o {tmp}/results.fb {root}/docs/fleditor_site/examples/task_channel/task_results.fl && make -s test-runtime-scheduled-execution TEST_BIN={tmp}/scheduled_task_channel_test && {tmp}/scheduled_task_channel_test {tmp}/inventory.fb {tmp}/rollback.fb {tmp}/results.fb"
+expect_exit = 0
+stdout_contains = "runtime-scheduled-task-channel-ok"

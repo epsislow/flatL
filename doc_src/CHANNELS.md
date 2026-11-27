@@ -28,9 +28,7 @@ Keys must be nonempty and no longer than `FLAT_VAR_NAME_MAX` bytes. A missing ke
 
 ## C1 operation synchronization
 
-Every Channel operation is serialized by that Channel's C11 atomic gate. Different Channels have independent gates. The runtime registry lock protects lookup/lifetime while an operation acquires its Channel gate.
-
-This is the portable single-process Channel synchronization foundation; it is not a claim that the VM, scheduler, native subsystem, or all runtime APIs are generally thread-safe. The current scheduler remains single-threaded. The later pthread worker milestone must audit and may replace the portable gate with a platform mutex and must add cross-thread registry/scheduler synchronization.
+Channel operations use the platform `FlatMutex` abstraction and the runtime registry/scheduler synchronization protocol. The cooperative scheduler mode (including FLEditor WASM) drives tasks on one host thread. Native hosts may separately enable the runtime-owned worker pool on supported platforms, subject to native-module capability gates and the documented concurrency audit. This does not certify every VM/native module as generally thread-safe.
 
 ## C2 explicit transactions
 
@@ -54,6 +52,7 @@ Because Channel IDs are ordinary NUMBER values rather than a distinct value tag,
 - Handle references are tracked for direct numeric `task.spawn()` arguments and for task-level Channel operations; this is not a distinct typed handle or general recursive reference-counting system.
 - A non-owner that encounters an active transaction receives busy rather than entering a Channel-specific WAITING state.
 - `--show-channel-log` records Channel create/set/var/lock/unlock/revert/destroy operations and their outcome, but does not log stored values.
-- No pthread worker pool or general thread-safety guarantee.
+- FLEditor WASM uses cooperative single-thread scheduling; it does not start pthreads or browser Web Workers.
+- Native worker-pool execution is a separate host option and remains subject to platform validation and module capability policies; this is not a blanket thread-safety guarantee.
 
 `flvm[26]` validates the C-level registry, copying, transactions, and rollback. `flvm[28]` validates event emission and that a spawned child pins its Channel until completion, after which the parent can destroy it.

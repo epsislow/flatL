@@ -24,6 +24,9 @@
     "test1_csv_utf16be.csv",
     "jsonl_sample.jsonl",
     "bytes/binary_file_roundtrip.fl",
-    "bytes/binary_random_record.fl"
+    "bytes/binary_random_record.fl",
+    "task_channel/parallel_inventory.fl",
+    "task_channel/transaction_rollback.fl",
+    "task_channel/task_results.fl"
   ]
 }

@@ -26,7 +26,7 @@ int flat_wasm_run_entry(const char *entry_path, char *err, size_t err_sz);
 
 void flat_wasm_free(void *p);
 
-/* Last flat_vm_run termination (FlatTermination); 0 if no run yet. */
+/* Last browser-facing run termination (FlatTermination); 0 if no run yet. */
 int flat_wasm_get_last_termination(void);
 
 /* Last run diagnostic (empty if none); valid until next flat_wasm_run*. */

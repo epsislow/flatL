@@ -8,6 +8,7 @@
 #include "flat_native_mods.h"
 #include "fgir.h"
 #include "vm.h"
+#include "flat_runtime.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -270,6 +271,7 @@ int flat_wasm_run_entry(const char *entry_path, char *err, size_t err_sz) {
 
 int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
     FlatBytecode bc;
+    FlatVmResult run_result;
     int rc;
 
     if (!fb || len == 0) {
@@ -292,17 +294,18 @@ int flat_wasm_run(const uint8_t *fb, size_t len, char *err, size_t err_sz) {
         return 1;
     }
     FlatVmOptions opts;
-    int term = (int)FLAT_TERM_UNKNOWN;
+    memset(&run_result, 0, sizeof run_result);
     flat_wasm_fill_vm_opts(&opts);
-    opts.out_termination = &term;
     g_last_panic_msg[0] = '\0';
-    opts.out_panic_msg = g_last_panic_msg;
-    opts.out_panic_msg_sz = sizeof g_last_panic_msg;
-    rc = flat_vm_run_opts(&bc, &opts);
-    g_last_termination = term;
+    rc = flat_runtime_run_scheduled(&bc, &opts, &run_result);
+    g_last_termination = (int)run_result.termination;
+    if (run_result.diagnostic[0] != '\0') {
+        snprintf(g_last_panic_msg, sizeof g_last_panic_msg, "%s",
+                 run_result.diagnostic);
+    }
     flat_fb_free(&bc);
     /* Logical FAIL (exit 2) is normal program outcome — not a runner error. */
-    if (rc != 0 && err && err_sz && term != (int)FLAT_TERM_FAIL) {
+    if (rc != 0 && err && err_sz && g_last_termination != (int)FLAT_TERM_FAIL) {
         if (g_last_panic_msg[0] != '\0') {
             snprintf(err, err_sz, "%s", g_last_panic_msg);
         } else {

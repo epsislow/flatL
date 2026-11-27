@@ -1873,3 +1873,122 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
     free(runtime);
     return 0;
 }
+
+/* One-shot host helper used by environments (such as FLEditor WASM) that need
+ * FlatL Task/Channel natives without exposing the full runtime lifecycle API. */
+int flat_runtime_run_scheduled(const FlatBytecode *bc, const FlatVmOptions *opts,
+                               FlatVmResult *out_result) {
+    enum { FLAT_RUNTIME_RUN_QUANTUM = 8 };
+    FlatRuntime *runtime = NULL;
+    FlatTaskId root_id = 0;
+    FlatVmResult root_result;
+    FlatTaskRecord *task;
+    int schedule_rc = 0;
+    int cleanup_rc = 0;
+    int rc = 1;
+    int have_root_result = 0;
+
+    memset(&root_result, 0, sizeof root_result);
+    root_result.exit_code = 1;
+    root_result.termination = FLAT_TERM_ERROR;
+    root_result.state = FLAT_VM_FAILED;
+    snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
+             "runtime task execution was not started");
+    if (out_result) *out_result = root_result;
+    if (!bc) return 1;
+
+    runtime = flat_runtime_create(NULL);
+    if (!runtime) {
+        snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
+                 "runtime initialization failed");
+        goto done;
+    }
+    if (flat_runtime_task_create(runtime, bc, opts, &root_id) != 0) {
+        snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
+                 "root task initialization failed");
+        goto cleanup;
+    }
+    if (flat_runtime_task_start(runtime, root_id) != 0) {
+        snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
+                 "root task start failed");
+        goto cleanup;
+    }
+
+    schedule_rc = flat_runtime_schedule(runtime, FLAT_RUNTIME_RUN_QUANTUM, 0, NULL);
+    if (schedule_rc == 0 &&
+        flat_runtime_task_result(runtime, root_id, &root_result) == 0) {
+        have_root_result = 1;
+        rc = root_result.exit_code;
+    } else {
+        if (schedule_rc != 0) {
+            snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
+                     "cooperative scheduler failed");
+        } else {
+            snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
+                     "root task stopped before reaching a terminal state");
+        }
+        root_result.exit_code = 1;
+        root_result.termination = FLAT_TERM_ERROR;
+        root_result.state = FLAT_VM_FAILED;
+        rc = 1;
+    }
+
+    /* A one-shot editor run cannot retain detached or permanently waiting
+     * tasks. Let runnable children finish naturally; cancel only leftovers. */
+    runtime_lock(runtime);
+    for (task = runtime->tasks; task; task = task->next) {
+        if (!runtime_task_is_terminal(task)) break;
+    }
+    runtime_unlock(runtime);
+    if (task) {
+        if (flat_runtime_shutdown_request(runtime, FLAT_RUNTIME_SHUTDOWN_CANCEL) != 0 ||
+            flat_runtime_schedule(runtime, FLAT_RUNTIME_RUN_QUANTUM, 0, NULL) != 0) {
+            cleanup_rc = -1;
+        }
+        if (!have_root_result && root_id != 0 &&
+            flat_runtime_task_result(runtime, root_id, &root_result) == 0) {
+            have_root_result = 1;
+            rc = root_result.exit_code;
+        }
+    }
+
+cleanup:
+    /* At this point all tasks should be terminal. Destroy them before Channels
+     * so task-held Channel references and uncommitted transactions are released. */
+    while (runtime->tasks) {
+        FlatTaskId id = runtime->tasks->id;
+        if (flat_runtime_task_destroy(runtime, id) != 0) {
+            cleanup_rc = -1;
+            break;
+        }
+    }
+    while (runtime->channels) {
+        FlatChannelId id = runtime->channels->id;
+        if (flat_runtime_channel_destroy(runtime, id) != 0) {
+            cleanup_rc = -1;
+            break;
+        }
+    }
+    if (flat_runtime_destroy(runtime) != 0) {
+        cleanup_rc = -1;
+    }
+    if (cleanup_rc != 0) {
+        rc = 1;
+        root_result.exit_code = 1;
+        root_result.termination = FLAT_TERM_ERROR;
+        root_result.state = FLAT_VM_FAILED;
+        snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
+                 "runtime task cleanup failed");
+    }
+
+done:
+    if (opts && opts->out_termination)
+        *opts->out_termination = (int)root_result.termination;
+    if (opts && opts->out_panic_msg && opts->out_panic_msg_sz) {
+        snprintf(opts->out_panic_msg, opts->out_panic_msg_sz, "%s",
+                 root_result.diagnostic);
+    }
+    if (out_result) *out_result = root_result;
+    return rc;
+}
+

@@ -1,0 +1,26 @@
+-- A worker changes a shared value, rolls the transaction back, then commits
+-- a corrected value. The parent observes only the committed value.
+use native task
+use native channel
+
+#main
+  shared = channel.create()
+  channel.set(shared, 'price', 10)
+
+  worker = task.spawn(#correct_price, shared)
+  task.wait(worker)
+
+  finalPrice = channel.var(shared, 'price')
+  io.outln('committed price=')
+  io.outln(finalPrice)
+
+  channel.destroy(shared)
+  OK
+
+#correct_price(shared)
+  channel.lock(shared)
+  channel.set(shared, 'price', 999)
+  channel.revert(shared)
+  channel.set(shared, 'price', 7)
+  channel.unlock(shared)
+  OK

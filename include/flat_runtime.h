@@ -48,6 +48,14 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config);
 int flat_runtime_run(FlatRuntime *runtime, const FlatBytecode *bc,
                      const FlatVmOptions *opts);
 
+/* One-shot cooperative execution with a scheduler-owned root task. Unlike
+ * flat_runtime_run(), this attaches the Task/Channel native bridge, runs the
+ * cooperative scheduler until no task is runnable, cancels any stranded
+ * waiters, and releases every task and Channel before returning. The runtime
+ * is created and destroyed internally. out_result may be NULL. */
+int flat_runtime_run_scheduled(const FlatBytecode *bc, const FlatVmOptions *opts,
+                               FlatVmResult *out_result);
+
 /* Stop admitting new task submissions. DRAIN lets started tasks finish and
  * leaves CREATED tasks untouched. CANCEL escalates DRAIN and requests cleanup
  * for every nonterminal task. Repeated requests are idempotent; DRAIN cannot

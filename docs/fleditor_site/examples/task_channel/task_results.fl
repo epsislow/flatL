@@ -1,0 +1,36 @@
+-- Inspect successful and failed child tasks after task.wait().
+use native task
+use native obj
+
+#main
+  successful = task.spawn(#worker_ok)
+  failed = task.spawn(#worker_fail)
+
+  task.wait(successful)
+  task.wait(failed)
+
+  successResult = task.result(successful)
+  failedResult = task.result(failed)
+  successExit = obj.get(successResult, 'exitCode')
+  failedExit = obj.get(failedResult, 'exitCode')
+  failedTerm = obj.get(failedResult, 'termination')
+
+  io.outln('successful state=')
+  io.outln(task.state(successful))
+  io.outln('successful exit=')
+  io.outln(successExit)
+  io.outln('failed state=')
+  io.outln(task.state(failed))
+  io.outln('failed exit=')
+  io.outln(failedExit)
+  io.outln('failed termination=')
+  io.outln(failedTerm)
+  OK
+
+#worker_ok
+  io.outln('worker completed')
+  OK
+
+#worker_fail
+  FAIL
+  OK

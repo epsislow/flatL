@@ -15,7 +15,10 @@ Curated `.fl` samples shipped with the browser playground. Paths in the editor p
 | `csv_reader/grid_row_build.fl` | `csv.next` + `L.push` → `t16[][]`, `call` + `str.to_num`, fără `getCells` |
 | `bytes/binary_file_roundtrip.fl` | `bytes.read` / `bytes.write`, endianness, binary file write/read |
 | `bytes/binary_random_record.fl` | `hash.randomBytes`, fixed-width fields and binary records |
+| `task_channel/parallel_inventory.fl` | `task.spawn` / `task.wait`, shared inventory Channel, transaction lock/retry and worker states |
+| `task_channel/transaction_rollback.fl` | Channel snapshot, `channel.revert()` and explicit commit with `channel.unlock()` |
+| `task_channel/task_results.fl` | successful/failed child tasks, `task.state()` and `task.result()` |
 
 **Reset project** reloads `main.fl` plus all files listed in `manifest.json`.
 
-These are teaching samples, not the full `test/cases/` CI corpus.
+Task/Channel samples run through the FLEditor WASM cooperative runtime. They do not start an OS worker pool; the browser scheduler is single-threaded and cooperative. These are teaching samples, not the full `test/cases/` CI corpus.

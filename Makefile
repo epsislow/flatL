@@ -742,6 +742,7 @@ fleditor-wasm-api-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-api-smoke)
 	$(WASM_NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
 	$(WASM_NODE) test/fleditor/wasm_api_limits_memory_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_task_channel_smoke.mjs
 	@$(call step_end)
 
 # Complete headless WASM regression suite. All tests run in Node.js against
@@ -758,6 +759,7 @@ fleditor-wasm-test: fleditor-wasm
 	$(WASM_NODE) test/fleditor/wasm_var_smoke.mjs
 	$(WASM_NODE) test/fleditor/wasm_api_lifecycle_smoke.mjs
 	$(WASM_NODE) test/fleditor/wasm_api_limits_memory_smoke.mjs
+	$(WASM_NODE) test/fleditor/wasm_task_channel_smoke.mjs
 	@$(call step_end)
 
 fleditor-wasm-smoke: fleditor-wasm
@@ -877,6 +879,12 @@ test-channel-lifecycle: $(FLVM_TEST_COMMON_OBJ)
 test-channel-native: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/027_channel_native/channel_native_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# One-shot cooperative runner used by FLEditor WASM: root Task + scheduler + cleanup.
+.PHONY: test-runtime-scheduled-execution
+test-runtime-scheduled-execution: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/056_wasm_runtime_task_runner/runtime_scheduled_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for a contended Channel lock, scheduler WAITING, and retrying OP_NATIVE.
 .PHONY: test-channel-lock-contention

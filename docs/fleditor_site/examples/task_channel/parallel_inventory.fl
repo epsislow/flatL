@@ -1,0 +1,37 @@
+-- Parallel inventory reservations using cooperative Tasks and a shared Channel.
+-- Three workers reserve stock from one shared record. Channel transactions
+-- serialize each read/modify/write sequence and retry contending workers.
+use native task
+use native channel
+use native math
+
+#main
+  inventory = channel.create()
+  channel.set(inventory, 'available', 20)
+
+  first = task.spawn(#reserve, inventory, 3)
+  second = task.spawn(#reserve, inventory, 4)
+  third = task.spawn(#reserve, inventory, 5)
+
+  task.wait(first)
+  task.wait(second)
+  task.wait(third)
+
+  available = channel.var(inventory, 'available')
+  io.outln('available=')
+  io.outln(available)
+  io.outln('worker states:')
+  io.outln(task.state(first))
+  io.outln(task.state(second))
+  io.outln(task.state(third))
+
+  channel.destroy(inventory)
+  OK
+
+#reserve(inventory, amount)
+  channel.lock(inventory)
+  available = channel.var(inventory, 'available')
+  math.calc('available - amount') -> available
+  channel.set(inventory, 'available', available)
+  channel.unlock(inventory)
+  OK

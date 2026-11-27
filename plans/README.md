@@ -49,6 +49,8 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [41 — VM Worker ASan/UBSan Regression](41_VM_WORKER_ASAN_REGRESSION.md): extends sanitizer validation to the multi-Channel worker/shutdown stress test and Emscripten single-thread rejection path; records the focused FLVM 1–55 sweep and remaining grouped-run timeout.
 - [Native module thread capabilities](../doc_src/NATIVE_THREAD_CAPABILITIES.md): enum-ul de capabilități, declarația pluginurilor, fallback-ul conservator și enforcement-ul worker-mode.
 
+- [61 — FLEditor WASM Task/Channel Runner](61_FLEDITOR_WASM_TASK_CHANNEL_RUNNER.md): wires the existing cooperative FlatRuntime task bridge into the browser WASM run API and adds runnable FLEditor examples for inventory transactions, rollback and task results.
+
 ## Reguli pentru continuarea lucrului
 
 1. Citește acest director înainte de orice modificare majoră la Task Runtime.
