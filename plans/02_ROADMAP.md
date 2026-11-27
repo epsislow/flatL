@@ -941,3 +941,29 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [ ] Rebuild and run the expanded WASM suite with the user's Emscripten SDK; confirm the new memory ceiling.
 
 **Archive 339 implementation checkpoint:** `sizeof(FgirProgram)` is reduced from 418,121,328 to 2,737,792 bytes and `sizeof(FgirBlock)` from 405,648 to 672 bytes on the native ABI. The focused compiler/linker suites pass 113/113; the new 65-block/17-instruction regression passes and passed three ASan runs with leak detection. The complete default test run passes 1,152/1,152 in 4:30.190. A fresh Emscripten rebuild remains pending. See `plans/49_FGIR_DYNAMIC_STORAGE.md`.
+
+
+## FGIR parser and fixed-metadata audit — archive 340
+
+- [x] Confirm the current compiler has no separate AST: `flat_parse_unit()` parses source lines directly into FGIR; `LocalBlockFrame` is parser nesting state, not an AST.
+- [x] Measure the remaining fixed FGIR metadata on the native ABI: `FgirProgram=2,737,792 B`, with `schemas[64]=1,577,216 B` and `functions[256]=1,008,640 B`.
+- [x] Audit schema parser/linker/catalog consumers and schema value-copy semantics.
+- [x] Audit function metadata indexed readers, parser/linker append paths, and broader copy-site surface.
+- [x] Select one isolated next change: dynamic outer `FgirProgram.schemas` array while keeping each `FgirSchemaDecl` self-contained.
+- [ ] Implement archive 341 schema-array reserve/free lifecycle, focused parser/linker tests, and ASan/UBSan. Do not combine with dynamic schema fields or function storage.
+
+**Archive 340 result:** source-only audit; no C implementation or language behavior changed. The compiler has no AST layer to optimize. The schema array is the recommended first target because it is the largest remaining unconditional FGIR reservation (about 1.58 MB) and has a substantially smaller call-site/ownership surface than the function table. See `plans/50_FGIR_PARSER_STORAGE_AUDIT.md`.
+
+
+## FGIR dynamic schema storage — archive 341
+
+- [x] Replace embedded `FgirProgram.schemas[64]` with an owned, capacity-managed schema declaration array.
+- [x] Keep `FgirSchemaDecl` self-contained; field keys/specifications remain inline and schema value copies remain safe.
+- [x] Preserve `FGIR_SCHEMA_MAX == 64` and existing parser/linker limit diagnostics.
+- [x] Add checked geometric reserve, cleanup in `flat_fgir_free()`, and allocation before parser/linker append.
+- [x] Add native tests for reserve/free/repeated lifecycle, 64-schema success, 65-schema rejection, and schema preservation through entry link merge.
+- [x] Run focused schema/type, linker, fmod and native-use tests; run parser/linker boundary cases under ASan/UBSan.
+- [ ] Run a complete `make test` to completion after the schema-storage change; the available full run stopped at 280/1,156 due to the outer execution limit.
+- [ ] Rebuild WASM with the user's Emscripten SDK and rerun `make fleditor-wasm-api-smoke` and `make fleditor-wasm-test`; confirm the compile high-water remains within the 128 MiB regression ceiling.
+
+**Archive 341 result:** `FgirProgram.schemas` is now an owned pointer with `schema_count` and `schema_capacity`. Growth is geometric and capped at 64; `flat_fgir_free()` releases the allocation. The native `sizeof(FgirProgram)` decreases from 2,737,792 bytes to 1,160,584 bytes (a reduction of 1,577,208 bytes) while `sizeof(FgirSchemaDecl)` remains 24,644 bytes. Focused tests passed: `flc[1-9]` (8 selected; IDs 1–4 and 6–9), `types` (251/251), `fmod` (18/18), and `native_use` (6/6). The new reserve/free harness passed ASan/UBSan with leak detection; sanitized `flc` builds passed the 64-schema success case, 65-schema rejection case, and schema-through-link case without sanitizer reports. `make all -j2` and `make docs` passed (50 sections). A full `make test` was attempted but did not complete within the execution window (stopped at 280/1,156); it is deliberately left open rather than reported as passing. Fresh WASM rebuild and Node.js suite validation remain for the user's Emscripten environment. See `plans/51_FGIR_DYNAMIC_SCHEMA_STORAGE.md`.

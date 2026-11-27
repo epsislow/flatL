@@ -145,17 +145,19 @@ typedef struct {
     char mod_id[64];
     int export_count;
     char exports[FGIR_MAX_FUNCTIONS][FGIR_MAX_FUNC_NAME];
-    FgirSchemaDecl schemas[FGIR_SCHEMA_MAX];
+    FgirSchemaDecl *schemas; /* owned; capacity grows up to FGIR_SCHEMA_MAX */
     int schema_count;
+    int schema_capacity;
     uint32_t jump_block_max_global; /* 0 = unlimited */
     int jump_block_max_global_set;
 } FgirProgram;
 
-/* FGIR owns dynamically allocated block and instruction arrays. Zero-initialize
- * a program before first use and release it with flat_fgir_free(). */
+/* FGIR owns dynamically allocated block, instruction and schema arrays.
+ * Zero-initialize a program before first use and release it with flat_fgir_free(). */
 void flat_fgir_free(FgirProgram *prog);
 int flat_fgir_reserve_blocks(FgirProgram *prog, size_t capacity);
 int flat_fgir_reserve_instr(FgirBlock *block, size_t capacity);
+int flat_fgir_reserve_schemas(FgirProgram *prog, size_t capacity);
 int flat_fgir_block_clone(FgirBlock *dst, const FgirBlock *src);
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);

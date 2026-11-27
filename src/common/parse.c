@@ -163,9 +163,15 @@ static int try_begin_schema(FgirProgram *out, const char *path, int line_no, con
             snprintf(err, err_size, "%s:%d: too many schemas", path, line_no);
             return -1;
         }
-        *schema_cur = out->schema_count++;
+        if (flat_fgir_reserve_schemas(out, (size_t)out->schema_count + 1u) != 0) {
+            snprintf(err, err_size, "%s:%d: out of memory while growing FGIR schemas", path,
+                     line_no);
+            return -1;
+        }
+        *schema_cur = out->schema_count;
+        memset(&out->schemas[*schema_cur], 0, sizeof out->schemas[*schema_cur]);
         snprintf(out->schemas[*schema_cur].name, sizeof out->schemas[*schema_cur].name, "%s", sname);
-        out->schemas[*schema_cur].field_count = 0;
+        out->schema_count++;
         return 1;
     }
     if (parse_schema_missing_colon_err(path, line_no, line, err, err_size)) {

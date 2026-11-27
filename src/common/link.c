@@ -955,7 +955,12 @@ static int merge_entry(FgirProgram *out, const FgirProgram *entry, char *err, si
             snprintf(err, err_size, "too many schemas after link");
             return -1;
         }
-        out->schemas[out->schema_count++] = entry->schemas[i];
+        if (flat_fgir_reserve_schemas(out, (size_t)out->schema_count + 1u) != 0) {
+            snprintf(err, err_size, "out of memory while growing FGIR schemas after link");
+            return -1;
+        }
+        out->schemas[out->schema_count] = entry->schemas[i];
+        out->schema_count++;
     }
     return 0;
 }
@@ -1004,7 +1009,7 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         return -1;
     }
     /* flat_link_program accepts a zero-initialized or previously used FGIR.
-     * Release any prior dynamic block/instruction storage before rebuilding it. */
+     * Release prior dynamic block/instruction/schema storage before rebuilding it. */
     flat_fgir_free(out);
     memset(out, 0, sizeof *out);
     out->main_index = -1;

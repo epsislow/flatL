@@ -1,0 +1,11 @@
+use "lib/math.fl" as #math_
+
+<stock>:
+  qty: u16
+
+#main
+  call #math_add
+  raw:o = { qty: 2 }
+  typed:<stock> = raw
+  io.outln(typed)
+  OK

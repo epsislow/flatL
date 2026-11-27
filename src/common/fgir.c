@@ -14,6 +14,7 @@ void flat_fgir_free(FgirProgram *prog) {
         prog->blocks[i].instr_capacity = 0;
     }
     free(prog->blocks);
+    free(prog->schemas);
     memset(prog, 0, sizeof(*prog));
     prog->main_index = -1;
     prog->func_var_slots_manual = -1;
@@ -63,6 +64,23 @@ int flat_fgir_reserve_instr(FgirBlock *block, size_t capacity) {
            (grown - (size_t)block->instr_capacity) * sizeof(*next));
     block->instr = next;
     block->instr_capacity = (int)grown;
+    return 0;
+}
+
+
+int flat_fgir_reserve_schemas(FgirProgram *prog, size_t capacity) {
+    FgirSchemaDecl *next;
+    size_t grown;
+    if (!prog || capacity > FGIR_SCHEMA_MAX || prog->schema_capacity < 0) return -1;
+    if (capacity <= (size_t)prog->schema_capacity) return 0;
+    if (grow_capacity((size_t)prog->schema_capacity, capacity, FGIR_SCHEMA_MAX, &grown) != 0 ||
+        grown > SIZE_MAX / sizeof(*next)) return -1;
+    next = (FgirSchemaDecl *)realloc(prog->schemas, grown * sizeof(*next));
+    if (!next) return -1;
+    memset(next + prog->schema_capacity, 0,
+           (grown - (size_t)prog->schema_capacity) * sizeof(*next));
+    prog->schemas = next;
+    prog->schema_capacity = (int)grown;
     return 0;
 }
 

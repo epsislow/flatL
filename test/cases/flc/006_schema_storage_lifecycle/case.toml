@@ -1,0 +1,8 @@
+suite = "flc"
+id = 6
+desc = "FGIR dynamic schema storage reserve/free lifecycle"
+kind = "exec"
+
+cmd = "gcc -std=c11 -Wall -Wextra -Werror -I{root}/include -o {tmp}/schema_storage_test {root}/test/cases/flc/006_schema_storage_lifecycle/schema_storage_test.c {root}/src/common/fgir.c && {tmp}/schema_storage_test"
+expect_exit = 0
+stdout_contains = "schema-storage-test-ok"
