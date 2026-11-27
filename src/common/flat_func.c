@@ -138,6 +138,10 @@ static int add_export(FgirProgram *prog, const char *sym, char *err, size_t err_
         snprintf(err, err_size, "too many export symbols");
         return -1;
     }
+    if (flat_fgir_reserve_exports(prog, (size_t)prog->export_count + 1u) != 0) {
+        snprintf(err, err_size, "out of memory while growing FGIR exports");
+        return -1;
+    }
     snprintf(prog->exports[prog->export_count], FGIR_MAX_FUNC_NAME, "%s", sym);
     prog->export_count++;
     return 0;

@@ -1,0 +1,8 @@
+suite = "flc"
+id = 15
+desc = "FGIR dynamic export storage reserve/free lifecycle"
+kind = "exec"
+
+cmd = "gcc -std=c11 -Wall -Wextra -Werror -I{root}/include -o {tmp}/export_storage_test {root}/test/cases/flc/012_export_storage_lifecycle/export_storage_test.c {root}/src/common/fgir.c && {tmp}/export_storage_test"
+expect_exit = 0
+stdout_contains = "export-storage-test-ok"

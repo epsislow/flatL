@@ -1,0 +1,8 @@
+suite = "flc"
+id = 16
+desc = "FGIR parser accepts 256 export symbols, suppresses duplicates and rejects 257"
+kind = "exec"
+
+cmd = "{root}/test/cases/flc/013_export_storage_parser_boundary/check_boundary.sh {root} {tmp}"
+expect_exit = 0
+stdout_contains = "export-parser-boundary-ok"

@@ -1,0 +1,8 @@
+suite = "flc"
+id = 17
+desc = "fmod validates all 256 exported functions and rejects an export without a def"
+kind = "exec"
+
+cmd = "{root}/test/cases/flc/014_export_storage_fmod_boundary/check_fmod_boundary.sh {root} {tmp}"
+expect_exit = 0
+stdout_contains = "export-fmod-boundary-ok"

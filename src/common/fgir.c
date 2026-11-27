@@ -17,6 +17,7 @@ void flat_fgir_free(FgirProgram *prog) {
     free(prog->functions);
     free(prog->schemas);
     free(prog->native_units);
+    free(prog->exports);
     memset(prog, 0, sizeof(*prog));
     prog->main_index = -1;
     prog->func_var_slots_manual = -1;
@@ -109,6 +110,34 @@ int flat_fgir_reserve_native_units(FgirProgram *prog, size_t capacity) {
     memset(next + current, 0, (grown - current) * sizeof(*next));
     prog->native_units = next;
     prog->native_unit_capacity = (int)grown;
+    return 0;
+}
+
+
+int flat_fgir_reserve_exports(FgirProgram *prog, size_t capacity) {
+    char (*next)[FGIR_MAX_FUNC_NAME];
+    size_t current;
+    size_t grown;
+
+    if (!prog || capacity > FGIR_MAX_FUNCTIONS || prog->export_capacity < 0) return -1;
+    current = (size_t)prog->export_capacity;
+    if (capacity <= current) return 0;
+
+    /* Export records are small and most modules expose only a few symbols. */
+    grown = current ? current : 1u;
+    while (grown < capacity) {
+        if (grown > FGIR_MAX_FUNCTIONS / 2u) {
+            grown = FGIR_MAX_FUNCTIONS;
+            break;
+        }
+        grown *= 2u;
+    }
+    if (grown < capacity || grown > SIZE_MAX / sizeof(*next)) return -1;
+    next = (char (*)[FGIR_MAX_FUNC_NAME])realloc(prog->exports, grown * sizeof(*next));
+    if (!next) return -1;
+    memset(next + current, 0, (grown - current) * sizeof(*next));
+    prog->exports = next;
+    prog->export_capacity = (int)grown;
     return 0;
 }
 

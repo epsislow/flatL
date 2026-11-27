@@ -59,3 +59,13 @@ The `FgirProgram` object shrinks by 131,184 bytes. A program that needs one nati
 - Dynamic `FgirNativeUnit.decls` storage.
 - Dynamic `optional_natives` and `exports` tables.
 - Changes to native module parsing, alias semantics, FNUN serialization, bytecode format, VM, worker runtime, or plugin loading.
+
+## User-side validation confirmation
+
+The user subsequently applied archive 346 on Termux and confirmed:
+
+- `make test`: 1,162/1,162 PASS in 2:16.493.
+- `make fleditor-wasm-test`: complete aggregate WASM suite PASS, including smoke, environment, multifile, CSV, order-flow, variable, API/lifecycle, limits/recovery/memory checks.
+- WASM linear memory remained 42,729,472 bytes after 100 repeated runs.
+
+Archive 346 is therefore confirmed by the user on both native Termux and WASM test suites.

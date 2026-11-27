@@ -512,3 +512,12 @@ The request-only cancellation contract is partially implemented by archive 303: 
 - A Channel waiter may be in `WAITING` before worker startup. A request-only cancellation followed by worker-mode CANCEL must complete VM cleanup, abort the transaction owner, release the waiter's Channel reference, and permit task/Channel/runtime destruction after join.
 - Cancellation remains request-only for external callers. VM teardown, transaction abort and wait-edge removal remain scheduler/worker-owned. No external caller may free a VM or Channel resource still owned by a worker.
 - Archive 307 adds regression coverage only; it does not change lock ordering, wait graph representation, scheduler dispatch or cancellation semantics. The focused tests do not constitute a general concurrency certification.
+
+## 27. FGIR export metadata ownership (archive 347 audit)
+
+- Keep the existing maximum of 256 export symbols and the existing 64-byte fixed-width symbol representation.
+- Archive 348 replaces only `FgirProgram.exports[256][64]` with an owned dynamic array of fixed-width names plus a capacity field. Allocate on the first non-empty, non-duplicate export and grow geometrically from one record.
+- Preserve duplicate suppression, empty-symbol behavior, existing symbol truncation behavior, and the `too many export symbols` diagnostic at the 257th distinct export.
+- `flat_fgir_free()` owns and releases the export allocation. `FgirProgram` currently has no shallow-copy/clone path; `.fmod` preparation consumes exports before functions/blocks are merged, so exports are not copied into the final linked program.
+- Keep `optional_natives[32]`, native-unit declarations, bytecode, and runtime behavior out of this implementation. Audit optional-native storage separately.
+- Archive 347 is audit-only; archive 348 implements the decision. The 256-symbol and 64-byte name limits remain unchanged.

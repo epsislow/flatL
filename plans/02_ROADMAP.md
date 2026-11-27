@@ -1033,6 +1033,30 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [x] Run focused FGIR, fmod and native-use tests (37/37 PASS).
 - [x] Run lifecycle and 32/33 linker boundary tests under ASan/UBSan with leak detection.
 - [x] Run `make all -j2` and `make docs` (50 sections).
-- [ ] Complete the full default native test suite and user-side Emscripten/WASM validation.
+- [x] Complete the full default native test suite and user-side Emscripten/WASM validation.
 
-**Archive 346 implementation:** `sizeof(FgirProgram)` decreases from 151,960 B to 20,776 B (131,184 B saved). `FgirNativeUnit` remains 4,100 B; its outer table starts with one record and grows geometrically to the unchanged 32-unit maximum. The focused `flc[1-14]`, `fmod` and `native_use` selections pass 37/37. The lifecycle harness and 32/33 linker boundary both pass ASan/UBSan with leak detection. A full-suite attempt used a stale `flc` binary from a DOM-disabled sanitizer build and timed out at 286/1,162; after a clean default rebuild, the DOM suite (18/18), the affected FLVM cases (3/3), and `flc[13-14]` (2/2) passed. Full native and WASM validation remain pending on the user's Termux/Emscripten environment. See `plans/56_FGIR_DYNAMIC_NATIVE_UNIT_STORAGE.md`.
+**Archive 346 implementation:** `sizeof(FgirProgram)` decreases from 151,960 B to 20,776 B (131,184 B saved). `FgirNativeUnit` remains 4,100 B; its outer table starts with one record and grows geometrically to the unchanged 32-unit maximum. The focused `flc[1-14]`, `fmod` and `native_use` selections pass 37/37. The lifecycle harness and 32/33 linker boundary both pass ASan/UBSan with leak detection. The implementation environment did not complete the full suite, but the user subsequently validated the archive on Termux: `make test` passed 1,162/1,162 in 2:16.493 and the complete `make fleditor-wasm-test` suite passed. WASM linear memory remained stable at 42,729,472 bytes after 100 runs. See `plans/56_FGIR_DYNAMIC_NATIVE_UNIT_STORAGE.md`.
+
+## FGIR export-table storage audit — archive 347
+
+- [x] Measure the fixed export table and remaining `FgirProgram` size on the native ABI.
+- [x] Audit every export-table reader/writer, `.fmod` preparation, linker merge boundary, and `FgirProgram` cleanup/reset path.
+- [x] Confirm no program shallow-copy/clone path or retained export-table pointers require clone/invalidation handling.
+- [x] Select only the outer export-name table for dynamic storage; keep the 256-symbol limit and 64-byte fixed-width names unchanged.
+- [ ] Implement checked reserve/free lifecycle and parser duplicate/empty/256/257 boundary tests in the next archive.
+- [ ] Run fmod semantics, ASan/UBSan leak checks, full native tests, and user-side WASM validation.
+
+**Archive 347 result:** audit-only checkpoint; no C implementation or language behavior changed. On the measured native ABI, `FgirProgram` is 20,776 B and `exports[256][64]` occupies 16,384 B. A pointer plus capacity field is projected to reduce `sizeof(FgirProgram)` to 4,408 B (16,368 B saved) before allocating export records. Exports are read/written only in `flat_func.c`; `.fmod` preparation consumes the manifest before linker merge, and `flat_fgir_free()` is the common lifecycle endpoint. `optional_natives[32]` remains separate and out of scope. See `plans/57_FGIR_EXPORT_STORAGE_AUDIT.md`.
+
+
+## FGIR dynamic export-table storage — archive 348
+
+- [x] Replace only the fixed export-name table with an owned pointer and capacity; preserve fixed-width 64-byte records.
+- [x] Add checked geometric reserve starting at one record and capped at 256; free/reset with the common FGIR lifecycle.
+- [x] Preserve empty-symbol no-op, duplicate suppression, symbol truncation, 256-symbol maximum, and existing 257th-symbol diagnostic.
+- [x] Add reserve/free lifecycle, parser 256/257/duplicate/empty, and `.fmod` 256-export/missing-definition regressions.
+- [x] Run focused FGIR, fmod and native-use tests; run lifecycle and parser/fmod boundary checks under ASan/UBSan.
+- [x] Run `make all -j2` and `make docs` (50 sections).
+- [ ] Complete the full default native suite and user-side Emscripten/WASM validation.
+
+**Archive 348 implementation:** `sizeof(FgirProgram)` decreases from 20,776 B to 4,408 B (16,368 B saved). The export array starts with one 64-byte record and grows geometrically to the unchanged 256-symbol maximum; programs with no exports allocate no export records. Focused `flc`, `fmod` and `native_use` tests pass 39/39, and the additional maximum `.fmod` test passes independently. ASan/UBSan with leak detection passes the direct lifecycle harness; an ASan/UBSan `flc` build passes parser 256/257, max-256 `.fmod`, missing-export-definition and all 18 existing fmod cases (20/20). `make docs` passes with 50 sections. The local full-suite attempt reached 320/1,164 before the 300-second execution limit; full native and WASM validation remain pending user-side. See `plans/58_FGIR_DYNAMIC_EXPORT_STORAGE.md`.
