@@ -57,3 +57,6 @@ Manifest preflight covers declared optional modules; runtime-generated native ca
 - Archive 306 (`flvm[43]`) exercises nested `task.wait()` and two contending Channel transaction children under four workers; see `18_WORKER_TASK_WAIT_CHANNEL_AUDIT.md`.
 - Archive 307 (`flvm[44]`) exercises a four-node wait chain, cycle rejection, cancellation of a middle waiter, and cancellation/cleanup of a Channel waiter under worker-mode CANCEL; see `19_WORKER_WAIT_GRAPH_CANCELLATION_AUDIT.md`.
 - These tests add evidence for specific interleavings only. HTTP/DOM worker lifecycle, plugin loading races, deterministic startup failure injection, Windows and actual Emscripten linking remain open.
+
+
+- Archive 314 fixes a confirmed Android/Termux worker-thread stack overflow in `vm_state_execute()`: `OP_GUARD`'s `FLAT_MAX_VARS`-sized `FlatSlotType` and flag arrays are now persistent `VmState` heap scratch. See `26_VM_GUARD_STACK_SCRATCH.md`. Re-run `flvm[38]`–`flvm[46]` and the ASan reproduction on Termux before treating this regression as closed.

@@ -108,6 +108,8 @@ typedef struct {
     size_t entry_index;
     char (*guard_names)[64];
     FlatValue *guard_vals;
+    uint8_t *guard_has_ty;
+    FlatSlotType *guard_slot_ty;
     FlatVcxRuntime *vcx;
     FlatExecutorContext executor;
     FlatRngState rng;
@@ -291,7 +293,9 @@ static int vm_state_initialize(VmState *st, const FlatBytecode *bc,
     flat_io_ctx_set_vcx(st->io_ctx, st->vcx);
     st->guard_names = calloc(scratch_n, 64);
     st->guard_vals = calloc(scratch_n, sizeof *st->guard_vals);
-    if (!st->guard_names || !st->guard_vals) goto fail;
+    st->guard_has_ty = calloc(scratch_n, sizeof *st->guard_has_ty);
+    st->guard_slot_ty = calloc(scratch_n, sizeof *st->guard_slot_ty);
+    if (!st->guard_names || !st->guard_vals || !st->guard_has_ty || !st->guard_slot_ty) goto fail;
     st->jump_block_entry_count = calloc(bc->block_count, sizeof(uint32_t));
     if (!st->jump_block_entry_count) goto fail;
 
@@ -1540,6 +1544,10 @@ static void vm_teardown(VmState *st, int rc) {
     st->guard_names = NULL;
     free(st->guard_vals);
     st->guard_vals = NULL;
+    free(st->guard_has_ty);
+    st->guard_has_ty = NULL;
+    free(st->guard_slot_ty);
+    st->guard_slot_ty = NULL;
     flat_executor_instr_stack_clear(&st->executor);
     flat_executor_context_reset(&st->executor);
     if (st->csv) {
@@ -2329,6 +2337,8 @@ static int vm_state_execute(VmState *st_ptr, const FlatVmOptions *opts,
 #define entry_index (st.entry_index)
 #define guard_names (st.guard_names)
 #define guard_vals (st.guard_vals)
+#define guard_has_ty (st.guard_has_ty)
+#define guard_slot_ty (st.guard_slot_ty)
     const FlatBytecode *bc = st.bc;
     int trace = opts && opts->trace;
     int trace_vars = opts && opts->trace_vars;
@@ -2548,8 +2558,6 @@ static int vm_state_execute(VmState *st_ptr, const FlatVmOptions *opts,
             {
                 char guard_panic[64];
                 int grc;
-                uint8_t guard_has_ty[FLAT_MAX_VARS];
-                FlatSlotType guard_slot_ty[FLAT_MAX_VARS];
                 int gvi;
 
                 for (gvi = 0; gvi < st.var_count; gvi++) {
@@ -2752,6 +2760,8 @@ static int vm_state_execute(VmState *st_ptr, const FlatVmOptions *opts,
     }
 }
 
+#undef guard_slot_ty
+#undef guard_has_ty
 #undef guard_vals
 #undef guard_names
 #undef entry_index
