@@ -264,7 +264,7 @@ VM_SRC  = src/common/flat_locale.c src/common/flat_time.c src/common/flat_runtim
           src/common/flat_io_ctx.c src/common/flat_memstream.c \
           $(STR_SRC) $(NATIVE_VM_SRC)
 FLAT_TIME_SRC = src/common/flat_time.c
-FGIR_SRC = src/common/flat_locale.c src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
+FGIR_SRC = src/common/fgir.c src/common/flat_locale.c src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
                src/common/flat_func_tag.c src/common/flat_assign.c src/common/flat_slot_type.c \
                src/common/flat_list_typed.c src/common/flat_list_shape.c src/common/flat_schema.c \
                src/common/flat_number.c src/common/flat_lit.c \
@@ -274,7 +274,7 @@ FGIR_SRC = src/common/flat_locale.c src/common/parse.c src/common/link.c src/com
            src/common/native_use.c src/common/flat_native_tag_validate.c \
            $(FLAT_TIME_SRC) \
            $(STR_SRC) $(NATIVE_FLC_SRC)
-FLATL_SRC = src/flatl/main.c src/common/parse.c src/common/link.c src/common/compile.c \
+FLATL_SRC = src/flatl/main.c src/common/fgir.c src/common/parse.c src/common/link.c src/common/compile.c \
            src/common/flat_func.c src/common/line_label.c src/common/flat_jump_block.c \
             src/common/native_use.c src/common/flat_native_tag_validate.c $(FB_SRC) $(VM_SRC) $(PORT_SRC)
 

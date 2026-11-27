@@ -927,3 +927,17 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - [ ] Design a capacity-managed FGIR block/instruction representation; one `FgirProgram` still has a large fixed-capacity footprint.
 
 **Archive 338 scope:** reduces the no-import link path from three simultaneously live fixed-size `FgirProgram` objects to one, and the import path from three to two by reusing the module scratch object for the entry. Native build passed and the focused `fmod`, `native`, and `native_use` suites passed 46/46. Fresh WASM validation remains pending because `emcc` is unavailable in this environment. See `plans/48_FGIR_LINKER_PEAK_MEMORY.md`.
+
+
+## FGIR dynamic storage checkpoint — archive 339
+
+- [x] Replace embedded `FgirProgram.blocks[1024]` with an owned, capacity-managed block array.
+- [x] Replace embedded `FgirBlock.instr[128]` with an owned, capacity-managed instruction array.
+- [x] Preserve the existing 1,024-block and 128-instruction language limits on every platform.
+- [x] Add explicit FGIR free/reserve/deep-clone helpers and update parser, linker merge, lowering, CLI and WASM ownership paths.
+- [x] Add a native regression that forces multiple block/instruction capacity expansions.
+- [x] Tighten the Node.js WASM memory ceiling to 128 MiB and add a generated dynamic-FGIR workload.
+- [x] Complete the full default `make test` run (1,152 selected tests; 1,152/1,152 PASS).
+- [ ] Rebuild and run the expanded WASM suite with the user's Emscripten SDK; confirm the new memory ceiling.
+
+**Archive 339 implementation checkpoint:** `sizeof(FgirProgram)` is reduced from 418,121,328 to 2,737,792 bytes and `sizeof(FgirBlock)` from 405,648 to 672 bytes on the native ABI. The focused compiler/linker suites pass 113/113; the new 65-block/17-instruction regression passes and passed three ASan runs with leak detection. The complete default test run passes 1,152/1,152 in 4:30.190. A fresh Emscripten rebuild remains pending. See `plans/49_FGIR_DYNAMIC_STORAGE.md`.

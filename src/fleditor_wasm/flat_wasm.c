@@ -167,6 +167,7 @@ static int compile_linked_entry(const char *entry_path, uint8_t **out_fb, size_t
     rc = 0;
 
 done:
+    flat_fgir_free(prog);
     free(prog);
     return rc;
 }

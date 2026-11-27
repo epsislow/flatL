@@ -137,3 +137,5 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [48 — FGIR Linker Peak Memory](48_FGIR_LINKER_PEAK_MEMORY.md): traces the three full-size FGIR allocations on the no-import WASM link path and removes redundant scratch programs without changing language limits.
 
 **Ultimul checkpoint:** arhiva 338 reduce peak-ul linkerului pentru programe fără importuri de la trei `FgirProgram` simultane la unul, iar pentru programe cu importuri reutilizează scratch-ul și elimină a treia structură. Utilizatorul a măsurat 1,263,337,472 bytes high-water în WASM, stabili după 100 execuții. Validarea nativă și 46 teste focalizate de link/import au trecut; rebuild-ul WASM cu noua modificare și pragul de 600 MiB trebuie confirmate pe Linux/Termux.
+
+- [49 — FGIR Dynamic Storage](49_FGIR_DYNAMIC_STORAGE.md): dynamic capacity-managed FGIR block and instruction arrays, deep-clone ownership, lifecycle cleanup, and WASM memory regression coverage.

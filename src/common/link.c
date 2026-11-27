@@ -849,7 +849,14 @@ static int append_block(FgirProgram *out, const FgirBlock *src, char *err, size_
         snprintf(err, err_size, "link: duplicate block \"%s\"", src->label);
         return -1;
     }
-    out->blocks[out->block_count] = *src;
+    if (flat_fgir_reserve_blocks(out, (size_t)out->block_count + 1u) != 0) {
+        snprintf(err, err_size, "out of memory while growing linked FGIR blocks");
+        return -1;
+    }
+    if (flat_fgir_block_clone(&out->blocks[out->block_count], src) != 0) {
+        snprintf(err, err_size, "out of memory while copying linked FGIR block");
+        return -1;
+    }
     if (strcmp(src->label, "#main") == 0) {
         out->main_index = out->block_count;
     }
@@ -892,25 +899,24 @@ static int merge_module(FgirProgram *out, const FgirProgram *mod, const char *as
 
         globalize_block_label(mod->blocks[i].label, prefix_body, prim, n_prim, glab, sizeof glab);
         memset(&b, 0, sizeof b);
-        snprintf(b.label, sizeof b.label, "%s", glab);
-        b.param_count = mod->blocks[i].param_count;
-        for (j = 0; j < b.param_count; j++) {
-            snprintf(b.params[j], sizeof b.params[j], "%s", mod->blocks[i].params[j]);
+        if (flat_fgir_block_clone(&b, &mod->blocks[i]) != 0) {
+            snprintf(err, err_size, "out of memory while preparing imported FGIR block");
+            rc = -1;
+            break;
         }
-        b.instr_count = mod->blocks[i].instr_count;
+        snprintf(b.label, sizeof b.label, "%s", glab);
         for (j = 0; j < b.instr_count; j++) {
-            b.instr[j] = mod->blocks[i].instr[j];
             maybe_rewrite_ref(b.instr[j].call_target, sizeof b.instr[j].call_target, prefix_body,
                               prim, n_prim);
             maybe_rewrite_ref(b.instr[j].foreach_block, sizeof b.instr[j].foreach_block, prefix_body,
                               prim, n_prim);
         }
-        b.native_unit_index = mod->blocks[i].native_unit_index;
-        b.jump_block_max_override = mod->blocks[i].jump_block_max_override;
         if (append_block(out, &b, err, err_size) != 0) {
+            free(b.instr);
             rc = -1;
             break;
         }
+        free(b.instr);
     }
     free(prim);
     return rc;
@@ -927,10 +933,7 @@ static int merge_fmod_unit(FgirProgram *out, const FgirProgram *mod, char *err, 
         out->functions[out->function_count++] = mod->functions[i];
     }
     for (i = 0; i < mod->block_count; i++) {
-        FgirBlock b = mod->blocks[i];
-        if (append_block(out, &b, err, err_size) != 0) {
-            return -1;
-        }
+        if (append_block(out, &mod->blocks[i], err, err_size) != 0) return -1;
     }
     return 0;
 }
@@ -945,10 +948,7 @@ static int merge_entry(FgirProgram *out, const FgirProgram *entry, char *err, si
         out->functions[out->function_count++] = entry->functions[i];
     }
     for (i = 0; i < entry->block_count; i++) {
-        FgirBlock b = entry->blocks[i];
-        if (append_block(out, &b, err, err_size) != 0) {
-            return -1;
-        }
+        if (append_block(out, &entry->blocks[i], err, err_size) != 0) return -1;
     }
     for (i = 0; i < entry->schema_count; i++) {
         if (out->schema_count >= FGIR_SCHEMA_MAX) {
@@ -1003,6 +1003,9 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     if (!entry_path || !out) {
         return -1;
     }
+    /* flat_link_program accepts a zero-initialized or previously used FGIR.
+     * Release any prior dynamic block/instruction storage before rebuilding it. */
+    flat_fgir_free(out);
     memset(out, 0, sizeof *out);
     out->main_index = -1;
 
@@ -1024,8 +1027,8 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
      * A source without imports can be parsed directly into the final output.
      * The old path allocated two additional, fully-sized FgirProgram objects
      * (one reusable module scratch and one entry program) even when neither
-     * was needed. FgirProgram is intentionally still fixed-capacity here, so
-     * avoiding those copies materially reduces the compiler's peak memory.
+     * was needed. FGIR block/instruction storage is capacity-managed, and this
+     * path also avoids allocating an otherwise empty scratch program.
      */
     if (mod_count == 0 && fmod_count == 0) {
         int unit_index;
@@ -1045,6 +1048,7 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
             int local_ui;
             int out_ui;
 
+            flat_fgir_free(mod);
             memset(mod, 0, sizeof *mod);
             mod->main_index = -1;
             if (resolve_use_path(entry_path, fmods[i].quoted, canonical, try_rel, sizeof try_rel, e2,
@@ -1075,6 +1079,7 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
             int local_ui;
             int out_ui;
 
+            flat_fgir_free(mod);
             memset(mod, 0, sizeof *mod);
             mod->main_index = -1;
             if (flat_parse_unit(mods[i].canonical, 0, mod, err, err_size) != 0) goto cleanup;
@@ -1088,6 +1093,7 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
 
         /* Reuse the module scratch for the entry instead of allocating a third
          * full FgirProgram while both the output and scratch are live. */
+        flat_fgir_free(mod);
         memset(mod, 0, sizeof *mod);
         mod->main_index = -1;
         if (flat_parse_unit(entry_path, 1, mod, err, err_size) != 0) goto cleanup;
@@ -1129,7 +1135,11 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
     rc = 0;
 
 cleanup:
-    free(mod);
+    if (mod) {
+        flat_fgir_free(mod);
+        free(mod);
+    }
+    if (rc != 0) flat_fgir_free(out);
     free(fmods);
     free(mods);
     return rc;

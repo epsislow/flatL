@@ -69,6 +69,10 @@ static int append_local_block_terminator(FgirProgram *out, int block_index,
         snprintf(err, err_size, "%s:%d: too many instructions in local handler", path, line_no);
         return -1;
     }
+    if (flat_fgir_reserve_instr(b, (size_t)b->instr_count + 1u) != 0) {
+        snprintf(err, err_size, "%s:%d: out of memory while growing FGIR instructions", path, line_no);
+        return -1;
+    }
     ins = &b->instr[b->instr_count];
     memset(ins, 0, sizeof *ins);
     ins->kind = FGIR_OK;
@@ -114,6 +118,10 @@ static int append_local_block(FgirProgram *out, const char *label, int *index,
                               const char *path, int line_no, char *err, size_t err_size) {
     if (out->block_count >= FGIR_MAX_BLOCKS) {
         snprintf(err, err_size, "%s:%d: too many blocks (including local blocks)", path, line_no);
+        return -1;
+    }
+    if (flat_fgir_reserve_blocks(out, (size_t)out->block_count + 1u) != 0) {
+        snprintf(err, err_size, "%s:%d: out of memory while growing FGIR blocks", path, line_no);
         return -1;
     }
     *index = out->block_count++;
@@ -823,6 +831,7 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
     if (!path || !out) {
         return -1;
     }
+    flat_fgir_free(out);
     memset(out, 0, sizeof *out);
     pending_label[0] = '\0';
     out->main_index = -1;
@@ -1082,6 +1091,11 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 fclose(f);
                 return -1;
             }
+            if (flat_fgir_reserve_blocks(out, (size_t)out->block_count + 1u) != 0) {
+                snprintf(err, err_size, "%s:%d: out of memory while growing FGIR blocks", path, line_no);
+                fclose(f);
+                return -1;
+            }
             cur = out->block_count++;
             memset(&out->blocks[cur], 0, sizeof out->blocks[cur]);
             out->blocks[cur].jump_block_max_override = -1;
@@ -1098,6 +1112,11 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             open_fn_sugar_base = -1;
             if (out->block_count >= FGIR_MAX_BLOCKS) {
                 snprintf(err, err_size, "%s:%d: too many blocks", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            if (flat_fgir_reserve_blocks(out, (size_t)out->block_count + 1u) != 0) {
+                snprintf(err, err_size, "%s:%d: out of memory while growing FGIR blocks", path, line_no);
                 fclose(f);
                 return -1;
             }
@@ -1162,6 +1181,11 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
                 fclose(f);
                 return -1;
             }
+            if (flat_fgir_reserve_blocks(out, (size_t)out->block_count + 1u) != 0) {
+                snprintf(err, err_size, "%s:%d: out of memory while growing FGIR blocks", path, line_no);
+                fclose(f);
+                return -1;
+            }
             cur = out->block_count++;
             memset(&out->blocks[cur], 0, sizeof(out->blocks[cur]));
             out->blocks[cur].jump_block_max_override = -1;
@@ -1178,6 +1202,11 @@ int flat_parse_unit(const char *path, int allow_main, FgirProgram *out, char *er
             FgirInstr *ins;
             if (b->instr_count >= FGIR_MAX_INSTR) {
                 snprintf(err, err_size, "%s:%d: too many instructions", path, line_no);
+                fclose(f);
+                return -1;
+            }
+            if (flat_fgir_reserve_instr(b, (size_t)b->instr_count + 1u) != 0) {
+                snprintf(err, err_size, "%s:%d: out of memory while growing FGIR instructions", path, line_no);
                 fclose(f);
                 return -1;
             }

@@ -97,8 +97,9 @@ typedef struct {
     char label[FGIR_MAX_LABEL];
     char params[FGIR_MAX_PARAMS][64];
     int param_count;
-    FgirInstr instr[FGIR_MAX_INSTR];
+    FgirInstr *instr; /* owned; capacity grows up to FGIR_MAX_INSTR */
     int instr_count;
+    int instr_capacity;
     int native_unit_index;
     int32_t jump_block_max_override; /* -1 inherit global; 0+ per-block limit (0 = unlimited) */
 } FgirBlock;
@@ -127,8 +128,9 @@ typedef struct {
 } FgirFunction;
 
 typedef struct {
-    FgirBlock blocks[FGIR_MAX_BLOCKS];
+    FgirBlock *blocks; /* owned; capacity grows up to FGIR_MAX_BLOCKS */
     int block_count;
+    int block_capacity;
     int main_index;
     FgirNativeUnit native_units[FGIR_MAX_NATIVE_UNITS];
     int native_unit_count;
@@ -148,6 +150,13 @@ typedef struct {
     uint32_t jump_block_max_global; /* 0 = unlimited */
     int jump_block_max_global_set;
 } FgirProgram;
+
+/* FGIR owns dynamically allocated block and instruction arrays. Zero-initialize
+ * a program before first use and release it with flat_fgir_free(). */
+void flat_fgir_free(FgirProgram *prog);
+int flat_fgir_reserve_blocks(FgirProgram *prog, size_t capacity);
+int flat_fgir_reserve_instr(FgirBlock *block, size_t capacity);
+int flat_fgir_block_clone(FgirBlock *dst, const FgirBlock *src);
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);
 int flat_parse_freeze_varname(const char *line, char *var_out, size_t var_sz);

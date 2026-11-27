@@ -80,13 +80,32 @@ try {
   assert.match(readCString(M, M.ccall('flat_wasm_get_last_panic', 'number', [], [])),
     /vm\.jump_limit/);
   const heapAfterCompileWarmup = M.HEAPU8.byteLength;
-  // A no-import source should need only the final FGIR program. The linker
-  // must not allocate separate module/entry scratch programs for this case.
-  // Keep a generous ceiling for allocator/page-growth overhead while catching
-  // accidental reintroduction of multiple ~418 MB FgirProgram objects.
-  const simpleCompileHeapCeiling = 600 * 1024 * 1024;
+  // FGIR block and instruction arrays are capacity-managed. A small source
+  // should stay comfortably below this ceiling; the old embedded arrays needed
+  // hundreds of MiB even after the linker peak reduction.
+  const simpleCompileHeapCeiling = 128 * 1024 * 1024;
   assert.ok(heapAfterCompileWarmup < simpleCompileHeapCeiling,
     `no-import compile used excessive linear memory: ${heapAfterCompileWarmup} bytes ` +
+    `(ceiling ${simpleCompileHeapCeiling})`);
+
+  // Force both dynamic arrays through several capacity expansions: 81 blocks
+  // and 17 instructions per non-entry block. The unused blocks are still parsed
+  // and compiled, while execution stays bounded to the tiny #main block.
+  const dynamicLines = ['#main', "  io.outln('dynamic-fgir-ok')", '  OK'];
+  for (let block = 0; block < 80; block += 1) {
+    dynamicLines.push(`#dynamic_${block}`);
+    for (let instruction = 0; instruction < 16; instruction += 1) {
+      dynamicLines.push("  io.out('x')");
+    }
+    dynamicLines.push('  OK');
+  }
+  stdout = '';
+  rc = await runSource(M, dynamicLines.join('\n') + '\n', errPtr);
+  assert.equal(rc, 0, `dynamic FGIR growth failed: ${readCString(M, errPtr)}`);
+  assert.match(stdout, /dynamic-fgir-ok/);
+  const heapAfterDynamicFGIR = M.HEAPU8.byteLength;
+  assert.ok(heapAfterDynamicFGIR < simpleCompileHeapCeiling,
+    `dynamic FGIR growth used excessive linear memory: ${heapAfterDynamicFGIR} bytes ` +
     `(ceiling ${simpleCompileHeapCeiling})`);
 
   // max_steps is independent from max_jumps; disable jump budget so step limit wins.
@@ -136,8 +155,8 @@ try {
   }
   assert.match(stdout, /post-growth 99/);
   const heapAfterStress = M.HEAPU8.byteLength;
-  assert.ok(heapAfterStress <= heapAfterCompileWarmup + (64 * 1024 * 1024),
-    `linear memory kept growing after warm-up: ${heapAfterCompileWarmup} -> ${heapAfterStress}`);
+  assert.ok(heapAfterStress <= heapAfterDynamicFGIR + (64 * 1024 * 1024),
+    `linear memory kept growing after warm-up: ${heapAfterDynamicFGIR} -> ${heapAfterStress}`);
 
   console.log(
     `OK: WASM limits/recovery/memory (jump limit, step limit, panic recovery, ` +

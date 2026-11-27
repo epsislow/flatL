@@ -234,6 +234,7 @@ int main(int argc, char **argv) {
                        t_end - t0);
     }
 done:
+    flat_fgir_free(prog);
     free(prog);
     return rc;
 }

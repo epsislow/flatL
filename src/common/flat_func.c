@@ -1340,6 +1340,10 @@ static int lower_one_call_vm(FgirProgram *prog, FgirBlock *b, int at, const Fgir
         snprintf(err, err_size, "lowered call too large");
         return -1;
     }
+    if (flat_fgir_reserve_instr(b, (size_t)(b->instr_count - 1 + n)) != 0) {
+        snprintf(err, err_size, "out of memory while growing lowered FGIR instructions");
+        return -1;
+    }
     memmove(&b->instr[at + n], &b->instr[at + 1], (size_t)(b->instr_count - at - 1) * sizeof *b->instr);
     memcpy(&b->instr[at], expanded, (size_t)n * sizeof *b->instr);
     b->instr_count = b->instr_count - 1 + n;
@@ -1562,6 +1566,10 @@ static int lower_one_call(FgirProgram *prog, FgirBlock *b, int at, const FgirIns
 
     if (b->instr_count - 1 - at + n > FGIR_MAX_INSTR) {
         snprintf(err, err_size, "lowered call too large");
+        return -1;
+    }
+    if (flat_fgir_reserve_instr(b, (size_t)(b->instr_count - 1 + n)) != 0) {
+        snprintf(err, err_size, "out of memory while growing lowered FGIR instructions");
         return -1;
     }
     memmove(&b->instr[at + n], &b->instr[at + 1], (size_t)(b->instr_count - at - 1) * sizeof *b->instr);

@@ -1,0 +1,8 @@
+suite = "flc"
+id = 4
+desc = "FGIR dynamic block/instruction capacity growth"
+kind = "exec"
+
+cmd = "{root}/bin/flc -o {case}/out.fb {case}/program.fl && {root}/bin/flvm {case}/out.fb"
+expect_exit = 0
+stdout_contains = "dynamic-fgir-ok"

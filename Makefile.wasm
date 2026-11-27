@@ -165,7 +165,7 @@ VM_SRC = src/common/flat_locale.c src/common/flat_runtime_log.c src/common/flat_
          src/common/value_json.c $(STR_SRC) \
          $(NATIVE_VM_SRC)
 
-FGIR_SRC = src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
+FGIR_SRC = src/common/fgir.c src/common/parse.c src/common/link.c src/common/compile.c src/common/flat_func.c \
            src/common/flat_func_tag.c \
            src/common/flat_assign.c src/common/flat_slot_type.c src/common/flat_list_typed.c \
            src/common/flat_list_shape.c \

@@ -97,6 +97,7 @@ static int compile_fl_to_fb(const char *in_path, const char *out_path, int verbo
         *report_out = link_report;
     }
 done:
+    flat_fgir_free(prog);
     free(prog);
     return rc;
 }
