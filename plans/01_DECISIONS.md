@@ -521,3 +521,15 @@ The request-only cancellation contract is partially implemented by archive 303: 
 - `flat_fgir_free()` owns and releases the export allocation. `FgirProgram` currently has no shallow-copy/clone path; `.fmod` preparation consumes exports before functions/blocks are merged, so exports are not copied into the final linked program.
 - Keep `optional_natives[32]`, native-unit declarations, bytecode, and runtime behavior out of this implementation. Audit optional-native storage separately.
 - Archive 347 is audit-only; archive 348 implements the decision. The 256-symbol and 64-byte name limits remain unchanged.
+
+
+## 28. FGIR optional-native union ownership (archive 349 audit)
+
+- Keep `FGIR_MAX_OPTIONAL_NATIVES == 32`, `FlatOptionalNativeDecl` (64-byte module plus 64-byte alias), core-module filtering, first-seen order, and module-only duplicate suppression unchanged.
+- Archive 350 should replace only `FgirProgram.optional_natives[32]` with an owned dynamic pointer plus capacity, allocated on the first unique non-core module and grown geometrically from one record.
+- The final FGIR union is built once by `flat_native_use_build_fnat_union()` after linking all native units. Each union record has an empty alias; source aliases remain in `FgirNativeUnit.decls` and are used for source-level resolution.
+- Preserve the separate fixed `FlatBytecode.optional_natives[32]` manifest and FNAT bytecode representation. This is not a bytecode or runtime storage change.
+- `flat_fgir_free()` owns and releases the FGIR allocation. No `FgirProgram` shallow-copy/clone path or retained pointer into the union was found.
+- Distinguish allocation failure from the existing 33rd-module diagnostic; commit `optional_native_count` only after the full union succeeds.
+- `flat_native_use_build_fnat_union()` returns `0` on success, `-1` for the 33rd unique non-core module, and `-2` for allocation failure. The linker preserves the existing overflow diagnostic and reports a distinct OOM diagnostic.
+- Archive 349 is audit-only; archive 350 implements the isolated dynamic FGIR union. `sizeof(FgirProgram)` falls from 4,408 B to 320 B on the measured native ABI; the fixed bytecode manifest and FNAT/FNUN formats are unchanged.

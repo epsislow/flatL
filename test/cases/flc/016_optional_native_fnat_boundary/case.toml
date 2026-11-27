@@ -1,0 +1,8 @@
+suite = "flc"
+id = 19
+desc = "FGIR optional-native union preserves FNAT order, core filtering, deduplication and FNUN aliases"
+kind = "exec"
+
+cmd = "{root}/test/cases/flc/016_optional_native_fnat_boundary/check_fnat_boundary.sh {root} {tmp}"
+expect_exit = 0
+stdout_contains = "optional-native-fnat-boundary-ok"

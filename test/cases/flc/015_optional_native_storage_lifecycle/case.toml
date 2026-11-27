@@ -1,0 +1,8 @@
+suite = "flc"
+id = 18
+desc = "FGIR optional-native union storage lifecycle, ordering, deduplication and 32/33 boundary"
+kind = "exec"
+
+cmd = "gcc -std=c11 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -I{root}/include -Wl,--gc-sections -o {tmp}/optional_native_storage_test {root}/test/cases/flc/015_optional_native_storage_lifecycle/optional_native_storage_test.c {root}/src/common/fgir.c {root}/src/common/native_use.c && {tmp}/optional_native_storage_test"
+expect_exit = 0
+stdout_contains = "optional-native-storage-test-ok"

@@ -18,6 +18,7 @@ void flat_fgir_free(FgirProgram *prog) {
     free(prog->schemas);
     free(prog->native_units);
     free(prog->exports);
+    free(prog->optional_natives);
     memset(prog, 0, sizeof(*prog));
     prog->main_index = -1;
     prog->func_var_slots_manual = -1;
@@ -138,6 +139,36 @@ int flat_fgir_reserve_exports(FgirProgram *prog, size_t capacity) {
     memset(next + current, 0, (grown - current) * sizeof(*next));
     prog->exports = next;
     prog->export_capacity = (int)grown;
+    return 0;
+}
+
+int flat_fgir_reserve_optional_natives(FgirProgram *prog, size_t capacity) {
+    FlatOptionalNativeDecl *next;
+    size_t current;
+    size_t grown;
+
+    if (!prog || capacity > FGIR_MAX_OPTIONAL_NATIVES || prog->optional_native_capacity < 0) {
+        return -1;
+    }
+    current = (size_t)prog->optional_native_capacity;
+    if (capacity <= current) return 0;
+
+    /* Optional-native records are fixed-width; allocate only when the first
+     * unique non-core module is added and grow geometrically up to 32. */
+    grown = current ? current : 1u;
+    while (grown < capacity) {
+        if (grown > FGIR_MAX_OPTIONAL_NATIVES / 2u) {
+            grown = FGIR_MAX_OPTIONAL_NATIVES;
+            break;
+        }
+        grown *= 2u;
+    }
+    if (grown < capacity || grown > SIZE_MAX / sizeof(*next)) return -1;
+    next = (FlatOptionalNativeDecl *)realloc(prog->optional_natives, grown * sizeof(*next));
+    if (!next) return -1;
+    memset(next + current, 0, (grown - current) * sizeof(*next));
+    prog->optional_natives = next;
+    prog->optional_native_capacity = (int)grown;
     return 0;
 }
 

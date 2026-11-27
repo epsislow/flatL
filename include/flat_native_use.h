@@ -9,6 +9,9 @@ int flat_native_use_scan_file(const char *path, FlatOptionalNativeDecl *decls, i
                               int *decl_count_out, char *err, size_t err_size);
 int flat_native_use_add_unit(FgirProgram *prog, const FlatOptionalNativeDecl *decls, int decl_count,
                              int *unit_index_out, char *err, size_t err_size);
+/* Build the ordered, deduplicated FGIR FNAT union. Returns 0 on success,
+ * -1 when the 32-module limit is exceeded, and -2 on allocation failure.
+ * optional_native_count is committed only after the complete union succeeds. */
 int flat_native_use_build_fnat_union(FgirProgram *prog);
 int flat_native_use_validate_program(const FgirProgram *prog, char *err, size_t err_size);
 int flat_native_resolve_module_name(const char *mod_in, const FlatOptionalNativeDecl *decls,

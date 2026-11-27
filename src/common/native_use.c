@@ -410,6 +410,9 @@ int flat_native_use_build_fnat_union(FgirProgram *prog) {
             if (n >= FGIR_MAX_OPTIONAL_NATIVES) {
                 return -1;
             }
+            if (flat_fgir_reserve_optional_natives(prog, (size_t)n + 1u) != 0) {
+                return -2;
+            }
             snprintf(prog->optional_natives[n].module, sizeof prog->optional_natives[n].module,
                      "%s", mod);
             prog->optional_natives[n].alias[0] = '\0';

@@ -1121,9 +1121,16 @@ int flat_link_program(const char *entry_path, const FlatLinkOptions *opts, FgirP
         out->jump_block_max_global_set = mod->jump_block_max_global_set;
     }
 
-    if (flat_native_use_build_fnat_union(out) != 0) {
-        snprintf(err, err_size, "too many optional native modules in program");
-        goto cleanup;
+    {
+        int fnat_rc = flat_native_use_build_fnat_union(out);
+        if (fnat_rc == -1) {
+            snprintf(err, err_size, "too many optional native modules in program");
+            goto cleanup;
+        }
+        if (fnat_rc != 0) {
+            snprintf(err, err_size, "out of memory while building optional native manifest");
+            goto cleanup;
+        }
     }
     flat_func_reclassify_program(out);
     if (flat_native_use_validate_program(out, err, err_size) != 0) goto cleanup;

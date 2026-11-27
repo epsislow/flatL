@@ -135,8 +135,9 @@ typedef struct {
     FgirNativeUnit *native_units; /* owned; capacity grows up to FGIR_MAX_NATIVE_UNITS */
     int native_unit_count;
     int native_unit_capacity;
-    FlatOptionalNativeDecl optional_natives[FGIR_MAX_OPTIONAL_NATIVES];
+    FlatOptionalNativeDecl *optional_natives; /* owned; capacity grows up to FGIR_MAX_OPTIONAL_NATIVES */
     int optional_native_count;
+    int optional_native_capacity;
     FgirFunction *functions; /* owned; capacity grows up to FGIR_MAX_FUNCTIONS */
     int function_count;
     int function_capacity;
@@ -155,7 +156,7 @@ typedef struct {
     int jump_block_max_global_set;
 } FgirProgram;
 
-/* FGIR owns dynamically allocated block, instruction, function, schema, native-unit and export arrays.
+/* FGIR owns dynamically allocated block, instruction, function, schema, native-unit, export and optional-native arrays.
  * Zero-initialize a program before first use and release it with flat_fgir_free(). */
 void flat_fgir_free(FgirProgram *prog);
 int flat_fgir_reserve_blocks(FgirProgram *prog, size_t capacity);
@@ -164,6 +165,7 @@ int flat_fgir_reserve_schemas(FgirProgram *prog, size_t capacity);
 int flat_fgir_reserve_functions(FgirProgram *prog, size_t capacity);
 int flat_fgir_reserve_native_units(FgirProgram *prog, size_t capacity);
 int flat_fgir_reserve_exports(FgirProgram *prog, size_t capacity);
+int flat_fgir_reserve_optional_natives(FgirProgram *prog, size_t capacity);
 int flat_fgir_block_clone(FgirBlock *dst, const FgirBlock *src);
 
 int flat_parse_free_varname(const char *line, char *var_out, size_t var_sz);
