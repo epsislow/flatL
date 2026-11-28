@@ -250,12 +250,17 @@ Detached nodes remain owned by their original document. As with all DOM handles,
 
 `setText(node, text)` detaches the node's existing children and inserts one text node when `text` is non-empty. It does not interpret the string as HTML. Existing detached child handles remain valid.
 
+`setHtml(node, html)` parses `html` as an HTML5 fragment using `node` as the parsing context, then replaces its direct children with the parsed fragment. This means context-sensitive markup is handled correctly (for example, `<tr>` content inserted into a `<tbody>`). Existing children are detached rather than destroyed, so their handles remain valid. The new nodes belong to the same document as `node`. The target must be an element; parse failures leave its existing children untouched.
+
+`setHtml` is a parser operation, not a sanitizer. It does not execute scripts or browser event handlers, and it does not update a live browser DOM. Sanitize untrusted markup before passing it to this function.
+
 ```flat
  dom.setAttr(section, 'title', 'Products')
  dom.setData(section, 'sku', 'A-42')
  dom.setProp(section, 'className', 'panel featured')
  dom.setProp(section, 'required', true)
  dom.setText(section, 'Plain text, not markup')
+ dom.setHtml(section, '<p>Parsed <strong>HTML</strong></p>')
 ```
 
 These functions modify the Lexbor DOM tree in memory. They do not update a browser page or FLEditor's live UI DOM; that requires a separate browser-side bridge.

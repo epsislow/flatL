@@ -378,6 +378,7 @@ int flat_native_dom_remove_attr(FlatNativeCtx *ctx);
 int flat_native_dom_set_data(FlatNativeCtx *ctx);
 int flat_native_dom_set_prop(FlatNativeCtx *ctx);
 int flat_native_dom_set_text(FlatNativeCtx *ctx);
+int flat_native_dom_set_html(FlatNativeCtx *ctx);
 int flat_native_dom_create_comment(FlatNativeCtx *ctx);
 int flat_native_dom_replace(FlatNativeCtx *ctx);
 

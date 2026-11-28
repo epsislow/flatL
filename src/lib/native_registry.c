@@ -354,6 +354,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("dom", "setData", "dom.setData(node, name, value)"),
     META_SIG("dom", "setProp", "dom.setProp(node, name, value)"),
     META_SIG("dom", "setText", "dom.setText(node, text)"),
+    META_SIG("dom", "setHtml", "dom.setHtml(node, html)"),
     META_SIG("dom", "createComment", "dom.createComment(page, text)"),
     META_SIG("dom", "replace", "dom.replace(parent, oldNode, newNode)"),
     META_SIG("math", "seed", "math.seed(n)"),

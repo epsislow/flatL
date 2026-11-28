@@ -1382,6 +1382,43 @@ int flat_native_dom_set_text(FlatNativeCtx *ctx)
     return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
 }
 
+/* Parse a fragment using the target element as the HTML5 parsing context.
+ * The parser builds a temporary fragment first, so parse failures leave the
+ * existing subtree untouched. Existing children are detached (not destroyed)
+ * to preserve their numeric handles. */
+int flat_native_dom_set_html(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[2], *html = NULL;
+    size_t len;
+    lxb_dom_node_t *node, *fragment, *child, *next;
+    FlatDomDocument *doc;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 2, 2) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 ||
+        node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &html, &len) != 0 ||
+        len > FLAT_DOM_MAX_INPUT) {
+        free(html);
+        return dom_fail(ctx, "dom.setHtml.args");
+    }
+
+    fragment = lxb_html_document_parse_fragment(doc->document,
+        lxb_dom_interface_element(node), (const lxb_char_t *)html, len);
+    free(html);
+    if (!fragment) return dom_fail(ctx, "dom.setHtml.parse");
+
+    for (child = node->first_child; child; child = next) {
+        next = child->next;
+        lxb_dom_node_remove(child);
+    }
+    while (fragment->first_child) {
+        child = fragment->first_child;
+        lxb_dom_node_remove(child);
+        lxb_dom_node_insert_child(node, child);
+    }
+    lxb_dom_node_destroy(fragment);
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
 int flat_native_dom_set_prop(FlatNativeCtx *ctx)
 {
     char buf[4096], *args[3], *name = NULL, *value = NULL, *attr = NULL;

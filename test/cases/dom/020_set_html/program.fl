@@ -1,0 +1,37 @@
+use native dom
+use native list
+
+#main
+  dom.parseHtml('<main><section id="target"><i>old</i></section><table><tbody id="rows"></tbody></table></main>') -> page
+  dom.select(page, '#target') -> targets
+  list.get(targets, 0) -> target
+  dom.children(target) -> old_children
+  list.get(old_children, 0) -> old_node
+
+  dom.setHtml(target, '<p class="one">Hello <b>world</b></p><p>Second</p>') == true
+  dom.children(target) -> paragraphs
+  list.len(paragraphs) == 2
+  list.get(paragraphs, 0) -> first
+  dom.text(first) == 'Hello world'
+  dom.html(first) == 'Hello <b>world</b>'
+
+  dom.setHtml(target, '<em>replacement</em>') == true
+  dom.text(old_node) == 'old'
+  dom.html(target) == '<em>replacement</em>'
+
+  dom.select(page, '#rows') -> row_roots
+  list.get(row_roots, 0) -> rows
+  dom.setHtml(rows, '<tr><td>A</td><td>B</td></tr>') == true
+  dom.children(rows) -> trs
+  list.get(trs, 0) -> tr
+  dom.children(tr) -> cells
+  list.len(cells) == 2
+  list.get(cells, 1) -> second_cell
+  dom.text(second_cell) == 'B'
+
+  dom.setHtml(target, '') == true
+  dom.children(target) -> empty
+  list.len(empty) == 0
+  dom.close(page)
+  io.outln('dom-set-html-ok')
+  OK

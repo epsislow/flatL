@@ -1,6 +1,6 @@
 # DOM construction and mutation API
 
-**Implementation checkpoint:** archive 353 (initial mutation API slice)
+**Implementation checkpoint:** archive 354 (mutation API plus HTML fragment replacement)
 
 ## Existing base
 
@@ -24,17 +24,24 @@ The DOM module already exposes parsed HTML, CSS selection, node navigation, seri
 - `setProp()` is deliberately limited and typed: boolean properties require BOOL, supported string properties require STRING. It is not a JavaScript DOM property implementation.
 - Lexbor tree mutations affect only FlatL's in-memory document. They do not update a browser/FLEditor live DOM; that requires a separate browser bridge.
 
-## Validation in archive 353
+## API added in archive 354
+
+- HTML fragment replacement: `setHtml(node, html)`. It parses with Lexbor using the target element as the HTML5 fragment context, then replaces direct children.
+- Existing children are detached, not destroyed, preserving their handles. New nodes belong to the target document. The target must be an element. Parse failure leaves the existing subtree unchanged.
+- The operation does not execute scripts or browser event handlers and is not an HTML sanitizer. Untrusted markup must be sanitized by the caller.
+
+## Validation in archive 354
 
 - `make all -j2` — PASS.
 - `make docs` — PASS.
-- `bin/run_tests dom -v -e` — 19/19 PASS.
-- Full default `bin/run_tests -v -e` discovered 1,216 tests and selected 1,173; the run timed out during `flvm[53]`. It is not claimed as a full-suite PASS.
-- `dom[19]` covers element/text/comment creation, append/prepend/insert-before/replace, moving, remove/clear, attribute/data/property writes, and text replacement.
+- `bin/run_tests dom -v -e` — 20/20 PASS.
+- Full default `bin/run_tests -v -e` discovered 1,217 tests and selected 1,174; the run timed out during `flvm[53]`. No full-suite PASS is claimed.
+- `dom[20]` covers nested HTML parsing, serialization, context-sensitive `<tr>` parsing in `<tbody>`, empty replacement, and preservation of detached child handles.
 
 ## Follow-up candidates
 
-- Add an HTML fragment parser path and `setHtml()` only after defining fragment context and error semantics; do not implement it by concatenating strings into the document.
 - Consider a `createFragment()` API if fragment insertion is useful independently of `setHtml()`.
+- Expand writable property coverage only where there is a clear typed mapping and tests; keep parsed DOM values distinct from browser live state.
+- Add stress tests for many document open/close cycles and detached-handle lifetimes.
 - Expand writable property coverage only where there is a clear typed mapping and tests; keep parsed DOM values distinct from browser live state.
 - Add stress tests for many document open/close cycles and detached-handle lifetimes.
