@@ -1,4 +1,6 @@
 #include "flat_runtime.h"
+#include "flat_runtime_event.h"
+#include "flat_vcx.h"
 #include "flat_task.h"
 #include "flat_task_native.h"
 #include "flat_channel_internal.h"
@@ -13,6 +15,7 @@
 #include <string.h>
 #include <math.h>
 #include <inttypes.h>
+#include <limits.h>
 #ifdef FLAT_RUNTIME_TESTING
 #include <stdatomic.h>
 #include <time.h>
@@ -24,6 +27,24 @@ typedef struct FlatRuntimeWorker {
     uint64_t quantum;
     int started;
 } FlatRuntimeWorker;
+
+typedef struct FlatRuntimeEventNode {
+    FlatValue value;
+    FlatCollectionPool *coll;
+    FlatStringPool *pool;
+    struct FlatRuntimeEventNode *next;
+} FlatRuntimeEventNode;
+
+typedef struct FlatRuntimeEventSubscription {
+    FlatEventSubscriptionId id;
+    uint64_t source_id;
+    char source_kind[32];
+    char event_name[48];
+    FlatRuntimeEventNode *head;
+    FlatRuntimeEventNode *tail;
+    size_t queued;
+    struct FlatRuntimeEventSubscription *next;
+} FlatRuntimeEventSubscription;
 
 typedef struct FlatTaskRecord {
     FlatTaskId id;
@@ -56,6 +77,9 @@ struct FlatRuntime {
     int worker_stop;
     int worker_error;
     FlatTaskRecord *tasks;
+    FlatRuntimeEventSubscription *event_subscriptions;
+    size_t event_subscription_count;
+    FlatEventSubscriptionId next_event_subscription_id;
     FlatChannel *channels;
     size_t channel_count;
     FlatChannelId next_channel_id;
@@ -383,6 +407,214 @@ static FlatChannel *runtime_find_channel(const FlatRuntime *runtime, FlatChannel
     return NULL;
 }
 
+
+static void runtime_event_node_destroy(FlatRuntimeEventNode *node) {
+    if (!node) return;
+    if (node->coll && node->pool) flat_value_release(node->coll, node->pool, &node->value);
+    if (node->coll) flat_coll_destroy(node->coll);
+    if (node->pool) flat_pool_destroy(node->pool);
+    free(node);
+}
+
+static void runtime_event_subscription_destroy(FlatRuntimeEventSubscription *sub) {
+    FlatRuntimeEventNode *node;
+    if (!sub) return;
+    node = sub->head;
+    while (node) {
+        FlatRuntimeEventNode *next = node->next;
+        runtime_event_node_destroy(node);
+        node = next;
+    }
+    free(sub);
+}
+
+static int runtime_event_name_valid(const char *s, size_t max_len) {
+    size_t n;
+    if (!s || !s[0]) return 0;
+    n = strlen(s);
+    return n < max_len;
+}
+
+int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
+                                 const char *source_kind, const char *event_name,
+                                 FlatEventSubscriptionId *out_subscription_id) {
+    FlatRuntimeEventSubscription *sub;
+    if (!runtime || source_id == 0 || !out_subscription_id ||
+        !runtime_event_name_valid(source_kind, sizeof sub->source_kind) ||
+        !runtime_event_name_valid(event_name, sizeof sub->event_name)) return -1;
+    sub = (FlatRuntimeEventSubscription *)calloc(1, sizeof *sub);
+    if (!sub) return -1;
+    sub->source_id = source_id;
+    snprintf(sub->source_kind, sizeof sub->source_kind, "%s", source_kind);
+    snprintf(sub->event_name, sizeof sub->event_name, "%s", event_name);
+    runtime_lock(runtime);
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING || runtime->next_event_subscription_id == 0) {
+        runtime_unlock(runtime);
+        free(sub);
+        return -1;
+    }
+    sub->id = runtime->next_event_subscription_id++;
+    sub->next = runtime->event_subscriptions;
+    runtime->event_subscriptions = sub;
+    runtime->event_subscription_count++;
+    *out_subscription_id = sub->id;
+    runtime_unlock(runtime);
+    return 0;
+}
+
+int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
+                                   FlatEventSubscriptionId subscription_id) {
+    FlatRuntimeEventSubscription **link, *sub;
+    if (!runtime || subscription_id == 0) return -1;
+    runtime_lock(runtime);
+    for (link = &runtime->event_subscriptions; *link; link = &(*link)->next) {
+        if ((*link)->id == subscription_id) break;
+    }
+    sub = *link;
+    if (!sub) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    *link = sub->next;
+    if (runtime->event_subscription_count) runtime->event_subscription_count--;
+    runtime_unlock(runtime);
+    runtime_event_subscription_destroy(sub);
+    return 0;
+}
+
+int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
+                               const char *source_kind, const char *event_name,
+                               const FlatValue *value,
+                               FlatCollectionPool *source_coll,
+                               FlatStringPool *source_pool,
+                               FlatFileTable *source_files) {
+    FlatRuntimeEventSubscription *sub;
+    FlatRuntimeEventNode **prepared = NULL;
+    size_t prepared_count = 0;
+    size_t matched = 0;
+    if (!runtime || source_id == 0 || !source_kind || !event_name || !value ||
+        !source_coll || !source_pool) return -1;
+    runtime_lock(runtime);
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
+        if (sub->source_id == source_id && strcmp(sub->source_kind, source_kind) == 0 &&
+            strcmp(sub->event_name, event_name) == 0) {
+            matched++;
+            if (sub->queued >= FLAT_RUNTIME_EVENT_QUEUE_MAX) {
+                runtime_unlock(runtime);
+                return -2;
+            }
+        }
+    }
+    if (matched == 0) {
+        runtime_unlock(runtime);
+        return 0;
+    }
+    prepared = (FlatRuntimeEventNode **)calloc(matched, sizeof *prepared);
+    if (!prepared) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
+        FlatRuntimeEventNode *node;
+        if (sub->source_id != source_id || strcmp(sub->source_kind, source_kind) != 0 ||
+            strcmp(sub->event_name, event_name) != 0) continue;
+        node = (FlatRuntimeEventNode *)calloc(1, sizeof *node);
+        if (!node) goto publish_fail;
+        node->coll = flat_coll_create();
+        node->pool = flat_pool_create();
+        if (!node->coll || !node->pool ||
+            flat_value_deep_copy_between(value, &node->value, source_coll, source_pool,
+                                         source_files, node->coll, node->pool, NULL) != 0) {
+            runtime_event_node_destroy(node);
+            goto publish_fail;
+        }
+        flat_value_retain(node->coll, node->pool, &node->value);
+        prepared[prepared_count++] = node;
+    }
+    prepared_count = 0;
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
+        FlatRuntimeEventNode *node;
+        if (sub->source_id != source_id || strcmp(sub->source_kind, source_kind) != 0 ||
+            strcmp(sub->event_name, event_name) != 0) continue;
+        node = prepared[prepared_count];
+        prepared[prepared_count++] = NULL;
+        if (sub->tail) sub->tail->next = node;
+        else sub->head = node;
+        sub->tail = node;
+        sub->queued++;
+    }
+    runtime_unlock(runtime);
+    free(prepared);
+    /* Wake host workers after publication. The producer never executes VM code;
+     * it only signals the scheduler/event-loop wait primitive. */
+    (void)flat_ready_queue_wake_all(&runtime->ready_queue);
+    return (int)matched;
+
+publish_fail:
+    runtime_unlock(runtime);
+    while (prepared_count > 0) runtime_event_node_destroy(prepared[--prepared_count]);
+    free(prepared);
+    return -1;
+}
+
+int flat_runtime_event_pending(FlatRuntime *runtime,
+                               FlatEventSubscriptionId subscription_id) {
+    FlatRuntimeEventSubscription *sub;
+    int queued;
+    if (!runtime || subscription_id == 0) return -1;
+    runtime_lock(runtime);
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
+        if (sub->id == subscription_id) break;
+    if (!sub) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    queued = sub->queued > (size_t)INT_MAX ? INT_MAX : (int)sub->queued;
+    runtime_unlock(runtime);
+    return queued;
+}
+
+int flat_runtime_event_next(FlatRuntime *runtime,
+                            FlatEventSubscriptionId subscription_id,
+                            FlatCollectionPool *destination_coll,
+                            FlatStringPool *destination_pool,
+                            FlatFileTable *destination_files,
+                            FlatValue *out_value) {
+    FlatRuntimeEventSubscription *sub;
+    FlatRuntimeEventNode *node;
+    int rc;
+    if (!runtime || subscription_id == 0 || !destination_coll || !destination_pool || !out_value)
+        return -1;
+    runtime_lock(runtime);
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
+        if (sub->id == subscription_id) break;
+    if (!sub) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    node = sub->head;
+    if (!node) {
+        runtime_unlock(runtime);
+        return 0;
+    }
+    rc = flat_value_deep_copy_between(&node->value, out_value, node->coll, node->pool, NULL,
+                                      destination_coll, destination_pool, destination_files);
+    if (rc != 0) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    sub->head = node->next;
+    if (!sub->head) sub->tail = NULL;
+    if (sub->queued) sub->queued--;
+    runtime_unlock(runtime);
+    runtime_event_node_destroy(node);
+    return 1;
+}
+
 FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
     FlatRuntime *runtime = (FlatRuntime *)calloc(1, sizeof *runtime);
     if (!runtime) return NULL;
@@ -396,6 +628,7 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         return NULL;
     }
     runtime->next_task_id = 1;
+    runtime->next_event_subscription_id = 1;
     runtime->lifecycle = FLAT_RUNTIME_RUNNING;
     runtime->next_channel_id = 1;
 
@@ -1852,7 +2085,7 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
     runtime_lock(runtime);
     runtime_refresh_lifecycle_locked(runtime);
     busy = runtime->active_runs != 0 || runtime->task_count != 0 || runtime->channel_count != 0 ||
-           runtime->workers_started || runtime->worker_starting || runtime->workers_joining ||
+           runtime->event_subscription_count != 0 || runtime->workers_started || runtime->worker_starting || runtime->workers_joining ||
            runtime->worker_count != 0 ||
            (runtime->lifecycle != FLAT_RUNTIME_RUNNING &&
             runtime->lifecycle != FLAT_RUNTIME_STOPPED);

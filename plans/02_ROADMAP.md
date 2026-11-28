@@ -157,7 +157,7 @@ Nu intră aici un toolkit UI complet, layout engine sau binding la React.
 
 Scop: asocierea unui block FlatL cu un event source prin `task.spawnFor()`, astfel încât fiecare eveniment să poată crea o execuție FlatL nouă, fără polling și fără a lega Task runtime de un anumit transport.
 
-- [ ] Definește contractul generic event-source și ownership-ul payload-urilor.
+- [x] Definește primul contract runtime generic: `(sourceId, sourceKind, eventName)` și ownership prin deep-copy în cozi bounded (arhiva 359); integrarea cu task dispatch rămâne deschisă.
 - [ ] Implementează API-ul `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)` și dezînregistrarea handlerului.
 - [ ] Definește modurile `serial` și `parallel`, `maxActive`, coada bounded și overflow/backpressure.
 - [ ] Definește failure isolation, panic, cancellation, source close și runtime shutdown.
@@ -1120,3 +1120,8 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 - Added regressions for a native panic in the owning block, a panic in a nested called block recovered by the caller, explicit `PANIC`, and a panic recovered inside a spawned child-task VM.
 - FLEditor WASM Task/Channel integration from archive 351 is user-validated: `make fleditor-wasm-test` passed on Termux, and the user confirmed all three examples run in the browser.
 - Archive 352 closes the planned v1.0 panic `.any` item. Archive 356 is the current DOM checkpoint. Event-driven task dispatch is a proposed future direction only; see plan 66. v2.0 cross-platform worker validation and v2.5 UI Runtime remain separate open work.
+
+
+### Event-driven task dispatch update (archive 360)
+
+The event broker now exposes per-subscription pending depth and wakes the runtime ready-queue wait primitive after successful event publication. This is notification plumbing only; automatic event-to-task dispatch and FlatL `task.spawnFor()` remain pending.

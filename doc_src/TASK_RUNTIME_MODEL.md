@@ -439,3 +439,13 @@ FLEditor's browser-facing `flat_wasm_run()` path now calls `flat_runtime_run_sch
 The adapter is one-shot: runnable child tasks are allowed to finish; tasks still waiting after the runnable queue drains are cancelled through the runtime shutdown path; task records are destroyed before Channel records; and the runtime is destroyed before returning. This prevents child VMs, task-held Channel references, or open transactions from leaking between FLEditor runs. The adapter does not start the native worker pool and does not use browser Web Workers.
 
 Three standalone examples are shipped in both `examples/task_channel/` and `docs/fleditor_site/examples/task_channel/`: `parallel_inventory.fl`, `transaction_rollback.fl`, and `task_results.fl`. They are listed in the FLEditor example manifest and exercised by `test/fleditor/wasm_task_channel_smoke.mjs`. `flvm[56]` runs the same examples through the C one-shot adapter repeatedly to validate result propagation and cleanup.
+
+### Runtime event-source broker (archive 359)
+
+Archive 359 introduces the first host-side event-source broker API in `include/flat_runtime_event.h`. A subscription is identified by a runtime-local numeric subscription ID and matches the explicit tuple `(sourceId, sourceKind, eventName)`. `sourceId` remains an ordinary NUMBER value; `sourceKind` is the namespace discriminator (for example, all socket transports use `"socket"`). No resource objects or OO handles are introduced.
+
+The host can register/unregister subscriptions, publish a `FlatValue` to all matching subscriptions, inspect queue depth with `flat_runtime_event_pending()`, and retrieve queued values with `flat_runtime_event_next()`. Published values are deep-copied into runtime-owned queue nodes, so the producer may release its VM pools after publishing. Each matching subscription receives its own copy. File handles are not transferable. Each subscription has a bounded queue of 256 events; publishing returns `-2` if any matching queue is full, without partially delivering the event. An unmatched event returns 0. Successful publication wakes the runtime ready-queue wait primitive after releasing the scheduler mutex. This is only a wake notification: producers still never execute VM code, and an external consumer must drain/dispatch the queued event.
+
+Archive 360 adds the queue-depth query and worker/event-loop wake notification on successful publication. It does not yet create handler tasks.
+
+This is the broker foundation only. Archive 359 does **not** yet implement FlatL `task.spawnFor()`, handler task creation, serial/parallel policies, or persistent FLEditor sessions. Those are subsequent milestones. Existing `task.spawn()` semantics are unchanged.

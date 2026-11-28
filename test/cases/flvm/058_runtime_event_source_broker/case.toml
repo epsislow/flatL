@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 58
+desc = "runtime event broker routes deep-copied events by numeric source ID, source kind and event name"
+kind = "exec"
+cmd = "make -s test-runtime-event-source-broker TEST_BIN={tmp}/runtime_event_source_broker_test && {tmp}/runtime_event_source_broker_test"
+expect_exit = 0
+stdout_contains = "runtime-event-source-broker-ok"

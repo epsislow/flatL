@@ -1,7 +1,7 @@
 # Event-driven Task Dispatch and Host Event Sources — roadmap
 
-**Status:** design roadmap only; no runtime/API implementation in this plan revision.
-**Baseline:** archive 356 (`flatL-main-356-dom-clone.zip`).
+**Status:** staged implementation; archive 359 adds the host-side event broker and archive 360 adds queue-depth inspection plus scheduler wake notification. `task.spawnFor()` dispatch remains pending.
+**Baseline:** archive 358 (`flatL-main-358-event-source-kind-contract.zip`).
 **Proposed next plan:** `task.spawnFor()` and a generic event-source contract, with sockets as the first transport integration.
 
 ## 1. Goal
@@ -275,4 +275,28 @@ Still open:
 - persistent FLEditor WASM session C/JS API;
 - whether event source adapters should be exposed as `sockets`, `timer`, `ui`, `fs.watch`, or other module APIs.
 
-No item in this document claims implementation or test completion. This is a roadmap for a future design and implementation phase.
+## 10. Archive 359 — host-side event broker foundation
+
+Archive 359 adds `include/flat_runtime_event.h` and a runtime-owned event subscription registry/queue:
+
+- subscriptions match the explicit `(sourceId, sourceKind, eventName)` tuple;
+- `sourceId` is a plain numeric ID and `sourceKind` is explicit (`"socket"` for every sockets transport);
+- host producers can publish `FlatValue` payloads to all matching subscriptions;
+- each subscription receives an independent deep copy, so producer VM pools may be released after publish;
+- each subscription queue is bounded at 256 events; an overflow rejects the publication atomically with `-2`;
+- subscriptions can be removed explicitly, and queued values are released on unsubscribe; runtime destruction is rejected while subscriptions remain active.
+
+The C API currently exposes `flat_runtime_event_subscribe`, `flat_runtime_event_unsubscribe`, `flat_runtime_event_publish`, and `flat_runtime_event_next`. `flvm[58]` covers namespace separation, fan-out, deep-copy delivery, empty queues and unsubscribe. Existing task behavior is unchanged.
+
+**Not implemented in archive 359:** FlatL `task.spawnFor()`, automatic event-to-task dispatch, event payload binding to handler parameters, serial/parallel execution, `maxActive`, configurable overflow strategies, socket adapters, and persistent FLEditor WASM sessions. The broker API is the first isolated increment; these remain next steps and must not be described as complete.
+
+Validation for archive 359: `make -j2 bin/flc bin/flvm` PASS; `bin/run_tests 'flvm[58]' -v -e` PASS (1/1). Full suite and sanitizers have not yet been run.
+
+
+## 11. Archive 360 — event queue wake integration
+
+Archive 360 adds `flat_runtime_event_pending()` for observing one subscription's queue depth. A successful `flat_runtime_event_publish()` now wakes the runtime ready-queue wait primitive after releasing `scheduler_mutex`. This allows host event loops and worker waiters to be notified that event work is available without running VM code in the producer.
+
+This increment does not yet create FlatL handler tasks or provide `task.spawnFor()`. Queue consumption and dispatch remain host-driven until the scheduler-owned subscription integration is implemented.
+
+Validation: `make -j2 bin/flc bin/flvm` PASS; `make -s test-runtime-event-source-broker TEST_BIN=/tmp/runtime_event_source_broker_test` and the resulting test binary PASS. The repository `bin/run_tests` executable is not included in the supplied archive, so the suite selector could not be invoked in this workspace.

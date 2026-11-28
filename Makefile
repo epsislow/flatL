@@ -1046,3 +1046,9 @@ test-worker-failure-isolation-soak: $(FLVM_TEST_COMMON_OBJ)
 test-emscripten-no-pthreads:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(filter-out -pthread,$(CFLAGS)) -D__EMSCRIPTEN__ -o $(TEST_BIN) test/cases/flvm/054_emscripten_no_pthreads/emscripten_no_pthreads_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(filter-out -pthread,$(VM_EXTRA_LIBS)) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for numeric source IDs, source-kind namespaces and queued event fan-out.
+.PHONY: test-runtime-event-source-broker
+test-runtime-event-source-broker: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/058_runtime_event_source_broker/runtime_event_source_broker_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

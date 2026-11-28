@@ -1504,3 +1504,23 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Added `dom[22]` covering shallow/deep copies, attributes, descendant content, insertion, source preservation and text-node cloning.
 - Validation: `make all -j2` PASS; `make docs` PASS (50 sections); `bin/run_tests dom -v -e` PASS (22/22); focused `dom[22]` PASS. Full default suite selected 1,176/1,219 tests and timed out during `flvm[53]`; all tests visibly completed before timeout passed, but the full suite is not claimed PASS.
 - See `plans/65_DOM_NODE_CLONING.md`.
+
+
+## Archive 359 — runtime event-source broker foundation
+
+- Added the host-side runtime event broker API in `include/flat_runtime_event.h`: subscribe, unsubscribe, publish and dequeue.
+- Event sources are selected by numeric `sourceId` plus explicit `sourceKind` and `eventName`; no resource objects are introduced. All socket transports can share `sourceKind = "socket"`.
+- Published FlatL values are deep-copied per matching subscription into runtime-owned queue nodes. Per-subscription queue capacity is 256; overflow rejects the publication without partial fan-out.
+- Added `flvm[58]` for namespace separation, fan-out, value-copy semantics, empty queues and unsubscribe.
+- Validation: `make -j2 bin/flc bin/flvm` PASS; `bin/run_tests 'flvm[58]' -v -e` PASS (1/1). Full suite and sanitizers not yet run.
+- This is only the event-broker foundation. `task.spawnFor()`, handler dispatch, serial/parallel policies, source adapters and persistent FLEditor WASM sessions remain unimplemented.
+- See [66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md](66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md).
+
+
+### Event-driven tasks — archive 360
+
+- Added `flat_runtime_event_pending()` to inspect queued events for a subscription.
+- Successful event publication now wakes runtime ready-queue waiters after releasing the scheduler mutex.
+- Producers still do not execute VM code.
+- `task.spawnFor()`, automatic event-to-task dispatch, serial/parallel policies, and FLEditor persistent sessions remain unimplemented.
+- Validation: `make -j2 bin/flc bin/flvm` PASS; focused broker integration test PASS. `bin/run_tests` was absent from the supplied archive and was not run.
