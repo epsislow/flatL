@@ -38,3 +38,12 @@ The first Termux execution of `make fleditor-wasm-websocket-e2e` reached the bro
 The browser start/send/close EM_JS signatures now carry `uint64_t` directly instead of round-tripping socket identifiers through `double`. The `open`/`receive`/`close` publisher therefore receives a BigInt socket ID and forwards it unchanged to the C callback. This also avoids losing precision for identifiers above JavaScript's safe-integer range. The empty character literal in the close reason was replaced with a JavaScript string literal to remove the Emscripten lexer warning.
 
 Validation in this environment: pending native build, focused regression tests, docs generation, and JavaScript syntax checks. The actual Emscripten link and live E2E still require the user's Termux SDK.
+
+
+## Archive 387 follow-up — idempotent peer-close handling in the E2E server
+
+The next Termux run passed the WASM BigInt callback boundary and reached the local Node RFC6455 server, but the server test harness failed with `ERR_STREAM_WRITE_AFTER_END`. The server deliberately sends a close frame and ends its TCP writable side after echoing the second FlatL message. The browser WebSocket then sends its close response; the test server previously tried to write another close frame after `socket.end()`.
+
+The test server now tracks a `closing` state and routes frame writes through a guarded helper. Its close operation is idempotent, and a late peer close response is accepted without attempting another write. Echo frames are also suppressed once the server begins closing. This is a test-harness TCP half-close race, not a FlatRuntime or WebSocket transport failure.
+
+Validation in this environment: `node --check test/fleditor/wasm_websocket_e2e.mjs` PASS. Full live E2E still needs to be rerun on Termux with the Emscripten build.

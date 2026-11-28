@@ -38,6 +38,17 @@ function makeServer() {
     let input = Buffer.alloc(0);
     let upgraded = false;
     let clientMessages = 0;
+    let closing = false;
+    const writeFrame = (opcode, payload = Buffer.alloc(0)) => {
+      if (closing || socket.destroyed || socket.writableEnded) return false;
+      return socket.write(frame(opcode, payload));
+    };
+    const closeAfterFlush = () => {
+      if (closing || socket.destroyed || socket.writableEnded) return;
+      closing = true;
+      socket.write(frame(8));
+      socket.end();
+    };
     const fail = (message) => { serverFailed ??= new Error(message); socket.destroy(); };
     socket.on('error', (error) => { if (!serverFailed) serverFailed = error; });
     socket.on('data', (chunk) => {
@@ -75,17 +86,20 @@ function makeServer() {
         const payload = Buffer.from(input.subarray(offset, offset + length));
         if (mask) for (let i = 0; i < payload.length; i++) payload[i] ^= mask[i & 3];
         input = input.subarray(offset + length);
-        if (opcode === 8) { socket.write(frame(8)); socket.end(); return; }
+        if (opcode === 8) {
+          /* A peer close may arrive after we already sent close + FIN. */
+          if (!closing) closeAfterFlush();
+          return;
+        }
         if (opcode !== 1 && opcode !== 2) continue;
         clientMessages++;
         const expected = clientMessages === 1 ? 'client-text' : 'client-binary';
         if (payload.toString('utf8') !== expected || (clientMessages === 1 && opcode !== 1) ||
             (clientMessages === 2 && opcode !== 2)) return fail(`unexpected client frame ${clientMessages}: opcode=${opcode}, payload=${payload.toString('hex')}`);
-        socket.write(frame(opcode, payload));
+        writeFrame(opcode, payload);
         if (clientMessages === 2) {
           /* Both FlatL sends have been echoed; now exercise peer-initiated close. */
-          socket.write(frame(8));
-          socket.end();
+          closeAfterFlush();
           return;
         }
       }

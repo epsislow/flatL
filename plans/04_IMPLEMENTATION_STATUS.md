@@ -1699,3 +1699,11 @@ Validation: `make -j2 all` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5).
 - Changed all three EM_JS socket-ID parameters to `uint64_t`, allowing Emscripten to preserve the identifier as BigInt across the JS/C boundary and avoiding precision loss from Number conversion.
 - Replaced the empty JavaScript character literal in `WebSocket.close()` with an empty string, removing the `-Wempty-character-constant` warning.
 - Validation: pending in this environment; the live E2E must be rerun on Termux with `make fleditor-wasm-websocket-e2e`.
+
+
+### Archive 387 — E2E server close-handshake write guard
+
+- The first Termux run after archive 386 passed the WASM `BigInt` callback boundary and reached the local Node test server, then failed with `ERR_STREAM_WRITE_AFTER_END`: the server had already sent a close frame and called `socket.end()`, then tried to write a second close response when the browser WebSocket replied.
+- Added a guarded frame writer and idempotent close helper to `test/fleditor/wasm_websocket_e2e.mjs`. Late peer close responses are now accepted without writing after the TCP writable side has ended; echo writes are also blocked once closing begins.
+- This fixes the E2E harness's close-handshake race; it does not change FlatRuntime or the WebSocket client backend.
+- Validation in this environment: `node --check test/fleditor/wasm_websocket_e2e.mjs` PASS. Live E2E remains pending a Termux rerun.

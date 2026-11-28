@@ -1229,3 +1229,9 @@ The FLEditor one-shot WASM runner now keeps a completed root run alive while eve
 - [x] Keep the JS-only WebSocket capability/echo smoke as a separate target.
 - [ ] Run `make fleditor-wasm-websocket-e2e` with the Emscripten build and confirm successful root completion/runtime teardown on the user's Termux setup.
 - [ ] Once the FlatL-level client E2E passes, proceed to the native WebSocket server/listener design and implementation. The server/listener is native-only; it is not expected to work in browser WASM.
+
+
+### FlatL WebSocket client E2E close-handshake follow-up — archive 387
+- [x] Make the local RFC6455 test server's close handling idempotent.
+- [x] Ignore a late client close response after the server has already sent close and ended its TCP writable side.
+- [ ] Rerun `make fleditor-wasm-websocket-e2e` on Termux and confirm the complete FlatL open/receive/close lifecycle.
