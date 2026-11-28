@@ -762,7 +762,11 @@ int flat_native_dom_close(FlatNativeCtx *ctx) {
     snprintf(buf, sizeof(buf), "%s", ctx->inner ? ctx->inner : "");
     if (dom_split_args(buf, args, 1, &argc) != 0 || argc != 1 ||
         dom_doc_id(ctx, args[0], &id) != 0) return dom_fail(ctx, "dom.close.args");
-    dom_doc_clear(&ctx->dom->docs[id - 1]);
+    {
+        FlatDomDocument *doc = dom_find_document(ctx, id);
+        if (!doc) return dom_fail(ctx, "dom.close.args");
+        dom_doc_clear(doc);
+    }
     return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
 }
 
@@ -778,14 +782,13 @@ static int dom_node_result(FlatNativeCtx *ctx, lxb_dom_node_t *node) {
     lxb_dom_node_t *ancestor;
     size_t i;
     if (!node) return flat_value_set_null(ctx->out);
-    for (ancestor = node; ancestor && !doc; ancestor = ancestor->parent) {
-        for (i = 0; i < FLAT_DOM_MAX_DOCUMENTS && !doc; ++i) {
-            FlatDomDocument *candidate = &ctx->dom->docs[i];
-            size_t j;
-            if (!candidate->live) continue;
-            for (j = 0; j < candidate->node_count; ++j) {
-                if (candidate->nodes[j] == ancestor) { doc = candidate; break; }
-            }
+    (void)ancestor;
+    for (i = 0; i < FLAT_DOM_MAX_DOCUMENTS; ++i) {
+        FlatDomDocument *candidate = &ctx->dom->docs[i];
+        if (candidate->live && candidate->document &&
+            node->owner_document == &candidate->document->dom_document) {
+            doc = candidate;
+            break;
         }
     }
     if (!doc || dom_node_handle(doc, doc->token, node, &handle) != 0) return -1;
@@ -1113,6 +1116,325 @@ int flat_native_dom_value(FlatNativeCtx *ctx) {
         }
     } else return dom_fail(ctx, "dom.value.type");
     if (dom_make_string(ctx, data, data ? len : 0) != 0) return dom_fail(ctx, "dom.value.alloc");
+    return dom_ok(ctx);
+}
+
+
+/* DOM construction and mutation. Detached nodes remain owned by their page;
+ * handles stay valid until the page is closed. */
+static int dom_node_owner(FlatNativeCtx *ctx, const char *expr,
+                          lxb_dom_node_t **node, FlatDomDocument **doc)
+{
+    FlatValue v;
+    double d;
+    uint64_t handle;
+    uint32_t token;
+    if (flat_native_parse_rhs(ctx, expr, &v) != 0) return -1;
+    if (v.tag != VAL_NUMBER) { flat_native_parse_rhs_release(ctx, &v); return -1; }
+    d = flat_number_as_f64(&v);
+    flat_native_parse_rhs_release(ctx, &v);
+    if (d < 1.0 || d > 1099511627775.0 || d != (double)(uint64_t)d) return -1;
+    handle = (uint64_t)d;
+    token = (uint32_t)(handle >> FLAT_DOM_NODE_SHIFT);
+    if (token == 0 || !(*doc = dom_find_document(ctx, token)) ||
+        dom_node_ref(ctx, expr, node) != 0) return -1;
+    return 0;
+}
+
+static int dom_make_node_handle(FlatNativeCtx *ctx, FlatDomDocument *doc,
+                                lxb_dom_node_t *node)
+{
+    uint64_t handle;
+    if (!doc || !node || dom_node_handle(doc, doc->token, node, &handle) != 0)
+        return -1;
+    return flat_value_set_number(ctx->out, (double)handle);
+}
+
+static int dom_set_attribute_value(lxb_dom_node_t *node, const char *name,
+                                   const char *value, size_t value_len)
+{
+    if (!node || node->type != LXB_DOM_NODE_TYPE_ELEMENT || !name || !*name)
+        return -1;
+    return lxb_dom_element_set_attribute(lxb_dom_interface_element(node),
+        (const lxb_char_t *)name, strlen(name), (const lxb_char_t *)value,
+        value_len) ? 0 : -1;
+}
+
+int flat_native_dom_create_element(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[2], *tag = NULL;
+    size_t len, i; uint32_t id;
+    FlatDomDocument *doc; lxb_dom_element_t *element;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 2, 2) != 0 ||
+        dom_doc_id(ctx, args[0], &id) != 0 ||
+        dom_get_string(ctx, args[1], &tag, &len) != 0 || len == 0 || len > 128)
+        { free(tag); return dom_fail(ctx, "dom.createElement.args"); }
+    for (i = 0; i < len; ++i) {
+        unsigned char c = (unsigned char)tag[i];
+        if (!(isalnum(c) || c == '-' || c == ':' || c == '_')) {
+            free(tag); return dom_fail(ctx, "dom.createElement.tag");
+        }
+        tag[i] = (char)tolower(c);
+    }
+    doc = dom_find_document(ctx, id);
+    if (!doc) { free(tag); return dom_fail(ctx, "dom.createElement.document"); }
+    element = lxb_dom_document_create_element(&doc->document->dom_document,
+        (const lxb_char_t *)tag, len, NULL);
+    free(tag);
+    if (!element || dom_make_node_handle(ctx, doc, lxb_dom_interface_node(element)) != 0)
+        return dom_fail(ctx, "dom.createElement.alloc");
+    return dom_ok(ctx);
+}
+
+int flat_native_dom_create_text(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[2], *text = NULL;
+    size_t len; uint32_t id; FlatDomDocument *doc; lxb_dom_text_t *node;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 2, 2) != 0 ||
+        dom_doc_id(ctx, args[0], &id) != 0 ||
+        dom_get_string(ctx, args[1], &text, &len) != 0) {
+        free(text); return dom_fail(ctx, "dom.createText.args");
+    }
+    doc = dom_find_document(ctx, id);
+    if (!doc) { free(text); return dom_fail(ctx, "dom.createText.document"); }
+    node = lxb_dom_document_create_text_node(&doc->document->dom_document,
+        (const lxb_char_t *)text, len);
+    free(text);
+    if (!node || dom_make_node_handle(ctx, doc, lxb_dom_interface_node(node)) != 0)
+        return dom_fail(ctx, "dom.createText.alloc");
+    return dom_ok(ctx);
+}
+
+int flat_native_dom_create_comment(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[2], *text = NULL; size_t len; uint32_t id;
+    FlatDomDocument *doc; lxb_dom_comment_t *node;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 2, 2) != 0 ||
+        dom_doc_id(ctx, args[0], &id) != 0 ||
+        dom_get_string(ctx, args[1], &text, &len) != 0) {
+        free(text); return dom_fail(ctx, "dom.createComment.args");
+    }
+    doc = dom_find_document(ctx, id);
+    if (!doc) { free(text); return dom_fail(ctx, "dom.createComment.document"); }
+    node = lxb_dom_document_create_comment(&doc->document->dom_document,
+        (const lxb_char_t *)text, len);
+    free(text);
+    if (!node || dom_make_node_handle(ctx, doc, lxb_dom_interface_node(node)) != 0)
+        return dom_fail(ctx, "dom.createComment.alloc");
+    return dom_ok(ctx);
+}
+
+static int dom_insert_nodes(FlatNativeCtx *ctx, int mode)
+{
+    char buf[4096], *args[3]; int wanted = mode == 2 ? 3 : 2;
+    lxb_dom_node_t *parent, *child, *reference = NULL, *ancestor;
+    FlatDomDocument *pd, *cd, *rd = NULL;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 3, wanted) != 0 ||
+        dom_node_owner(ctx, args[0], &parent, &pd) != 0 ||
+        dom_node_owner(ctx, args[1], &child, &cd) != 0 || pd != cd ||
+        parent->type == LXB_DOM_NODE_TYPE_TEXT || parent->type == LXB_DOM_NODE_TYPE_COMMENT)
+        return dom_fail(ctx, "dom.insert.args");
+    if (mode == 2) {
+        if (dom_node_owner(ctx, args[2], &reference, &rd) != 0 || rd != pd ||
+            reference->parent != parent) return dom_fail(ctx, "dom.insert.reference");
+    }
+    for (ancestor = parent; ancestor; ancestor = ancestor->parent)
+        if (ancestor == child) return dom_fail(ctx, "dom.insert.cycle");
+    {
+        lxb_dom_exception_code_t code;
+        if (mode == 0) code = lxb_dom_node_insert(parent, child, NULL, false);
+        else if (mode == 1) code = lxb_dom_node_insert(parent, child, parent->first_child, false);
+        else code = lxb_dom_node_insert(parent, child, reference, false);
+        if (code != LXB_DOM_EXCEPTION_OK) return dom_fail(ctx, "dom.insert.invalid");
+    }
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+int flat_native_dom_append(FlatNativeCtx *ctx) { return dom_insert_nodes(ctx, 0); }
+int flat_native_dom_prepend(FlatNativeCtx *ctx) { return dom_insert_nodes(ctx, 1); }
+int flat_native_dom_insert_before(FlatNativeCtx *ctx) { return dom_insert_nodes(ctx, 2); }
+
+int flat_native_dom_replace(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[3];
+    lxb_dom_node_t *parent, *old_node, *new_node, *ancestor;
+    FlatDomDocument *pd, *od, *nd;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 3, 3) != 0 ||
+        dom_node_owner(ctx, args[0], &parent, &pd) != 0 ||
+        dom_node_owner(ctx, args[1], &old_node, &od) != 0 ||
+        dom_node_owner(ctx, args[2], &new_node, &nd) != 0 ||
+        pd != od || pd != nd || old_node->parent != parent ||
+        parent->type == LXB_DOM_NODE_TYPE_TEXT || parent->type == LXB_DOM_NODE_TYPE_COMMENT)
+        return dom_fail(ctx, "dom.replace.args");
+    for (ancestor = parent; ancestor; ancestor = ancestor->parent)
+        if (ancestor == new_node) return dom_fail(ctx, "dom.replace.cycle");
+    if (lxb_dom_node_replace_child(parent, new_node, old_node) != LXB_DOM_EXCEPTION_OK)
+        return dom_fail(ctx, "dom.replace.invalid");
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+int flat_native_dom_remove(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[1]; lxb_dom_node_t *node; FlatDomDocument *doc;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 ||
+        node->type == LXB_DOM_NODE_TYPE_DOCUMENT)
+        return dom_fail(ctx, "dom.remove.args");
+    (void)doc;
+    lxb_dom_node_remove(node);
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+int flat_native_dom_clear(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[1]; lxb_dom_node_t *node, *child, *next;
+    FlatDomDocument *doc;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 ||
+        node->type == LXB_DOM_NODE_TYPE_TEXT || node->type == LXB_DOM_NODE_TYPE_COMMENT)
+        return dom_fail(ctx, "dom.clear.args");
+    (void)doc;
+    for (child = node->first_child; child; child = next) {
+        next = child->next;
+        lxb_dom_node_remove(child);
+    }
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+int flat_native_dom_set_attr(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[3], *name = NULL, *value = NULL; size_t nl, vl;
+    lxb_dom_node_t *node; FlatDomDocument *doc;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 3, 3) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &name, &nl) != 0 || nl == 0 || nl > 1024 ||
+        dom_get_string(ctx, args[2], &value, &vl) != 0) {
+        free(name); free(value); return dom_fail(ctx, "dom.setAttr.args");
+    }
+    (void)doc;
+    if (dom_set_attribute_value(node, name, value, vl) != 0) {
+        free(name); free(value); return dom_fail(ctx, "dom.setAttr");
+    }
+    free(name); free(value);
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+int flat_native_dom_remove_attr(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[2], *name = NULL; size_t len;
+    lxb_dom_node_t *node; FlatDomDocument *doc;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 2, 2) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &name, &len) != 0 || len == 0 || len > 1024) {
+        free(name); return dom_fail(ctx, "dom.removeAttr.args");
+    }
+    (void)doc;
+    (void)lxb_dom_element_remove_attribute(lxb_dom_interface_element(node),
+        (const lxb_char_t *)name, len);
+    free(name);
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+int flat_native_dom_set_data(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[3], *name = NULL, *value = NULL, attr[1030];
+    size_t len, vl, i; lxb_dom_node_t *node; FlatDomDocument *doc;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 3, 3) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &name, &len) != 0 || len == 0 || len > 1024 ||
+        dom_get_string(ctx, args[2], &value, &vl) != 0) {
+        free(name); free(value); return dom_fail(ctx, "dom.setData.args");
+    }
+    (void)doc;
+    if (len >= 5 && strncasecmp(name, "data-", 5) == 0) snprintf(attr, sizeof(attr), "%s", name);
+    else snprintf(attr, sizeof(attr), "data-%s", name);
+    for (i = 0; attr[i]; ++i) attr[i] = (char)tolower((unsigned char)attr[i]);
+    if (dom_set_attribute_value(node, attr, value, vl) != 0) {
+        free(name); free(value); return dom_fail(ctx, "dom.setData");
+    }
+    free(name); free(value);
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+int flat_native_dom_set_text(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[2], *value = NULL; size_t len;
+    lxb_dom_node_t *node, *child, *next; lxb_dom_text_t *text;
+    FlatDomDocument *doc;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 2, 2) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 ||
+        node->type == LXB_DOM_NODE_TYPE_TEXT || node->type == LXB_DOM_NODE_TYPE_COMMENT ||
+        dom_get_string(ctx, args[1], &value, &len) != 0) {
+        free(value); return dom_fail(ctx, "dom.setText.args");
+    }
+    for (child = node->first_child; child; child = next) {
+        next = child->next; lxb_dom_node_remove(child);
+    }
+    if (len) {
+        text = lxb_dom_document_create_text_node(&doc->document->dom_document,
+            (const lxb_char_t *)value, len);
+        if (!text) { free(value); return dom_fail(ctx, "dom.setText.alloc"); }
+        lxb_dom_node_insert_child(node, lxb_dom_interface_node(text));
+        if (dom_node_handle(doc, doc->token, lxb_dom_interface_node(text), &(uint64_t){0}) != 0) {
+            free(value); return dom_fail(ctx, "dom.setText.handle");
+        }
+    }
+    free(value);
+    return dom_ok(ctx) + flat_value_set_bool(ctx->out, 1);
+}
+
+int flat_native_dom_set_prop(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[3], *name = NULL, *value = NULL, *attr = NULL;
+    size_t nl, vl = 0; FlatValue v; lxb_dom_node_t *node; FlatDomDocument *doc;
+    int boolean = -1, rc = -1;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 3, 3) != 0 ||
+        dom_node_owner(ctx, args[0], &node, &doc) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT ||
+        dom_get_string(ctx, args[1], &name, &nl) != 0 || nl == 0 || nl > 64 ||
+        flat_native_parse_rhs(ctx, args[2], &v) != 0) goto done;
+    (void)doc;
+    if (strcmp(name, "checked") == 0 || strcmp(name, "disabled") == 0 || strcmp(name, "required") == 0) {
+        if (v.tag != VAL_BOOL) { flat_native_parse_rhs_release(ctx, &v); goto done; }
+        boolean = v.u.boolean;
+        flat_native_parse_rhs_release(ctx, &v);
+        if (strcmp(name, "checked") == 0) {
+            char type[32];
+            if (!dom_node_named(node, "input") || dom_input_type_value(node, type) != 0 ||
+                (strcmp(type, "checkbox") != 0 && strcmp(type, "radio") != 0)) goto done;
+        }
+        if (boolean) rc = dom_set_attribute_value(node, name, "", 0);
+        else rc = lxb_dom_element_remove_attribute(lxb_dom_interface_element(node),
+            (const lxb_char_t *)name, strlen(name)) == LXB_STATUS_OK ? 0 : -1;
+    } else {
+        if (v.tag != VAL_STR_INLINE && v.tag != VAL_STR_REF) {
+            flat_native_parse_rhs_release(ctx, &v); goto done;
+        }
+        value = (char *)malloc(FLAT_DOM_MAX_INPUT + 1);
+        if (!value || flat_value_get_cstr(&v, ctx->pool, value, FLAT_DOM_MAX_INPUT + 1) != 0) {
+            free(value); value = NULL; flat_native_parse_rhs_release(ctx, &v); goto done;
+        }
+        vl = strlen(value);
+        flat_native_parse_rhs_release(ctx, &v);
+        if (strcmp(name, "id") == 0) attr = "id";
+        else if (strcmp(name, "className") == 0) attr = "class";
+        else if (strcmp(name, "name") == 0) attr = "name";
+        else if (strcmp(name, "type") == 0) attr = "type";
+        else if (strcmp(name, "href") == 0) attr = "href";
+        else if (strcmp(name, "src") == 0) attr = "src";
+        else if (strcmp(name, "title") == 0) attr = "title";
+        else if (strcmp(name, "value") == 0 && !dom_node_named(node, "textarea") && !dom_node_named(node, "select")) attr = "value";
+        if (attr) rc = dom_set_attribute_value(node, attr, value, vl);
+        else if (strcmp(name, "value") == 0 && dom_node_named(node, "textarea")) {
+            /* Implemented by the same safe text replacement as setText below. */
+            lxb_dom_node_t *child, *next; lxb_dom_text_t *text;
+            for (child = node->first_child; child; child = next) { next = child->next; lxb_dom_node_remove(child); }
+            text = lxb_dom_document_create_text_node(&doc->document->dom_document, (const lxb_char_t *)value, vl);
+            if (text) { lxb_dom_node_insert_child(node, lxb_dom_interface_node(text)); rc = 0; }
+        }
+    }
+    if (rc == 0) rc = flat_value_set_bool(ctx->out, 1);
+done:
+    free(name); free(value);
+    if (rc != 0) return dom_fail(ctx, "dom.setProp");
     return dom_ok(ctx);
 }
 

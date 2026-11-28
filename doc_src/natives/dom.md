@@ -210,6 +210,56 @@ These functions inspect the parsed HTML state. FlatL's DOM module does not run b
 
 `text(node)` already returns the full descendant text content (the DOM `textContent` concept); a separate `textContent()` alias is not provided.
 
+### Creating and modifying nodes
+
+`createElement(page, tag)` creates a detached HTML element owned by `page`. The tag name is normalized to lower case and must contain only ASCII letters, digits, `-`, `_`, or `:`. `createText(page, text)` creates a detached text node, while `createComment(page, text)` creates a detached comment node. These calls return ordinary numeric node handles and can be used with the same navigation, serialization, and mutation APIs as parsed nodes.
+
+Tree operations require all participating nodes to belong to the same document:
+
+- `append(parent, child)` inserts the child at the end of the parent's children.
+- `prepend(parent, child)` inserts it before the first child.
+- `insertBefore(parent, child, reference)` inserts it immediately before `reference`, which must already be a child of `parent`.
+- `replace(parent, oldNode, newNode)` replaces the existing direct child `oldNode` with `newNode`.
+- Inserting an attached node moves it from its previous parent. Inserting a node into itself or one of its descendants is rejected.
+- `remove(node)` detaches the node from its parent. The node handle remains valid and the node can be inserted elsewhere in the same document.
+- `clear(node)` detaches all direct children. Their handles remain valid; the nodes are not destroyed.
+
+Detached nodes remain owned by their original document. As with all DOM handles, they become invalid when that document is closed. Nodes from different documents cannot be combined.
+
+```flat
+ dom.parseHtml('<main></main>') -> page
+ dom.select(page, 'main') -> roots
+ list.get(roots, 0) -> root
+ dom.createElement(page, 'section') -> section
+ dom.setAttr(section, 'id', 'content')
+ dom.createText(page, 'Hello') -> label
+ dom.append(section, label)
+ dom.prepend(root, section)
+ dom.outerHtml(root) -> markup
+```
+
+### Writing attributes, data and properties
+
+`setAttr(node, name, value)` writes an element attribute as a string; `removeAttr(node, name)` removes it. `setData(node, name, value)` writes a `data-*` attribute and follows the same prefix rule as `data()`: pass either `sku` or `data-sku`. These operations return `true` on success.
+
+`setProp(node, name, value)` is a limited writable counterpart to `prop()`, not a general JavaScript property setter:
+
+- Boolean properties `checked`, `disabled`, and `required` require a FlatL BOOL. `checked` is accepted only for checkbox/radio inputs.
+- String properties `id`, `className`, `name`, `type`, `href`, `src`, `title`, and `value` require a FlatL STRING. `className` maps to the `class` attribute. For ordinary elements and input/button controls, `value` maps to the `value` attribute; for `textarea`, it replaces the text content.
+- Read-only, unknown, unsupported, or incorrectly typed properties fail with `dom.setProp`.
+
+`setText(node, text)` detaches the node's existing children and inserts one text node when `text` is non-empty. It does not interpret the string as HTML. Existing detached child handles remain valid.
+
+```flat
+ dom.setAttr(section, 'title', 'Products')
+ dom.setData(section, 'sku', 'A-42')
+ dom.setProp(section, 'className', 'panel featured')
+ dom.setProp(section, 'required', true)
+ dom.setText(section, 'Plain text, not markup')
+```
+
+These functions modify the Lexbor DOM tree in memory. They do not update a browser page or FLEditor's live UI DOM; that requires a separate browser-side bridge.
+
 ### `prop(node, name)`
 
 Reads a supported HTML/DOM property. This is a deliberately limited property accessor, not a JavaScript browser DOM implementation.

@@ -2,7 +2,7 @@
 
 Acest director păstrează deciziile de arhitectură, direcția și ordinea de implementare pentru Task Runtime, Channel și viitoarea integrare UI. Scopul este ca lucrul să poată continua într-o conversație nouă fără să depindă de istoricul chatului.
 
-**Ultima arhivă:** `flatL-main-352-panic-block-any.zip`. Arhiva 351 Task/Channel WASM este validată de utilizator atât prin `make fleditor-wasm-test` în Termux, cât și prin rularea manuală a celor trei exemple în browser. Arhiva 352 implementează `#panic.#target.any`, inclusiv caller-chain și child-task VM. Lucrul se oprește după etapa B; UI Runtime și validarea worker pool pe Windows rămân pentru o etapă viitoare.
+**Ultima arhivă:** `flatL-main-353-dom-mutation-api.zip`. Arhiva 351 Task/Channel WASM este validată de utilizator atât prin `make fleditor-wasm-test` în Termux, cât și prin rularea manuală a celor trei exemple în browser. Arhiva 352 implementează `#panic.#target.any`, inclusiv caller-chain și child-task VM. Lucrul se oprește după etapa B; UI Runtime și validarea worker pool pe Windows rămân pentru o etapă viitoare.
 
 ## Documente
 
@@ -46,6 +46,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [38 — Worker Failure Isolation Soak](38_WORKER_FAILURE_ISOLATION_SOAK.md): checks task-local failure across repeated worker-runtime lifecycles.
 - [39 — Emscripten Single-Thread Worker Gate](39_EMSCRIPTEN_SINGLE_THREAD_WORKER_GATE.md): validates the no-pthreads synchronization branch and clean worker-start rejection.
 - [62 — Block-scoped Panic Any](62_BLOCK_SCOPED_PANIC_ANY.md): defines and validates `#panic.#target.any`, caller-chain precedence, explicit PANIC and child-task VM recovery.
+- [63 — DOM Construction and Mutation API](63_DOM_MUTATION_API.md): extends the Lexbor-backed DOM module with node creation, tree mutations, attribute/data/property writes and explicit document ownership semantics.
 - [40 — Windows FlatSync / FlatThread Audit](40_WINDOWS_FLAT_SYNC_AUDIT.md): audits SRWLOCK/condition-variable semantics and FlatThread create/join ownership; adds a portable FlatThread contract regression while keeping real Windows validation open.
 - [55 — FGIR Native-Unit Storage Audit](55_FGIR_NATIVE_UNIT_STORAGE_AUDIT.md): audits the remaining fixed `FgirProgram.native_units[32]` table and selects an isolated dynamic outer-table conversion.
 - [56 — FGIR Dynamic Native-Unit Storage](56_FGIR_DYNAMIC_NATIVE_UNIT_STORAGE.md): converts only the outer native-unit table to owned dynamic storage and preserves inline per-unit declarations.
@@ -66,7 +67,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima arhivă:** `flatL-main-352-panic-block-any.zip`.
+**Ultima arhivă:** `flatL-main-353-dom-mutation-api.zip`.
 
 **Ultimul checkpoint validat de utilizator:** arhiva 351 Task/Channel WASM este validată prin `make fleditor-wasm-test` în Termux și prin rularea manuală a celor trei exemple în browser. Arhiva 352 implementează block-scoped panic `.any`, cu fallback pe caller chain și test în child-task VM. Validarea focalizată este 9/9 pentru `panic[1-9]` și 1/1 pentru `flvm[57]`; `make all -j2` și `make docs` trec. Suita completă nu este declarată PASS. Lucrul se oprește după etapa B, conform deciziei utilizatorului.
 

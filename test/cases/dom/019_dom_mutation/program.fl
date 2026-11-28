@@ -1,0 +1,69 @@
+use native dom
+use native list
+
+#main
+  dom.parseHtml('<main></main>') -> page
+  dom.select(page, 'main') -> roots
+  list.get(roots, 0) -> root
+
+  dom.createElement(page, 'section') -> section
+  dom.setAttr(section, 'id', 'content') == true
+  dom.setData(section, 'role', 'primary') == true
+  dom.prop(section, 'id') == 'content'
+  dom.data(section, 'role') == 'primary'
+
+  dom.createElement(page, 'p') -> first
+  dom.createText(page, 'first') -> first_text
+  dom.append(first, first_text) == true
+  dom.append(section, first) == true
+
+  dom.createElement(page, 'p') -> second
+  dom.setText(second, 'second') == true
+  dom.prepend(section, second) == true
+  dom.select(section, 'p') -> paragraphs
+  list.len(paragraphs) == 2
+  list.get(paragraphs, 0) -> first_item
+  dom.text(first_item) == 'second'
+
+  dom.createElement(page, 'p') -> middle
+  dom.setText(middle, 'middle') == true
+  dom.insertBefore(section, middle, first) == true
+  dom.select(section, 'p') -> paragraphs2
+  list.get(paragraphs2, 1) -> middle_item
+  dom.text(middle_item) == 'middle'
+
+  dom.createElement(page, 'p') -> replacement
+  dom.setText(replacement, 'replacement') == true
+  dom.replace(section, second, replacement) == true
+  dom.text(second) == 'second'
+  dom.select(section, 'p') -> replaced
+  list.get(replaced, 0) -> replacement_item
+  dom.text(replacement_item) == 'replacement'
+
+  dom.createComment(page, 'created comment') -> note
+  dom.append(root, note) == true
+
+  dom.setProp(first, 'title', 'hello') == true
+  dom.prop(first, 'title') == 'hello'
+  dom.setProp(first, 'required', true) == true
+  dom.prop(first, 'required') == true
+  dom.setProp(first, 'required', false) == true
+  dom.hasAttr(first, 'required') == false
+
+  dom.remove(middle) == true
+  dom.select(section, 'p') -> remaining
+  list.len(remaining) == 2
+
+  dom.createElement(page, 'aside') -> other_parent
+  dom.append(root, other_parent) == true
+  dom.append(other_parent, first) == true
+  dom.select(section, 'p') -> after_move
+  list.len(after_move) == 1
+  dom.select(other_parent, 'p') -> moved
+  list.len(moved) == 1
+  dom.clear(section) == true
+  dom.children(section) -> no_children
+  list.len(no_children) == 0
+  dom.close(page)
+  io.outln('dom-mutation-ok')
+  OK

@@ -277,6 +277,20 @@ static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_HTML, flat_native_dom_html);
     flat_native_plugin_register(FLAT_NATIVE_DOM_OUTER_HTML, flat_native_dom_outer_html);
     flat_native_plugin_register(FLAT_NATIVE_DOM_PROP, flat_native_dom_prop);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CREATE_ELEMENT, flat_native_dom_create_element);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CREATE_TEXT, flat_native_dom_create_text);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_APPEND, flat_native_dom_append);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_PREPEND, flat_native_dom_prepend);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_INSERT_BEFORE, flat_native_dom_insert_before);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_REMOVE, flat_native_dom_remove);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CLEAR, flat_native_dom_clear);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_SET_ATTR, flat_native_dom_set_attr);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_REMOVE_ATTR, flat_native_dom_remove_attr);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_SET_DATA, flat_native_dom_set_data);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_SET_PROP, flat_native_dom_set_prop);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_SET_TEXT, flat_native_dom_set_text);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CREATE_COMMENT, flat_native_dom_create_comment);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_REPLACE, flat_native_dom_replace);
 }
 #endif
 
