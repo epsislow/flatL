@@ -206,7 +206,7 @@ HTTP_CFLAGS =
 HTTP_LIBS =
 ENSURE_LIBZ_1 =
 else
-HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_curl.c src/http/flat_ws_transport.c src/http/flat_ws_event_client.c
+HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_curl.c src/http/flat_ws_transport.c src/http/flat_ws_event_client.c src/http/flat_ws_server_transport.c src/http/flat_ws_server_frames.c src/http/flat_ws_server_registry.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 # MSYS2 UCRT64: libcurl PE imports libz-1.dll; mingw zlib package ships zlib1.dll.
@@ -310,7 +310,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-wasm-api-smoke fleditor-wasm-test fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-env-smoke fleditor-wasm-multifile-smoke fleditor-wasm-websocket-smoke fleditor-wasm-websocket-e2e fleditor-rebuild ensure-libz-1
+.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-wasm-api-smoke fleditor-wasm-test fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-env-smoke fleditor-wasm-multifile-smoke fleditor-wasm-websocket-smoke fleditor-wasm-websocket-e2e test-websocket-server-listener fleditor-rebuild ensure-libz-1
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -1148,6 +1148,12 @@ test-runtime-websocket-registry: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/074_runtime_websocket_registry/runtime_websocket_registry_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
+# Validate the native WebSocket server listening-socket foundation.
+.PHONY: test-websocket-server-listener
+test-websocket-server-listener:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/076_websocket_server_listener/websocket_server_listener_test.c src/http/flat_ws_server_transport.c src/common/flat_hash.c external/hash/WjCryptLib_Md5.c external/hash/WjCryptLib_Sha1.c external/hash/WjCryptLib_Sha256.c external/hash/WjCryptLib_Sha512.c -Iexternal/hash $(LDFLAGS)
+
 # Integration test for FlatL sockets WebSocket native bridge.
 .PHONY: test-sockets-native-bridge
 test-sockets-native-bridge: $(FLVM_TEST_COMMON_OBJ)
@@ -1168,3 +1174,21 @@ fleditor-wasm-websocket-e2e: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-websocket-e2e)
 	$(WASM_NODE) test/fleditor/wasm_websocket_e2e.mjs
 	@$(call step_end)
+
+# Validate the native RFC 6455 HTTP Upgrade handshake and accept-key calculation.
+.PHONY: test-websocket-server-upgrade
+test-websocket-server-upgrade:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -Iexternal/hash -pthread -o $(TEST_BIN) test/cases/flvm/077_websocket_server_upgrade/websocket_server_upgrade_test.c src/http/flat_ws_server_transport.c src/common/flat_hash.c external/hash/WjCryptLib_Md5.c external/hash/WjCryptLib_Sha1.c external/hash/WjCryptLib_Sha256.c external/hash/WjCryptLib_Sha512.c $(LDFLAGS)
+
+# Native RFC 6455 server frame parsing/writing, fragmentation and control frames.
+.PHONY: test-websocket-server-frames
+test-websocket-server-frames:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/078_websocket_server_frames/websocket_server_frames_test.c src/http/flat_ws_server_frames.c $(LDFLAGS)
+
+# Thread-safe ownership registry for native WebSocket server listeners and peers.
+.PHONY: test-websocket-server-registry
+test-websocket-server-registry:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -Iexternal/hash -Iinclude -o $(TEST_BIN) test/cases/flvm/079_websocket_server_registry/websocket_server_registry_test.c src/http/flat_ws_server_registry.c src/http/flat_ws_server_transport.c src/http/flat_ws_server_frames.c src/common/flat_hash.c external/hash/WjCryptLib_Md5.c external/hash/WjCryptLib_Sha1.c external/hash/WjCryptLib_Sha256.c external/hash/WjCryptLib_Sha512.c $(LDFLAGS)

@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 78
+desc = "native WebSocket server parses masked RFC 6455 frames, fragmentation and control frames"
+kind = "exec"
+cmd = "make -s test-websocket-server-frames TEST_BIN={tmp}/websocket_server_frames_test && {tmp}/websocket_server_frames_test"
+expect_exit = 0
+stdout_contains = "websocket-server-frames-ok"

@@ -487,3 +487,13 @@ Native WebSocket transport is now controlled independently by `FLAT_WITH_WEBSOCK
 ## Archive 378 — sanitizer validation of the WebSocket event pipeline
 
 No runtime code changes in this checkpoint. Repeated Clang ASan (with leak detection) and UBSan runs passed for the socket event adapter, WebSocket registry, transport contract, runtime event bridge, and FlatL native bridge. The exact repeat counts and coverage boundary are in `plans/67_WEBSOCKET_EVENT_SANITIZER_VALIDATION.md`. The user also confirmed the archive-377 FLEditor WASM link fix on Termux. A live WebSocket-capable libcurl host is still needed to exercise the actual background reader and network round-trip under sanitizers.
+
+
+## Archive 388 — native WebSocket listener TCP foundation
+
+- Added `include/flat_ws_server_transport.h` and `src/http/flat_ws_server_transport.c` as a native TCP listening-endpoint primitive. It supports IPv4/IPv6 address resolution, bind/listen, OS-assigned ephemeral ports, timed accept, and explicit peer/listener cleanup.
+- Kept the listener transport independent from the existing libcurl WebSocket client transport. No new third-party dependency is introduced.
+- Added `flvm[76]` to validate loopback bind on port `0`, non-blocking accept timeout, a local TCP connect/accept, and descriptor cleanup.
+- This is intentionally a transport foundation only: HTTP Upgrade, RFC 6455 frame handling, per-client event readers, FlatRuntime server registry, and FlatL `sockets.wsListen/wsStop` are not implemented yet.
+- Native-only by design; browser WASM cannot bind a TCP listening socket. Node.js-hosted WASM server support remains out of scope.
+- Validation in this workspace: `make -j2 all` PASS; `bin/run_tests 'flvm[71-76]' -v -e` PASS (6/6). The standalone listener harness also passed. Documentation generation is pending for this archive.

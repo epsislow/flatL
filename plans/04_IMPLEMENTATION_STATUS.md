@@ -1707,3 +1707,30 @@ Validation: `make -j2 all` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5).
 - Added a guarded frame writer and idempotent close helper to `test/fleditor/wasm_websocket_e2e.mjs`. Late peer close responses are now accepted without writing after the TCP writable side has ended; echo writes are also blocked once closing begins.
 - This fixes the E2E harness's close-handshake race; it does not change FlatRuntime or the WebSocket client backend.
 - Validation in this environment: `node --check test/fleditor/wasm_websocket_e2e.mjs` PASS. Live E2E remains pending a Termux rerun.
+
+### Archive 388 — native WebSocket listener foundation
+
+Added a native TCP listening-socket primitive (`flat_ws_server_transport`) with IPv4/IPv6 binding, ephemeral-port discovery, timed accept, and explicit cleanup. `flvm[76]` verifies the loopback listener lifecycle. This is not yet a complete WebSocket server: HTTP Upgrade, RFC 6455 framing, runtime event integration, client registry, and FlatL listener operations remain pending. The implementation is native-only; browser WASM cannot bind listening TCP sockets.
+
+
+### Archive 389 — native WebSocket HTTP Upgrade
+
+Added `flat_ws_server_peer_accept_upgrade()` to the native server transport. It reads a bounded HTTP header block through `CRLFCRLF`, validates the GET/HTTP 1.1 request and required RFC 6455 headers (`Upgrade: websocket`, `Connection: ... Upgrade`, `Sec-WebSocket-Version: 13`, and a canonical Base64 key decoding to 16 bytes), computes the SHA-1 + Base64 `Sec-WebSocket-Accept` value, and sends `101 Switching Protocols`. Header reading is byte-oriented to avoid consuming the first WebSocket frame if it arrives in the same TCP packet. The peer remains caller-owned.
+
+Added `flvm[77]`, which performs a loopback upgrade using the RFC 6455 sample client key and verifies the expected accept value. Updated `flvm[76]` link dependencies to include the shared SHA-1 implementation. Also corrected the peer socket type to preserve 64-bit Windows `SOCKET` values instead of narrowing them to `int`.
+
+Validation: `make -j2 all` PASS; standalone handshake harness PASS. Full `flvm[76-77]` and `make docs` validation pending final run. This milestone implements the HTTP handshake only; frame parsing/writing, runtime integration, client registry and FlatL listener APIs remain pending.
+
+
+### Archive 390 — native WebSocket RFC 6455 frame layer
+
+Added `flat_ws_server_peer_send()` and `flat_ws_server_peer_receive()` in the native server transport. The writer emits unmasked server frames with short, 16-bit, or 64-bit payload lengths. The reader validates mandatory client masking, zero RSV bits, supported opcodes, canonical extended lengths, the 64-bit length high bit, and control-frame FIN/125-byte limits. It reassembles fragmented text/binary messages, permits interleaved control frames, automatically answers ping with pong, ignores pong, validates and echoes close, validates UTF-8 text/close reasons, and bounds allocations by the caller-provided maximum message size. Returned messages are released with `flat_ws_server_message_free()`.
+
+Added `flvm[78]` coverage for fragmented text with an interleaved ping, pong response, 16-bit binary payload parsing, and unmasked server frame output. Timeouts are still per readiness wait rather than absolute operation deadlines. Runtime registry/event integration and FlatL listener APIs remain pending.
+
+
+### Archive 391 — native WebSocket server registry lifecycle
+
+Added `FlatWsServerRegistry`, a thread-safe transport-level owner for native WebSocket listeners and accepted peers. It allocates monotonic numeric IDs, tracks active operations, rejects operations after close begins, interrupts blocked socket I/O, waits for operations to leave, and then closes descriptors. Peer receive operations are serialized; explicit sends and automatic PONG/CLOSE responses share a per-peer send mutex. Added `flvm[79]`, which verifies that closing a listener interrupts a blocking accept and that duplicate close is rejected.
+
+Validation: `make -j2 all` PASS; `bin/run_tests 'flvm[76-79]' -v -e` PASS (4/4); `make docs` PASS (53 sections). This is a transport-level registry only: it is not owned by FlatRuntime, has no background I/O reactor, does not publish event-source events, and does not expose FlatL server APIs. The host must prevent new API calls from starting concurrently with registry destruction.

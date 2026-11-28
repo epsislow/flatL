@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 79
+desc = "native WebSocket server registry owns listeners and interrupts an in-flight accept during close"
+kind = "exec"
+cmd = "make -s test-websocket-server-registry TEST_BIN={tmp}/websocket_server_registry_test && {tmp}/websocket_server_registry_test"
+expect_exit = 0
+stdout_contains = "websocket-server-registry-ok"

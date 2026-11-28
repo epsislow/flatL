@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 76
+desc = "native WebSocket server transport binds an ephemeral port and accepts TCP peers"
+kind = "exec"
+cmd = "make -s test-websocket-server-listener TEST_BIN={tmp}/websocket_server_listener_test && {tmp}/websocket_server_listener_test"
+expect_exit = 0
+stdout_contains = "websocket-server-listener-ok"

@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 77
+desc = "native WebSocket server validates RFC 6455 upgrade and emits the correct accept response"
+kind = "exec"
+cmd = "make -s test-websocket-server-upgrade TEST_BIN={tmp}/websocket_server_upgrade_test && {tmp}/websocket_server_upgrade_test"
+expect_exit = 0
+stdout_contains = "websocket-server-upgrade-ok"

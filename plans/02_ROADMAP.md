@@ -1235,3 +1235,47 @@ The FLEditor one-shot WASM runner now keeps a completed root run alive while eve
 - [x] Make the local RFC6455 test server's close handling idempotent.
 - [x] Ignore a late client close response after the server has already sent close and ended its TCP writable side.
 - [ ] Rerun `make fleditor-wasm-websocket-e2e` on Termux and confirm the complete FlatL open/receive/close lifecycle.
+
+
+## Native WebSocket server listener — archive 388
+
+- [x] Add a native TCP listening-endpoint primitive with bind/listen, ephemeral-port discovery, timed accept, and explicit cleanup.
+- [x] Add a `bin/run_tests` loopback listener test (`flvm[76]`).
+- [x] Implement bounded HTTP Upgrade validation and RFC 6455 `Sec-WebSocket-Accept` generation.
+- [ ] Implement masked client-frame parsing and server text/binary/control frame writing with bounded payloads.
+- [ ] Add runtime-owned listener and accepted-client registries with race-safe stop/close lifecycle.
+- [ ] Publish listener `connection` events and per-client `open`/`receive`/`close`/`error` through the shared `socket` source kind.
+- [ ] Expose FlatL `sockets.wsListen()` / `sockets.wsStop()` and add FlatL-level multi-client loopback E2E coverage.
+- [ ] Add TLS/WSS after the plain `ws://` listener is stable. Server listening remains native-only; browser WASM is not expected to bind TCP ports.
+
+**Archive 388 boundary:** only the TCP listener primitive is implemented. Do not treat this milestone as WebSocket protocol or FlatL server support yet.
+
+### Archive 389 — native WebSocket HTTP Upgrade
+- [x] Validate GET/HTTP 1.1, Upgrade/Connection headers, WebSocket version 13 and the canonical 16-byte Base64 client key.
+- [x] Compute `Sec-WebSocket-Accept` with the existing SHA-1 implementation and send the 101 response.
+- [x] Keep the accepted peer descriptor intact across Windows 64-bit `SOCKET` and POSIX descriptors.
+- [x] Add an RFC 6455 sample-key loopback test (`flvm[77]`).
+- [x] Add masked client-frame parsing and server frame writing (`flvm[78]`); the handshake still does not establish a runtime-managed WebSocket client.
+
+### Archive 390 — native WebSocket RFC 6455 frame layer
+- [x] Add server frame writer with unmasked text, binary, close, ping and pong frames and 7/16/64-bit lengths.
+- [x] Add masked client frame parser with RSV/opcode/control validation and canonical extended lengths.
+- [x] Reassemble fragmented text/binary messages while handling interleaved ping/pong/close control frames.
+- [x] Validate UTF-8 text and close reasons; enforce caller-provided maximum message size.
+- [x] Add `flvm[78]` coverage for fragmentation, ping/pong, 16-bit payload and server frame output.
+- [ ] Add absolute operation deadlines, runtime-owned client lifecycle/event publication, and FlatL `sockets.wsListen()` / `sockets.wsStop()`.
+
+**Archive 390 boundary:** native TCP + HTTP Upgrade + caller-owned RFC 6455 frame I/O are implemented. Runtime registry, event broker integration, FlatL APIs, TLS/WSS, and a multi-client FlatL E2E remain pending.
+
+
+### Archive 391 — native WebSocket server registry lifecycle
+- [x] Add an owning registry for listener and accepted-peer handles with monotonic numeric IDs.
+- [x] Add registry operations for listen, accept, HTTP Upgrade, send, receive, peer close and listener close.
+- [x] Serialize receive operations and peer writes; automatic PONG/CLOSE responses use the same send lock as explicit sends.
+- [x] Interrupt blocking accept/receive operations during close and wait for active operations before releasing descriptors.
+- [x] Add `flvm[79]` for closing a listener during an in-flight blocking accept.
+- [ ] Connect the transport registry to FlatRuntime's generic `socket` event-source adapter and scheduler wakeup mechanism.
+- [ ] Add a host I/O reactor; do not introduce one thread per connection or execute FlatL blocks on I/O threads.
+- [ ] Expose FlatL `sockets.wsListen()` / `sockets.wsStop()` and add multi-client FlatL E2E coverage.
+
+**Archive 391 boundary:** transport ownership and teardown are implemented, but this registry is not yet FlatRuntime-owned and does not publish Task events. Accept and receive are host-driven; there is no background I/O reactor. See `plans/70_WEBSOCKET_SERVER_REGISTRY_LIFECYCLE.md`.
