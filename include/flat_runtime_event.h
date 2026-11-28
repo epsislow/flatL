@@ -55,6 +55,18 @@ int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t sou
                                               struct FlatFileTable *source_files,
                                               FlatEventDispatchMode mode,
                                               FlatEventSubscriptionId *out_subscription_id);
+/* Same registration API with an explicit concurrency ceiling. max_active must
+ * be positive; SERIAL effectively caps concurrency at one regardless of this
+ * value. Existing registration APIs remain unlimited PARALLEL by default. */
+int flat_runtime_event_subscribe_handler_options(FlatRuntime *runtime, uint64_t source_id,
+                                                 const char *source_kind, const char *event_name,
+                                                 const FlatBytecode *bc, const char *handler_label,
+                                                 const FlatValue *bound_args, size_t bound_arg_count,
+                                                 FlatCollectionPool *source_coll,
+                                                 FlatStringPool *source_pool,
+                                                 struct FlatFileTable *source_files,
+                                                 FlatEventDispatchMode mode, size_t max_active,
+                                                 FlatEventSubscriptionId *out_subscription_id);
 /* Publish one value to every matching subscription. Values are deep-copied;
  * file handles cannot be published. Returns the number of matching subscriptions,
  * 0 when there are no listeners, -1 on invalid/error, or -2 on queue overflow. */

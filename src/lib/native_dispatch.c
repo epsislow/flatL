@@ -12,6 +12,7 @@ static int flat_native_invoke_inner(uint16_t id, FlatNativeCtx *ctx) {
     if (id == FLAT_NATIVE_TASK_RESULT) return flat_native_task_result(ctx);
     if (id == FLAT_NATIVE_TASK_SPAWN_FOR) return flat_native_task_spawn_for(ctx);
     if (id == FLAT_NATIVE_TASK_SPAWN_FOR_MODE) return flat_native_task_spawn_for_mode(ctx);
+    if (id == FLAT_NATIVE_TASK_SPAWN_FOR_LIMIT) return flat_native_task_spawn_for_limit(ctx);
     if (id == FLAT_NATIVE_TASK_STOP_FOR) return flat_native_task_stop_for(ctx);
     if (id == FLAT_NATIVE_CHANNEL_CREATE) return flat_native_channel_create(ctx);
     if (id == FLAT_NATIVE_CHANNEL_SET) return flat_native_channel_set(ctx);

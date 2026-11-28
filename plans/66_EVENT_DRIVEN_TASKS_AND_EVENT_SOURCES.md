@@ -365,3 +365,14 @@ Both native entry points use the same runtime registration bridge. `parallel` al
 Still pending: `maxActive`, configurable queue capacity/overflow policy, explicit source-adapter APIs, and persistent FLEditor WASM sessions.
 
 Validation: `make -j2 bin/flc bin/flvm` PASS; the new serial C integration harness PASS. `bin/run_tests` is not present in the supplied archive, so the repository test selector and full suite were not run.
+
+
+## Archive 367 — bounded parallel event-handler concurrency
+
+Added `max_active` to the runtime event subscription policy through `flat_runtime_event_subscribe_handler_options()`. Existing C registration APIs remain source-compatible: the original parallel registration remains effectively unlimited (`SIZE_MAX`), while `flat_runtime_event_subscribe_handler_mode()` delegates with the same compatibility default. `max_active` must be positive. The scheduler dispatches an event only while `active_handlers < max_active`; SERIAL subscriptions normalize the limit to one regardless of the supplied value.
+
+Exposed the limit to FlatL as `task.spawnForLimit(sourceId, sourceKind, eventName, #handler, mode, maxActive, ...args)`. It accepts `parallel` or `serial` and a positive whole NUMBER concurrency ceiling. `maxActive = 1` is bounded parallel dispatch with one active handler; serial remains FIFO and is always capped at one. Existing `task.spawnFor()` and `task.spawnForMode()` signatures remain unchanged.
+
+Added `flvm[65]` for the C API and `flvm[66]` for the FlatL native. Both publish three events with `maxActive = 2`, verify that only two handler tasks become active before the third remains queued, then verify eventual FIFO delivery and cleanup.
+
+Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests flvm -v -e` PASS (66/66). ASan/UBSan and the full default suite were not run for this increment.

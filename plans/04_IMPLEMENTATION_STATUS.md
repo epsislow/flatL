@@ -28,7 +28,9 @@
 - Archive 364 exposes `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)` and `task.stopFor(subscriptionId)` as FlatL natives. Source IDs remain NUMBER values; socket transports use the shared `socket` kind. Subscription IDs are distinct from per-event task IDs.
 - Persistent subscriptions own a bytecode snapshot and deep-copied bound arguments, so the registering task VM can be destroyed while the subscription remains active. Events create ordinary isolated tasks through the scheduler; the event payload is parameter 0.
 - `flvm[58-62]` passed (5/5). `make all` passed. Full suite and ASan/UBSan were not run for this checkpoint.
-- Archive 365 adds C runtime dispatch modes `FLAT_EVENT_DISPATCH_PARALLEL` (default) and `FLAT_EVENT_DISPATCH_SERIAL`; serial waits for each handler task to become terminal before dispatching the next FIFO event. `flvm[63]` covers the serial behavior. The FlatL native still defaults to parallel; selecting the mode from FlatL, `maxActive`, configurable queue/overflow policies, source-close/failure semantics, native socket adapters and persistent FLEditor WASM sessions remain open.
+- Archive 365 adds C runtime dispatch modes `FLAT_EVENT_DISPATCH_PARALLEL` (default) and `FLAT_EVENT_DISPATCH_SERIAL`; serial waits for each handler task to become terminal before dispatching the next FIFO event. `flvm[63]` covers the serial behavior.
+- Archive 366 exposes `task.spawnForMode(..., mode, ...)` for explicit `parallel`/`serial` selection.
+- Archive 367 adds `task.spawnForLimit(..., mode, maxActive, ...)` and the C API `flat_runtime_event_subscribe_handler_options()`. Parallel dispatch now respects a per-subscription active-handler ceiling; serial always remains capped at one. `flvm[65-66]` cover the C and FlatL surfaces. Configurable queue capacity/overflow policies, source-close/failure semantics, native socket adapters and persistent FLEditor WASM sessions remain open.
 
 ## Ce este prezent în arhiva 252 (bază)
 
@@ -1561,3 +1563,11 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Added `task.spawnForMode(sourceId, sourceKind, eventName, #handler, mode, ...args)` to expose `parallel` and `serial` policies through the FlatL native API.
 - Kept `task.spawnFor()` unchanged and parallel by default, avoiding ambiguity with existing bound arguments.
 - Added `flvm[64]` for native serial-mode FIFO dispatch and bound-argument delivery.
+
+
+## Current checkpoint — archive 367 (2026-11-28)
+
+- Added `task.spawnForLimit(sourceId, sourceKind, eventName, #handler, mode, maxActive, ...args)`. `maxActive` is a positive whole NUMBER; `parallel` dispatches no more than that many non-terminal handler tasks per subscription. `serial` remains capped at one regardless of the supplied limit.
+- Added `flat_runtime_event_subscribe_handler_options()` while preserving the previous C registration APIs and their compatibility defaults.
+- Added `flvm[65]` and `flvm[66]`; the complete FLVM suite passed: 66/66. `make -j2 all` and `make docs` passed. ASan/UBSan and the full default suite were not run.
+- Remaining: configurable queue capacity and overflow/backpressure, failure/source-close/shutdown semantics, native sockets adapters, and persistent FLEditor WASM sessions.

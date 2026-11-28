@@ -46,6 +46,7 @@ typedef struct FlatRuntimeEventSubscription {
     int dispatching;
     int handler_dispatching;
     size_t active_handlers;
+    size_t max_active;
     FlatEventDispatchMode dispatch_mode;
     const FlatBytecode *handler_bc;
     FlatBytecode handler_bytecode;
@@ -180,7 +181,7 @@ static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const F
                                          const char *event_name, const char *handler_label,
                                          const FlatValue *args, size_t arg_count,
                                          FlatCollectionPool *source_coll, FlatStringPool *source_pool,
-                                         FlatFileTable *source_files, int dispatch_mode,
+                                         FlatFileTable *source_files, int dispatch_mode, size_t max_active,
                                          uint64_t *out_subscription_id);
 static int runtime_task_native_stop_for(void *user, uint64_t parent_id,
                                         uint64_t subscription_id);
@@ -497,14 +498,14 @@ int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
     return 0;
 }
 
-int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t source_id,
-                                              const char *source_kind, const char *event_name,
+int flat_runtime_event_subscribe_handler_options(FlatRuntime *runtime, uint64_t source_id,
+                                                 const char *source_kind, const char *event_name,
                                          const FlatBytecode *bc, const char *handler_label,
                                          const FlatValue *bound_args, size_t bound_arg_count,
                                          FlatCollectionPool *source_coll,
                                          FlatStringPool *source_pool,
                                          FlatFileTable *source_files,
-                                         FlatEventDispatchMode mode,
+                                         FlatEventDispatchMode mode, size_t max_active,
                                          FlatEventSubscriptionId *out_subscription_id) {
     FlatRuntimeEventSubscription *sub;
     FlatCollectionPool *copy_coll = NULL;
@@ -514,7 +515,8 @@ int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t sou
     if (!runtime || source_id == 0 || !bc || !handler_label || handler_label[0] != '#' ||
         !out_subscription_id || (bound_arg_count && (!bound_args || !source_coll || !source_pool)) ||
         bound_arg_count >= FGIR_MAX_PARAMS ||
-        (mode != FLAT_EVENT_DISPATCH_PARALLEL && mode != FLAT_EVENT_DISPATCH_SERIAL)) return -1;
+        (mode != FLAT_EVENT_DISPATCH_PARALLEL && mode != FLAT_EVENT_DISPATCH_SERIAL) ||
+        max_active == 0) return -1;
     for (bi = 0; bi < bc->block_count; ++bi) {
         if (bc->block_labels && strcmp(bc->block_labels[bi], handler_label) == 0) {
             expected = bc->block_params ? bc->block_params[bi].param_count : 0;
@@ -550,6 +552,7 @@ int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t sou
         !runtime_event_name_valid(event_name, sizeof sub->event_name)) goto fail;
     sub->source_id = source_id;
     sub->dispatch_mode = mode;
+    sub->max_active = mode == FLAT_EVENT_DISPATCH_SERIAL ? 1 : max_active;
     snprintf(sub->source_kind, sizeof sub->source_kind, "%s", source_kind);
     snprintf(sub->event_name, sizeof sub->event_name, "%s", event_name);
     snprintf(sub->handler_label, sizeof sub->handler_label, "%s", handler_label);
@@ -581,6 +584,20 @@ fail:
     if (copy_coll) flat_coll_destroy(copy_coll);
     if (copy_pool) flat_pool_destroy(copy_pool);
     return -1;
+}
+
+int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t source_id,
+                                              const char *source_kind, const char *event_name,
+                                              const FlatBytecode *bc, const char *handler_label,
+                                              const FlatValue *bound_args, size_t bound_arg_count,
+                                              FlatCollectionPool *source_coll,
+                                              FlatStringPool *source_pool,
+                                              FlatFileTable *source_files,
+                                              FlatEventDispatchMode mode,
+                                              FlatEventSubscriptionId *out_subscription_id) {
+    return flat_runtime_event_subscribe_handler_options(runtime, source_id, source_kind, event_name,
+        bc, handler_label, bound_args, bound_arg_count, source_coll, source_pool, source_files,
+        mode, SIZE_MAX, out_subscription_id);
 }
 
 int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_id,
@@ -1187,11 +1204,11 @@ static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const F
                                          const char *event_name, const char *handler_label,
                                          const FlatValue *args, size_t arg_count,
                                          FlatCollectionPool *source_coll, FlatStringPool *source_pool,
-                                         FlatFileTable *source_files, int dispatch_mode,
+                                         FlatFileTable *source_files, int dispatch_mode, size_t max_active,
                                          uint64_t *out_subscription_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
     FlatTaskRecord *parent;
-    if (!runtime || !bc || !out_subscription_id) return -1;
+    if (!runtime || !bc || !out_subscription_id || max_active == 0) return -1;
     runtime_lock(runtime);
     parent = runtime_find_task(runtime, parent_id);
     if (!parent || parent->cleanup_owned || parent->state != FLAT_TASK_RUNNING ||
@@ -1200,17 +1217,11 @@ static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const F
         return -1;
     }
     runtime_unlock(runtime);
-    if (dispatch_mode == FLAT_EVENT_DISPATCH_PARALLEL)
-        return flat_runtime_event_subscribe_handler(runtime, source_id, source_kind, event_name,
-                                                    bc, handler_label, args, arg_count,
-                                                    source_coll, source_pool, source_files,
-                                                    out_subscription_id);
-    if (dispatch_mode != FLAT_EVENT_DISPATCH_SERIAL) return -1;
-    return flat_runtime_event_subscribe_handler_mode(runtime, source_id, source_kind, event_name,
-                                                     bc, handler_label, args, arg_count,
-                                                     source_coll, source_pool, source_files,
-                                                     (FlatEventDispatchMode)dispatch_mode,
-                                                     out_subscription_id);
+    if (dispatch_mode != FLAT_EVENT_DISPATCH_PARALLEL &&
+        dispatch_mode != FLAT_EVENT_DISPATCH_SERIAL) return -1;
+    return flat_runtime_event_subscribe_handler_options(runtime, source_id, source_kind, event_name,
+        bc, handler_label, args, arg_count, source_coll, source_pool, source_files,
+        (FlatEventDispatchMode)dispatch_mode, max_active, out_subscription_id);
 }
 
 static int runtime_task_native_stop_for(void *user, uint64_t parent_id,
@@ -1628,7 +1639,7 @@ static int runtime_dispatch_one_event_handler(FlatRuntime *runtime) {
     }
     for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
         if (sub->handler_bc && sub->head && !sub->dispatching && !sub->handler_dispatching &&
-            (sub->dispatch_mode != FLAT_EVENT_DISPATCH_SERIAL || sub->active_handlers == 0)) break;
+            sub->active_handlers < sub->max_active) break;
     }
     if (!sub) { runtime_unlock(runtime); return 0; }
     sub->handler_dispatching = 1;

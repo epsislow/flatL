@@ -5,6 +5,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
+#include <limits.h>
 
 static int task_fail(FlatNativeCtx *ctx, const char *reason) {
     if (ctx && ctx->io_status) *ctx->io_status = FLAT_IO_ERR;
@@ -163,9 +165,9 @@ int flat_native_task_result(FlatNativeCtx *ctx) {
 }
 
 
-static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode) {
+static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode, int with_limit) {
     char buf[FGIR_MAX_LINE];
-    char *parts[FGIR_MAX_PARAMS + 5];
+    char *parts[FGIR_MAX_PARAMS + 6];
     char label[FGIR_MAX_LABEL];
     char source_kind[32];
     char event_name[48];
@@ -175,13 +177,14 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode) {
     uint64_t source_id = 0, subscription_id = 0;
     int part_count = 0, arg_count, arg_start, parsed = 0, i, rc;
     int dispatch_mode = 0;
+    size_t max_active = SIZE_MAX;
     memset(values, 0, sizeof values);
     memset(&kind_value, 0, sizeof kind_value);
     memset(&event_value, 0, sizeof event_value);
     if (!ctx || !ctx->task_bridge || !ctx->task_bridge->spawn_for || !ctx->bc ||
         !ctx->inner || !ctx->out || !ctx->io_status || !ctx->pool || !ctx->coll ||
         !ctx->vars || task_split_spawn_args((snprintf(buf, sizeof buf, "%s", ctx->inner), buf),
-                                             parts, FGIR_MAX_PARAMS + 5, &part_count) != 0 ||
+                                             parts, FGIR_MAX_PARAMS + 6, &part_count) != 0 ||
         part_count < 4 || task_parse_id(ctx, parts[0], &source_id) != 0)
         return task_fail(ctx, "task.spawnFor.args");
     if (flat_native_parse_rhs(ctx, parts[1], &kind_value) != 0 ||
@@ -212,6 +215,24 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode) {
         else if (strcmp(mode_name, "serial") == 0) dispatch_mode = 1;
         else return task_fail(ctx, "task.spawnForMode.mode");
         arg_start = 5;
+        if (with_limit) {
+            FlatValue limit_value;
+            double limit_number;
+            memset(&limit_value, 0, sizeof limit_value);
+            if (part_count < 6 || flat_native_parse_rhs(ctx, parts[5], &limit_value) != 0 ||
+                limit_value.tag != VAL_NUMBER) {
+                flat_native_parse_rhs_release(ctx, &limit_value);
+                return task_fail(ctx, "task.spawnForLimit.maxActive");
+            }
+            limit_number = flat_number_as_f64(&limit_value);
+            flat_native_parse_rhs_release(ctx, &limit_value);
+            if (!(limit_number >= 1.0) || limit_number > 9007199254740991.0 ||
+                limit_number != (double)(uint64_t)limit_number) {
+                return task_fail(ctx, "task.spawnForLimit.maxActive");
+            }
+            max_active = (size_t)limit_number;
+            arg_start = 6;
+        }
     }
     arg_count = part_count - arg_start;
     if (arg_count >= FGIR_MAX_PARAMS) return task_fail(ctx, "task.spawnFor.args");
@@ -226,7 +247,7 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode) {
     rc = ctx->task_bridge->spawn_for(ctx->task_bridge->user, ctx->task_bridge->task_id,
                                      ctx->bc, source_id, source_kind, event_name, label,
                                      values, (size_t)arg_count, ctx->coll, ctx->pool,
-                                     ctx->file_tbl, dispatch_mode, &subscription_id);
+                                     ctx->file_tbl, dispatch_mode, max_active, &subscription_id);
     for (i = 0; i < parsed; ++i) flat_native_parse_rhs_release(ctx, &values[i]);
     if (rc == -2) return task_fail(ctx, "task.spawnFor.args");
     if (rc != 0 || subscription_id == 0) return task_fail(ctx, "task.spawnFor.failed");
@@ -235,11 +256,15 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode) {
 }
 
 int flat_native_task_spawn_for(FlatNativeCtx *ctx) {
-    return task_spawn_for_impl(ctx, 0);
+    return task_spawn_for_impl(ctx, 0, 0);
 }
 
 int flat_native_task_spawn_for_mode(FlatNativeCtx *ctx) {
-    return task_spawn_for_impl(ctx, 1);
+    return task_spawn_for_impl(ctx, 1, 0);
+}
+
+int flat_native_task_spawn_for_limit(FlatNativeCtx *ctx) {
+    return task_spawn_for_impl(ctx, 1, 1);
 }
 
 int flat_native_task_stop_for(FlatNativeCtx *ctx) {

@@ -161,7 +161,8 @@ Scop: asocierea unui block FlatL cu un event source prin `task.spawnFor()`, astf
 - [x] Implementează brokerul, dispatch-ul automat în scheduler și API-ul C pentru handler persistent (arhivele 359–363).
 - [x] Expune `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)` și `task.stopFor(subscriptionId)` în FlatL (arhiva 364).
 - [x] Definește și implementează în API-ul C modurile `parallel` (implicit) și `serial`, cu FIFO și cel mult un handler activ pentru abonările seriale (arhiva 365).
-- [ ] Expune selectarea modului în native-ul FlatL și implementează `maxActive`, coada bounded configurabilă și overflow/backpressure.
+- [x] Expune selectarea modului în native-ul FlatL (`task.spawnForMode`) și implementează `maxActive` prin `task.spawnForLimit` (arhiva 367).
+- [ ] Implementează coada bounded configurabilă și overflow/backpressure.
 - [ ] Definește failure isolation, panic, cancellation, source close și runtime shutdown.
 - [ ] Implementează dispatch generic folosind un event source intern de test.
 - [ ] Integrează un prim event source nativ/socket după alegerea backend-ului de event loop.

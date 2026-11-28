@@ -390,6 +390,7 @@ int flat_native_task_state(FlatNativeCtx *ctx);
 int flat_native_task_result(FlatNativeCtx *ctx);
 int flat_native_task_spawn_for(FlatNativeCtx *ctx);
 int flat_native_task_spawn_for_mode(FlatNativeCtx *ctx);
+int flat_native_task_spawn_for_limit(FlatNativeCtx *ctx);
 int flat_native_task_stop_for(FlatNativeCtx *ctx);
 int flat_native_channel_create(FlatNativeCtx *ctx);
 int flat_native_channel_set(FlatNativeCtx *ctx);

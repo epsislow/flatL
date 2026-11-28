@@ -1,0 +1,11 @@
+use native task
+
+#main
+  sub = task.spawnForLimit(17, 'socket', 'receive', #onEvent, 'parallel', 2, 'bound')
+  io.outln(sub)
+  OK
+
+#onEvent(event, extra)
+  io.outln(event)
+  io.outln(extra)
+  OK

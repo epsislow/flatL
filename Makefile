@@ -1087,3 +1087,15 @@ test-runtime-event-serial-dispatch: $(FLVM_TEST_COMMON_OBJ)
 test-native-task-spawn-for-mode: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/064_native_task_spawn_for_mode/native_task_spawn_for_mode_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for bounded parallel event-handler concurrency.
+.PHONY: test-runtime-event-max-active
+test-runtime-event-max-active: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/065_runtime_event_max_active/runtime_event_max_active_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for FlatL task.spawnForLimit() bounded parallel subscriptions.
+.PHONY: test-native-task-spawn-for-limit
+test-native-task-spawn-for-limit: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/066_native_task_spawn_for_limit/native_task_spawn_for_limit_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
