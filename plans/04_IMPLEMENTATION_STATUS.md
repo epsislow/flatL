@@ -1618,3 +1618,18 @@ Validation update: user-reported archive 372 FLVM suite result: 73 passed, 0 fai
 
 ### WebSocket native API follow-up — archive 374
 The sockets native API now supports `sockets.wsSendBinary(socketId, bytes)` in addition to text sends. `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)` accepts optional bounded positive-integer settings (defaults: 10000 ms and 1 MiB). The task-native bridge now carries the frame opcode and connect settings. The existing send timeout remains 10 seconds. A real network round-trip remains pending on a libcurl build with WebSocket protocol support.
+
+
+### Archive 375 — WebSocket open-event replay
+
+- The runtime remembers the initial `socket/open` event until the first matching subscription is created. This closes the ordering gap between synchronous `sockets.wsConnect()` and the subsequent FlatL `task.spawnFor()` call.
+- `socket/close` clears the retained open marker, preventing a subscription created after closure from receiving a stale open notification.
+- The loopback WebSocket integration test now subscribes after connect and, on WebSocket-capable libcurl builds, exercises text and binary frames in both directions. The local linked libcurl lacks `ws`/`wss`, so only its unsupported-capability fallback was executed.
+- Validation: `make -j2 all`, `make docs`, and `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5). Full FLVM suite and ASan/UBSan are not yet run for this archive.
+
+Full-suite note for archive 375: `bin/run_tests --categ=default -e` exceeded the 300-second execution window before producing a final summary. This is not recorded as a pass or as a test failure; the complete `flvm` suite and the focused socket tests completed independently.
+
+
+### WebSocket pre-subscription event buffering (archive 376)
+
+Implemented bounded replay for early `socket/receive` events: 256 frames per socket and 4096 across the runtime. The first matching subscription receives retained frames FIFO, respecting its queue capacity and overflow policy. Hard overflow is surfaced as `socket/error` and closes the reader. `flvm[71]` covers FIFO replay and capacity overflow; targeted validation passed (`flvm[15]`, `flvm[71-75]`). Full FLVM validation timed out before completion and remains pending.

@@ -153,10 +153,20 @@ static void *ws_reader_main(void *opaque) {
             flat_ws_message_free(&message);
             continue;
         }
-        if (ws_publish_message(client, &message) < 0) {
-            flat_ws_message_free(&message);
-            terminal = 1;
-            break;
+        {
+            int publish_rc = ws_publish_message(client, &message);
+            if (publish_rc < 0) {
+                const char *reason = publish_rc == -2
+                    ? "WebSocket receive subscriber queue is full"
+                    : publish_rc == -3
+                        ? "WebSocket pre-subscription receive buffer is full"
+                        : "WebSocket receive event publication failed";
+                (void)ws_publish_string(client, FLAT_SOCKET_EVENT_ERROR,
+                                        reason, strlen(reason));
+                flat_ws_message_free(&message);
+                terminal = 1;
+                break;
+            }
         }
         flat_ws_message_free(&message);
     }

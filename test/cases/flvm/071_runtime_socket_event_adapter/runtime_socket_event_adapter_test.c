@@ -27,14 +27,76 @@ int main(void) {
     FlatCollectionPool *dest_coll = flat_coll_create();
     FlatStringPool *source_pool = flat_pool_create();
     FlatStringPool *dest_pool = flat_pool_create();
-    FlatEventSubscriptionId open_sub = 0, receive_sub = 0, close_sub = 0, error_sub = 0;
+    FlatEventSubscriptionId open_sub = 0, receive_sub = 0, close_sub = 0, error_sub = 0, late_open_sub = 0;
     FlatValue payload;
     int rc = 1;
 
     memset(&payload, 0, sizeof payload);
     if (!runtime || !source_coll || !dest_coll || !source_pool || !dest_pool) goto done;
     if (flat_value_set_number(&payload, 1) != 0) goto done;
-    if (flat_runtime_event_subscribe(runtime, 41, "socket", "open", &open_sub) != 0 ||
+    /* A WebSocket's open event can arrive before FlatL executes spawnFor.
+     * A later subscription must receive the retained one-shot notification. */
+    if (flat_runtime_socket_event_publish(runtime, 42, FLAT_SOCKET_EVENT_OPEN, &payload,
+                                          source_coll, source_pool, NULL) != 0 ||
+        flat_runtime_event_subscribe(runtime, 42, "socket", "open", &late_open_sub) != 0) goto done;
+    {
+        FlatValue replay;
+        memset(&replay, 0, sizeof replay);
+        if (flat_runtime_event_next(runtime, late_open_sub, dest_coll, dest_pool, NULL, &replay) != 1 ||
+            replay.tag != VAL_NULL) {
+            flat_value_release(dest_coll, dest_pool, &replay);
+            goto done;
+        }
+        flat_value_release(dest_coll, dest_pool, &replay);
+    }
+    if (flat_runtime_event_unsubscribe(runtime, late_open_sub) != 0) goto done;
+    late_open_sub = 0;
+    /* Receive frames that arrive before task.spawnFor are retained in a
+     * bounded per-socket FIFO and replayed to the first later subscriber. */
+    if (flat_value_set_number(&payload, 10) != 0) goto done;
+    if (flat_runtime_socket_event_publish(runtime, 44, FLAT_SOCKET_EVENT_RECEIVE, &payload, source_coll, source_pool, NULL) != 0) goto done;
+    if (flat_value_set_number(&payload, 11) != 0) goto done;
+    if (flat_runtime_socket_event_publish(runtime, 44, FLAT_SOCKET_EVENT_RECEIVE, &payload, source_coll, source_pool, NULL) != 0) goto done;
+    if (flat_runtime_event_subscribe(runtime, 44, "socket", "receive", &late_open_sub) != 0) goto done;
+    if (flat_runtime_event_pending(runtime, late_open_sub) != 2) goto done;
+    if (expect_number(runtime, late_open_sub, dest_coll, dest_pool, 10) != 0) goto done;
+    if (expect_number(runtime, late_open_sub, dest_coll, dest_pool, 11) != 0) goto done;
+    if (flat_runtime_event_unsubscribe(runtime, late_open_sub) != 0) goto done;
+    late_open_sub = 0;
+    /* The pre-subscription buffer is bounded at 256 events. It rejects the
+     * next frame rather than silently dropping data or growing without limit. */
+    {
+        int i;
+        for (i = 0; i < 256; ++i) {
+            if (flat_value_set_number(&payload, (double)i) != 0 ||
+                flat_runtime_socket_event_publish(runtime, 45, FLAT_SOCKET_EVENT_RECEIVE, &payload,
+                                                  source_coll, source_pool, NULL) != 0) goto done;
+        }
+        if (flat_runtime_socket_event_publish(runtime,45,FLAT_SOCKET_EVENT_RECEIVE,&payload,source_coll,source_pool,NULL) != -3) goto done;
+        if (flat_runtime_event_subscribe(runtime, 45, "socket", "receive", &late_open_sub) != 0) goto done;
+        if (flat_runtime_event_pending(runtime, late_open_sub) != 256) goto done;
+        for (i = 0; i < 256; ++i)
+            if (expect_number(runtime, late_open_sub, dest_coll, dest_pool, (double)i) != 0) goto done;
+    }
+    if (flat_runtime_event_unsubscribe(runtime, late_open_sub) != 0) goto done;
+    late_open_sub = 0;
+    /* The retained notification is one-shot: a second late subscriber does
+     * not receive a duplicate. */
+    if (flat_runtime_event_subscribe(runtime, 42, "socket", "open", &late_open_sub) != 0 ||
+        flat_runtime_event_pending(runtime, late_open_sub) != 0) goto done;
+    if (flat_runtime_event_unsubscribe(runtime, late_open_sub) != 0) goto done;
+    late_open_sub = 0;
+    /* Closing before the first subscription also discards the stale open. */
+    if (flat_runtime_socket_event_publish(runtime, 43, FLAT_SOCKET_EVENT_OPEN, &payload,
+                                          source_coll, source_pool, NULL) != 0 ||
+        flat_runtime_socket_event_publish(runtime, 43, FLAT_SOCKET_EVENT_CLOSE, &payload,
+                                          source_coll, source_pool, NULL) != 0 ||
+        flat_runtime_event_subscribe(runtime, 43, "socket", "open", &late_open_sub) != 0 ||
+        flat_runtime_event_pending(runtime, late_open_sub) != 0) goto done;
+    if (flat_runtime_event_unsubscribe(runtime, late_open_sub) != 0) goto done;
+    late_open_sub = 0;
+    if (flat_value_set_number(&payload, 1) != 0 ||
+        flat_runtime_event_subscribe(runtime, 41, "socket", "open", &open_sub) != 0 ||
         flat_runtime_event_subscribe(runtime, 41, "socket", "receive", &receive_sub) != 0 ||
         flat_runtime_event_subscribe(runtime, 41, "socket", "close", &close_sub) != 0 ||
         flat_runtime_event_subscribe(runtime, 41, "socket", "error", &error_sub) != 0) goto done;
@@ -77,6 +139,7 @@ done:
         if (receive_sub) flat_runtime_event_unsubscribe(runtime, receive_sub);
         if (close_sub) flat_runtime_event_unsubscribe(runtime, close_sub);
         if (error_sub) flat_runtime_event_unsubscribe(runtime, error_sub);
+        if (late_open_sub) flat_runtime_event_unsubscribe(runtime, late_open_sub);
         flat_runtime_destroy(runtime);
     }
     if (source_coll) flat_coll_destroy(source_coll);

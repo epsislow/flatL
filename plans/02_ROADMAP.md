@@ -1160,3 +1160,15 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Add binary WebSocket frame sending through `sockets.wsSendBinary(socketId, bytes)`.
 - [x] Make connect timeout and inbound maximum frame size configurable in `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)`.
 - [ ] Add a live WebSocket round-trip test on a build with libcurl `ws`/`wss` support.
+
+
+### Event-driven sockets — archive 375
+
+- [x] Retain and replay the initial `socket/open` event when `wsConnect()` returns before `task.spawnFor()` subscribes.
+- [x] Extend the loopback WebSocket integration harness to cover late open subscription plus text/binary client-server round trips.
+- [ ] Execute the live loopback handshake and text/binary round trip on a libcurl build advertising `ws` and `wss`; current linked libcurl does not provide these protocols.
+- [ ] Add bounded pre-subscription buffering for `receive` events if the API should guarantee delivery when peers send immediately after the handshake.
+- [ ] Add browser WebSocket bridge and persistent FLEditor WASM runtime session.
+
+
+- [x] WebSocket event delivery before subscription: retain the one-shot `open` event and a bounded FIFO of early `receive` frames; apply explicit overflow behavior and surface hard failures as `socket/error`. See archive 376 in `66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md`.

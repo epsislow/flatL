@@ -41,12 +41,25 @@ typedef struct FlatRuntimeSocketEntry {
 } FlatRuntimeSocketEntry;
 #endif
 
+typedef struct FlatRuntimeOpenSocketEvent {
+    uint64_t source_id;
+    struct FlatRuntimeOpenSocketEvent *next;
+} FlatRuntimeOpenSocketEvent;
+
 typedef struct FlatRuntimeEventNode {
     FlatValue value;
     FlatCollectionPool *coll;
     FlatStringPool *pool;
     struct FlatRuntimeEventNode *next;
 } FlatRuntimeEventNode;
+
+typedef struct FlatRuntimePendingSocketEvents {
+    uint64_t source_id;
+    FlatRuntimeEventNode *head;
+    FlatRuntimeEventNode *tail;
+    size_t count;
+    struct FlatRuntimePendingSocketEvents *next;
+} FlatRuntimePendingSocketEvents;
 
 typedef struct FlatRuntimeEventSubscription {
     FlatEventSubscriptionId id;
@@ -114,6 +127,9 @@ struct FlatRuntime {
     int worker_error;
     FlatTaskRecord *tasks;
     FlatRuntimeEventSubscription *event_subscriptions;
+    FlatRuntimeOpenSocketEvent *open_socket_events;
+    FlatRuntimePendingSocketEvents *pending_socket_events;
+    size_t pending_socket_event_count;
     size_t event_subscription_count;
     FlatEventSubscriptionId next_event_subscription_id;
     FlatChannel *channels;
@@ -471,6 +487,160 @@ static void runtime_event_node_destroy(FlatRuntimeEventNode *node) {
     free(node);
 }
 
+static void runtime_event_forget_open_locked(FlatRuntime *runtime, uint64_t source_id);
+
+/* WebSocket connections are created before FlatL can subscribe with
+ * task.spawnFor. Retain the one-shot open notification so a subscription
+ * registered immediately after wsConnect receives it exactly once. */
+static int runtime_event_queue_open_replay_locked(FlatRuntime *runtime,
+                                                   FlatRuntimeEventSubscription *sub) {
+    FlatRuntimeOpenSocketEvent *open_event;
+    FlatRuntimeEventNode *node;
+    if (!runtime || !sub || strcmp(sub->source_kind, "socket") != 0 ||
+        strcmp(sub->event_name, "open") != 0) return 0;
+    for (open_event = runtime->open_socket_events; open_event; open_event = open_event->next)
+        if (open_event->source_id == sub->source_id) break;
+    if (!open_event) return 0;
+    node = (FlatRuntimeEventNode *)calloc(1, sizeof *node);
+    if (!node) return -1;
+    node->coll = flat_coll_create();
+    node->pool = flat_pool_create();
+    if (!node->coll || !node->pool || flat_value_set_null(&node->value) != 0) {
+        runtime_event_node_destroy(node);
+        return -1;
+    }
+    sub->head = sub->tail = node;
+    sub->queued = 1;
+    runtime_event_forget_open_locked(runtime, sub->source_id);
+    return 0;
+}
+
+static int runtime_event_remember_open_locked(FlatRuntime *runtime, uint64_t source_id) {
+    FlatRuntimeOpenSocketEvent *entry;
+    for (entry = runtime->open_socket_events; entry; entry = entry->next)
+        if (entry->source_id == source_id) return 0;
+    entry = (FlatRuntimeOpenSocketEvent *)calloc(1, sizeof *entry);
+    if (!entry) return -1;
+    entry->source_id = source_id;
+    entry->next = runtime->open_socket_events;
+    runtime->open_socket_events = entry;
+    return 0;
+}
+
+static void runtime_event_forget_open_locked(FlatRuntime *runtime, uint64_t source_id) {
+    FlatRuntimeOpenSocketEvent **link, *entry;
+    for (link = &runtime->open_socket_events; *link; link = &(*link)->next) {
+        if ((*link)->source_id != source_id) continue;
+        entry = *link;
+        *link = entry->next;
+        free(entry);
+        return;
+    }
+}
+
+#define FLAT_RUNTIME_SOCKET_PRE_SUBSCRIBE_CAPACITY 256
+#define FLAT_RUNTIME_SOCKET_PRE_SUBSCRIBE_TOTAL_CAPACITY 4096
+
+static FlatRuntimePendingSocketEvents *runtime_find_pending_socket_events_locked(
+        FlatRuntime *runtime, uint64_t source_id) {
+    FlatRuntimePendingSocketEvents *entry;
+    for (entry = runtime->pending_socket_events; entry; entry = entry->next)
+        if (entry->source_id == source_id) return entry;
+    return NULL;
+}
+
+static int runtime_event_queue_receive_replay_locked(FlatRuntime *runtime,
+                                                       FlatRuntimeEventSubscription *sub) {
+    FlatRuntimePendingSocketEvents **link, *entry;
+    FlatRuntimeEventNode *node;
+    size_t keep, skip = 0, i;
+    if (!runtime || !sub || strcmp(sub->source_kind, "socket") != 0 ||
+        strcmp(sub->event_name, "receive") != 0) return 0;
+    for (link = &runtime->pending_socket_events; *link; link = &(*link)->next)
+        if ((*link)->source_id == sub->source_id) break;
+    if (!*link) return 0;
+    entry = *link;
+    if (entry->count > sub->queue_capacity) {
+        if (sub->overflow_policy == FLAT_EVENT_OVERFLOW_WAIT ||
+            sub->overflow_policy == FLAT_EVENT_OVERFLOW_ERROR) return -1;
+        if (sub->overflow_policy == FLAT_EVENT_OVERFLOW_DROP_OLDEST)
+            skip = entry->count - sub->queue_capacity;
+        keep = sub->queue_capacity;
+    } else {
+        keep = entry->count;
+    }
+    node = entry->head;
+    for (i = 0; i < skip && node; ++i) {
+        FlatRuntimeEventNode *next = node->next;
+        runtime_event_node_destroy(node);
+        node = next;
+    }
+    if (sub->overflow_policy == FLAT_EVENT_OVERFLOW_DROP_NEWEST &&
+        entry->count > sub->queue_capacity) {
+        FlatRuntimeEventNode *tail = node;
+        for (i = 1; i < keep && tail; ++i) tail = tail->next;
+        if (tail) {
+            FlatRuntimeEventNode *discard = tail->next;
+            tail->next = NULL;
+            while (discard) {
+                FlatRuntimeEventNode *next = discard->next;
+                runtime_event_node_destroy(discard);
+                discard = next;
+            }
+            sub->tail = tail;
+        }
+    } else {
+        sub->tail = entry->tail;
+    }
+    sub->head = node;
+    sub->queued = keep;
+    if (runtime->pending_socket_event_count >= entry->count)
+        runtime->pending_socket_event_count -= entry->count;
+    else
+        runtime->pending_socket_event_count = 0;
+    *link = entry->next;
+    free(entry);
+    return 0;
+}
+
+static int runtime_event_remember_receive_locked(FlatRuntime *runtime, uint64_t source_id,
+                                                  const FlatValue *value,
+                                                  FlatCollectionPool *source_coll,
+                                                  FlatStringPool *source_pool,
+                                                  FlatFileTable *source_files) {
+    FlatRuntimePendingSocketEvents *entry;
+    FlatRuntimeEventNode *node;
+    if (!runtime || !value || !source_coll || !source_pool) return -1;
+    entry = runtime_find_pending_socket_events_locked(runtime, source_id);
+    if ((entry && entry->count >= FLAT_RUNTIME_SOCKET_PRE_SUBSCRIBE_CAPACITY) ||
+        runtime->pending_socket_event_count >= FLAT_RUNTIME_SOCKET_PRE_SUBSCRIBE_TOTAL_CAPACITY)
+        return -3;
+    node = (FlatRuntimeEventNode *)calloc(1, sizeof *node);
+    if (!node) return -1;
+    node->coll = flat_coll_create();
+    node->pool = flat_pool_create();
+    if (!node->coll || !node->pool ||
+        flat_value_deep_copy_between(value, &node->value, source_coll, source_pool,
+                                     source_files, node->coll, node->pool, NULL) != 0) {
+        runtime_event_node_destroy(node);
+        return -1;
+    }
+    flat_value_retain(node->coll, node->pool, &node->value);
+    if (!entry) {
+        entry = (FlatRuntimePendingSocketEvents *)calloc(1, sizeof *entry);
+        if (!entry) { runtime_event_node_destroy(node); return -1; }
+        entry->source_id = source_id;
+        entry->next = runtime->pending_socket_events;
+        runtime->pending_socket_events = entry;
+    }
+    if (entry->tail) entry->tail->next = node;
+    else entry->head = node;
+    entry->tail = node;
+    entry->count++;
+    runtime->pending_socket_event_count++;
+    return 0;
+}
+
 static void runtime_event_subscription_destroy(FlatRuntimeEventSubscription *sub) {
     FlatRuntimeEventNode *node;
     if (!sub) return;
@@ -522,6 +692,13 @@ int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
     sub->id = runtime->next_event_subscription_id++;
     sub->next = runtime->event_subscriptions;
     runtime->event_subscriptions = sub;
+    if (runtime_event_queue_open_replay_locked(runtime, sub) != 0 ||
+        runtime_event_queue_receive_replay_locked(runtime, sub) != 0) {
+        runtime->event_subscriptions = sub->next;
+        runtime_unlock(runtime);
+        runtime_event_subscription_destroy(sub);
+        return -1;
+    }
     runtime->event_subscription_count++;
     *out_subscription_id = sub->id;
     runtime_unlock(runtime);
@@ -613,6 +790,13 @@ int flat_runtime_event_subscribe_handler_config(FlatRuntime *runtime, uint64_t s
     sub->id = runtime->next_event_subscription_id++;
     sub->next = runtime->event_subscriptions;
     runtime->event_subscriptions = sub;
+    if (runtime_event_queue_open_replay_locked(runtime, sub) != 0 ||
+        runtime_event_queue_receive_replay_locked(runtime, sub) != 0) {
+        runtime->event_subscriptions = sub->next;
+        runtime_unlock(runtime);
+        runtime_event_subscription_destroy(sub);
+        return -1;
+    }
     runtime->event_subscription_count++;
     *out_subscription_id = sub->id;
     runtime_unlock(runtime);
@@ -713,6 +897,8 @@ int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
         runtime_unlock(runtime);
         return -1;
     }
+    if (strcmp(source_kind, "socket") == 0 && strcmp(event_name, "close") == 0)
+        runtime_event_forget_open_locked(runtime, source_id);
     /* Preflight all matching subscriptions before allocating or mutating any
      * queue. WAIT/ERROR preserve atomic fan-out; DROP_NEWEST skips only the
      * overflowing subscriber; DROP_OLDEST replaces its oldest queued item. */
@@ -731,6 +917,18 @@ int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
             sub->overflow_policy != FLAT_EVENT_OVERFLOW_DROP_NEWEST) prepared_count++;
     }
     if (matched == 0) {
+        if (strcmp(source_kind, "socket") == 0 && strcmp(event_name, "open") == 0 &&
+            runtime_event_remember_open_locked(runtime, source_id) != 0) {
+            runtime_unlock(runtime);
+            return -1;
+        }
+        if (strcmp(source_kind, "socket") == 0 && strcmp(event_name, "receive") == 0) {
+            int remember_rc = runtime_event_remember_receive_locked(runtime, source_id, value,
+                                                                    source_coll, source_pool,
+                                                                    source_files);
+            runtime_unlock(runtime);
+            return remember_rc;
+        }
         runtime_unlock(runtime);
         return 0;
     }
@@ -2750,6 +2948,21 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
         if (pop_rc == 0) break;
     }
     if (flat_ready_queue_destroy(&runtime->ready_queue) != 0) return -1;
+    while (runtime->open_socket_events) {
+        FlatRuntimeOpenSocketEvent *next = runtime->open_socket_events->next;
+        free(runtime->open_socket_events);
+        runtime->open_socket_events = next;
+    }
+    while (runtime->pending_socket_events) {
+        FlatRuntimePendingSocketEvents *entry = runtime->pending_socket_events;
+        runtime->pending_socket_events = entry->next;
+        while (entry->head) {
+            FlatRuntimeEventNode *next = entry->head->next;
+            runtime_event_node_destroy(entry->head);
+            entry->head = next;
+        }
+        free(entry);
+    }
     flat_host_config_destroy(&runtime->host);
 #if FLAT_WITH_HTTP
     if (flat_mutex_destroy(&runtime->socket_mutex) != 0) return -1;

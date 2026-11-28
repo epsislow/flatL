@@ -454,3 +454,27 @@ The user ran the full default test suite on archive 370 and reported: `Passed: 1
 - Extended the task-native bridge to carry connection options and the outgoing frame opcode.
 - Extended the sockets native compile probe to cover the new signatures.
 - A live network round-trip still requires a libcurl build advertising WebSocket support; this increment's automated test validates compilation and bridge/module behavior, not a remote handshake.
+
+
+## Archive 375 — WebSocket open-event replay and round-trip harness
+
+The runtime event broker now retains the one-shot `socket/open` notification by numeric source ID only when no matching subscription exists at publish time. If `wsConnect()` completes before FlatL executes `task.spawnFor()`, the first subsequently registered `socket/open` subscription receives the retained null payload. The same applies to the C event-handler subscription API. The retained marker is consumed once, or discarded if the matching `socket/close` event is published first. Existing subscriptions receive `open` through normal fan-out without creating a replay marker.
+
+Updated `flvm[71]` to verify late subscription replay and that a subscription created after `close` does not receive a stale `open`. Updated the loopback WebSocket test (`flvm[73]`) to subscribe after connection, then exchange text and binary frames (including embedded zero bytes) with a local server. The live branch is capability-gated: this environment's linked libcurl does not advertise `ws`/`wss`, so the test's unsupported-capability path is what can run here; the actual handshake/round-trip branch remains unverified locally.
+
+Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5). Full FLVM suite and ASan/UBSan are pending.
+
+Full default-category run was attempted but exceeded the 300-second execution window before a final summary. It is not counted as a pass. The complete FLVM suite passed independently (75/75).
+
+
+## Archive 376 — bounded WebSocket pre-subscription receive replay
+
+The runtime event broker now retains `socket/receive` events when no matching subscription exists. Each socket has a FIFO backlog capped at 256 frames, with a runtime-wide cap of 4096 frames. The first later matching receive subscription takes ownership of that backlog in arrival order. The backlog is removed from the pending-source registry atomically under the scheduler mutex.
+
+Replay respects the subscription's configured queue capacity and overflow policy: `dropOldest` keeps the newest frames, `dropNewest` keeps the oldest frames, while `wait` and `error` reject registration if the retained backlog cannot fit. A rejected registration leaves the pending backlog intact for a later compatible subscription. The buffer is bounded both per source and globally.
+
+The WebSocket reader continues retrying `wait` backpressure for an already registered subscription. A hard overflow or internal publication failure now publishes a descriptive `socket/error` event before terminating the reader and publishing `socket/close`; it does not silently discard the frame.
+
+Updated `flvm[71]` to validate FIFO replay of late receive subscriptions, the per-socket 256-frame bound, and deterministic hard overflow. The minimal runtime lifecycle test now links the value-pool sources required by runtime-owned pending-event cleanup.
+
+Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests 'flvm[15]' -v -e` PASS (1/1); `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5). A full FLVM run was attempted but timed out after test 53 without a final summary; it is not counted as passing. Live WebSocket handshake/round-trip remains capability-gated because the linked libcurl does not advertise `ws`/`wss` in this environment.

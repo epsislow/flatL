@@ -44,6 +44,14 @@ static void base64(const unsigned char *in, size_t n, char out[32]) {
     out[o]='\0';
 }
 static int send_all(int fd,const void *data,size_t len){const char*p=data;while(len){ssize_t n=send(fd,p,len,0);if(n<=0)return -1;p+=n;len-=(size_t)n;}return 0;}
+static int recv_all(int fd, void *data, size_t len) { char *p=(char*)data; while(len){ssize_t n=recv(fd,p,len,0);if(n<=0)return -1;p+=n;len-=(size_t)n;}return 0; }
+static int expect_client_frame(int fd, unsigned expected_opcode, const unsigned char *expected, size_t expected_len) {
+    unsigned char h[2], mask[4], payload[256]; size_t i, len;
+    if (recv_all(fd,h,2)!=0 || (h[0]&0x0f)!=expected_opcode || !(h[1]&0x80) || (h[1]&0x7f)>=126) return -1;
+    len=(size_t)(h[1]&0x7f); if(len!=expected_len || len>sizeof payload || recv_all(fd,mask,4)!=0 || recv_all(fd,payload,len)!=0)return -1;
+    for(i=0;i<len;i++)payload[i]^=mask[i&3];
+    return memcmp(payload,expected,len)==0?0:-1;
+}
 static void *server_main(void *arg) {
     TestServer *s=(TestServer*)arg; int fd; fd=accept(s->listen_fd,NULL,NULL); char req[4096], key[128]={0}, response[512], accept_src[256], accept_value[32]; size_t used=0; ssize_t n;
     if(fd<0){perror("accept");s->failed=1;return NULL;}
@@ -52,8 +60,14 @@ static void *server_main(void *arg) {
     snprintf(accept_src,sizeof accept_src,"%s258EAFA5-E914-47DA-95CA-C5AB0DC85B11",key);
     { unsigned char digest[20]; sha1((const unsigned char*)accept_src,strlen(accept_src),digest); base64(digest,20,accept_value); }
     snprintf(response,sizeof response,"HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",accept_value);
-    if(send_all(fd,response,strlen(response))!=0 || send_all(fd,"\x81\x02hi\x88\x00",6)!=0)s->failed=1;
-    usleep(100000);
+    if(send_all(fd,response,strlen(response))!=0) s->failed=1;
+    /* Wait until the client has subscribed to the open/receive events. */
+    if(!s->failed && expect_client_frame(fd,1,(const unsigned char*)"ready",5)!=0)s->failed=1;
+    if(!s->failed && send_all(fd,"\x81\x02hi\x82\x03\x00\xff\x7f",9)!=0)s->failed=1;
+    if(!s->failed && expect_client_frame(fd,1,(const unsigned char*)"from-client",11)!=0)s->failed=1;
+    { const unsigned char binary_expected[3]={0x00,0x7f,0xff};
+      if(!s->failed && expect_client_frame(fd,2,binary_expected,sizeof binary_expected)!=0)s->failed=1; }
+    if(!s->failed && send_all(fd,"\x88\x00",2)!=0)s->failed=1;
 done: close(fd); return NULL;
 }
 static int wait_event(FlatRuntime *rt, FlatEventSubscriptionId sub, FlatCollectionPool *coll, FlatStringPool *pool, FlatValue *out) {
@@ -80,17 +94,27 @@ int main(void) {
     if(bind(server.listen_fd,(struct sockaddr*)&addr,sizeof addr)!=0||listen(server.listen_fd,1)!=0||getsockname(server.listen_fd,(struct sockaddr*)&addr,&alen)!=0)goto done;
     server.port=ntohs(addr.sin_port); if(pthread_create(&server.thread,NULL,server_main,&server)!=0)goto done; server_started=1;
     rt=flat_runtime_create(NULL);coll=flat_coll_create();pool=flat_pool_create();if(!rt||!coll||!pool)goto done;
-    if(flat_runtime_event_subscribe(rt,77,"socket","open",&open_sub)!=0||flat_runtime_event_subscribe(rt,77,"socket","receive",&recv_sub)!=0||flat_runtime_event_subscribe(rt,77,"socket","close",&close_sub)!=0)goto done;
     snprintf(url,sizeof url,"ws://127.0.0.1:%d/echo",server.port);
     if(flat_ws_event_client_start(rt,77,url,2000,4096,&client,error,sizeof error)!=0)goto done;
+    /* Subscribe after connect: the one-shot open event must be replayed. */
+    if(flat_runtime_event_subscribe(rt,77,"socket","open",&open_sub)!=0||flat_runtime_event_subscribe(rt,77,"socket","receive",&recv_sub)!=0||flat_runtime_event_subscribe(rt,77,"socket","close",&close_sub)!=0)goto done;
     if(wait_event(rt,open_sub,coll,pool,&v)!=1||v.tag!=VAL_NULL)goto done;
     flat_value_release(coll,pool,&v);memset(&v,0,sizeof v);
+    if(flat_ws_event_client_send(client,FLAT_WS_TEXT,"ready",5,1000,error,sizeof error)!=0)goto done;
     if(wait_event(rt,recv_sub,coll,pool,&v)!=1||v.tag!=VAL_OBJECT)goto done;
     if(flat_obj_get(coll,v.u.coll_id,"opcode",&field)!=0||field.tag!=VAL_NUMBER||flat_number_as_f64(&field)!=FLAT_WS_TEXT)goto done;
     flat_value_release(coll,pool,&field);memset(&field,0,sizeof field);
     if(flat_obj_get(coll,v.u.coll_id,"data",&field)!=0||field.tag!=VAL_STR_REF)goto done;
     {size_t len=0;const unsigned char *p=flat_pool_read(pool,field.u.ref_id,&len);if(!p||len!=2||memcmp(p,"hi",2)!=0)goto done;}
     flat_value_release(coll,pool,&field);memset(&field,0,sizeof field);flat_value_release(coll,pool,&v);memset(&v,0,sizeof v);
+    if(wait_event(rt,recv_sub,coll,pool,&v)!=1||v.tag!=VAL_OBJECT)goto done;
+    if(flat_obj_get(coll,v.u.coll_id,"opcode",&field)!=0||field.tag!=VAL_NUMBER||flat_number_as_f64(&field)!=FLAT_WS_BINARY)goto done;
+    flat_value_release(coll,pool,&field);memset(&field,0,sizeof field);
+    if(flat_obj_get(coll,v.u.coll_id,"data",&field)!=0||field.tag!=VAL_STR_REF)goto done;
+    {size_t len=0;const unsigned char *p=flat_pool_read(pool,field.u.ref_id,&len);const unsigned char expected[3]={0x00,0xff,0x7f};if(!p||len!=3||memcmp(p,expected,3)!=0)goto done;}
+    flat_value_release(coll,pool,&field);memset(&field,0,sizeof field);flat_value_release(coll,pool,&v);memset(&v,0,sizeof v);
+    if(flat_ws_event_client_send(client,FLAT_WS_TEXT,"from-client",11,1000,error,sizeof error)!=0)goto done;
+    {const unsigned char binary[3]={0x00,0x7f,0xff};if(flat_ws_event_client_send(client,FLAT_WS_BINARY,binary,sizeof binary,1000,error,sizeof error)!=0)goto done;}
     if(wait_event(rt,close_sub,coll,pool,&v)!=1||v.tag!=VAL_NULL)goto done;
     flat_value_release(coll,pool,&v);memset(&v,0,sizeof v);
     flat_ws_event_client_stop(client);client=NULL;
