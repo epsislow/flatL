@@ -1,55 +1,180 @@
-# sockets
+# Native module `sockets`
 
-The `sockets` native module currently exposes the first FlatL-facing WebSocket operations. It is available when the HTTP/WebSocket native support is compiled in and when the program runs inside a `FlatRuntime` task (the runtime supplies the socket bridge to task VMs).
+The `sockets` module currently provides a **runtime-owned WebSocket client**. It uses the linked native libcurl build and the `FlatRuntime` socket bridge. Declare it in the source header:
 
-## `sockets.wsSupported()`
+```flat
+use native sockets
+use native task
+```
 
-Returns a boolean indicating whether the linked libcurl build advertises WebSocket (`ws`/`wss`) protocol support. This checks the actual runtime library capability; the libcurl version number alone is not sufficient.
+The module is available to FlatL code running in a task owned by `FlatRuntime`. A standalone VM invocation (`bin/flvm`, `bin/flatl run`, or `bin/flatl crun`) does not install this task bridge; use a runtime host for actual socket operations. FLEditor WASM currently includes the module API but does not enable the native libcurl WebSocket transport, so `wsSupported()` returns `false` there.
 
-## `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)`
+## API reference
 
-Connects to a `ws://` or `wss://` endpoint and returns a positive numeric `socketId`. The ID is an ordinary NUMBER in the shared `socket` source namespace. Both configuration arguments are optional: `connectTimeoutMs` defaults to 10000 (10 seconds), and `maxFrameBytes` defaults to 1048576 (1 MiB). The timeout must be an integer from 1 through 86400000; the frame limit must be an integer from 1 through 1073741824 (1 GiB).
+| Function | Arguments | Return value | Purpose |
+|---|---|---|---|
+| `sockets.wsSupported()` | none | BOOL | Reports whether the active runtime socket bridge has WebSocket support (`ws` and `wss`). |
+| `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)` | URL STRING; optional timeout and frame limit NUMBERS | NUMBER — `socketId` | Opens a `ws://` or `wss://` connection. The handshake is synchronous. |
+| `sockets.wsSend(socketId, message)` | socket ID NUMBER, message STRING | BOOL | Sends one text frame. |
+| `sockets.wsSendBinary(socketId, bytes)` | socket ID NUMBER, bytes STRING | BOOL | Sends one binary frame, preserving the stored byte length, including embedded zero bytes. |
+| `sockets.wsClose(socketId)` | socket ID NUMBER | BOOL | Closes the connection and stops its reader. The ID is invalid afterwards. |
 
-The connection handshake is synchronous in this increment. Incoming frames are read by the existing event-client thread and published to the runtime event broker as `open`, `receive`, `close`, and `error` events.
+### `sockets.wsSupported()`
 
-## `sockets.wsSend(socketId, message)`
+Returns `true` only when the runtime bridge is present and the linked libcurl advertises both WebSocket protocols. The libcurl version number alone is not used as the capability test.
 
-Sends a text WebSocket message and returns `true` on success. The message is sent as a UTF-8/text payload; embedded zero bytes are not preserved by this text API.
+```flat
+supported = sockets.wsSupported()
+io.outln(supported)
+```
 
-## `sockets.wsSendBinary(socketId, bytes)`
+A call made outside a runtime-owned task fails because there is no socket bridge to query. A supported native build can still return `false` if its linked libcurl was built without `ws`/`wss`.
 
-Sends a binary WebSocket frame and returns `true` on success. `bytes` must be a FlatL string value; its stored byte length is used, so embedded zero bytes in a string reference are preserved. The API does not perform text encoding or base64 conversion.
+### `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)`
 
-## `sockets.wsClose(socketId)`
+| Argument | Type | Default | Valid range / meaning |
+|---|---|---:|---|
+| `url` | STRING | — | A `ws://` or `wss://` endpoint. |
+| `connectTimeoutMs` | NUMBER | `10000` | Integer from `1` to `86400000` milliseconds. |
+| `maxFrameBytes` | NUMBER | `1048576` | Integer from `1` to `1073741824` bytes (1 GiB). Maximum accepted inbound frame size. |
 
-Closes the connection, stops its reader and returns `true` on success. The socket ID becomes invalid after close.
+Returns a positive numeric `socketId`. Socket IDs share the `socket` event-source namespace used by `task.spawnFor()`.
 
-## Event subscription
+```flat
+wsId = sockets.wsConnect('ws://127.0.0.1:8765', 5000, 65536)
+```
 
-Use the generic task event API with the common socket kind:
+The connection handshake blocks the calling task until success or failure. After the handshake, a reader thread receives frames and publishes events to the runtime broker. The `open` event is retained if it is published before the first matching subscription.
+
+### `sockets.wsSend(socketId, message)`
+
+Sends a WebSocket **text** frame. `message` is passed as a text payload; this function is not the binary-safe API.
+
+```flat
+sent = sockets.wsSend(wsId, 'hello from FlatL')
+```
+
+### `sockets.wsSendBinary(socketId, bytes)`
+
+Sends a WebSocket **binary** frame. `bytes` is a FlatL STRING value, and the stored byte length is used. Embedded zero bytes are preserved; no base64 conversion or text encoding is performed.
+
+```flat
+-- payload is a binary STRING produced by the bytes module.
+sent = sockets.wsSendBinary(wsId, payload)
+```
+
+For arbitrary binary construction and slicing, see [native `bytes`](bytes.md) and pass its binary string value to this function.
+
+### `sockets.wsClose(socketId)`
+
+Stops the reader and closes the connection. Close the socket when it is no longer needed; the runtime also owns cleanup when it is destroyed.
+
+```flat
+closed = sockets.wsClose(wsId)
+```
+
+## Events and `task.spawnFor()`
+
+WebSocket events use the common source kind `'socket'`. The event name identifies the event type:
+
+| Event | When it is published | Payload |
+|---|---|---|
+| `open` | Handshake has completed | Empty payload. |
+| `receive` | A WebSocket frame arrives | OBJECT with `opcode` and `data`; `data` contains the frame payload. |
+| `close` | Peer close or reader termination | Empty payload. |
+| `error` | Transport or reader error occurs | STRING containing the error description. |
+
+Subscribe with `task.spawnFor(sourceId, sourceKind, eventName, #handler, options?, ...)`. The first handler parameter receives the event payload; additional arguments are copied into each handler task. See [native `task`](task.md) for scheduling and queue options.
 
 ```flat
 subId = task.spawnFor(wsId, 'socket', 'receive', #onMessage, {
-  mode: 'parallel',
-  maxActive: 4,
-  queueCapacity: 100,
+  mode: 'serial',
+  queueCapacity: 64,
   overflow: 'dropOldest'
 })
 
 #onMessage(event)
+  io.outln(event.opcode)
   io.outln(event.data)
   OK
 ```
 
-The event payload is an object containing `opcode` and `data`. The transport thread never executes FlatL code; handler tasks are created by the runtime scheduler. If no matching subscription exists when the one-shot `open` event is published, the runtime retains it until the first matching subscription is registered, so the normal sequence `wsConnect()` followed by `task.spawnFor()` does not lose the open notification. If a subscription already exists, normal fan-out delivers the event and no replay is retained. The retained notification is consumed once; publishing `close` before the first subscription discards it.
+`mode: 'serial'` processes one handler at a time in event order. Use `mode: 'parallel'` and `maxActive` when independent messages may be processed concurrently. Queue overflow policies are `wait`, `dropOldest`, `dropNewest`, and `error`; see the `task.spawnFor()` options table in [native `task`](task.md).
 
-The runtime also buffers `receive` events that arrive before the first matching subscription. The buffer preserves FIFO order and is transferred to the first later `socket/receive` subscription. It is bounded to 256 frames per socket and 4096 frames across the runtime. If either limit is reached, publication returns a hard-overflow result; the WebSocket reader publishes an `error` event and terminates the connection rather than silently discarding data or growing memory without limit. A subscription whose `queueCapacity` is smaller than the retained backlog must choose `dropOldest` or `dropNewest`; the default `wait` policy rejects that subscription until a compatible queue is requested. The retained receive frames remain available for a later subscription.
+### Events arriving before subscription
 
-## Current limitations
+The runtime protects the usual connect-then-subscribe sequence:
 
-- `wsConnect` performs its handshake synchronously.
-- Pre-subscription `receive` frames are buffered within the documented 256-per-socket / 4096-per-runtime limits; overflow terminates the reader with an `error` event.
-- `wsSend` sends text frames; `wsSendBinary` sends binary frames.
-- The send timeout remains fixed at 10 seconds; only the connection handshake timeout and inbound maximum frame size are configurable.
+- The one-shot `open` notification is retained until the first matching `socket/open` subscription. It is consumed once. If `close` occurs before the first subscription, the retained `open` notification is discarded.
+- Incoming `receive` frames are buffered FIFO until the first matching `socket/receive` subscription.
+- The pre-subscription receive buffer is bounded to 256 frames per socket and 4096 frames per runtime.
+- If either transport buffer limit is reached, the reader publishes an `error` event and terminates the connection rather than silently dropping data or growing memory without limit.
+- If the retained backlog exceeds the new subscription's queue capacity, the default `wait` policy rejects that subscription. Use `dropOldest` or `dropNewest` to accept a smaller queue and apply its stated policy.
+
+The transport reader never executes FlatL code. It publishes to the runtime event broker; the cooperative scheduler creates handler tasks.
+
+## Complete example: connect, subscribe, send, close
+
+This example illustrates the normal event-driven structure. It must be run by a host that creates a `FlatRuntime` root task and drives its scheduler; it is not runnable as a standalone `flatl crun` program.
+
+```flat
+use native sockets
+use native task
+#main
+  supported = sockets.wsSupported()
+  io.outln(supported)
+  wsId = sockets.wsConnect('ws://127.0.0.1:8765', 5000, 65536)
+
+  openSub = task.spawnFor(wsId, 'socket', 'open', #onOpen)
+  receiveSub = task.spawnFor(wsId, 'socket', 'receive', #onReceive, {
+    mode: 'serial',
+    queueCapacity: 64,
+    overflow: 'dropOldest'
+  })
+  closeSub = task.spawnFor(wsId, 'socket', 'close', #onClose)
+  errorSub = task.spawnFor(wsId, 'socket', 'error', #onError)
+
+  sockets.wsSend(wsId, 'hello')
+  -- For binary data, construct a byte string and use wsSendBinary.
+  -- The application decides when its exchange is complete, then calls
+  -- task.stopFor(subscriptionId) and sockets.wsClose(wsId).
+  OK
+
+#onOpen(event)
+  io.outln('WebSocket opened')
+  OK
+
+#onReceive(event)
+  io.outln(event.opcode)
+  io.outln(event.data)
+  OK
+
+#onClose(event)
+  io.outln('WebSocket closed')
+  OK
+
+#onError(event)
+  io.outln('WebSocket error')
+  OK
+```
+
+A production program should also define its application-level completion condition, stop subscriptions with `task.stopFor(subscriptionId)` when they are no longer needed, and close the socket. `task.stopFor()` refuses removal while a handler dispatch is in progress.
+
+## Native support and build notes
+
+- Native support requires `http=1` and a libcurl build that advertises both `ws` and `wss`.
+- `http*` in the build recipe means FlatL links the system libcurl; it does not compile or bundle curl itself. `pkg-config libcurl` supplies the headers and linker flags.
+- FLEditor WASM currently sets `FLAT_WITH_WEBSOCKET=0`. The module remains declared, but `wsSupported()` returns `false` and the native transport is unavailable in the browser build.
+- The current `FlatTaskNativeBridge` exposes sockets to runtime-owned task VMs. Standalone VM execution without a runtime task bridge cannot use these operations.
+- `wsConnect` performs a synchronous handshake. The send timeout is fixed at 10 seconds; only connection timeout and inbound maximum frame size are configurable.
 - TCP and UDP are not implemented by this module yet.
-- The current `FlatTaskNativeBridge` exposes sockets to runtime-owned task VMs; standalone VM execution without a runtime task bridge cannot use these operations.
+
+## Testing
+
+The repository's runtime-owned integration probe is:
+
+```bash
+bin/run_tests 'flvm[75]' -v -e
+```
+
+It compiles the FlatL probe, creates a `FlatRuntime`, starts a root task and a child task, and prints the value returned by `sockets.wsSupported()`. This is the appropriate support check; `bin/flatl crun` and `bin/flvm` run standalone VMs and do not install the socket task bridge.

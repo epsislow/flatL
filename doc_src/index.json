@@ -217,6 +217,11 @@
       "file": "natives/http.md"
     },
     {
+      "id": "sockets-native",
+      "label": "Native sockets",
+      "file": "natives/sockets.md"
+    },
+    {
       "id": "env-native",
       "label": "Native env",
       "file": "natives/env.md"
