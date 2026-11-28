@@ -1153,13 +1153,13 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [ ] Expose WebSocket connect/send/close through the FlatL `sockets` native module.
 
 - [x] Expose initial FlatL WebSocket operations through the runtime task bridge (`sockets.wsSupported`, `wsConnect`, `wsSend`, `wsClose`).
-- [ ] Validate a real WebSocket handshake and end-to-end `task.spawnFor` receive flow on a libcurl build with `ws`/`wss` enabled.
+- [x] Validate a real loopback WebSocket handshake, runtime registry receive, and text/binary send round trips on a libcurl build with `ws`/`wss` enabled (archive 380; `flvm[73-74]`). The FlatL-level `task.spawnFor` flow remains a separate follow-up.
 
 
 ### WebSocket native API follow-up (archive 374)
 - [x] Add binary WebSocket frame sending through `sockets.wsSendBinary(socketId, bytes)`.
 - [x] Make connect timeout and inbound maximum frame size configurable in `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)`.
-- [ ] Add a live WebSocket round-trip test on a build with libcurl `ws`/`wss` support.
+- [x] Add live loopback text/binary WebSocket round-trip coverage through the runtime-owned registry; see `flvm[74]` and archive 380.
 
 
 ### Event-driven sockets — archive 375
@@ -1191,3 +1191,9 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [ ] Add deterministic publish/subscribe/close/runtime-destroy race stress and run it under ThreadSanitizer where supported.
 
 **Archive 378 result:** ASan passed three consecutive rounds for four focused C harnesses; the FlatL sockets native bridge passed once under ASan. UBSan passed three consecutive rounds for all five harnesses. No sanitizer diagnostics were emitted. `make -j2 all`, `make docs`, and `bin/run_tests 'flvm[71-75]' -v -e` passed. The linked libcurl does not advertise `ws`/`wss`, so live reader-thread network behavior remains outside this validation. See `plans/67_WEBSOCKET_EVENT_SANITIZER_VALIDATION.md`.
+
+
+### WebSocket live transport round-trip — archive 380
+- [x] Extend `flvm[74]` loopback server coverage through `FlatRuntime`'s socket registry: receive text and binary frames, send text and binary frames, verify client masking/opcodes/payload bytes, then observe close and clean up the runtime.
+- [x] Validate on the current build with `bin/run_tests 'flvm[72-75]' -v -e`; live tests `flvm[73-74]` execute their local WebSocket server paths when libcurl advertises `ws`/`wss`, otherwise retain the explicit capability fallback.
+- [ ] Add a full FlatL program-level `task.spawnFor` WebSocket round trip and a local `wss://` certificate test.

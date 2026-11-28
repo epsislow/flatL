@@ -1646,3 +1646,7 @@ Implemented bounded replay for early `socket/receive` events: 256 frames per soc
 ### WebSocket event pipeline sanitizer checkpoint (archive 378)
 
 Repeated ASan/leak-detection validation passed for the socket event adapter, WebSocket registry, transport contract and runtime event bridge (3/3 each); the FlatL sockets native bridge passed once. UBSan passed three rounds for all five harnesses. `make -j2 all`, `make docs`, and `flvm[71-75]` passed. The user confirmed the archive-377 FLEditor WASM build works on Termux. Live WebSocket handshake/reader-thread behavior remains untested here because linked libcurl lacks `ws`/`wss`. Details and exact commands are recorded in `plans/67_WEBSOCKET_EVENT_SANITIZER_VALIDATION.md`.
+
+
+### WebSocket live runtime registry round-trip — archive 380
+Extended `flvm[74]` from a receive/close lifecycle check to a live bidirectional loopback test through `FlatRuntime`: the server sends text and binary frames (including zero and high-bit bytes), the runtime publishes both receive events, the client sends text and binary frames, and the server validates masking, opcodes and exact payloads before sending close. The test verifies the close event and the existing runtime/socket cleanup contract. `flvm[73]` continues to cover the event-client layer and late subscription behavior. A full FlatL source-level `task.spawnFor` integration and `wss://` certificate test remain pending.

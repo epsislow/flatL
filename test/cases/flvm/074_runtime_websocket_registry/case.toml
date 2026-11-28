@@ -1,6 +1,6 @@
 suite = "flvm"
 id = 74
-desc = "FlatRuntime owns numeric WebSocket IDs and closes registered clients"
+desc = "FlatRuntime WebSocket registry performs live text/binary send and receive round trips"
 kind = "exec"
 cmd = "make -s test-runtime-websocket-registry TEST_BIN={tmp}/runtime_websocket_registry_test && {tmp}/runtime_websocket_registry_test"
 expect_exit = 0
