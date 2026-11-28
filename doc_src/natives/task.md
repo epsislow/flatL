@@ -29,9 +29,9 @@ A native host normally creates and starts the root task through the C `FlatRunti
 | Call | Arguments | Returns | Behavior |
 |---|---|---|---|
 | `task.spawn(#block, arg1, …)` | Literal block label followed by zero or more value expressions; count must exactly match the block's named parameters | NUMBER — runtime-local task ID | Evaluates arguments in the parent, deep-copies them into the child's private VM context, and makes it RUNNABLE |
-| `task.spawnFor(sourceId, sourceKind, eventName, #handler, arg1, …)` | Positive whole NUMBER source ID, STRING source kind and event name, literal handler block, then zero or more bound values | NUMBER — runtime-local event subscription ID | Registers a persistent handler. Each matching event creates a normal isolated runnable task; the event payload is parameter 0 and bound values follow it |
-| `task.spawnForMode(sourceId, sourceKind, eventName, #handler, mode, arg1, …)` | Same as `spawnFor`, followed by the STRING mode `parallel` or `serial`, then zero or more bound values | NUMBER — runtime-local event subscription ID | Registers a persistent handler with an explicit dispatch policy |
-| `task.spawnForLimit(sourceId, sourceKind, eventName, #handler, mode, maxActive, arg1, …)` | Same as `spawnForMode`, followed by a positive whole NUMBER concurrency limit, then zero or more bound values | NUMBER — runtime-local event subscription ID | Registers a handler with an explicit dispatch policy and maximum number of active handler tasks |
+| `task.spawnFor(sourceId, sourceKind, eventName, #handler, options?, arg1, …)` | Positive whole NUMBER source ID, STRING source kind and event name, literal handler block, optional options OBJECT, then zero or more bound values | NUMBER — runtime-local event subscription ID | Registers a persistent handler with per-subscription dispatch and queue policies. Each event creates an isolated task; payload is parameter 0 and bound values follow it |
+| `task.spawnForMode(...)` | Compatibility helper; same source/handler arguments followed by `parallel` or `serial` | NUMBER — subscription ID | Legacy mode-selection helper; prefer `task.spawnFor()` with `mode` in its options OBJECT |
+| `task.spawnForLimit(...)` | Compatibility helper; same as mode helper followed by positive whole NUMBER `maxActive` | NUMBER — subscription ID | Legacy concurrency helper; prefer `task.spawnFor()` with `mode` and `maxActive` in its options OBJECT |
 | `task.stopFor(subscriptionId)` | Positive whole NUMBER subscription ID | BOOL — `true` when removed | Unregisters the handler and discards queued events; fails if dispatch is currently in progress |
 | `task.wait(taskId)` | Positive whole NUMBER task ID | BOOL — `true` when the wait request is accepted | If the target is non-terminal, the current task enters WAITING and yields to the scheduler. It resumes after the target reaches COMPLETED, FAILED, or CANCELLED. If the target is already terminal, execution continues immediately |
 | `task.state(taskId)` | Positive whole NUMBER task ID | NUMBER — `FlatTaskState` numeric value | Queries a task's current lifecycle state |
@@ -43,9 +43,40 @@ The child receives a fresh VM and private VCX. Only the declared parameter names
 
 
 
-`task.spawnFor(sourceId, sourceKind, eventName, #handler, arg1, …)` registers a persistent event handler owned by the current runtime, not by the lifetime of the task that registers it. `sourceId` is an ordinary positive NUMBER; `sourceKind` is the explicit namespace discriminator (for example, all WebSocket/TCP/UDP connections use `'socket'`); `eventName` identifies the event (for example, `'receive'`, `'close'`, or `'error'`). The handler block must declare one parameter for the event payload plus one parameter for each bound argument. Bound arguments are deep-copied at registration. The runtime keeps an owned bytecode snapshot, so the registering task/VM may finish and be destroyed while the subscription remains active.
+`task.spawnFor(sourceId, sourceKind, eventName, #handler, options?, arg1, …)` registers a persistent event handler owned by the current runtime, not by the lifetime of the task that registers it. `sourceId` is an ordinary positive NUMBER; `sourceKind` is the explicit namespace discriminator (for example, all WebSocket/TCP/UDP connections use `'socket'`); `eventName` identifies the event (for example, `'receive'`, `'close'`, or `'error'`). The handler block must declare one parameter for the event payload plus one parameter for each bound argument. Bound arguments are deep-copied at registration. The runtime keeps an owned bytecode snapshot, so the registering task/VM may finish and be destroyed while the subscription remains active.
 
-Each queued event is dispatched by the runtime scheduler as a new ordinary task with a fresh VM/VCX. The event payload is passed first, followed by the registration-time bound arguments. The producer only publishes an owned event value; it never executes FlatL code directly. `task.spawnFor()` keeps the backward-compatible default `parallel` policy. Use `task.spawnForMode(..., 'parallel', ...)` to select it explicitly, or `task.spawnForMode(..., 'serial', ...)` to allow at most one non-terminal handler task per subscription while preserving FIFO order. Use `task.spawnForLimit(..., 'parallel', maxActive, ...)` to cap the number of non-terminal handler tasks per subscription. `maxActive` must be a positive whole NUMBER. A value of `1` behaves like serial dispatch; larger values allow bounded parallelism. `task.spawnForLimit(..., 'serial', maxActive, ...)` still caps concurrency at one because serial mode takes precedence. The broker still uses its fixed bounded per-subscription queue; configurable queue capacity/overflow policy and source adapters are not yet exposed.
+Each queued event is dispatched by the runtime scheduler as a new ordinary task with a fresh VM/VCX. The event payload is passed first, followed by the registration-time bound arguments. The producer only publishes an owned event value; it never executes FlatL code directly.
+
+The recommended API is a single `task.spawnFor()` call with an optional options OBJECT immediately after the handler block:
+
+```flat
+options = { mode: 'parallel', maxActive: 4, queueCapacity: 100, overflow: 'dropOldest' }
+subscriptionId = task.spawnFor(wsId, 'socket', 'receive', #onMessage, options, userId)
+
+#onMessage(event, userId)
+  -- process the event payload
+  OK
+```
+
+Supported options and defaults:
+
+| Option | Type / values | Default | Behavior |
+|---|---|---|---|
+| `mode` | STRING: `parallel` or `serial` | `parallel` | `serial` runs at most one non-terminal handler task per subscription and preserves FIFO dispatch; `parallel` allows concurrent handler tasks |
+| `maxActive` | Positive whole NUMBER | No additional concurrency cap | Maximum number of non-terminal handler tasks for a `parallel` subscription. `1` gives bounded single-handler concurrency. `serial` always caps at one, regardless of this value |
+| `queueCapacity` | Positive whole NUMBER | `256` | Maximum number of queued, not-yet-dispatched events for this subscription. Active handler tasks do not occupy queue slots |
+| `overflow` | STRING: `wait`, `dropOldest`, `dropNewest`, or `error` | `wait` | Defines what happens when the pending-event queue is full |
+
+Overflow behavior:
+
+- `wait`: the publisher receives the backpressure result (`-2` from the C publish API) and must retain/retry the event after queue capacity becomes available. It does not block the FlatL scheduler or host callback.
+- `dropOldest`: discard the oldest event still waiting in this subscription's queue, then enqueue the new event. Already-dispatched/running handlers are not affected.
+- `dropNewest`: discard the new event for this full subscription; other matching subscriptions may still receive it.
+- `error`: reject publication with the hard-overflow result (`-3` from the C publish API). Fan-out is atomic for WAIT/ERROR subscriptions: no matching queue is modified when one of them rejects the publication.
+
+If no options OBJECT is supplied, `task.spawnFor()` uses `parallel`, the default concurrency setting, a queue capacity of 256 and `wait` overflow. The options OBJECT is recognized when it contains one or more of `mode`, `maxActive`, `queueCapacity` or `overflow`; unknown keys are rejected. Place the options OBJECT before bound arguments. For compatibility, objects without any recognized option key remain ordinary bound arguments.
+
+`task.spawnForMode()` and `task.spawnForLimit()` remain available as compatibility helpers for existing code, but new code should use `task.spawnFor()` with the options OBJECT. The mode helper accepts `parallel` or `serial`; the limit helper additionally accepts a positive whole `maxActive` NUMBER. These helpers use the same runtime policy implementation.
 
 `task.stopFor(subscriptionId)` removes a subscription and releases its queued events and copied bound arguments. It returns BOOL true on success. Removal is rejected while a dispatch is in progress or any handler task created by the subscription is still non-terminal. The subscription ID is distinct from task IDs created for individual event-handler executions.
 
@@ -73,4 +104,8 @@ Runnable FLEditor examples are shipped under `docs/fleditor_site/examples/task_c
 
 The runtime event broker now also exposes `flat_runtime_event_subscribe_handler()`. It registers a persistent handler against `(sourceId, sourceKind, eventName)`, validates that the target block accepts one event parameter plus the bound arguments, and deep-copies those bound arguments into runtime-owned storage. The scheduler automatically converts queued events for registered handlers into ordinary runnable tasks. The event payload is parameter 0; bound arguments follow it.
 
-The C API clones the supplied bytecode into subscription-owned storage; the caller's bytecode may be released after registration returns. `flat_runtime_event_unsubscribe()` rejects removal while a handler dispatch is in progress and releases the bytecode snapshot, stored argument copies and queued events. Archive 364 exposes the FlatL `task.spawnFor()` and `task.stopFor()` native wrappers over this runtime API. Archive 366 adds `task.spawnForMode()` for explicit `parallel` or `serial` dispatch selection. Serial mode waits for the prior handler task to become terminal before dispatching the next queued event. `maxActive`, configurable bounded queue/overflow policies, and source adapters remain future work.
+The C API clones the supplied bytecode into subscription-owned storage; the caller's bytecode may be released after registration returns. `flat_runtime_event_unsubscribe()` rejects removal while a handler dispatch is in progress and releases the bytecode snapshot, stored argument copies and queued events. Archive 364 exposes the FlatL `task.spawnFor()` and `task.stopFor()` native wrappers over this runtime API. Archive 366 adds `task.spawnForMode()` and archive 367 adds `task.spawnForLimit()` as compatibility helpers. Archive 368 consolidates their configuration in the `task.spawnFor()` options OBJECT and exposes bounded queue capacity plus overflow policies. Archive 369 adds the shared C-side socket event adapter boundary; concrete transport modules remain future work.
+
+### Socket event sources
+
+Socket event producers use the shared `sourceKind` value `'socket'` for WebSocket, TCP and UDP connections. The connection ID is an ordinary NUMBER. Standard event names are `open`, `receive`, `close` and `error`; see [Socket event adapter contract](../SOCKET_EVENT_ADAPTER.md). The C-side adapter boundary and a synchronous native libcurl WebSocket transport foundation are available. The transport is not yet exposed as `sockets.wsConnect()` and is not yet connected to asynchronous `task.spawnFor()` event delivery; see [Native WebSocket transport foundation](../WEBSOCKET_TRANSPORT.md).

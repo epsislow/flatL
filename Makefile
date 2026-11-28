@@ -206,7 +206,7 @@ HTTP_CFLAGS =
 HTTP_LIBS =
 ENSURE_LIBZ_1 =
 else
-HTTP_SRC = src/lib/mod_http.c src/common/flat_http_boundary.c src/http/flat_http_curl.c
+HTTP_SRC = src/lib/mod_http.c src/common/flat_http_boundary.c src/http/flat_http_curl.c src/http/flat_ws_transport.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 # MSYS2 UCRT64: libcurl PE imports libz-1.dll; mingw zlib package ships zlib1.dll.
@@ -249,7 +249,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_capability.c src/lib/na
                 src/lib/mod_date.c src/lib/mod_mem.c src/lib/mod_file.c src/lib/mod_vcx.c \
                 src/lib/mod_vcx_dschema.c src/lib/mod_executor.c src/lib/mod_task.c src/lib/mod_channel.c $(HTTP_SRC) $(DOM_SRC) $(ENV_SRC) $(PATH_SRC) $(FS_SRC) $(ENC_SRC) $(RE_SRC) $(HASH_SRC) $(BYTES_SRC) $(FLAT_PATH_SRC) $(FLAT_ENC_SRC) $(NATIVE_MODS_SRC) $(NATIVE_VM_MATH) $(NATIVE_VM_PLUGIN)
 NATIVE_FLC_SRC = src/lib/native_registry.c src/lib/native_util.c $(NATIVE_MODS_SRC) src/common/flat_native_tag_common.c
-VM_SRC  = src/common/flat_locale.c src/common/flat_time.c src/common/flat_runtime_log.c src/common/flat_host_config.c src/common/flat_channel.c src/common/flat_scheduler_sync.c src/common/flat_runtime.c src/common/flat_vm_handle.c src/common/vm.c src/common/flat_func_tag.c \
+VM_SRC  = src/common/flat_locale.c src/common/flat_time.c src/common/flat_runtime_log.c src/common/flat_host_config.c src/common/flat_channel.c src/common/flat_scheduler_sync.c src/common/flat_runtime.c src/common/flat_runtime_socket_event.c src/common/flat_vm_handle.c src/common/vm.c src/common/flat_func_tag.c \
           src/common/doc_lookup.c src/common/flat_number.c \
           src/common/value_pool.c \
           src/common/value_collection.c src/common/value_live.c src/common/flat_assign.c \
@@ -1047,11 +1047,24 @@ test-emscripten-no-pthreads:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(filter-out -pthread,$(CFLAGS)) -D__EMSCRIPTEN__ -o $(TEST_BIN) test/cases/flvm/054_emscripten_no_pthreads/emscripten_no_pthreads_test.c $(FB_SRC) $(VM_SRC) $(PORT_SRC) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(filter-out -pthread,$(VM_EXTRA_LIBS)) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
+
+# Compile and validate the native libcurl WebSocket transport boundary.
+.PHONY: test-websocket-transport
+test-websocket-transport:
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/072_websocket_transport/websocket_transport_test.c src/http/flat_ws_transport.c $(LDFLAGS) $(HTTP_CFLAGS) $(HTTP_LIBS) -lm
+
 # Integration test for numeric source IDs, source-kind namespaces and queued event fan-out.
 .PHONY: test-runtime-event-source-broker
 test-runtime-event-source-broker: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/058_runtime_event_source_broker/runtime_event_source_broker_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Validate the shared socket event namespace and lifecycle event names.
+.PHONY: test-runtime-socket-event-adapter
+test-runtime-socket-event-adapter: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/071_runtime_socket_event_adapter/runtime_socket_event_adapter_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
 
 # Integration test for converting one queued event into an ordinary runnable FlatL task.
 .PHONY: test-runtime-event-task-dispatch
@@ -1099,3 +1112,24 @@ test-runtime-event-max-active: $(FLVM_TEST_COMMON_OBJ)
 test-native-task-spawn-for-limit: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/066_native_task_spawn_for_limit/native_task_spawn_for_limit_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+# Integration test for the unified task.spawnFor() options object and queue overflow policies.
+.PHONY: test-native-task-spawn-for-options
+test-native-task-spawn-for-options: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/067_native_task_spawn_for_options/native_task_spawn_for_options_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+.PHONY: test-native-task-spawn-for-drop-newest
+test-native-task-spawn-for-drop-newest: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/068_native_task_spawn_for_options_dropnewest/native_task_spawn_for_options_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+.PHONY: test-native-task-spawn-for-overflow-wait
+test-native-task-spawn-for-overflow-wait: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/069_native_task_spawn_for_overflow_wait/native_task_spawn_for_options_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+.PHONY: test-native-task-spawn-for-overflow-error
+test-native-task-spawn-for-overflow-error: $(FLVM_TEST_COMMON_OBJ)
+	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
+	$(CC) $(CFLAGS) -pthread -o $(TEST_BIN) test/cases/flvm/070_native_task_spawn_for_overflow_error/native_task_spawn_for_options_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm

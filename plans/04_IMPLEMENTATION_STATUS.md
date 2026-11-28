@@ -1571,3 +1571,22 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Added `flat_runtime_event_subscribe_handler_options()` while preserving the previous C registration APIs and their compatibility defaults.
 - Added `flvm[65]` and `flvm[66]`; the complete FLVM suite passed: 66/66. `make -j2 all` and `make docs` passed. ASan/UBSan and the full default suite were not run.
 - Remaining: configurable queue capacity and overflow/backpressure, failure/source-close/shutdown semantics, native sockets adapters, and persistent FLEditor WASM sessions.
+
+
+## Current checkpoint — archive 368 (2026-11-28)
+
+- Unified the public FlatL event-subscription configuration in `task.spawnFor(sourceId, sourceKind, eventName, #handler, options?, ...boundArgs)`. The optional OBJECT supports `mode`, `maxActive`, `queueCapacity` and `overflow`.
+- Defaults: `parallel`, no additional active-handler cap, queue capacity 256, overflow `wait`. `serial` always allows one active handler; `parallel` obeys `maxActive`.
+- Added per-subscription queue capacities and all four overflow policies. `wait` returns C publish status `-2` for host-side retry/backpressure; `error` returns `-3`; `dropOldest` replaces the oldest queued item; `dropNewest` skips the new event for that subscription. WAIT/ERROR fan-out is atomic.
+- Preserved the existing C `flat_runtime_event_subscribe_handler_options()` signature and added `flat_runtime_event_subscribe_handler_config()` for the richer options structure. Existing FlatL `task.spawnForMode()` and `task.spawnForLimit()` remain compatibility helpers; new code should use the options OBJECT.
+- Updated `doc_src/natives/task.md`, `doc_src/TASK_RUNTIME_MODEL.md`, plan 66, roadmap and implementation status.
+- Added `flvm[67-70]`; validation `make -j2 all`, `make docs`, and `bin/run_tests 'flvm[58-70]' -v -e` all PASS (13/13 selected tests). Full default suite and ASan/UBSan were not run.
+- Remaining: sockets/native host adapters, source close/error lifecycle, pause/resume/info controls if still desired, and persistent FLEditor WASM event sessions.
+
+
+## Current checkpoint — archive 370 (2026-11-28)
+
+- Archives 357–368 implement the generic event broker, persistent FlatL `task.spawnFor()` subscriptions, event-first payload binding, `serial`/`parallel`, `maxActive`, bounded queue capacity and overflow policies. Archive 369 adds the shared C socket event adapter with `sourceKind = 'socket'`.
+- Archive 370 adds a synchronous native libcurl WebSocket transport foundation in `include/flat_ws_transport.h` / `src/http/flat_ws_transport.c`. It supports `ws://` and `wss://`, text/binary frame send, bounded individual-frame receive, timeouts and explicit close. Native HTTP-enabled builds require libcurl 7.86.0+.
+- This is not yet the FlatL `sockets` module: no `sockets.wsConnect()` native, numeric socket ID registry, background/event-loop reader, or direct publication to `FlatRuntime` exists yet. Browser WebSocket support also remains a separate JS bridge.
+- Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests 'flvm[71-72]' -v -e` PASS (2/2). No live WebSocket echo test, full suite, WASM build or ASan/UBSan validation was run.

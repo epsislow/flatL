@@ -1,0 +1,12 @@
+use native task
+
+#main
+  options = { mode: 'parallel', maxActive: 2, queueCapacity: 2, overflow: 'dropOldest' }
+  sub = task.spawnFor(17, 'socket', 'receive', #onEvent, options, 'bound')
+  io.outln(sub)
+  OK
+
+#onEvent(event, extra)
+  io.outln(event)
+  io.outln(extra)
+  OK

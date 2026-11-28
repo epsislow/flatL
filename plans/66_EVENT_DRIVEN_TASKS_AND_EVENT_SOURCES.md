@@ -1,8 +1,8 @@
 # Event-driven Task Dispatch and Host Event Sources — roadmap
 
-**Status:** staged implementation; archive 359 adds the host-side event broker and archive 360 adds queue-depth inspection plus scheduler wake notification. `task.spawnFor()` dispatch remains pending.
+**Status:** generic runtime broker, persistent FlatL `task.spawnFor()` handlers and configurable dispatch/queue policies are implemented through archive 368. Archive 369 adds the shared socket event adapter; archive 370 adds a synchronous native libcurl WebSocket transport foundation. The asynchronous transport-to-runtime bridge, FlatL `sockets` module, browser WebSocket bridge and persistent FLEditor WASM sessions remain pending.
 **Baseline:** archive 358 (`flatL-main-358-event-source-kind-contract.zip`).
-**Proposed next plan:** `task.spawnFor()` and a generic event-source contract, with sockets as the first transport integration.
+**Next plan:** generic source adapters, beginning with sockets, plus persistent event-driven FLEditor WASM sessions.
 
 ## 1. Goal
 
@@ -376,3 +376,36 @@ Exposed the limit to FlatL as `task.spawnForLimit(sourceId, sourceKind, eventNam
 Added `flvm[65]` for the C API and `flvm[66]` for the FlatL native. Both publish three events with `maxActive = 2`, verify that only two handler tasks become active before the third remains queued, then verify eventual FIFO delivery and cleanup.
 
 Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests flvm -v -e` PASS (66/66). ASan/UBSan and the full default suite were not run for this increment.
+
+
+## Archive 368 — unified `task.spawnFor()` options and bounded queue policies
+
+Archive 368 consolidates the FlatL configuration in the existing `task.spawnFor()` API. The optional OBJECT immediately after `#handler` accepts `mode`, `maxActive`, `queueCapacity` and `overflow`; bound handler arguments follow the options OBJECT. Defaults are `parallel`, effectively unlimited active handlers, queue capacity 256 and `wait` overflow. `serial` always permits at most one active handler; `parallel` respects `maxActive`. Queue capacity counts pending events only.
+
+Overflow policies are implemented per subscription:
+
+- `wait`: publication returns `-2` backpressure so a host producer can retain and retry the event; it never blocks the scheduler or host callback.
+- `dropOldest`: removes the oldest queued event and appends the new event.
+- `dropNewest`: discards the new event only for the full subscription; other subscriptions may still receive it.
+- `error`: rejects publication with `-3`. WAIT/ERROR preflight all matching subscriptions and leave every queue unchanged if one rejects the event.
+
+The existing C `flat_runtime_event_subscribe_handler_options()` signature remains source-compatible; the new richer configuration is exposed through `flat_runtime_event_subscribe_handler_config()`. The old FlatL helpers `task.spawnForMode()` and `task.spawnForLimit()` remain for compatibility, but new code should use `task.spawnFor()` with the options OBJECT. `doc_src/natives/task.md` and `doc_src/TASK_RUNTIME_MODEL.md` describe the options, defaults, overflow behavior, argument order and compatibility helpers.
+
+Added `flvm[67-70]` to validate the options OBJECT, `dropOldest`, `dropNewest`, WAIT backpressure and ERROR overflow. Validation: `make -j2 all` PASS; `bin/run_tests 'flvm[58-70]' -v -e` PASS (13/13); `make docs` PASS. Full default suite and ASan/UBSan were not run for this increment.
+
+## Archive 369 — shared socket event adapter boundary
+
+Added `flat_runtime_socket_event_publish()` and `FlatSocketEvent` in `include/flat_runtime_socket_event.h` / `src/common/flat_runtime_socket_event.c`. All socket transports share the fixed `sourceKind = "socket"` namespace while keeping connection IDs as ordinary positive numeric values. The adapter accepts only `open`, `receive`, `close`, and `error` event kinds and forwards payload ownership to the generic runtime broker, which deep-copies values for subscribers.
+
+Added `flvm[71]` to validate all four lifecycle/data event routes, namespace consistency, invalid source IDs and invalid event kinds. Documented the producer contract, backpressure handling, event payload and the current implementation boundary in `doc_src/SOCKET_EVENT_ADAPTER.md`.
+
+This increment is the C-side adapter boundary only. It does **not** implement `sockets.wsConnect()`, a WebSocket/TCP/UDP transport, native I/O event loops, or the browser WebSocket bridge. Those require a persistent host event loop and transport-specific implementations.
+
+
+## Archive 370 — native WebSocket transport foundation
+
+Added `include/flat_ws_transport.h` and `src/http/flat_ws_transport.c`, using libcurl's WebSocket API (minimum libcurl 7.86.0). The native C surface initializes libcurl, connects to `ws://`/`wss://` with a bounded handshake timeout, sends text/binary frames, receives bounded individual frames with timeout reporting, and closes/releases the connection. Received payload buffers are caller-owned and released with `flat_ws_message_free()`. Continuation frames are surfaced as `FLAT_WS_CONTINUATION`; complete fragmented-message assembly is left to the next transport integration layer.
+
+The implementation is compiled only in native HTTP-enabled builds. The Emscripten Fetch path does not compile it; browser WebSocket requires a separate JS bridge. This is intentionally a synchronous transport primitive: it does not yet allocate FlatL `socketId` values, run a background reader, publish runtime events, or expose `sockets.wsConnect()`/`wsSend()`/`wsClose()`.
+
+Added `flvm[72]` for libcurl initialization, URL scheme validation, refused-connection cleanup, and API argument validation. `flvm[71-72]` PASS; `make -j2 all` PASS; `make docs` PASS. A live WebSocket echo handshake, ASan/UBSan and WASM build have not yet been validated.

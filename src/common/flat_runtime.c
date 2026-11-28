@@ -47,6 +47,8 @@ typedef struct FlatRuntimeEventSubscription {
     int handler_dispatching;
     size_t active_handlers;
     size_t max_active;
+    size_t queue_capacity;
+    FlatEventOverflowPolicy overflow_policy;
     FlatEventDispatchMode dispatch_mode;
     const FlatBytecode *handler_bc;
     FlatBytecode handler_bytecode;
@@ -181,7 +183,8 @@ static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const F
                                          const char *event_name, const char *handler_label,
                                          const FlatValue *args, size_t arg_count,
                                          FlatCollectionPool *source_coll, FlatStringPool *source_pool,
-                                         FlatFileTable *source_files, int dispatch_mode, size_t max_active,
+                                         FlatFileTable *source_files,
+                                         const FlatEventSubscriptionOptions *options,
                                          uint64_t *out_subscription_id);
 static int runtime_task_native_stop_for(void *user, uint64_t parent_id,
                                         uint64_t subscription_id);
@@ -481,6 +484,8 @@ int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
     sub = (FlatRuntimeEventSubscription *)calloc(1, sizeof *sub);
     if (!sub) return -1;
     sub->source_id = source_id;
+    sub->queue_capacity = FLAT_EVENT_DEFAULT_QUEUE_CAPACITY;
+    sub->overflow_policy = FLAT_EVENT_OVERFLOW_WAIT;
     snprintf(sub->source_kind, sizeof sub->source_kind, "%s", source_kind);
     snprintf(sub->event_name, sizeof sub->event_name, "%s", event_name);
     runtime_lock(runtime);
@@ -498,25 +503,37 @@ int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
     return 0;
 }
 
-int flat_runtime_event_subscribe_handler_options(FlatRuntime *runtime, uint64_t source_id,
+int flat_runtime_event_subscribe_handler_config(FlatRuntime *runtime, uint64_t source_id,
                                                  const char *source_kind, const char *event_name,
                                          const FlatBytecode *bc, const char *handler_label,
                                          const FlatValue *bound_args, size_t bound_arg_count,
                                          FlatCollectionPool *source_coll,
                                          FlatStringPool *source_pool,
                                          FlatFileTable *source_files,
-                                         FlatEventDispatchMode mode, size_t max_active,
+                                         const FlatEventSubscriptionOptions *options,
                                          FlatEventSubscriptionId *out_subscription_id) {
     FlatRuntimeEventSubscription *sub;
     FlatCollectionPool *copy_coll = NULL;
     FlatStringPool *copy_pool = NULL;
     FlatValue *copies = NULL;
     size_t bi, i, expected = 0;
+    FlatEventSubscriptionOptions defaults;
+    if (!options) {
+        defaults.mode = FLAT_EVENT_DISPATCH_PARALLEL;
+        defaults.max_active = SIZE_MAX;
+        defaults.queue_capacity = FLAT_EVENT_DEFAULT_QUEUE_CAPACITY;
+        defaults.overflow = FLAT_EVENT_OVERFLOW_WAIT;
+        options = &defaults;
+    }
     if (!runtime || source_id == 0 || !bc || !handler_label || handler_label[0] != '#' ||
         !out_subscription_id || (bound_arg_count && (!bound_args || !source_coll || !source_pool)) ||
         bound_arg_count >= FGIR_MAX_PARAMS ||
-        (mode != FLAT_EVENT_DISPATCH_PARALLEL && mode != FLAT_EVENT_DISPATCH_SERIAL) ||
-        max_active == 0) return -1;
+        (options->mode != FLAT_EVENT_DISPATCH_PARALLEL && options->mode != FLAT_EVENT_DISPATCH_SERIAL) ||
+        options->max_active == 0 || options->queue_capacity == 0 ||
+        (options->overflow != FLAT_EVENT_OVERFLOW_WAIT &&
+         options->overflow != FLAT_EVENT_OVERFLOW_DROP_OLDEST &&
+         options->overflow != FLAT_EVENT_OVERFLOW_DROP_NEWEST &&
+         options->overflow != FLAT_EVENT_OVERFLOW_ERROR)) return -1;
     for (bi = 0; bi < bc->block_count; ++bi) {
         if (bc->block_labels && strcmp(bc->block_labels[bi], handler_label) == 0) {
             expected = bc->block_params ? bc->block_params[bi].param_count : 0;
@@ -551,8 +568,10 @@ int flat_runtime_event_subscribe_handler_options(FlatRuntime *runtime, uint64_t 
     if (!runtime_event_name_valid(source_kind, sizeof sub->source_kind) ||
         !runtime_event_name_valid(event_name, sizeof sub->event_name)) goto fail;
     sub->source_id = source_id;
-    sub->dispatch_mode = mode;
-    sub->max_active = mode == FLAT_EVENT_DISPATCH_SERIAL ? 1 : max_active;
+    sub->dispatch_mode = options->mode;
+    sub->max_active = options->mode == FLAT_EVENT_DISPATCH_SERIAL ? 1 : options->max_active;
+    sub->queue_capacity = options->queue_capacity;
+    sub->overflow_policy = options->overflow;
     snprintf(sub->source_kind, sizeof sub->source_kind, "%s", source_kind);
     snprintf(sub->event_name, sizeof sub->event_name, "%s", event_name);
     snprintf(sub->handler_label, sizeof sub->handler_label, "%s", handler_label);
@@ -595,9 +614,9 @@ int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t sou
                                               FlatFileTable *source_files,
                                               FlatEventDispatchMode mode,
                                               FlatEventSubscriptionId *out_subscription_id) {
-    return flat_runtime_event_subscribe_handler_options(runtime, source_id, source_kind, event_name,
+    return flat_runtime_event_subscribe_handler_config(runtime, source_id, source_kind, event_name,
         bc, handler_label, bound_args, bound_arg_count, source_coll, source_pool, source_files,
-        mode, SIZE_MAX, out_subscription_id);
+        &(FlatEventSubscriptionOptions){ mode, SIZE_MAX, FLAT_EVENT_DEFAULT_QUEUE_CAPACITY, FLAT_EVENT_OVERFLOW_WAIT }, out_subscription_id);
 }
 
 int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_id,
@@ -608,9 +627,28 @@ int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_i
                                          FlatStringPool *source_pool,
                                          FlatFileTable *source_files,
                                          FlatEventSubscriptionId *out_subscription_id) {
-    return flat_runtime_event_subscribe_handler_mode(runtime, source_id, source_kind, event_name,
+    return flat_runtime_event_subscribe_handler_config(runtime, source_id, source_kind, event_name,
         bc, handler_label, bound_args, bound_arg_count, source_coll, source_pool, source_files,
-        FLAT_EVENT_DISPATCH_PARALLEL, out_subscription_id);
+        &(FlatEventSubscriptionOptions){ FLAT_EVENT_DISPATCH_PARALLEL, SIZE_MAX, FLAT_EVENT_DEFAULT_QUEUE_CAPACITY, FLAT_EVENT_OVERFLOW_WAIT }, out_subscription_id);
+}
+
+int flat_runtime_event_subscribe_handler_options(FlatRuntime *runtime, uint64_t source_id,
+                                                 const char *source_kind, const char *event_name,
+                                                 const FlatBytecode *bc, const char *handler_label,
+                                                 const FlatValue *bound_args, size_t bound_arg_count,
+                                                 FlatCollectionPool *source_coll,
+                                                 FlatStringPool *source_pool,
+                                                 FlatFileTable *source_files,
+                                                 FlatEventDispatchMode mode, size_t max_active,
+                                                 FlatEventSubscriptionId *out_subscription_id) {
+    FlatEventSubscriptionOptions options;
+    options.mode = mode;
+    options.max_active = max_active;
+    options.queue_capacity = FLAT_EVENT_DEFAULT_QUEUE_CAPACITY;
+    options.overflow = FLAT_EVENT_OVERFLOW_WAIT;
+    return flat_runtime_event_subscribe_handler_config(runtime, source_id, source_kind, event_name,
+        bc, handler_label, bound_args, bound_arg_count, source_coll, source_pool, source_files,
+        &options, out_subscription_id);
 }
 
 int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
@@ -650,29 +688,41 @@ int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
         runtime_unlock(runtime);
         return -1;
     }
+    /* Preflight all matching subscriptions before allocating or mutating any
+     * queue. WAIT/ERROR preserve atomic fan-out; DROP_NEWEST skips only the
+     * overflowing subscriber; DROP_OLDEST replaces its oldest queued item. */
     for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
-        if (sub->source_id == source_id && strcmp(sub->source_kind, source_kind) == 0 &&
-            strcmp(sub->event_name, event_name) == 0) {
-            matched++;
-            if (sub->queued >= FLAT_RUNTIME_EVENT_QUEUE_MAX) {
-                runtime_unlock(runtime);
-                return -2;
-            }
+        if (sub->source_id != source_id || strcmp(sub->source_kind, source_kind) != 0 ||
+            strcmp(sub->event_name, event_name) != 0) continue;
+        matched++;
+        if (sub->queued >= sub->queue_capacity &&
+            (sub->overflow_policy == FLAT_EVENT_OVERFLOW_WAIT ||
+             sub->overflow_policy == FLAT_EVENT_OVERFLOW_ERROR)) {
+            int overflow_rc = sub->overflow_policy == FLAT_EVENT_OVERFLOW_WAIT ? -2 : -3;
+            runtime_unlock(runtime);
+            return overflow_rc;
         }
+        if (sub->queued < sub->queue_capacity ||
+            sub->overflow_policy != FLAT_EVENT_OVERFLOW_DROP_NEWEST) prepared_count++;
     }
     if (matched == 0) {
         runtime_unlock(runtime);
         return 0;
     }
-    prepared = (FlatRuntimeEventNode **)calloc(matched, sizeof *prepared);
-    if (!prepared) {
-        runtime_unlock(runtime);
-        return -1;
+    if (prepared_count) {
+        prepared = (FlatRuntimeEventNode **)calloc(prepared_count, sizeof *prepared);
+        if (!prepared) {
+            runtime_unlock(runtime);
+            return -1;
+        }
     }
+    prepared_count = 0;
     for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
         FlatRuntimeEventNode *node;
         if (sub->source_id != source_id || strcmp(sub->source_kind, source_kind) != 0 ||
-            strcmp(sub->event_name, event_name) != 0) continue;
+            strcmp(sub->event_name, event_name) != 0 ||
+            (sub->queued >= sub->queue_capacity &&
+             sub->overflow_policy == FLAT_EVENT_OVERFLOW_DROP_NEWEST)) continue;
         node = (FlatRuntimeEventNode *)calloc(1, sizeof *node);
         if (!node) goto publish_fail;
         node->coll = flat_coll_create();
@@ -690,24 +740,35 @@ int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
     for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
         FlatRuntimeEventNode *node;
         if (sub->source_id != source_id || strcmp(sub->source_kind, source_kind) != 0 ||
-            strcmp(sub->event_name, event_name) != 0) continue;
+            strcmp(sub->event_name, event_name) != 0 ||
+            (sub->queued >= sub->queue_capacity &&
+             sub->overflow_policy == FLAT_EVENT_OVERFLOW_DROP_NEWEST)) continue;
         node = prepared[prepared_count];
         prepared[prepared_count++] = NULL;
+        if (sub->queued >= sub->queue_capacity &&
+            sub->overflow_policy == FLAT_EVENT_OVERFLOW_DROP_OLDEST) {
+            FlatRuntimeEventNode *oldest = sub->head;
+            if (oldest) {
+                sub->head = oldest->next;
+                if (!sub->head) sub->tail = NULL;
+                if (sub->queued) sub->queued--;
+                runtime_event_node_destroy(oldest);
+            }
+        }
         if (sub->tail) sub->tail->next = node;
         else sub->head = node;
         sub->tail = node;
         sub->queued++;
     }
-    runtime_unlock(runtime);
     free(prepared);
-    /* Wake host workers after publication. The producer never executes VM code;
-     * it only signals the scheduler/event-loop wait primitive. */
-    (void)flat_ready_queue_wake_all(&runtime->ready_queue);
+    runtime_unlock(runtime);
     return (int)matched;
-
 publish_fail:
     runtime_unlock(runtime);
-    while (prepared_count > 0) runtime_event_node_destroy(prepared[--prepared_count]);
+    if (prepared) {
+        size_t i;
+        for (i = 0; i < prepared_count; ++i) runtime_event_node_destroy(prepared[i]);
+    }
     free(prepared);
     return -1;
 }
@@ -1204,11 +1265,12 @@ static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const F
                                          const char *event_name, const char *handler_label,
                                          const FlatValue *args, size_t arg_count,
                                          FlatCollectionPool *source_coll, FlatStringPool *source_pool,
-                                         FlatFileTable *source_files, int dispatch_mode, size_t max_active,
+                                         FlatFileTable *source_files,
+                                         const FlatEventSubscriptionOptions *options,
                                          uint64_t *out_subscription_id) {
     FlatRuntime *runtime = (FlatRuntime *)user;
     FlatTaskRecord *parent;
-    if (!runtime || !bc || !out_subscription_id || max_active == 0) return -1;
+    if (!runtime || !bc || !out_subscription_id || !options) return -1;
     runtime_lock(runtime);
     parent = runtime_find_task(runtime, parent_id);
     if (!parent || parent->cleanup_owned || parent->state != FLAT_TASK_RUNNING ||
@@ -1217,11 +1279,9 @@ static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const F
         return -1;
     }
     runtime_unlock(runtime);
-    if (dispatch_mode != FLAT_EVENT_DISPATCH_PARALLEL &&
-        dispatch_mode != FLAT_EVENT_DISPATCH_SERIAL) return -1;
-    return flat_runtime_event_subscribe_handler_options(runtime, source_id, source_kind, event_name,
+    return flat_runtime_event_subscribe_handler_config(runtime, source_id, source_kind, event_name,
         bc, handler_label, args, arg_count, source_coll, source_pool, source_files,
-        (FlatEventDispatchMode)dispatch_mode, max_active, out_subscription_id);
+        options, out_subscription_id);
 }
 
 static int runtime_task_native_stop_for(void *user, uint64_t parent_id,

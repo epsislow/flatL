@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 68
+desc = "FlatL task.spawnFor dropNewest keeps earlier queued events"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/native_spawn_for_drop_newest.fb {root}/test/cases/flvm/068_native_task_spawn_for_options_dropnewest/program.fl && make -s test-native-task-spawn-for-drop-newest TEST_BIN={tmp}/native_spawn_for_drop_newest_test && {tmp}/native_spawn_for_drop_newest_test {tmp}/native_spawn_for_drop_newest.fb"
+expect_exit = 0
+stdout_contains = "native-task-spawn-for-drop-newest-ok"

@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 72
+desc = "native WebSocket transport initializes libcurl and validates URL and operation contracts"
+kind = "exec"
+cmd = "make -s test-websocket-transport TEST_BIN={tmp}/websocket_transport_test && {tmp}/websocket_transport_test"
+expect_exit = 0
+stdout_contains = "websocket-transport-validation-ok"

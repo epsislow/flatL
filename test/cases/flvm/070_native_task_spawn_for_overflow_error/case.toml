@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 70
+desc = "FlatL task.spawnFor overflow error applies configured backpressure"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/native_spawn_for_error.fb {root}/test/cases/flvm/070_native_task_spawn_for_overflow_error/program.fl && make -s test-native-task-spawn-for-overflow-error TEST_BIN={tmp}/native_spawn_for_error_test && {tmp}/native_spawn_for_error_test {tmp}/native_spawn_for_error.fb"
+expect_exit = 0
+stdout_contains = "native-task-spawn-for-error-ok"

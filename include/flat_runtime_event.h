@@ -19,6 +19,22 @@ typedef enum FlatEventDispatchMode {
     FLAT_EVENT_DISPATCH_SERIAL = 1
 } FlatEventDispatchMode;
 
+typedef enum FlatEventOverflowPolicy {
+    FLAT_EVENT_OVERFLOW_WAIT = 0,
+    FLAT_EVENT_OVERFLOW_DROP_OLDEST = 1,
+    FLAT_EVENT_OVERFLOW_DROP_NEWEST = 2,
+    FLAT_EVENT_OVERFLOW_ERROR = 3
+} FlatEventOverflowPolicy;
+
+typedef struct FlatEventSubscriptionOptions {
+    FlatEventDispatchMode mode;
+    size_t max_active;
+    size_t queue_capacity;
+    FlatEventOverflowPolicy overflow;
+} FlatEventSubscriptionOptions;
+
+#define FLAT_EVENT_DEFAULT_QUEUE_CAPACITY 256
+
 /* The first event-broker increment is deliberately host-driven: source IDs are
  * ordinary numeric values and source_kind identifies their namespace. */
 #define FLAT_RUNTIME_EVENT_QUEUE_MAX 256
@@ -55,9 +71,21 @@ int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t sou
                                               struct FlatFileTable *source_files,
                                               FlatEventDispatchMode mode,
                                               FlatEventSubscriptionId *out_subscription_id);
-/* Same registration API with an explicit concurrency ceiling. max_active must
- * be positive; SERIAL effectively caps concurrency at one regardless of this
- * value. Existing registration APIs remain unlimited PARALLEL by default. */
+/* Same registration API with explicit dispatch, concurrency and queue policies.
+ * queue_capacity must be positive. WAIT and ERROR reject publication atomically
+ * when any matching queue is full; WAIT returns -2 (producer backpressure) and
+ * ERROR returns -3 (hard overflow). DROP_OLDEST replaces that queue's oldest
+ * item; DROP_NEWEST ignores the new item for the full subscription. */
+int flat_runtime_event_subscribe_handler_config(FlatRuntime *runtime, uint64_t source_id,
+                                                const char *source_kind, const char *event_name,
+                                                const FlatBytecode *bc, const char *handler_label,
+                                                const FlatValue *bound_args, size_t bound_arg_count,
+                                                FlatCollectionPool *source_coll,
+                                                FlatStringPool *source_pool,
+                                                struct FlatFileTable *source_files,
+                                                const FlatEventSubscriptionOptions *options,
+                                                FlatEventSubscriptionId *out_subscription_id);
+/* Compatibility API retained for existing C callers. */
 int flat_runtime_event_subscribe_handler_options(FlatRuntime *runtime, uint64_t source_id,
                                                  const char *source_kind, const char *event_name,
                                                  const FlatBytecode *bc, const char *handler_label,
@@ -69,7 +97,8 @@ int flat_runtime_event_subscribe_handler_options(FlatRuntime *runtime, uint64_t 
                                                  FlatEventSubscriptionId *out_subscription_id);
 /* Publish one value to every matching subscription. Values are deep-copied;
  * file handles cannot be published. Returns the number of matching subscriptions,
- * 0 when there are no listeners, -1 on invalid/error, or -2 on queue overflow. */
+ * 0 when there are no listeners, -1 on invalid/internal error, -2 when a WAIT
+ * subscription applies backpressure, or -3 when an ERROR subscription overflows. */
 int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
                                const char *source_kind, const char *event_name,
                                const FlatValue *value,

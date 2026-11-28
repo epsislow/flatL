@@ -165,22 +165,125 @@ int flat_native_task_result(FlatNativeCtx *ctx) {
 }
 
 
-static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode, int with_limit) {
+static int task_event_option_number(FlatNativeCtx *ctx, uint32_t object_id,
+                                    const char *key, size_t *out, int *present) {
+    FlatValue value;
+    double number;
+    memset(&value, 0, sizeof value);
+    *present = 0;
+    if (flat_obj_get(ctx->coll, object_id, key, &value) != 0) return 0;
+    *present = 1;
+    if (value.tag != VAL_NUMBER) return -1;
+    number = flat_number_as_f64(&value);
+    if (!(number >= 1.0) || number > 9007199254740991.0 ||
+        number != (double)(uint64_t)number || (uint64_t)number > (uint64_t)SIZE_MAX)
+        return -1;
+    *out = (size_t)number;
+    return 0;
+}
+
+static int task_event_option_string(FlatNativeCtx *ctx, uint32_t object_id,
+                                    const char *key, char *out, size_t out_size,
+                                    int *present) {
+    FlatValue value;
+    memset(&value, 0, sizeof value);
+    *present = 0;
+    if (flat_obj_get(ctx->coll, object_id, key, &value) != 0) return 0;
+    *present = 1;
+    if (flat_value_get_cstr(&value, ctx->pool, out, out_size) != 0) return -1;
+    return 0;
+}
+
+static int task_event_options_parse(FlatNativeCtx *ctx, const char *expr,
+                                    FlatEventSubscriptionOptions *options,
+                                    int *is_options) {
+    FlatValue value;
+    char mode[16] = "parallel";
+    char overflow[24] = "error";
+    int has_mode = 0, has_max = 0, has_capacity = 0, has_overflow = 0;
+    int i, count;
+    size_t max_active = SIZE_MAX, queue_capacity = FLAT_EVENT_DEFAULT_QUEUE_CAPACITY;
+    static const char *const allowed[] = { "mode", "maxActive", "queueCapacity", "overflow" };
+    memset(&value, 0, sizeof value);
+    *is_options = 0;
+    if (flat_native_parse_rhs(ctx, expr, &value) != 0) return -1;
+    if (value.tag != VAL_OBJECT) {
+        flat_native_parse_rhs_release(ctx, &value);
+        return 0;
+    }
+    if (flat_obj_len(ctx->coll, value.u.coll_id, &count) != 0) {
+        flat_native_parse_rhs_release(ctx, &value);
+        return -1;
+    }
+    /* Treat the first post-handler OBJECT as options only when it contains
+     * at least one recognized option key. This preserves ordinary object
+     * values as bound arguments for existing spawnFor calls. */
+    if (flat_obj_get(ctx->coll, value.u.coll_id, "mode", &(FlatValue){0}) == 0 ||
+        flat_obj_get(ctx->coll, value.u.coll_id, "maxActive", &(FlatValue){0}) == 0 ||
+        flat_obj_get(ctx->coll, value.u.coll_id, "queueCapacity", &(FlatValue){0}) == 0 ||
+        flat_obj_get(ctx->coll, value.u.coll_id, "overflow", &(FlatValue){0}) == 0)
+        *is_options = 1;
+    if (!*is_options) {
+        flat_native_parse_rhs_release(ctx, &value);
+        return 0;
+    }
+    for (i = 0; i < count; ++i) {
+        const char *key = NULL;
+        FlatValue ignored;
+        int j, known = 0;
+        memset(&ignored, 0, sizeof ignored);
+        if (flat_obj_entry_at(ctx->coll, value.u.coll_id, i, &key, &ignored) != 0 || !key) {
+            flat_native_parse_rhs_release(ctx, &value);
+            return -1;
+        }
+        for (j = 0; j < (int)(sizeof allowed / sizeof allowed[0]); ++j)
+            if (strcmp(key, allowed[j]) == 0) known = 1;
+        if (!known) {
+            flat_native_parse_rhs_release(ctx, &value);
+            return -1;
+        }
+    }
+    if (task_event_option_string(ctx, value.u.coll_id, "mode", mode, sizeof mode, &has_mode) != 0 ||
+        task_event_option_number(ctx, value.u.coll_id, "maxActive", &max_active, &has_max) != 0 ||
+        task_event_option_number(ctx, value.u.coll_id, "queueCapacity", &queue_capacity, &has_capacity) != 0 ||
+        task_event_option_string(ctx, value.u.coll_id, "overflow", overflow, sizeof overflow, &has_overflow) != 0) {
+        flat_native_parse_rhs_release(ctx, &value);
+        return -1;
+    }
+    flat_native_parse_rhs_release(ctx, &value);
+    options->mode = FLAT_EVENT_DISPATCH_PARALLEL;
+    if (strcmp(mode, "parallel") == 0) options->mode = FLAT_EVENT_DISPATCH_PARALLEL;
+    else if (strcmp(mode, "serial") == 0) options->mode = FLAT_EVENT_DISPATCH_SERIAL;
+    else return -1;
+    options->max_active = max_active;
+    options->queue_capacity = queue_capacity;
+    if (strcmp(overflow, "wait") == 0) options->overflow = FLAT_EVENT_OVERFLOW_WAIT;
+    else if (strcmp(overflow, "dropOldest") == 0) options->overflow = FLAT_EVENT_OVERFLOW_DROP_OLDEST;
+    else if (strcmp(overflow, "dropNewest") == 0) options->overflow = FLAT_EVENT_OVERFLOW_DROP_NEWEST;
+    else if (strcmp(overflow, "error") == 0) options->overflow = FLAT_EVENT_OVERFLOW_ERROR;
+    else return -1;
+    (void)has_mode; (void)has_max; (void)has_capacity; (void)has_overflow;
+    return 0;
+}
+
+static int task_spawn_for_impl(FlatNativeCtx *ctx, int legacy_mode, int legacy_limit) {
     char buf[FGIR_MAX_LINE];
     char *parts[FGIR_MAX_PARAMS + 6];
     char label[FGIR_MAX_LABEL];
     char source_kind[32];
     char event_name[48];
-    char mode_name[16] = "parallel";
     FlatValue values[FGIR_MAX_PARAMS];
     FlatValue kind_value, event_value;
+    FlatEventSubscriptionOptions options;
     uint64_t source_id = 0, subscription_id = 0;
     int part_count = 0, arg_count, arg_start, parsed = 0, i, rc;
-    int dispatch_mode = 0;
-    size_t max_active = SIZE_MAX;
     memset(values, 0, sizeof values);
     memset(&kind_value, 0, sizeof kind_value);
     memset(&event_value, 0, sizeof event_value);
+    options.mode = FLAT_EVENT_DISPATCH_PARALLEL;
+    options.max_active = SIZE_MAX;
+    options.queue_capacity = FLAT_EVENT_DEFAULT_QUEUE_CAPACITY;
+    options.overflow = FLAT_EVENT_OVERFLOW_ERROR;
     if (!ctx || !ctx->task_bridge || !ctx->task_bridge->spawn_for || !ctx->bc ||
         !ctx->inner || !ctx->out || !ctx->io_status || !ctx->pool || !ctx->coll ||
         !ctx->vars || task_split_spawn_args((snprintf(buf, sizeof buf, "%s", ctx->inner), buf),
@@ -202,8 +305,15 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode, int with_limit
     if (label[0] != '#' || label[1] == '\0' || strpbrk(label, " \t\r\n"))
         return task_fail(ctx, "task.spawnFor.handler");
     arg_start = 4;
-    if (with_mode) {
+    if (!legacy_mode && part_count > 4) {
+        int is_options = 0;
+        if (task_event_options_parse(ctx, parts[4], &options, &is_options) != 0)
+            return task_fail(ctx, "task.spawnFor.options");
+        if (is_options) arg_start = 5;
+    }
+    if (legacy_mode) {
         FlatValue mode_value;
+        char mode_name[16];
         memset(&mode_value, 0, sizeof mode_value);
         if (part_count < 5 || flat_native_parse_rhs(ctx, parts[4], &mode_value) != 0 ||
             flat_value_get_cstr(&mode_value, ctx->pool, mode_name, sizeof mode_name) != 0) {
@@ -211,11 +321,11 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode, int with_limit
             return task_fail(ctx, "task.spawnForMode.mode");
         }
         flat_native_parse_rhs_release(ctx, &mode_value);
-        if (strcmp(mode_name, "parallel") == 0) dispatch_mode = 0;
-        else if (strcmp(mode_name, "serial") == 0) dispatch_mode = 1;
+        if (strcmp(mode_name, "parallel") == 0) options.mode = FLAT_EVENT_DISPATCH_PARALLEL;
+        else if (strcmp(mode_name, "serial") == 0) options.mode = FLAT_EVENT_DISPATCH_SERIAL;
         else return task_fail(ctx, "task.spawnForMode.mode");
         arg_start = 5;
-        if (with_limit) {
+        if (legacy_limit) {
             FlatValue limit_value;
             double limit_number;
             memset(&limit_value, 0, sizeof limit_value);
@@ -227,10 +337,9 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode, int with_limit
             limit_number = flat_number_as_f64(&limit_value);
             flat_native_parse_rhs_release(ctx, &limit_value);
             if (!(limit_number >= 1.0) || limit_number > 9007199254740991.0 ||
-                limit_number != (double)(uint64_t)limit_number) {
+                limit_number != (double)(uint64_t)limit_number)
                 return task_fail(ctx, "task.spawnForLimit.maxActive");
-            }
-            max_active = (size_t)limit_number;
+            options.max_active = (size_t)limit_number;
             arg_start = 6;
         }
     }
@@ -247,7 +356,7 @@ static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode, int with_limit
     rc = ctx->task_bridge->spawn_for(ctx->task_bridge->user, ctx->task_bridge->task_id,
                                      ctx->bc, source_id, source_kind, event_name, label,
                                      values, (size_t)arg_count, ctx->coll, ctx->pool,
-                                     ctx->file_tbl, dispatch_mode, max_active, &subscription_id);
+                                     ctx->file_tbl, &options, &subscription_id);
     for (i = 0; i < parsed; ++i) flat_native_parse_rhs_release(ctx, &values[i]);
     if (rc == -2) return task_fail(ctx, "task.spawnFor.args");
     if (rc != 0 || subscription_id == 0) return task_fail(ctx, "task.spawnFor.failed");

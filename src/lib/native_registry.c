@@ -380,7 +380,7 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("task", "wait", "task.wait(taskId)"),
     META_SIG("task", "state", "task.state(taskId)"),
     META_SIG("task", "result", "task.result(taskId)"),
-    META_SIG("task", "spawnFor", "task.spawnFor(sourceId, sourceKind, eventName, #handler, ...)"),
+    META_SIG("task", "spawnFor", "task.spawnFor(sourceId, sourceKind, eventName, #handler, options?, ...)"),
     META_SIG("task", "spawnForMode", "task.spawnForMode(sourceId, sourceKind, eventName, #handler, mode, ...)"),
     META_SIG("task", "spawnForLimit", "task.spawnForLimit(sourceId, sourceKind, eventName, #handler, mode, maxActive, ...)"),
     META_SIG("task", "stopFor", "task.stopFor(subscriptionId)"),

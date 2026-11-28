@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 71
+desc = "socket event adapter publishes lifecycle events through the shared socket namespace"
+kind = "exec"
+cmd = "make -s test-runtime-socket-event-adapter TEST_BIN={tmp}/runtime_socket_event_adapter_test && {tmp}/runtime_socket_event_adapter_test"
+expect_exit = 0
+stdout_contains = "runtime-socket-event-adapter-ok"

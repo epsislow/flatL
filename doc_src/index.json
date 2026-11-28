@@ -167,6 +167,16 @@
       "file": "natives/obj.md"
     },
     {
+      "id": "socket-event-adapter",
+      "label": "Socket event adapter",
+      "file": "SOCKET_EVENT_ADAPTER.md"
+    },
+    {
+      "id": "websocket-transport",
+      "label": "Native WebSocket transport",
+      "file": "WEBSOCKET_TRANSPORT.md"
+    },
+    {
       "id": "task-native",
       "label": "Native task",
       "file": "natives/task.md"

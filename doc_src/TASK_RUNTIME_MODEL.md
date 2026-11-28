@@ -458,3 +458,14 @@ This is the broker foundation only. Archive 359 does **not** yet implement FlatL
 The runtime subscription owns a parsed bytecode snapshot and deep-copied bound arguments. This allows the registering task and its VM to be destroyed without invalidating the handler. Every matching event is dispatched by the scheduler into a fresh normal task/VM/VCX; the event payload is parameter zero and bound arguments follow. `task.stopFor()` unregisters the subscription and discards queued events, but rejects removal while dispatch is in progress.
 
 `flvm[62]` validates native registration, native unregistration, event-first argument binding, automatic scheduler dispatch, and handler execution after the registering root task has been destroyed. This increment still uses the broker's fixed 256-event queue and parallel task creation. Serial mode, `maxActive`, configurable overflow/backpressure and real source adapters remain future work.
+
+
+## Event-handler subscriptions and queue policies
+
+`task.spawnFor(sourceId, sourceKind, eventName, #handler, options?, ...boundArgs)` registers a persistent event handler. The source ID is a normal NUMBER; the explicit `sourceKind` selects its namespace. Socket transports share the `socket` kind. The handler receives the event payload as its first parameter, then the registration-time bound arguments. Each event creates an ordinary isolated task.
+
+The optional options OBJECT supports `mode` (`parallel` or `serial`, default `parallel`), `maxActive` (positive whole NUMBER, default effectively unlimited), `queueCapacity` (positive whole NUMBER, default 256) and `overflow` (`wait`, `dropOldest`, `dropNewest`, or `error`, default `wait`). `serial` always limits a subscription to one active handler. `parallel` honors `maxActive`. Queue capacity counts waiting events, not active handlers.
+
+When a queue is full, `wait` returns a backpressure result to the publisher so it can retain and retry the event; it does not block the host callback. `dropOldest` replaces the oldest queued event, `dropNewest` discards only the new event for the full subscription, and `error` rejects publication. The C publish API returns `-2` for WAIT backpressure and `-3` for ERROR overflow. WAIT/ERROR fan-out is atomic: no matching subscription queue is changed if a matching WAIT/ERROR queue is full.
+
+`task.spawnForMode()` and `task.spawnForLimit()` remain compatibility helpers; new code should prefer the options OBJECT on `task.spawnFor()`. `task.stopFor(subscriptionId)` unregisters the subscription and discards queued events; it is rejected while a handler is active.

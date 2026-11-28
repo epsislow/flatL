@@ -6,6 +6,8 @@
 #include "vm.h"
 #include <stdint.h>
 
+#include "flat_runtime_event.h"
+
 struct FlatFileTable;
 
 typedef struct FlatTaskNativeBridge {
@@ -23,7 +25,8 @@ typedef struct FlatTaskNativeBridge {
                      uint64_t source_id, const char *source_kind, const char *event_name,
                      const char *handler_label, const FlatValue *args, size_t arg_count,
                      FlatCollectionPool *source_coll, FlatStringPool *source_pool,
-                     struct FlatFileTable *source_files, int dispatch_mode, size_t max_active,
+                     struct FlatFileTable *source_files,
+                     const FlatEventSubscriptionOptions *options,
                      uint64_t *out_subscription_id);
     int (*stop_for)(void *user, uint64_t parent_id, uint64_t subscription_id);
     int (*wait)(void *user, uint64_t waiter_id, uint64_t target_id);

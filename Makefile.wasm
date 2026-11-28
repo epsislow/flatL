@@ -150,7 +150,7 @@ NATIVE_VM_SRC = src/lib/native_registry.c src/lib/native_capability.c src/lib/na
                 $(WASM_MATH) src/lib/native_plugin_host.c
 
 VM_SRC = src/common/flat_locale.c src/common/flat_runtime_log.c src/common/flat_host_config.c \
-         src/common/flat_channel.c src/common/flat_scheduler_sync.c src/common/flat_runtime.c \
+         src/common/flat_channel.c src/common/flat_scheduler_sync.c src/common/flat_runtime.c src/common/flat_runtime_socket_event.c \
          src/common/flat_vm_handle.c src/common/flat_time.c src/common/vm.c src/common/doc_lookup.c \
          src/common/flat_number.c src/common/value_pool.c \
          src/common/flat_file.c src/common/flat_csv.c src/common/flat_csv_runtime.c \
