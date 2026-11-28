@@ -1179,3 +1179,15 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Keep `sockets` native handlers linkable in WASM and report WebSocket capability as unsupported rather than referencing native transport symbols.
 - [ ] Implement the browser JavaScript WebSocket host bridge and persistent FLEditor WASM event session.
 - [ ] Verify `make fleditor-wasm` with the supported Emscripten SDK; `emcc` is unavailable in the current validation environment.
+
+
+## WebSocket event pipeline sanitizer checkpoint — archive 378
+
+- [x] Run repeated AddressSanitizer/leak-detection checks for the socket event adapter, WebSocket registry, transport contract and runtime event bridge.
+- [x] Run repeated UndefinedBehaviorSanitizer checks for those paths and the FlatL sockets native bridge.
+- [x] Re-run the focused `flvm[71-75]` regression group and build/docs.
+- [x] Record user confirmation that the archive-377 FLEditor WASM build links successfully on Termux.
+- [ ] Exercise the live WebSocket handshake, reader-thread receive and close races on a libcurl build advertising `ws`/`wss`.
+- [ ] Add deterministic publish/subscribe/close/runtime-destroy race stress and run it under ThreadSanitizer where supported.
+
+**Archive 378 result:** ASan passed three consecutive rounds for four focused C harnesses; the FlatL sockets native bridge passed once under ASan. UBSan passed three consecutive rounds for all five harnesses. No sanitizer diagnostics were emitted. `make -j2 all`, `make docs`, and `bin/run_tests 'flvm[71-75]' -v -e` passed. The linked libcurl does not advertise `ws`/`wss`, so live reader-thread network behavior remains outside this validation. See `plans/67_WEBSOCKET_EVENT_SANITIZER_VALIDATION.md`.

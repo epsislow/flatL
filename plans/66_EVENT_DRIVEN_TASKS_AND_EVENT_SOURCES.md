@@ -482,3 +482,8 @@ Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests 'flvm[15]' -v 
 
 ### FLEditor WASM transport boundary — archive 377
 Native WebSocket transport is now controlled independently by `FLAT_WITH_WEBSOCKET`; it defaults on with native HTTP builds and defaults off for `FLAT_WASM_BUILD`. Browser HTTP Fetch remains enabled. The WASM build still includes the FlatL `sockets` module so `sockets.wsSupported()` can return false cleanly and other WebSocket calls report unsupported runtime capability instead of failing at link time. A JavaScript WebSocket bridge and persistent runtime session remain future work.
+
+
+## Archive 378 — sanitizer validation of the WebSocket event pipeline
+
+No runtime code changes in this checkpoint. Repeated Clang ASan (with leak detection) and UBSan runs passed for the socket event adapter, WebSocket registry, transport contract, runtime event bridge, and FlatL native bridge. The exact repeat counts and coverage boundary are in `plans/67_WEBSOCKET_EVENT_SANITIZER_VALIDATION.md`. The user also confirmed the archive-377 FLEditor WASM link fix on Termux. A live WebSocket-capable libcurl host is still needed to exercise the actual background reader and network round-trip under sanitizers.
