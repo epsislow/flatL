@@ -1,0 +1,48 @@
+use native dom
+use native list
+
+#main
+  dom.parseHtml('<main><article id="source" class="card"><h2>Title</h2><p>Body <b>text</b></p></article></main>') -> page
+  dom.select(page, '#source') -> source_nodes
+  list.get(source_nodes, 0) -> source
+
+  dom.clone(source, false) -> shallow
+  dom.tag(shallow) == 'article'
+  dom.prop(shallow, 'id') == 'source'
+  dom.children(shallow) -> shallow_children
+  list.len(shallow_children) == 0
+
+  dom.clone(source, true) -> deep
+  dom.tag(deep) == 'article'
+  dom.prop(deep, 'className') == 'card'
+  dom.children(deep) -> deep_children
+  list.len(deep_children) == 2
+  list.get(deep_children, 0) -> cloned_heading
+  dom.text(cloned_heading) == 'Title'
+  list.get(deep_children, 1) -> cloned_paragraph
+  dom.text(cloned_paragraph) == 'Body text'
+
+  dom.append(source, shallow) == true
+  dom.append(source, deep) == true
+  dom.children(source) -> original_children
+  list.len(original_children) == 4
+  dom.text(source) == 'TitleBody textTitleBody text'
+
+  dom.clone(cloned_heading, true) -> heading_copy
+  dom.text(heading_copy) == 'Title'
+
+  dom.createFrag(page) -> source_frag
+  dom.createElement(page, 'strong') -> fragment_child
+  dom.setText(fragment_child, 'fragment') == true
+  dom.append(source_frag, fragment_child) == true
+  dom.clone(source_frag, true) -> fragment_copy
+  dom.children(fragment_copy) -> fragment_copy_children
+  list.len(fragment_copy_children) == 1
+  list.get(fragment_copy_children, 0) -> copied_fragment_child
+  dom.text(copied_fragment_child) == 'fragment'
+  dom.clone(source_frag, false) -> empty_fragment_copy
+  dom.children(empty_fragment_copy) -> empty_fragment_children
+  list.len(empty_fragment_children) == 0
+  dom.close(page)
+  io.outln('dom-clone-ok')
+  OK

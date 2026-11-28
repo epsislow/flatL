@@ -366,6 +366,8 @@ int flat_native_dom_inner_text(FlatNativeCtx *ctx);
 int flat_native_dom_html(FlatNativeCtx *ctx);
 int flat_native_dom_outer_html(FlatNativeCtx *ctx);
 int flat_native_dom_prop(FlatNativeCtx *ctx);
+int flat_native_dom_create_frag(FlatNativeCtx *ctx);
+int flat_native_dom_clone(FlatNativeCtx *ctx);
 int flat_native_dom_create_element(FlatNativeCtx *ctx);
 int flat_native_dom_create_text(FlatNativeCtx *ctx);
 int flat_native_dom_append(FlatNativeCtx *ctx);

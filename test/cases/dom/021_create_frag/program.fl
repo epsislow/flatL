@@ -1,0 +1,45 @@
+use native dom
+use native list
+
+#main
+  dom.parseHtml('<main><ul id="users"></ul></main>') -> page
+  dom.select(page, 'main') -> roots
+  list.get(roots, 0) -> root
+  dom.select(page, '#users') -> lists
+  list.get(lists, 0) -> users
+
+  dom.createFrag(page) -> frag
+  dom.createElement(page, 'li') -> alice
+  dom.setText(alice, 'Alice') == true
+  dom.append(frag, alice) == true
+
+  dom.createFrag(page) -> nested
+  dom.createElement(page, 'li') -> bob
+  dom.setText(bob, 'Bob') == true
+  dom.append(nested, bob) == true
+  dom.append(frag, nested) == true
+
+  dom.children(frag) -> prepared
+  list.len(prepared) == 2
+  list.get(prepared, 0) -> first
+  list.get(prepared, 1) -> second
+  dom.text(first) == 'Alice'
+  dom.text(second) == 'Bob'
+
+  dom.append(users, frag) == true
+  dom.children(frag) -> emptied
+  list.len(emptied) == 0
+  dom.children(nested) -> nested_emptied
+  list.len(nested_emptied) == 0
+
+  dom.children(users) -> inserted
+  list.len(inserted) == 2
+  list.get(inserted, 0) -> inserted_alice
+  list.get(inserted, 1) -> inserted_bob
+  dom.text(inserted_alice) == 'Alice'
+  dom.text(inserted_bob) == 'Bob'
+  dom.html(users) == '<li>Alice</li><li>Bob</li>'
+
+  dom.close(page)
+  io.outln('dom-create-frag-ok')
+  OK

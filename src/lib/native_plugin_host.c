@@ -290,6 +290,8 @@ static void register_embedded_dom(void) {
     flat_native_plugin_register(FLAT_NATIVE_DOM_SET_PROP, flat_native_dom_set_prop);
     flat_native_plugin_register(FLAT_NATIVE_DOM_SET_TEXT, flat_native_dom_set_text);
     flat_native_plugin_register(FLAT_NATIVE_DOM_SET_HTML, flat_native_dom_set_html);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CREATE_FRAG, flat_native_dom_create_frag);
+    flat_native_plugin_register(FLAT_NATIVE_DOM_CLONE, flat_native_dom_clone);
     flat_native_plugin_register(FLAT_NATIVE_DOM_CREATE_COMMENT, flat_native_dom_create_comment);
     flat_native_plugin_register(FLAT_NATIVE_DOM_REPLACE, flat_native_dom_replace);
 }

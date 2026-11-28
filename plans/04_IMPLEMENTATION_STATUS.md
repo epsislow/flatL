@@ -2,7 +2,7 @@
 
 **Ultima actualizare:** 2026-11-28  
 **Arhivă de referință:** `flatL-main-351-fleditor-wasm-task-channel.zip`
-**Arhivă curentă:** `flatL-main-352-panic-block-any.zip`  
+**Arhivă curentă:** `flatL-main-355-dom-create-frag.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 
@@ -1476,3 +1476,23 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Removed the Windows-only trampoline write to `FlatThread.result`; the trampoline now owns only its `{fn,arg}` start record and discards the function return value, matching POSIX behavior.
 - Added `flvm[55]` and `make test-flat-thread-contract` for failed-create state, condition wakeup, join, and repeated-join rejection.
 - Validation on local POSIX host: `make all -j2`, `make docs` (50 sections), `flvm[37]`, `flvm[42]`, `flvm[55]`, and the dedicated `flvm[55]` harness under ASan/UBSan PASS. Windows compile/run remains unavailable; `_WIN32_WINNT >= 0x0600` must be configured for SRWLOCK/CONDITION_VARIABLE APIs. Actual Emscripten build remains unavailable.
+
+
+## Archive 355 — DOM `createFrag`
+
+- Added `dom.createFrag(page)` backed by Lexbor `DocumentFragment`; the short public name was confirmed by the user.
+- Existing `append`/`prepend`/`insertBefore` accept fragments as child nodes. Lexbor transfers fragment children in order; the fragment handle remains valid and becomes empty. Nested fragment composition is supported.
+- `children(fragment)` returns direct element children, enabling inspection before insertion. Fragment handles follow the same document ownership and close-time invalidation rules as other DOM nodes.
+- Added `dom[21]` for fragment creation, nested composition, ordered insertion, empty-after-insertion semantics and serialization.
+- Validation: `make all -j2` PASS; `bin/run_tests dom -v -e` PASS (21/21). `make docs` PASS; full default suite attempt timed out at `flvm[53]` (all earlier cases passed). `flvm[54-57]` passed separately (4/4); no full-suite PASS is claimed.
+- See `plans/64_DOM_DOCUMENT_FRAGMENT.md`; archives 353–355 DOM work is summarized in `plans/63_DOM_MUTATION_API.md`.
+
+
+## Archive 356 — DOM node cloning
+
+- Added `dom.clone(node, deep)` backed by Lexbor node cloning/import within the source node's owning document. `deep` is a required BOOL.
+- Shallow copies preserve the node and its attributes but omit children; deep copies include the descendant subtree. The source remains unchanged and the clone is detached with a fresh FlatL node handle.
+- Cloning is supported for exposed DOM nodes, including DocumentFragment; document, document-type and attribute nodes are rejected.
+- Added `dom[22]` covering shallow/deep copies, attributes, descendant content, insertion, source preservation and text-node cloning.
+- Validation: `make all -j2` PASS; `make docs` PASS (50 sections); `bin/run_tests dom -v -e` PASS (22/22); focused `dom[22]` PASS. Full default suite selected 1,176/1,219 tests and timed out during `flvm[53]`; all tests visibly completed before timeout passed, but the full suite is not claimed PASS.
+- See `plans/65_DOM_NODE_CLONING.md`.

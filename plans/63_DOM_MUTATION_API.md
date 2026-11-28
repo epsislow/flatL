@@ -1,6 +1,6 @@
 # DOM construction and mutation API
 
-**Implementation checkpoint:** archive 354 (mutation API plus HTML fragment replacement)
+**Implementation checkpoint:** archive 355 (mutation API, HTML fragment replacement and DocumentFragment construction)
 
 ## Existing base
 
@@ -35,13 +35,20 @@ The DOM module already exposes parsed HTML, CSS selection, node navigation, seri
 - `make all -j2` — PASS.
 - `make docs` — PASS.
 - `bin/run_tests dom -v -e` — 20/20 PASS.
-- Full default `bin/run_tests -v -e` discovered 1,217 tests and selected 1,174; the run timed out during `flvm[53]`. No full-suite PASS is claimed.
+- Full default suite was attempted but timed out during `flvm[53]`; no full-suite PASS is claimed.
 - `dom[20]` covers nested HTML parsing, serialization, context-sensitive `<tr>` parsing in `<tbody>`, empty replacement, and preservation of detached child handles.
 
 ## Follow-up candidates
 
-- Consider a `createFragment()` API if fragment insertion is useful independently of `setHtml()`.
+- [x] Add an independently constructible fragment API; implemented as the shorter `createFrag(page)` name. See [64 — DOM DocumentFragment](64_DOM_DOCUMENT_FRAGMENT.md).
 - Expand writable property coverage only where there is a clear typed mapping and tests; keep parsed DOM values distinct from browser live state.
 - Add stress tests for many document open/close cycles and detached-handle lifetimes.
-- Expand writable property coverage only where there is a clear typed mapping and tests; keep parsed DOM values distinct from browser live state.
-- Add stress tests for many document open/close cycles and detached-handle lifetimes.
+
+
+## Validation in archive 355 (including this API)
+
+- `make all -j2` — PASS.
+- `make docs` — PASS (50 sections).
+- `bin/run_tests dom -v -e` — 21/21 PASS.
+- Full default `bin/run_tests -v -e` discovered 1,218 tests and selected 1,175; it timed out during `flvm[53]`. All suites reached before that point passed. `flvm[54-57]` passed separately (4/4). No full-suite PASS is claimed.
+- `dom[21]` covers fragment creation, nested fragment composition, ordered insertion, empty fragment handles after insertion, and final serialization.

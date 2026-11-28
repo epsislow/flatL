@@ -15,6 +15,8 @@ DOM is disabled by default. It is enabled at build time; see [Build](#build).
 | Call | Returns | Panic / failure |
 |------|---------|-----------------|
 | `parseHtml(html)` | NUMBER document handle | `dom.parseHtml` |
+| `createFrag(page)` | NUMBER fragment handle | `dom.createFrag` |
+| `clone(node, deep)` | NUMBER cloned node handle | `dom.clone` |
 | `select(page, cssSelector)` | LIST of NUMBER node handles | `dom.select` |
 | `text(node)` | STRING | `dom.text` |
 | `attr(node, name)` | STRING (missing attribute → `""`) | `dom.attr` |
@@ -211,6 +213,18 @@ These functions inspect the parsed HTML state. FlatL's DOM module does not run b
 `text(node)` already returns the full descendant text content (the DOM `textContent` concept); a separate `textContent()` alias is not provided.
 
 ### Creating and modifying nodes
+`createFrag(page)` creates an empty, detached HTML `DocumentFragment` owned by the document and returns its ordinary numeric node handle. A fragment is a temporary container: append or prepend nodes to it while assembling a subtree, then insert the fragment into an element. Inserting a fragment moves all of its children into the target in order; the fragment itself remains valid but becomes empty. Inserting a fragment into another fragment composes the children in the same way. Fragment handles, like other node handles, remain valid until the owning document is closed.
+
+`children(fragment)` returns its direct element children, just as it does for an element. `append`, `prepend`, and `insertBefore` accept a fragment as the child argument. The fragment and target must belong to the same document.
+
+```flat
+dom.createFrag(page) -> frag
+dom.createElement(page, 'li') -> item
+dom.setText(item, 'Alice')
+dom.append(frag, item)
+dom.append(list, frag) -- moves the fragment children into list
+```
+
 
 `createElement(page, tag)` creates a detached HTML element owned by `page`. The tag name is normalized to lower case and must contain only ASCII letters, digits, `-`, `_`, or `:`. `createText(page, text)` creates a detached text node, while `createComment(page, text)` creates a detached comment node. These calls return ordinary numeric node handles and can be used with the same navigation, serialization, and mutation APIs as parsed nodes.
 
@@ -236,6 +250,21 @@ Detached nodes remain owned by their original document. As with all DOM handles,
  dom.append(section, label)
  dom.prepend(root, section)
  dom.outerHtml(root) -> markup
+```
+
+### `clone(node, deep) -> copy`
+
+`clone(node, deep)` creates a detached copy of a node in the same owning document. `deep` must be a FlatL BOOL:
+
+- `false` creates a shallow copy: the node itself and its attributes are copied, but it has no children.
+- `true` creates a deep copy including the complete descendant subtree.
+
+The original node is never detached or modified. The copy receives a new node handle, belongs to the same document, and can be inserted or modified independently. Cloning a `DocumentFragment` follows the same shallow/deep rule. Document, document-type and attribute nodes are not accepted. The clone remains valid until its owning document is closed.
+
+```flat
+ dom.clone(card, false) -> empty_card
+ dom.clone(card, true) -> card_copy
+ dom.append(container, card_copy)
 ```
 
 ### Writing attributes, data and properties
@@ -365,7 +394,7 @@ The suite covers HTML parsing and recovery, CSS selector groups/combinators/pseu
 
 ## Current scope
 
-This version supports HTML parsing, document- and element-scoped CSS selection, DOM element metadata and navigation, text and form-control value extraction, data attributes, form-control inspection, limited property access, HTML serialization, form field extraction, and document cleanup. XML parsing, XPath, and form submission are not part of this version.
+This version supports HTML parsing, document- and element-scoped CSS selection, DOM element metadata and navigation, text and form-control value extraction, data attributes, form-control inspection, limited property access, HTML serialization, form field extraction, DocumentFragment construction, shallow/deep node cloning, and document cleanup. XML parsing, XPath, and form submission are not part of this version.
 
 
 ## Worker-mode status

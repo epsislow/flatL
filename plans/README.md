@@ -47,6 +47,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [39 — Emscripten Single-Thread Worker Gate](39_EMSCRIPTEN_SINGLE_THREAD_WORKER_GATE.md): validates the no-pthreads synchronization branch and clean worker-start rejection.
 - [62 — Block-scoped Panic Any](62_BLOCK_SCOPED_PANIC_ANY.md): defines and validates `#panic.#target.any`, caller-chain precedence, explicit PANIC and child-task VM recovery.
 - [63 — DOM Construction and Mutation API](63_DOM_MUTATION_API.md): extends the Lexbor-backed DOM module with node creation, tree mutations, attribute/data/property writes and explicit document ownership semantics.
+- [64 — DOM DocumentFragment](64_DOM_DOCUMENT_FRAGMENT.md): adds `dom.createFrag(page)` for detached subtree construction and ordered fragment insertion.
 - [40 — Windows FlatSync / FlatThread Audit](40_WINDOWS_FLAT_SYNC_AUDIT.md): audits SRWLOCK/condition-variable semantics and FlatThread create/join ownership; adds a portable FlatThread contract regression while keeping real Windows validation open.
 - [55 — FGIR Native-Unit Storage Audit](55_FGIR_NATIVE_UNIT_STORAGE_AUDIT.md): audits the remaining fixed `FgirProgram.native_units[32]` table and selects an isolated dynamic outer-table conversion.
 - [56 — FGIR Dynamic Native-Unit Storage](56_FGIR_DYNAMIC_NATIVE_UNIT_STORAGE.md): converts only the outer native-unit table to owned dynamic storage and preserves inline per-unit declarations.

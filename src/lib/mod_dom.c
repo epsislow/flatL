@@ -891,7 +891,9 @@ int flat_native_dom_children(FlatNativeCtx *ctx) {
     char buf[4096], *args[1]; lxb_dom_node_t *node, *child;
     uint32_t list_id, next_id; FlatValue item;
     if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
-        dom_node_ref(ctx, args[0], &node) != 0 || node->type != LXB_DOM_NODE_TYPE_ELEMENT)
+        dom_node_ref(ctx, args[0], &node) != 0 ||
+        (node->type != LXB_DOM_NODE_TYPE_ELEMENT &&
+         node->type != LXB_DOM_NODE_TYPE_DOCUMENT_FRAGMENT))
         return dom_fail(ctx, "dom.children.args");
     if (flat_list_empty(ctx->coll, ctx->pool, &list_id) != 0) return dom_fail(ctx, "dom.children");
     for (child = node->first_child; child; child = child->next) {
@@ -1158,6 +1160,57 @@ static int dom_set_attribute_value(lxb_dom_node_t *node, const char *name,
     return lxb_dom_element_set_attribute(lxb_dom_interface_element(node),
         (const lxb_char_t *)name, strlen(name), (const lxb_char_t *)value,
         value_len) ? 0 : -1;
+}
+
+int flat_native_dom_create_frag(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[1];
+    uint32_t id;
+    FlatDomDocument *doc;
+    lxb_dom_document_fragment_t *fragment;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 1, 1) != 0 ||
+        dom_doc_id(ctx, args[0], &id) != 0)
+        return dom_fail(ctx, "dom.createFrag.args");
+    doc = dom_find_document(ctx, id);
+    if (!doc) return dom_fail(ctx, "dom.createFrag.document");
+    fragment = lxb_dom_document_create_document_fragment(&doc->document->dom_document);
+    if (!fragment || dom_make_node_handle(ctx, doc, lxb_dom_interface_node(fragment)) != 0)
+        return dom_fail(ctx, "dom.createFrag.alloc");
+    return dom_ok(ctx);
+}
+
+int flat_native_dom_clone(FlatNativeCtx *ctx)
+{
+    char buf[4096], *args[2];
+    lxb_dom_node_t *source, *copy;
+    FlatDomDocument *doc;
+    FlatValue deep_value;
+    int deep;
+    if (!ctx || !ctx->out || dom_args(ctx, buf, args, 2, 2) != 0 ||
+        dom_node_owner(ctx, args[0], &source, &doc) != 0 ||
+        flat_native_parse_rhs(ctx, args[1], &deep_value) != 0)
+        return dom_fail(ctx, "dom.clone.args");
+    if (deep_value.tag != VAL_BOOL) {
+        flat_native_parse_rhs_release(ctx, &deep_value);
+        return dom_fail(ctx, "dom.clone.deep");
+    }
+    deep = deep_value.u.boolean ? 1 : 0;
+    flat_native_parse_rhs_release(ctx, &deep_value);
+
+    /* A document itself is not a cloneable node through this API. All other
+     * node kinds exposed by the DOM module, including fragments, are valid. */
+    if (source->type == LXB_DOM_NODE_TYPE_DOCUMENT ||
+        source->type == LXB_DOM_NODE_TYPE_DOCUMENT_TYPE ||
+        source->type == LXB_DOM_NODE_TYPE_ATTRIBUTE)
+        return dom_fail(ctx, "dom.clone.unsupported");
+
+    copy = lxb_dom_node_clone(source, deep != 0);
+    if (!copy) return dom_fail(ctx, "dom.clone.alloc");
+    if (dom_make_node_handle(ctx, doc, copy) != 0) {
+        lxb_dom_node_destroy(copy);
+        return dom_fail(ctx, "dom.clone.handle");
+    }
+    return dom_ok(ctx);
 }
 
 int flat_native_dom_create_element(FlatNativeCtx *ctx)
