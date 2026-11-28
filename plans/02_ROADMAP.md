@@ -1206,3 +1206,11 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Keep the FLEditor WASM runtime alive while the root task is waiting by yielding with Asyncify and resuming the cooperative scheduler for browser events.
 - [ ] Build and run the FLEditor WASM artifact with the user's Emscripten SDK; verify browser `ws://` and `wss://` handshakes, text/binary round trips, and runtime cleanup.
 - [ ] Add a browser-level integration test for event-driven FlatL `task.spawnFor` WebSocket handling.
+
+- [x] Add a headless Node.js 22+ WebSocket smoke for the FLEditor WASM build (browser WebSocket capability, local text/binary echo, clean close, and event-loop responsiveness).
+- [ ] Add a FlatL-level WASM event-session completion mechanism so a root task can await `task.spawnFor()` socket handlers; then extend the smoke to assert `open`/`receive`/`close` handler delivery through the runtime event broker.
+
+
+### WASM WebSocket E2E prerequisite — archive 383
+
+The FLEditor one-shot WASM runner now keeps a completed root run alive while event subscriptions, WebSocket connections, or handler tasks remain. This is required for event-driven FlatL programs whose root registers `task.spawnFor()` handlers and then completes. Programs must stop subscriptions and close sockets to release the run. Next: add and execute the distinct `wasm_websocket_e2e.mjs` harness that drives FlatL handlers against a local Node WebSocket server; do not treat the existing JS-only smoke as an end-to-end FlatL transport test.

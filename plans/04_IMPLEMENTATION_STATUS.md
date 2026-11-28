@@ -1661,3 +1661,18 @@ The WASM `flat_runtime_run_scheduled()` runner now uses Asyncify to yield while 
 Documentation updated in `doc_src/natives/sockets.md`, `doc_src/natives/README.md`, and `doc_src/WEBSOCKET_TRANSPORT.md`.
 
 Validation available in this environment: native `make -j2 all`; focused native FLVM regressions; documentation generation; browser adapter and runtime C syntax checks using Emscripten API stubs; and Makefile WASM dry-run. `emcc` is unavailable here, so no real Emscripten link or browser handshake has been claimed. User-side Termux/browser validation remains required.
+
+### Archive 382 — headless browser WebSocket smoke test
+
+Added `test/fleditor/wasm_websocket_smoke.mjs` and `make fleditor-wasm-websocket-smoke`. The test uses Node.js 22+'s browser-compatible global `WebSocket` and a dependency-free local RFC6455 echo server implemented with `net`. It checks that the generated FLEditor WASM module reports `sockets.wsSupported() == true`, that Node's event loop continues to run timers while the WebSocket handshake/messages are pending, and that text plus binary payloads (including `0x00`, `0xff`, `0x7f`) round-trip before a clean close.
+
+Scope note: this is a browser-API + WASM capability + event-loop smoke, not yet a full FlatL `task.spawnFor()` callback integration test. The current one-shot WASM runner only guarantees that the runtime remains alive while the root task itself is non-terminal; FlatL has no event-await primitive for a root task to suspend directly on a subscription. A complete FlatL-level test needs a runtime-owned completion/wait mechanism (or an explicit host run-session API) so the root can remain alive until a socket handler signals completion. The test deliberately does not claim that coverage.
+
+Validation in this environment: `node --check test/fleditor/wasm_websocket_smoke.mjs` PASS; `node -v` reports v22.16.0 and global `WebSocket` is available; Makefile dry-run selects browser WebSocket sources and invokes the new smoke. Emscripten is unavailable here, so the generated module and live smoke were not executed. Native regressions and docs are validated separately.
+
+
+### Archive 383 — WASM event-driven runtime keepalive
+
+Updated `flat_runtime_run_scheduled()` for `FLAT_WASM_BUILD`: after the root task reaches a terminal result, the one-shot runner continues driving the scheduler while event subscriptions, registered WebSocket connections, or non-terminal handler tasks remain. It yields through `emscripten_sleep()` between scheduler quanta so browser callbacks can publish events and handler tasks can run. The runtime is cleaned up only after those resources drain. This establishes the lifecycle needed for a true FlatL-level WebSocket E2E test. It also means event-driven programs must explicitly call `task.stopFor()` and `sockets.wsClose()` when finished; otherwise the run intentionally remains alive.
+
+Validation: `make -j2 all` PASS; `make docs` PASS (53 sections); `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5). Emscripten is unavailable in this environment, so WASM compilation and browser E2E execution remain unverified. The separate E2E test is not yet claimed complete; this archive addresses its prerequisite runtime lifecycle.

@@ -1151,3 +1151,11 @@ test-runtime-websocket-registry: $(FLVM_TEST_COMMON_OBJ)
 test-sockets-native-bridge: $(FLVM_TEST_COMMON_OBJ)
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -o $(TEST_BIN) test/cases/flvm/075_sockets_native_bridge/sockets_native_bridge_test.c $(FLVM_TEST_COMMON_OBJ) $(LDFLAGS) $(FLC_LDFLAGS) $(EXPORT_DYNAMIC) $(VM_EXTRA_LIBS) $(HTTP_CFLAGS) $(DOM_CFLAGS) $(RE_CFLAGS) $(HASH_CFLAGS) $(HTTP_LIBS) $(DOM_LIBS) $(RE_LIBS) -lm
+
+
+# Headless browser WebSocket capability/event-loop/echo smoke (Node.js 22+).
+.PHONY: fleditor-wasm-websocket-smoke
+fleditor-wasm-websocket-smoke: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-websocket-smoke)
+	$(WASM_NODE) test/fleditor/wasm_websocket_smoke.mjs
+	@$(call step_end)

@@ -2976,6 +2976,27 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
     return 0;
 }
 
+#ifdef FLAT_WASM_BUILD
+/* A FLEditor run may finish its root task while event subscriptions are still
+ * serving browser callbacks. Keep the one-shot runtime alive until subscriptions,
+ * sockets and their handler tasks have all been explicitly drained. */
+static int runtime_wasm_has_async_work(FlatRuntime *runtime) {
+    FlatTaskRecord *task;
+    int pending = 0;
+    if (!runtime) return 0;
+    runtime_lock(runtime);
+    if (runtime->event_subscription_count != 0) pending = 1;
+    for (task = runtime->tasks; !pending && task; task = task->next) {
+        if (!runtime_task_is_terminal(task)) pending = 1;
+    }
+    runtime_unlock(runtime);
+#if FLAT_WITH_WEBSOCKET
+    if (!pending && flat_runtime_socket_count(runtime) != 0) pending = 1;
+#endif
+    return pending;
+}
+#endif
+
 /* One-shot host helper used by environments (such as FLEditor WASM) that need
  * FlatL Task/Channel natives without exposing the full runtime lifecycle API. */
 int flat_runtime_run_scheduled(const FlatBytecode *bc, const FlatVmOptions *opts,
@@ -3023,11 +3044,11 @@ int flat_runtime_run_scheduled(const FlatBytecode *bc, const FlatVmOptions *opts
     for (;;) {
         schedule_rc = flat_runtime_schedule(runtime, FLAT_RUNTIME_RUN_QUANTUM, 0, NULL);
         if (schedule_rc != 0) break;
-        if (flat_runtime_task_result(runtime, root_id, &root_result) == 0) {
+        if (!have_root_result && flat_runtime_task_result(runtime, root_id, &root_result) == 0) {
             have_root_result = 1;
             rc = root_result.exit_code;
-            break;
         }
+        if (have_root_result && !runtime_wasm_has_async_work(runtime)) break;
         emscripten_sleep(10);
     }
 #else
@@ -3052,8 +3073,9 @@ int flat_runtime_run_scheduled(const FlatBytecode *bc, const FlatVmOptions *opts
         rc = 1;
     }
 
-    /* A one-shot editor run cannot retain detached or permanently waiting
-     * tasks. Let runnable children finish naturally; cancel only leftovers. */
+    /* Event-driven browser runs may outlive the root task. At this point all
+     * registered subscriptions, sockets and handler tasks have drained. Cancel
+     * only unrelated leftovers. */
     runtime_lock(runtime);
     for (task = runtime->tasks; task; task = task->next) {
         if (!runtime_task_is_terminal(task)) break;
