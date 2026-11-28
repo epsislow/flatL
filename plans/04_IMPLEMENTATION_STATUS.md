@@ -1676,3 +1676,18 @@ Validation in this environment: `node --check test/fleditor/wasm_websocket_smoke
 Updated `flat_runtime_run_scheduled()` for `FLAT_WASM_BUILD`: after the root task reaches a terminal result, the one-shot runner continues driving the scheduler while event subscriptions, registered WebSocket connections, or non-terminal handler tasks remain. It yields through `emscripten_sleep()` between scheduler quanta so browser callbacks can publish events and handler tasks can run. The runtime is cleaned up only after those resources drain. This establishes the lifecycle needed for a true FlatL-level WebSocket E2E test. It also means event-driven programs must explicitly call `task.stopFor()` and `sockets.wsClose()` when finished; otherwise the run intentionally remains alive.
 
 Validation: `make -j2 all` PASS; `make docs` PASS (53 sections); `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5). Emscripten is unavailable in this environment, so WASM compilation and browser E2E execution remain unverified. The separate E2E test is not yet claimed complete; this archive addresses its prerequisite runtime lifecycle.
+
+### Archive 384 — WASM closed-socket subscription lifecycle
+
+The WASM one-shot runner no longer treats every persistent socket subscription as indefinitely active after its source closes. `socket/close` marks all subscriptions for that socket as closed; queued notifications and dispatched handler tasks remain live work, and the runner prunes those subscriptions only after queues and active-handler accounting drain. This allows close handlers to finish without requiring application code to manually stop every subscription solely to release the one-shot runner. Native runtime subscription behavior is unchanged.
+
+Validation: `make -j2 all` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5). Emscripten is unavailable here, so the WASM branch is not compiled in this environment. This is a lifecycle prerequisite, not the completed FlatL-level E2E test.
+
+### Archive 385 — FlatL-level WASM WebSocket E2E harness
+
+- Added `test/fleditor/wasm_websocket_e2e.mjs`, separate from the JS-only WebSocket smoke. It loads the FLEditor WASM module and executes a real FlatL source program registering `task.spawnFor()` handlers for socket `open`, `receive`, and `close`.
+- The local dependency-free Node RFC6455 server sends text and binary messages, validates the text and binary frames sent by FlatL, echoes both, then performs a peer-initiated close. Assertions cover the FlatL handler output, message opcodes/payloads, Node event-loop progress, successful root termination, and successful runtime teardown (the `flat_wasm_run_source` call must return).
+- Added `make fleditor-wasm-websocket-e2e`; the existing `make fleditor-wasm-websocket-smoke` remains unchanged and independent.
+- Fixed browser peer-close cleanup: the JS WebSocket handle is removed before publishing `socket/close`; the C event bridge then removes the runtime-owned socket registry entry. This is required because the WASM runner also waits for the runtime socket count to reach zero.
+- Validation: `node --check test/fleditor/wasm_websocket_e2e.mjs` PASS; equivalent FlatL program compiles via `bin/flc` PASS; `make -j2 all` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5); `make docs` PASS (53 sections).
+- Environment limitation: Node.js 22.16.0 is available, but `emcc` is absent. Therefore the Emscripten build and live `make fleditor-wasm-websocket-e2e` have NOT been run here. The harness is implemented, but its runtime assertions remain to be verified on the user's Emscripten build.

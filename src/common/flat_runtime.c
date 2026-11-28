@@ -74,6 +74,7 @@ typedef struct FlatRuntimeEventSubscription {
     size_t queued;
     int dispatching;
     int handler_dispatching;
+    int source_closed;
     size_t active_handlers;
     size_t max_active;
     size_t queue_capacity;
@@ -900,8 +901,15 @@ int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
         runtime_unlock(runtime);
         return -1;
     }
-    if (strcmp(source_kind, "socket") == 0 && strcmp(event_name, "close") == 0)
+    if (strcmp(source_kind, "socket") == 0 && strcmp(event_name, "close") == 0) {
         runtime_event_forget_open_locked(runtime, source_id);
+        /* A closed socket can no longer produce events. Keep its subscriptions
+         * until queued close notifications and already-started handlers drain. */
+        for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
+            if (sub->source_id == source_id && strcmp(sub->source_kind, "socket") == 0)
+                sub->source_closed = 1;
+        }
+    }
     /* Preflight all matching subscriptions before allocating or mutating any
      * queue. WAIT/ERROR preserve atomic fan-out; DROP_NEWEST skips only the
      * overflowing subscriber; DROP_OLDEST replaces its oldest queued item. */
@@ -2982,10 +2990,14 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
  * sockets and their handler tasks have all been explicitly drained. */
 static int runtime_wasm_has_async_work(FlatRuntime *runtime) {
     FlatTaskRecord *task;
+    FlatRuntimeEventSubscription *sub;
     int pending = 0;
     if (!runtime) return 0;
     runtime_lock(runtime);
-    if (runtime->event_subscription_count != 0) pending = 1;
+    for (sub = runtime->event_subscriptions; !pending && sub; sub = sub->next) {
+        if (!sub->source_closed || sub->queued != 0 || sub->dispatching ||
+            sub->handler_dispatching || sub->active_handlers != 0) pending = 1;
+    }
     for (task = runtime->tasks; !pending && task; task = task->next) {
         if (!runtime_task_is_terminal(task)) pending = 1;
     }
@@ -2994,6 +3006,27 @@ static int runtime_wasm_has_async_work(FlatRuntime *runtime) {
     if (!pending && flat_runtime_socket_count(runtime) != 0) pending = 1;
 #endif
     return pending;
+}
+
+/* Closed-source subscriptions are no longer useful once their queued close
+ * event and all dispatched handlers have completed. Remove them before the
+ * one-shot runtime teardown so persistent subscriptions cannot keep WASM alive. */
+static int runtime_wasm_prune_closed_subscriptions(FlatRuntime *runtime) {
+    for (;;) {
+        FlatEventSubscriptionId id = 0;
+        FlatRuntimeEventSubscription *sub;
+        runtime_lock(runtime);
+        for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
+            if (sub->source_closed && sub->queued == 0 && !sub->dispatching &&
+                !sub->handler_dispatching && sub->active_handlers == 0) {
+                id = sub->id;
+                break;
+            }
+        }
+        runtime_unlock(runtime);
+        if (!id) return 0;
+        if (flat_runtime_event_unsubscribe(runtime, id) != 0) return -1;
+    }
 }
 #endif
 
@@ -3047,6 +3080,10 @@ int flat_runtime_run_scheduled(const FlatBytecode *bc, const FlatVmOptions *opts
         if (!have_root_result && flat_runtime_task_result(runtime, root_id, &root_result) == 0) {
             have_root_result = 1;
             rc = root_result.exit_code;
+        }
+        if (runtime_wasm_prune_closed_subscriptions(runtime) != 0) {
+            schedule_rc = -1;
+            break;
         }
         if (have_root_result && !runtime_wasm_has_async_work(runtime)) break;
         emscripten_sleep(10);

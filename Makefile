@@ -310,7 +310,7 @@ MIN_OK_FB = test/cases/flvm/001_min_ok/min_ok.fb examples/min_ok.fb
 # Default: compile only (does not run tests)
 .DEFAULT_GOAL := all
 
-.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-wasm-api-smoke fleditor-wasm-test fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-env-smoke fleditor-wasm-multifile-smoke fleditor-rebuild ensure-libz-1
+.PHONY: all help clean test test-all test-bench test-perf test-flatl fixtures tools flvm flc flatl mkfb fbdump run_tests gen_doc_site docs io_generate_tests json_generate_tests date_generate_tests rebuild rebuild-native fleditor-wasm fleditor-node-check fleditor-serve fleditor-stop fleditor-serve-forced fleditor-smoke fleditor-layout-smoke fleditor-theme-smoke fleditor-project-smoke fleditor-project-archive-smoke fleditor-hex-smoke fleditor-csv-smoke fleditor-jsonl-smoke fleditor-jsonl-adv-filter-smoke fleditor-wasm-csv-smoke fleditor-wasm-api-smoke fleditor-wasm-test fleditor-examples-smoke fleditor-block-map-smoke fleditor-wasm-smoke fleditor-wasm-env-smoke fleditor-wasm-multifile-smoke fleditor-wasm-websocket-smoke fleditor-wasm-websocket-e2e fleditor-rebuild ensure-libz-1
 
 help:
 	@echo "flatL Makefile — run from repo root"
@@ -376,6 +376,8 @@ help:
 	@echo "  make fleditor-wasm-env-smoke       WASM env/args contract smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-multifile-smoke WASM multifile smoke (needs fleditor-wasm)"
 	@echo "  make fleditor-wasm-order-flow-smoke   WASM user def (order_flow; needs fleditor-wasm)"
+	@echo "  make fleditor-wasm-websocket-smoke    browser WebSocket capability smoke (WASM + Node 22+)"
+	@echo "  make fleditor-wasm-websocket-e2e      FlatL program WebSocket E2E (WASM + Node 22+)"
 	@echo ""
 	@echo "Note: if sources unchanged, make skips that compile step (no line)."
 	@echo "      Failed steps print FAIL (or the compiler error) — use V=1 for full cmds."
@@ -1158,4 +1160,11 @@ test-sockets-native-bridge: $(FLVM_TEST_COMMON_OBJ)
 fleditor-wasm-websocket-smoke: fleditor-wasm
 	@$(call step_begin,fleditor-wasm-websocket-smoke)
 	$(WASM_NODE) test/fleditor/wasm_websocket_smoke.mjs
+	@$(call step_end)
+
+# FlatL-level WebSocket E2E: WASM program, Node WebSocket server, event handlers and peer close.
+.PHONY: fleditor-wasm-websocket-e2e
+fleditor-wasm-websocket-e2e: fleditor-wasm
+	@$(call step_begin,fleditor-wasm-websocket-e2e)
+	$(WASM_NODE) test/fleditor/wasm_websocket_e2e.mjs
 	@$(call step_end)

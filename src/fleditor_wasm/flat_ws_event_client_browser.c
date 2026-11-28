@@ -1,6 +1,7 @@
 #include "flat_ws_event_client.h"
 #include "flat_runtime.h"
 #include "flat_runtime_socket_event.h"
+#include "flat_runtime_socket.h"
 #include "flat_value.h"
 
 #include <emscripten.h>
@@ -104,11 +105,13 @@ EM_JS(int, flat_wasm_ws_start_js,
         emit(4, 0, new TextEncoder().encode('WebSocket browser transport error'));
     };
     ws.onclose = function () {
-        if (!entry.terminal) {
-            entry.terminal = true;
-            emit(3, 0, null);
-        }
+        var shouldEmit = !entry.terminal;
+        entry.terminal = true;
+        /* Remove the JS handle before publishing close. The C event bridge
+         * then releases the runtime-owned client record without recursively
+         * closing this already-closed browser socket. */
         entry.cleanup();
+        if (shouldEmit) emit(3, 0, null);
     };
     if (connect_timeout_ms > 0) {
         entry.timer = setTimeout(function () {
@@ -207,6 +210,11 @@ int flat_wasm_ws_event(uintptr_t runtime_ptr, uint64_t socket_id, int event,
     int rc;
     if (!runtime || !socket_id || (length && !data)) return -1;
     rc = publish_event(runtime, socket_id, event, opcode, data, length);
+    if (event == FLAT_SOCKET_EVENT_CLOSE) {
+        /* A peer-initiated close must also remove the runtime's socket entry;
+         * otherwise the one-shot WASM runner would retain async work forever. */
+        (void)flat_runtime_ws_close(runtime, socket_id);
+    }
     if (event == FLAT_SOCKET_EVENT_RECEIVE && rc < 0) {
         static const char message[] = "WebSocket receive event publication failed or runtime queue is full";
         (void)publish_event(runtime, socket_id, FLAT_SOCKET_EVENT_ERROR, 0,

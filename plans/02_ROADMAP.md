@@ -1205,12 +1205,27 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Implement browser text/binary send and close without linking libcurl or requiring pthreads.
 - [x] Keep the FLEditor WASM runtime alive while the root task is waiting by yielding with Asyncify and resuming the cooperative scheduler for browser events.
 - [ ] Build and run the FLEditor WASM artifact with the user's Emscripten SDK; verify browser `ws://` and `wss://` handshakes, text/binary round trips, and runtime cleanup.
-- [ ] Add a browser-level integration test for event-driven FlatL `task.spawnFor` WebSocket handling.
+- [x] Add a browser-level integration test for event-driven FlatL `task.spawnFor` WebSocket handling (archive 385 harness; execution with Emscripten remains pending).
 
 - [x] Add a headless Node.js 22+ WebSocket smoke for the FLEditor WASM build (browser WebSocket capability, local text/binary echo, clean close, and event-loop responsiveness).
-- [ ] Add a FlatL-level WASM event-session completion mechanism so a root task can await `task.spawnFor()` socket handlers; then extend the smoke to assert `open`/`receive`/`close` handler delivery through the runtime event broker.
+- [x] Add the FlatL-level WASM event-session completion lifecycle: the one-shot runner remains alive while subscriptions/sockets/handlers are active, then drains after peer close (archives 383–385).
 
 
 ### WASM WebSocket E2E prerequisite — archive 383
 
 The FLEditor one-shot WASM runner now keeps a completed root run alive while event subscriptions, WebSocket connections, or handler tasks remain. This is required for event-driven FlatL programs whose root registers `task.spawnFor()` handlers and then completes. Programs must stop subscriptions and close sockets to release the run. Next: add and execute the distinct `wasm_websocket_e2e.mjs` harness that drives FlatL handlers against a local Node WebSocket server; do not treat the existing JS-only smoke as an end-to-end FlatL transport test.
+
+### WASM WebSocket E2E lifecycle follow-up — archive 384
+- [x] Mark socket subscriptions closed when the socket emits its terminal `close` event.
+- [x] Keep queued close notifications and already-dispatched handlers alive until they drain.
+- [x] Prune closed-source subscriptions in the one-shot WASM runner after dispatch completion.
+- [ ] Add the distinct Node.js `wasm_websocket_e2e.mjs` that executes FlatL `task.spawnFor()` handlers against a local WebSocket server.
+- [ ] Run E2E with Emscripten and verify root completion, runtime teardown and no remaining callbacks.
+
+### FlatL WebSocket client E2E — archive 385
+- [x] Add a distinct Node.js WASM E2E that runs actual FlatL `task.spawnFor()` handlers for socket `open`, `receive`, and `close`.
+- [x] Exercise text and binary traffic in both directions against a local dependency-free RFC6455 server.
+- [x] Cover peer-initiated close and release of both event subscriptions and the runtime-owned socket registry entry.
+- [x] Keep the JS-only WebSocket capability/echo smoke as a separate target.
+- [ ] Run `make fleditor-wasm-websocket-e2e` with the Emscripten build and confirm successful root completion/runtime teardown on the user's Termux setup.
+- [ ] Once the FlatL-level client E2E passes, proceed to the native WebSocket server/listener design and implementation. The server/listener is native-only; it is not expected to work in browser WASM.
