@@ -478,3 +478,7 @@ The WebSocket reader continues retrying `wait` backpressure for an already regis
 Updated `flvm[71]` to validate FIFO replay of late receive subscriptions, the per-socket 256-frame bound, and deterministic hard overflow. The minimal runtime lifecycle test now links the value-pool sources required by runtime-owned pending-event cleanup.
 
 Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests 'flvm[15]' -v -e` PASS (1/1); `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5). A full FLVM run was attempted but timed out after test 53 without a final summary; it is not counted as passing. Live WebSocket handshake/round-trip remains capability-gated because the linked libcurl does not advertise `ws`/`wss` in this environment.
+
+
+### FLEditor WASM transport boundary — archive 377
+Native WebSocket transport is now controlled independently by `FLAT_WITH_WEBSOCKET`; it defaults on with native HTTP builds and defaults off for `FLAT_WASM_BUILD`. Browser HTTP Fetch remains enabled. The WASM build still includes the FlatL `sockets` module so `sockets.wsSupported()` can return false cleanly and other WebSocket calls report unsupported runtime capability instead of failing at link time. A JavaScript WebSocket bridge and persistent runtime session remain future work.

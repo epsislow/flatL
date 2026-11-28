@@ -1633,3 +1633,11 @@ Full-suite note for archive 375: `bin/run_tests --categ=default -e` exceeded the
 ### WebSocket pre-subscription event buffering (archive 376)
 
 Implemented bounded replay for early `socket/receive` events: 256 frames per socket and 4096 across the runtime. The first matching subscription receives retained frames FIFO, respecting its queue capacity and overflow policy. Hard overflow is surfaced as `socket/error` and closes the reader. `flvm[71]` covers FIFO replay and capacity overflow; targeted validation passed (`flvm[15]`, `flvm[71-75]`). Full FLVM validation timed out before completion and remains pending.
+
+
+## Archive 377 — FLEditor WASM WebSocket link fix
+
+- Split the native WebSocket transport build capability from HTTP Fetch with `FLAT_WITH_WEBSOCKET`. It defaults to `FLAT_WITH_HTTP` for native builds and is disabled for `FLAT_WASM_BUILD`.
+- Kept the FlatL `sockets` native module and its handlers in the WASM build when HTTP is enabled. In this build, `sockets.wsSupported()` reports false and connect/send/close fail through the existing unsupported runtime stubs; this avoids pretending that the native libcurl/pthread transport is available in the browser.
+- Kept browser HTTP Fetch enabled and added `src/lib/mod_sockets.c` to the WASM source list, resolving the missing native handler symbols. Native WebSocket event-client and transport objects are no longer referenced by `flat_runtime.c` in WASM builds.
+- Validation in this environment: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5); `bin/run_tests flvm -e` attempted but exceeded 300 seconds after test 53 without final summary; compile-only checks of `flat_runtime.c`, `native_plugin_host.c`, and `mod_sockets.c` with `FLAT_WASM_BUILD` and `FLAT_WITH_WEBSOCKET=0` PASS; `make -f Makefile.wasm -n fleditor-wasm` confirms the corrected source list and flags. Actual Emscripten link was not run because `emcc` is unavailable in this environment.

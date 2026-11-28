@@ -2,7 +2,7 @@
 #include "flat_runtime_event.h"
 #include "flat_runtime_socket.h"
 #include "flat_native_mods.h"
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
 #include "flat_ws_event_client.h"
 #endif
 #include "flat_vcx.h"
@@ -33,7 +33,7 @@ typedef struct FlatRuntimeWorker {
     int started;
 } FlatRuntimeWorker;
 
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
 typedef struct FlatRuntimeSocketEntry {
     uint64_t id;
     FlatWsEventClient *client;
@@ -105,7 +105,7 @@ typedef struct FlatTaskRecord {
 struct FlatRuntime {
     FlatHostConfig host;
     FlatMutex scheduler_mutex;
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
     FlatMutex socket_mutex;
     FlatRuntimeSocketEntry *sockets;
     size_t socket_count;
@@ -1057,7 +1057,7 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         free(runtime);
         return NULL;
     }
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
     if (flat_mutex_init(&runtime->socket_mutex) != 0) {
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
         free(runtime);
@@ -1065,7 +1065,7 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
     }
 #endif
     if (flat_ready_queue_init(&runtime->ready_queue, 16) != 0) {
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
         (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1076,7 +1076,7 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
     runtime->next_event_subscription_id = 1;
     runtime->lifecycle = FLAT_RUNTIME_RUNNING;
     runtime->next_channel_id = 1;
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
     runtime->next_socket_id = 1;
 #endif
 
@@ -1084,7 +1084,7 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         if (flat_env_context_clone(&runtime->host.env, &config->env) != 0) {
             (void)flat_ready_queue_close(&runtime->ready_queue);
             (void)flat_ready_queue_destroy(&runtime->ready_queue);
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
             (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
             (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1096,7 +1096,7 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
             flat_host_config_destroy(&runtime->host);
             (void)flat_ready_queue_close(&runtime->ready_queue);
             (void)flat_ready_queue_destroy(&runtime->ready_queue);
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
             (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
             (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -2812,7 +2812,7 @@ static int runtime_task_native_socket_close(void *user, uint64_t socket_id) {
     return flat_runtime_ws_close((FlatRuntime *)user, socket_id);
 }
 
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
 int flat_runtime_ws_supported(void) { return flat_ws_supported(); }
 
 int flat_runtime_ws_connect(FlatRuntime *runtime, const char *url,
@@ -2919,18 +2919,18 @@ size_t flat_runtime_socket_count(FlatRuntime *runtime) { (void)runtime; return 0
 
 int flat_runtime_destroy(FlatRuntime *runtime) {
     int busy;
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
     size_t active_socket_count;
 #endif
     if (!runtime) return -1;
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
     active_socket_count = flat_runtime_socket_count(runtime);
 #endif
     runtime_lock(runtime);
     runtime_refresh_lifecycle_locked(runtime);
     busy = runtime->active_runs != 0 || runtime->task_count != 0 || runtime->channel_count != 0 ||
            runtime->event_subscription_count != 0 ||
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
            active_socket_count != 0 ||
 #endif
            runtime->workers_started || runtime->worker_starting || runtime->workers_joining ||
@@ -2964,7 +2964,7 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
         free(entry);
     }
     flat_host_config_destroy(&runtime->host);
-#if FLAT_WITH_HTTP
+#if FLAT_WITH_WEBSOCKET
     if (flat_mutex_destroy(&runtime->socket_mutex) != 0) return -1;
 #endif
     if (flat_mutex_destroy(&runtime->scheduler_mutex) != 0) return -1;

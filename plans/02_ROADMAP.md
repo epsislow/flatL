@@ -1172,3 +1172,10 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 
 
 - [x] WebSocket event delivery before subscription: retain the one-shot `open` event and a bounded FIFO of early `receive` frames; apply explicit overflow behavior and surface hard failures as `socket/error`. See archive 376 in `66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md`.
+
+
+### FLEditor WASM build correction — archive 377
+- [x] Separate native libcurl/pthread WebSocket transport from browser HTTP Fetch at build time (`FLAT_WITH_WEBSOCKET`).
+- [x] Keep `sockets` native handlers linkable in WASM and report WebSocket capability as unsupported rather than referencing native transport symbols.
+- [ ] Implement the browser JavaScript WebSocket host bridge and persistent FLEditor WASM event session.
+- [ ] Verify `make fleditor-wasm` with the supported Emscripten SDK; `emcc` is unavailable in the current validation environment.

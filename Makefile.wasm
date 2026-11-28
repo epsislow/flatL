@@ -30,8 +30,8 @@ ifeq ($(http),0)
 WASM_HTTP_CFLAGS = -DFLAT_WITH_HTTP=0
 HTTP_SRC =
 else
-WASM_HTTP_CFLAGS =
-HTTP_SRC = src/lib/mod_http.c src/common/flat_http_boundary.c src/http/flat_http_fetch.c
+WASM_HTTP_CFLAGS = -DFLAT_WITH_WEBSOCKET=0
+HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_fetch.c
 endif
 env ?= 1
 ifeq ($(env),0)
