@@ -8,9 +8,9 @@
 #ifndef FLAT_WITH_HTTP
 #define FLAT_WITH_HTTP 1
 #endif
-/* WebSocket transport uses native libcurl/pthreads and is unavailable in browser WASM. */
+/* Native builds use libcurl/pthreads; browser WASM supplies a JavaScript WebSocket backend. */
 #ifndef FLAT_WITH_WEBSOCKET
-#if defined(FLAT_WASM_BUILD)
+#if defined(FLAT_WASM_BUILD) && !defined(FLAT_WASM_BROWSER_WEBSOCKET)
 #define FLAT_WITH_WEBSOCKET 0
 #else
 #define FLAT_WITH_WEBSOCKET FLAT_WITH_HTTP

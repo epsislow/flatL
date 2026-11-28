@@ -89,7 +89,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 
 ## WASM availability
 
-**Default FlEditor build** (`make fleditor-wasm` / `make rebuild` with `emcc`): same optional flags as native (`http=0`, `fs=0`, …). Inspect the linked set with **`flat_wasm_mods()`** (playground) or compare to **`bin/flvm --mods`**. The `sockets` native declaration is still present in WASM, but WebSocket transport is intentionally disabled (`FLAT_WITH_WEBSOCKET=0`); its capability probe therefore returns `false`.
+**Default FlEditor build** (`make fleditor-wasm` / `make rebuild` with `emcc`): same optional flags as native (`http=0`, `fs=0`, …). Inspect the linked set with **`flat_wasm_mods()`** (playground) or compare to **`bin/flvm --mods`**. The `sockets` native module is available in WASM through the browser JavaScript WebSocket backend (`FLAT_WASM_BROWSER_WEBSOCKET=1`). It does not link libcurl or require pthreads; connection establishment is asynchronous and browser CSP/mixed-content policies still apply.
 
 | Status | Meaning |
 |--------|---------|
@@ -107,7 +107,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `mem` | ✅ | ✅ | |
 | `file` | ✅ | partial | FlEditor: project **MEMFS** (`/fleditor`), not host disk — [file.md](./file.md) |
 | `http` | ✅ | partial | native **libcurl**; WASM **Fetch + Asyncify** + **CORS** — [http.md](./http.md) |
-| `sockets` | ✅* | ❌ | Native WebSocket client via system libcurl and runtime task bridge; FLEditor WASM currently disables the native transport — [sockets.md](./sockets.md) |
+| `sockets` | ✅* | partial | Native libcurl backend; FLEditor browser WebSocket backend with asynchronous connect and browser security policies — [sockets.md](./sockets.md) |
 | `dom` | ✅ | ✅ | WASM requires **bundled** Lexbor (`dom_compile=1`) — [dom.md](./dom.md) |
 | `env` | ✅ | partial | WASM: **Settings → Env** / Program args only (no OS `getenv`) — [env.md](./env.md) |
 | `path` | ✅ | ✅ | pure strings; sep via `file.sep` / Settings → Path — [path.md](./path.md) |

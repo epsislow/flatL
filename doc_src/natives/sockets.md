@@ -1,13 +1,13 @@
 # Native module `sockets`
 
-The `sockets` module currently provides a **runtime-owned WebSocket client**. It uses the linked native libcurl build and the `FlatRuntime` socket bridge. Declare it in the source header:
+The `sockets` module provides a **runtime-owned WebSocket client** with a shared FlatL API and platform-specific transports: native builds use linked libcurl, while FLEditor WASM uses the browser JavaScript `WebSocket` API. Both transports publish through the same `FlatRuntime` socket registry and event broker. Declare it in the source header:
 
 ```flat
 use native sockets
 use native task
 ```
 
-The module is available to FlatL code running in a task owned by `FlatRuntime`. A standalone VM invocation (`bin/flvm`, `bin/flatl run`, or `bin/flatl crun`) does not install this task bridge; use a runtime host for actual socket operations. FLEditor WASM currently includes the module API but does not enable the native libcurl WebSocket transport, so `wsSupported()` returns `false` there.
+The module is available to FlatL code running in a task owned by `FlatRuntime`. A standalone VM invocation (`bin/flvm`, `bin/flatl run`, or `bin/flatl crun`) does not install this task bridge; use a runtime host for actual socket operations. FLEditor WASM uses the browser WebSocket backend and keeps the runtime alive while the root task waits for event-driven work.
 
 ## API reference
 
@@ -28,7 +28,7 @@ supported = sockets.wsSupported()
 io.outln(supported)
 ```
 
-A call made outside a runtime-owned task fails because there is no socket bridge to query. A supported native build can still return `false` if its linked libcurl was built without `ws`/`wss`.
+A call made outside a runtime-owned task fails because there is no socket bridge to query. Native builds return `true` when the linked libcurl advertises both `ws` and `wss`. Browser WASM returns `true` when the browser provides `WebSocket`, `TextEncoder`, and `TextDecoder`. Browser connection policy (CSP, mixed-content rules, and server origin policy) can still prevent an individual connection.
 
 ### `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)`
 
@@ -44,7 +44,7 @@ Returns a positive numeric `socketId`. Socket IDs share the `socket` event-sourc
 wsId = sockets.wsConnect('ws://127.0.0.1:8765', 5000, 65536)
 ```
 
-The connection handshake blocks the calling task until success or failure. After the handshake, a reader thread receives frames and publishes events to the runtime broker. The `open` event is retained if it is published before the first matching subscription.
+On native builds, the connection handshake blocks the calling task until success or failure; a reader thread then receives frames. In browser WASM, the call creates the browser `WebSocket` and returns the ID immediately; the handshake continues asynchronously and `open` or `error` is published later. The browser does not expose a synchronous connect timeout, so the configured timeout is enforced by a timer while the socket remains in CONNECTING state. Both transports publish events to the same runtime broker. The `open` event is retained if it is published before the first matching subscription.
 
 ### `sockets.wsSend(socketId, message)`
 
@@ -111,7 +111,7 @@ The runtime protects the usual connect-then-subscribe sequence:
 - If either transport buffer limit is reached, the reader publishes an `error` event and terminates the connection rather than silently dropping data or growing memory without limit.
 - If the retained backlog exceeds the new subscription's queue capacity, the default `wait` policy rejects that subscription. Use `dropOldest` or `dropNewest` to accept a smaller queue and apply its stated policy.
 
-The transport reader never executes FlatL code. It publishes to the runtime event broker; the cooperative scheduler creates handler tasks.
+Neither transport executes FlatL code from its I/O callback. The native reader thread or browser JavaScript callback publishes to the runtime event broker; the cooperative scheduler creates handler tasks. In FLEditor WASM, the runner uses Asyncify to yield to the browser and resume scheduling while the root task is waiting, allowing WebSocket callbacks to enqueue and run event handlers.
 
 ## Complete example: connect, subscribe, send, close
 
@@ -134,14 +134,13 @@ use native task
   closeSub = task.spawnFor(wsId, 'socket', 'close', #onClose)
   errorSub = task.spawnFor(wsId, 'socket', 'error', #onError)
 
-  sockets.wsSend(wsId, 'hello')
-  -- For binary data, construct a byte string and use wsSendBinary.
-  -- The application decides when its exchange is complete, then calls
-  -- task.stopFor(subscriptionId) and sockets.wsClose(wsId).
+  -- Wait for open before sending: browser WebSocket connects asynchronously.
   OK
 
 #onOpen(event)
   io.outln('WebSocket opened')
+  sockets.wsSend(wsId, 'hello')
+  -- For binary data, construct a byte string and use wsSendBinary.
   OK
 
 #onReceive(event)
@@ -158,15 +157,15 @@ use native task
   OK
 ```
 
-A production program should also define its application-level completion condition, stop subscriptions with `task.stopFor(subscriptionId)` when they are no longer needed, and close the socket. `task.stopFor()` refuses removal while a handler dispatch is in progress.
+A production program should also define its application-level completion condition, stop subscriptions with `task.stopFor(subscriptionId)` when they are no longer needed, and close the socket. In browser WASM, send only after the `open` handler runs; `wsSend`/`wsSendBinary` fail while the browser socket is still CONNECTING. `task.stopFor()` refuses removal while a handler dispatch is in progress.
 
-## Native support and build notes
+## Platform support and build notes
 
 - Native support requires `http=1` and a libcurl build that advertises both `ws` and `wss`.
 - `http*` in the build recipe means FlatL links the system libcurl; it does not compile or bundle curl itself. `pkg-config libcurl` supplies the headers and linker flags.
-- FLEditor WASM currently sets `FLAT_WITH_WEBSOCKET=0`. The module remains declared, but `wsSupported()` returns `false` and the native transport is unavailable in the browser build.
+- FLEditor WASM enables `FLAT_WITH_WEBSOCKET=1` with `FLAT_WASM_BROWSER_WEBSOCKET=1` and compiles the browser adapter instead of the libcurl transport. It uses the browser `WebSocket` API; it does not link libcurl or require pthreads. `wsConnect()` is asynchronous at the transport level, even though it returns a socket ID synchronously.
 - The current `FlatTaskNativeBridge` exposes sockets to runtime-owned task VMs. Standalone VM execution without a runtime task bridge cannot use these operations.
-- `wsConnect` performs a synchronous handshake. The send timeout is fixed at 10 seconds; only connection timeout and inbound maximum frame size are configurable.
+- `wsConnect` has platform-specific timing: synchronous handshake on native and asynchronous handshake in browser WASM. The send timeout is fixed at 10 seconds on native; browser `WebSocket.send()` queues data synchronously and has no configurable send timeout. Connection timeout and inbound maximum frame size are configurable.
 - TCP and UDP are not implemented by this module yet.
 
 ## Testing

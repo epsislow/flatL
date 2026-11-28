@@ -21,6 +21,9 @@
 #include <math.h>
 #include <inttypes.h>
 #include <limits.h>
+#ifdef FLAT_WASM_BUILD
+#include <emscripten.h>
+#endif
 #ifdef FLAT_RUNTIME_TESTING
 #include <stdatomic.h>
 #include <time.h>
@@ -3013,12 +3016,29 @@ int flat_runtime_run_scheduled(const FlatBytecode *bc, const FlatVmOptions *opts
         goto cleanup;
     }
 
+#ifdef FLAT_WASM_BUILD
+    /* Browser transports (WebSocket, Fetch completion, timers) publish events
+     * on the JS thread. Keep the runtime alive while the root task is waiting;
+     * Asyncify yields to the browser so those callbacks can enqueue work. */
+    for (;;) {
+        schedule_rc = flat_runtime_schedule(runtime, FLAT_RUNTIME_RUN_QUANTUM, 0, NULL);
+        if (schedule_rc != 0) break;
+        if (flat_runtime_task_result(runtime, root_id, &root_result) == 0) {
+            have_root_result = 1;
+            rc = root_result.exit_code;
+            break;
+        }
+        emscripten_sleep(10);
+    }
+#else
     schedule_rc = flat_runtime_schedule(runtime, FLAT_RUNTIME_RUN_QUANTUM, 0, NULL);
     if (schedule_rc == 0 &&
         flat_runtime_task_result(runtime, root_id, &root_result) == 0) {
         have_root_result = 1;
         rc = root_result.exit_code;
-    } else {
+    }
+#endif
+    if (!have_root_result) {
         if (schedule_rc != 0) {
             snprintf(root_result.diagnostic, sizeof root_result.diagnostic,
                      "cooperative scheduler failed");

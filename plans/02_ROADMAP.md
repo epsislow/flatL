@@ -1147,7 +1147,7 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Preserve text/binary opcode in `{ opcode, data }` payloads; answer ping frames with pong; retry `wait` backpressure without entering the VM.
 - [ ] Expose native FlatL `sockets.wsConnect()`, `sockets.wsSend()` and `sockets.wsClose()` over the host adapter and numeric socket ID registry.
 - [ ] Validate a live handshake on a libcurl build that advertises `ws` and `wss`; the current environment's libcurl 8.10.1 does not advertise these protocols.
-- [ ] Add the browser WebSocket host bridge and persistent FLEditor WASM runtime session.
+- [x] Add the browser WebSocket host bridge and Asyncify-driven FLEditor WASM event session (archive 381).
 
 - [x] Runtime-owned numeric WebSocket registry and lifecycle API (archive 372).
 - [ ] Expose WebSocket connect/send/close through the FlatL `sockets` native module.
@@ -1168,7 +1168,7 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Extend the loopback WebSocket integration harness to cover late open subscription plus text/binary client-server round trips.
 - [ ] Execute the live loopback handshake and text/binary round trip on a libcurl build advertising `ws` and `wss`; current linked libcurl does not provide these protocols.
 - [ ] Add bounded pre-subscription buffering for `receive` events if the API should guarantee delivery when peers send immediately after the handshake.
-- [ ] Add browser WebSocket bridge and persistent FLEditor WASM runtime session.
+- [x] Add browser WebSocket bridge and Asyncify-driven FLEditor WASM event session (archive 381).
 
 
 - [x] WebSocket event delivery before subscription: retain the one-shot `open` event and a bounded FIFO of early `receive` frames; apply explicit overflow behavior and surface hard failures as `socket/error`. See archive 376 in `66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md`.
@@ -1177,7 +1177,7 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 ### FLEditor WASM build correction — archive 377
 - [x] Separate native libcurl/pthread WebSocket transport from browser HTTP Fetch at build time (`FLAT_WITH_WEBSOCKET`).
 - [x] Keep `sockets` native handlers linkable in WASM and report WebSocket capability as unsupported rather than referencing native transport symbols.
-- [ ] Implement the browser JavaScript WebSocket host bridge and persistent FLEditor WASM event session.
+- [x] Implement the browser JavaScript WebSocket host bridge and Asyncify-driven FLEditor WASM event session (archive 381).
 - [ ] Verify `make fleditor-wasm` with the supported Emscripten SDK; `emcc` is unavailable in the current validation environment.
 
 
@@ -1197,3 +1197,12 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Extend `flvm[74]` loopback server coverage through `FlatRuntime`'s socket registry: receive text and binary frames, send text and binary frames, verify client masking/opcodes/payload bytes, then observe close and clean up the runtime.
 - [x] Validate on the current build with `bin/run_tests 'flvm[72-75]' -v -e`; live tests `flvm[73-74]` execute their local WebSocket server paths when libcurl advertises `ws`/`wss`, otherwise retain the explicit capability fallback.
 - [ ] Add a full FlatL program-level `task.spawnFor` WebSocket round trip and a local `wss://` certificate test.
+
+
+### Browser WebSocket backend and FLEditor async runtime — archive 381
+- [x] Add a browser `WebSocket` adapter for FLEditor WASM, preserving the existing `FlatWsEventClient` interface and shared runtime socket registry/event broker.
+- [x] Forward browser `open`, `message`, `error`, and `close` callbacks into the runtime; preserve binary payload bytes with `ArrayBuffer` and enforce `maxFrameBytes`.
+- [x] Implement browser text/binary send and close without linking libcurl or requiring pthreads.
+- [x] Keep the FLEditor WASM runtime alive while the root task is waiting by yielding with Asyncify and resuming the cooperative scheduler for browser events.
+- [ ] Build and run the FLEditor WASM artifact with the user's Emscripten SDK; verify browser `ws://` and `wss://` handshakes, text/binary round trips, and runtime cleanup.
+- [ ] Add a browser-level integration test for event-driven FlatL `task.spawnFor` WebSocket handling.

@@ -30,8 +30,8 @@ ifeq ($(http),0)
 WASM_HTTP_CFLAGS = -DFLAT_WITH_HTTP=0
 HTTP_SRC =
 else
-WASM_HTTP_CFLAGS = -DFLAT_WITH_WEBSOCKET=0
-HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_fetch.c
+WASM_HTTP_CFLAGS = -DFLAT_WITH_WEBSOCKET=1 -DFLAT_WASM_BROWSER_WEBSOCKET=1
+HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_fetch.c src/fleditor_wasm/flat_ws_event_client_browser.c
 endif
 env ?= 1
 ifeq ($(env),0)
@@ -127,7 +127,7 @@ WASM_LDFLAGS = \
   -s ASYNCIFY=1 \
   -s ASYNCIFY_STACK_SIZE=1048576 \
   -s 'ASYNCIFY_IMPORTS=[emscripten_sleep,flat_http_fetch_sync_js]' \
-  -s 'EXPORTED_FUNCTIONS=[_flat_wasm_compile,_flat_wasm_compile_entry,_flat_wasm_disassemble_entry,_flat_wasm_run,_flat_wasm_run_source,_flat_wasm_run_entry,_flat_wasm_get_last_termination,_flat_wasm_get_last_panic,_flat_wasm_toolchain_version,_flat_wasm_mods,_flat_wasm_set_run_limits,_flat_wasm_env_clear,_flat_wasm_env_set,_flat_wasm_env_args_clear,_flat_wasm_env_args_push,_flat_wasm_path_sep_set,_flat_wasm_path_sep_reset,_flat_wasm_free,_malloc,_free]' \
+  -s 'EXPORTED_FUNCTIONS=[_flat_wasm_ws_event,_flat_wasm_compile,_flat_wasm_compile_entry,_flat_wasm_disassemble_entry,_flat_wasm_run,_flat_wasm_run_source,_flat_wasm_run_entry,_flat_wasm_get_last_termination,_flat_wasm_get_last_panic,_flat_wasm_toolchain_version,_flat_wasm_mods,_flat_wasm_set_run_limits,_flat_wasm_env_clear,_flat_wasm_env_set,_flat_wasm_env_args_clear,_flat_wasm_env_args_push,_flat_wasm_path_sep_set,_flat_wasm_path_sep_reset,_flat_wasm_free,_malloc,_free]' \
   -s 'EXPORTED_RUNTIME_METHODS=[ccall,cwrap,UTF8ToString,getValue,setValue,HEAPU8,Asyncify,FS]' \
   -lm
 

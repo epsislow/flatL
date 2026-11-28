@@ -42,3 +42,12 @@ The shared event namespace remains `sourceKind = 'socket'`, with `open`, `receiv
 The reader publishes through `flat_runtime_socket_event_publish()` and never touches VM or task state. For `overflow = 'wait'`, it retains the current event and retries publication until capacity is available or the client is stopping. The runtime must outlive every client: stop all clients before destroying the runtime. The host owns the numeric `socket_id`; the current bridge is a C host API and does not yet expose FlatL `sockets.wsConnect()` natives.
 
 Lifecycle payloads are intentionally small and stable: `open` and `close` carry `NULL`; `error` carries a STRING diagnostic; `receive` carries `{ opcode: NUMBER, data: STRING }`. The `data` string is byte-preserving for both text and binary frames; inspect `opcode` before interpreting it as text. Individual continuation frames are delivered separately as opcode `3`; this bridge does not reassemble fragmented WebSocket messages.
+
+
+## Browser WebSocket backend (FLEditor WASM)
+
+FLEditor WASM uses `src/fleditor_wasm/flat_ws_event_client_browser.c` rather than the native libcurl transport. The adapter creates a browser `WebSocket`, sets `binaryType = 'arraybuffer'`, and forwards `open`, `message`, `error`, and `close` callbacks into `flat_runtime_socket_event_publish()`. Binary messages are copied as raw bytes; text messages are encoded as UTF-8. Incoming payloads are checked against `maxFrameBytes` before publication.
+
+The browser backend intentionally shares the native runtime socket registry and event broker. It does not create a reader thread. `wsConnect()` allocates the socket ID and returns immediately; the browser handshake completes later and emits `open` or `error`. The configured connect timeout is enforced with a browser timer while the WebSocket is CONNECTING. `wsSend` and `wsSendBinary` require the socket to be OPEN. Browser WebSocket does not expose ping/pong frames, arbitrary handshake headers, or a send timeout.
+
+The FLEditor WASM runner uses Asyncify to yield while the root task remains non-terminal, then resumes the cooperative scheduler after browser callbacks publish events. This keeps the runtime and socket registry alive while a FlatL task is waiting for WebSocket events. Programs must keep the root task alive (for example by awaiting their event-driven work); once the root task terminates, the one-shot runner cancels remaining tasks and closes its runtime.

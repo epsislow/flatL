@@ -1650,3 +1650,14 @@ Repeated ASan/leak-detection validation passed for the socket event adapter, Web
 
 ### WebSocket live runtime registry round-trip — archive 380
 Extended `flvm[74]` from a receive/close lifecycle check to a live bidirectional loopback test through `FlatRuntime`: the server sends text and binary frames (including zero and high-bit bytes), the runtime publishes both receive events, the client sends text and binary frames, and the server validates masking, opcodes and exact payloads before sending close. The test verifies the close event and the existing runtime/socket cleanup contract. `flvm[73]` continues to cover the event-client layer and late subscription behavior. A full FlatL source-level `task.spawnFor` integration and `wss://` certificate test remain pending.
+
+
+## Archive 381 — browser WebSocket backend
+
+Added `src/fleditor_wasm/flat_ws_event_client_browser.c`, a browser adapter implementing the existing `FlatWsEventClient` contract with JavaScript `WebSocket`. The WASM build now sets `FLAT_WITH_WEBSOCKET=1` and `FLAT_WASM_BROWSER_WEBSOCKET=1`, includes the browser adapter instead of native libcurl/pthread transport, and exports the C event callback. `wsSupported()` now detects browser `WebSocket`, `TextEncoder`, and `TextDecoder`. Browser messages use UTF-8 for text and raw `ArrayBuffer` bytes for binary; inbound frames are bounded by `maxFrameBytes`. Connect returns a socket ID immediately; `open`/`error` arrive asynchronously. Browser send requires the socket to be OPEN.
+
+The WASM `flat_runtime_run_scheduled()` runner now uses Asyncify to yield while the root task remains non-terminal and resumes the cooperative scheduler after browser callbacks enqueue events. This is required because the previous one-shot runner cancelled waiting tasks and destroyed the runtime as soon as the scheduler became idle. The runtime still cancels remaining detached tasks when the root task terminates.
+
+Documentation updated in `doc_src/natives/sockets.md`, `doc_src/natives/README.md`, and `doc_src/WEBSOCKET_TRANSPORT.md`.
+
+Validation available in this environment: native `make -j2 all`; focused native FLVM regressions; documentation generation; browser adapter and runtime C syntax checks using Emscripten API stubs; and Makefile WASM dry-run. `emcc` is unavailable here, so no real Emscripten link or browser handshake has been claimed. User-side Termux/browser validation remains required.
