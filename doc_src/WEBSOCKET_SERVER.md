@@ -153,3 +153,20 @@ destruction. Run focused checks with:
 ```sh
 bin/run_tests 'flvm[76-82]' -v -e
 ```
+
+## Build separation: native server vs browser WebSocket client (archive 395)
+
+The WebSocket client and native WebSocket server now have separate build
+capabilities. `FLAT_WITH_WEBSOCKET` continues to control the WebSocket client
+(including the browser WASM JavaScript-backed client). `FLAT_WITH_WS_SERVER`
+controls only the native listening server, registry and reactor ownership.
+
+`FLAT_WITH_WS_SERVER` defaults to enabled for native WebSocket builds and is
+forced off when `FLAT_WASM_BUILD` is defined. This is intentional: browser
+WASM can initiate WebSocket connections through the browser API, but it cannot
+own native listening sockets. The runtime server API remains linkable and
+returns `-1` when the native server capability is unavailable.
+
+`flvm[84]` compiles the runtime with the browser-WASM feature combination and
+checks the object has no undefined references to the native reactor or server
+registry, while confirming that the browser WebSocket client remains present.

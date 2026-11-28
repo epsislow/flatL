@@ -42,3 +42,18 @@ New listener/accept and peer I/O operations are rejected once runtime shutdown h
 ## Next step
 
 Add reactor registration and a single runtime-owned I/O service thread. Begin with listener readiness and incremental nonblocking accept. Then add per-peer handshake/frame state machines, queued writes/backpressure, and event publication into the existing socket event broker. The I/O service must enqueue events only; it must never execute FlatL bytecode.
+
+## Build boundary correction (archive 395)
+
+The runtime's native server ownership is gated by `FLAT_WITH_WS_SERVER`, not
+`FLAT_WITH_WEBSOCKET`. The latter continues to represent WebSocket client
+support and remains enabled for browser WASM when `FLAT_WASM_BROWSER_WEBSOCKET`
+is selected. The native server capability defaults on for native builds and
+off whenever `FLAT_WASM_BUILD` is defined. WASM builds therefore retain the
+JavaScript-backed WebSocket client without linking native reactor or registry
+symbols. Server API calls return `-1` when that capability is unavailable.
+
+The isolated `flvm[15]` lifecycle harness explicitly disables the native
+server capability because it compiles `flat_runtime.c` without the native
+server transport dependencies. This keeps that test focused on host snapshot
+and runtime lifecycle semantics.

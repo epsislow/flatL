@@ -16,6 +16,15 @@
 #define FLAT_WITH_WEBSOCKET FLAT_WITH_HTTP
 #endif
 #endif
+#ifndef FLAT_WITH_WS_SERVER
+/* The native WebSocket server requires OS listening sockets and the native
+ * reactor/registry. Browser WASM keeps the WebSocket client but not server. */
+#if FLAT_WITH_WEBSOCKET && !defined(FLAT_WASM_BUILD)
+#define FLAT_WITH_WS_SERVER 1
+#else
+#define FLAT_WITH_WS_SERVER 0
+#endif
+#endif
 #ifndef FLAT_WITH_ENV
 #define FLAT_WITH_ENV 1
 #endif

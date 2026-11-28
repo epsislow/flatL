@@ -2,6 +2,6 @@ suite = "flvm"
 id = 15
 desc = "runtime owns immutable host snapshots and rejects destruction during an active VM run"
 kind = "exec"
-cmd = "gcc -std=c11 -Wall -Wextra -pthread -ffunction-sections -fdata-sections -I{root}/include -Wl,--gc-sections -o {tmp}/runtime_lifecycle_test {root}/test/cases/flvm/015_runtime_lifecycle/runtime_lifecycle_test.c {root}/src/common/flat_runtime.c {root}/src/common/flat_scheduler_sync.c {root}/src/common/flat_host_config.c {root}/src/common/flat_env.c {root}/src/common/flat_path.c {root}/src/common/value_collection.c {root}/src/common/value_pool.c {root}/src/common/value_live.c && {tmp}/runtime_lifecycle_test"
+cmd = "gcc -std=c11 -Wall -Wextra -pthread -DFLAT_WITH_WS_SERVER=0 -ffunction-sections -fdata-sections -I{root}/include -Wl,--gc-sections -o {tmp}/runtime_lifecycle_test {root}/test/cases/flvm/015_runtime_lifecycle/runtime_lifecycle_test.c {root}/src/common/flat_runtime.c {root}/src/common/flat_scheduler_sync.c {root}/src/common/flat_host_config.c {root}/src/common/flat_env.c {root}/src/common/flat_path.c {root}/src/common/value_collection.c {root}/src/common/value_pool.c {root}/src/common/value_live.c && {tmp}/runtime_lifecycle_test"
 expect_exit = 0
 stdout_contains = "runtime-lifecycle-ok"

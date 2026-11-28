@@ -2,10 +2,10 @@
 #include "flat_runtime_event.h"
 #include "flat_runtime_socket.h"
 #include "flat_native_mods.h"
-#if FLAT_WITH_WEBSOCKET
+#include "flat_runtime_ws_server.h"
+#if FLAT_WITH_WS_SERVER
 #include "flat_io_reactor.h"
 #include "flat_ws_server_registry.h"
-#include "flat_runtime_ws_server.h"
 #endif
 #if FLAT_WITH_WEBSOCKET
 #include "flat_ws_event_client.h"
@@ -116,11 +116,13 @@ struct FlatRuntime {
     FlatMutex scheduler_mutex;
 #if FLAT_WITH_WEBSOCKET
     FlatMutex socket_mutex;
-    FlatIoReactor *io_reactor;
-    FlatWsServerRegistry *ws_server_registry;
     FlatRuntimeSocketEntry *sockets;
     size_t socket_count;
     uint64_t next_socket_id;
+#endif
+#if FLAT_WITH_WS_SERVER
+    FlatIoReactor *io_reactor;
+    FlatWsServerRegistry *ws_server_registry;
 #endif
     FlatReadyQueue ready_queue;
     unsigned active_runs;
@@ -1088,9 +1090,13 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         free(runtime);
         return NULL;
     }
+#endif
+#if FLAT_WITH_WS_SERVER
     runtime->io_reactor = flat_io_reactor_create();
     if (!runtime->io_reactor) {
+#if FLAT_WITH_WEBSOCKET
         (void)flat_mutex_destroy(&runtime->socket_mutex);
+#endif
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
         free(runtime);
         return NULL;
@@ -1099,16 +1105,20 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
     if (!runtime->ws_server_registry) {
         (void)flat_io_reactor_destroy(runtime->io_reactor);
         runtime->io_reactor = NULL;
+#if FLAT_WITH_WEBSOCKET
         (void)flat_mutex_destroy(&runtime->socket_mutex);
+#endif
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
         free(runtime);
         return NULL;
     }
 #endif
     if (flat_ready_queue_init(&runtime->ready_queue, 16) != 0) {
-#if FLAT_WITH_WEBSOCKET
+#if FLAT_WITH_WS_SERVER
         (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
         (void)flat_io_reactor_destroy(runtime->io_reactor);
+#endif
+#if FLAT_WITH_WEBSOCKET
         (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1127,9 +1137,11 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         if (flat_env_context_clone(&runtime->host.env, &config->env) != 0) {
             (void)flat_ready_queue_close(&runtime->ready_queue);
             (void)flat_ready_queue_destroy(&runtime->ready_queue);
-#if FLAT_WITH_WEBSOCKET
+#if FLAT_WITH_WS_SERVER
             (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
             (void)flat_io_reactor_destroy(runtime->io_reactor);
+#endif
+#if FLAT_WITH_WEBSOCKET
             (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
             (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1141,9 +1153,11 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
             flat_host_config_destroy(&runtime->host);
             (void)flat_ready_queue_close(&runtime->ready_queue);
             (void)flat_ready_queue_destroy(&runtime->ready_queue);
-#if FLAT_WITH_WEBSOCKET
+#if FLAT_WITH_WS_SERVER
             (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
             (void)flat_io_reactor_destroy(runtime->io_reactor);
+#endif
+#if FLAT_WITH_WEBSOCKET
             (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
             (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1154,9 +1168,11 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         flat_host_config_destroy(&runtime->host);
         (void)flat_ready_queue_close(&runtime->ready_queue);
         (void)flat_ready_queue_destroy(&runtime->ready_queue);
-#if FLAT_WITH_WEBSOCKET
+#if FLAT_WITH_WS_SERVER
         (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
         (void)flat_io_reactor_destroy(runtime->io_reactor);
+#endif
+#if FLAT_WITH_WEBSOCKET
         (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -2969,7 +2985,7 @@ int flat_runtime_ws_close(FlatRuntime *runtime, uint64_t id) {
 size_t flat_runtime_socket_count(FlatRuntime *runtime) { (void)runtime; return 0; }
 #endif
 
-#if FLAT_WITH_WEBSOCKET
+#if FLAT_WITH_WS_SERVER
 int flat_runtime_ws_server_listen(FlatRuntime *runtime, const char *host,
                                   uint16_t port, int backlog,
                                   uint64_t *out_listener_id, uint16_t *out_bound_port,
@@ -3021,6 +3037,52 @@ int flat_runtime_ws_server_close_listener(FlatRuntime *runtime, uint64_t listene
     if (!runtime || !runtime->ws_server_registry) return -1;
     return flat_ws_server_registry_close_listener(runtime->ws_server_registry, listener_id);
 }
+#else
+int flat_runtime_ws_server_listen(FlatRuntime *runtime, const char *host,
+                                  uint16_t port, int backlog,
+                                  uint64_t *out_listener_id, uint16_t *out_bound_port,
+                                  char *error, unsigned long error_capacity) {
+    (void)runtime; (void)host; (void)port; (void)backlog;
+    (void)out_bound_port; (void)error; (void)error_capacity;
+    if (out_listener_id) *out_listener_id = 0;
+    return -1;
+}
+int flat_runtime_ws_server_accept(FlatRuntime *runtime, uint64_t listener_id,
+                                  long timeout_ms, uint64_t *out_peer_id,
+                                  char *error, unsigned long error_capacity) {
+    (void)runtime; (void)listener_id; (void)timeout_ms;
+    (void)error; (void)error_capacity;
+    if (out_peer_id) *out_peer_id = 0;
+    return -1;
+}
+int flat_runtime_ws_server_upgrade(FlatRuntime *runtime, uint64_t peer_id,
+                                   long timeout_ms, char *error,
+                                   unsigned long error_capacity) {
+    (void)runtime; (void)peer_id; (void)timeout_ms; (void)error; (void)error_capacity;
+    return -1;
+}
+int flat_runtime_ws_server_send(FlatRuntime *runtime, uint64_t peer_id,
+                                FlatWsServerOpcode opcode, const void *data,
+                                unsigned long length, char *error,
+                                unsigned long error_capacity) {
+    (void)runtime; (void)peer_id; (void)opcode; (void)data; (void)length;
+    (void)error; (void)error_capacity; return -1;
+}
+int flat_runtime_ws_server_receive(FlatRuntime *runtime, uint64_t peer_id,
+                                   long timeout_ms, unsigned long max_message_bytes,
+                                   FlatWsServerMessage *out_message, char *error,
+                                   unsigned long error_capacity) {
+    (void)runtime; (void)peer_id; (void)timeout_ms; (void)max_message_bytes;
+    (void)error; (void)error_capacity;
+    if (out_message) memset(out_message, 0, sizeof *out_message);
+    return -1;
+}
+int flat_runtime_ws_server_close_peer(FlatRuntime *runtime, uint64_t peer_id) {
+    (void)runtime; (void)peer_id; return -1;
+}
+int flat_runtime_ws_server_close_listener(FlatRuntime *runtime, uint64_t listener_id) {
+    (void)runtime; (void)listener_id; return -1;
+}
 #endif
 
 int flat_runtime_destroy(FlatRuntime *runtime) {
@@ -3069,7 +3131,7 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
         }
         free(entry);
     }
-#if FLAT_WITH_WEBSOCKET
+#if FLAT_WITH_WS_SERVER
     if (runtime->ws_server_registry) {
         if (flat_ws_server_registry_destroy(runtime->ws_server_registry) != 0) return -1;
         runtime->ws_server_registry = NULL;

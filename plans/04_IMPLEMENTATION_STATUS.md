@@ -1758,3 +1758,13 @@ Added `FlatIoService` (`include/flat_io_service.h`, `src/common/flat_io_service.
 Added `flvm[83]` to verify readiness dispatch on the owner thread, token delivery, descriptor removal, stop wakeup/join, and repeated stop. The POSIX focused test uses a socketpair and drains readiness in its callback. The Windows build uses the same service implementation, while this focused socketpair test is POSIX-specific.
 
 Important integration boundary: this archive adds the reusable I/O service but does not yet replace `FlatRuntime`'s direct `FlatIoReactor` field. WebSocket listeners are not yet registered with the service, and it does not yet accept clients or publish WebSocket events. Those are the next integration tasks. No `sockets.wsListen()` API is exposed yet.
+
+
+## WebSocket server build correction — archive 395 (2026-11-28)
+
+- Split native WebSocket server capability from general WebSocket client support using `FLAT_WITH_WS_SERVER`.
+- Browser WASM builds retain the JavaScript-backed WebSocket client while excluding native server registry/reactor ownership and references.
+- Runtime server API symbols remain available as unsupported stubs when the native server capability is disabled.
+- Updated the isolated `flvm[15]` lifecycle harness to disable native server support because it intentionally links only the runtime lifecycle dependencies.
+- Preserved executable permissions for shell-based test helpers in the archive.
+- Focused validation: native build and docs; `flc[11,12,14,16,17,19]`; `flvm[15,76-84]`; WASM feature-gate object check.

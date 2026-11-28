@@ -1312,3 +1312,15 @@ backends remain future work.
 - [x] Add `flvm[83]` for readiness dispatch, token delivery, removal and shutdown.
 - [ ] Integrate the service into `FlatRuntime` and register listener descriptors.
 - [ ] Implement nonblocking accept and incremental HTTP/WebSocket parsing.
+
+
+## WebSocket server build correction — archive 395 (2026-11-28)
+
+The native WebSocket server is now gated independently from WebSocket client
+support. `FLAT_WITH_WS_SERVER` defaults on for native builds and off for
+`FLAT_WASM_BUILD`, allowing browser WASM to retain its JavaScript WebSocket
+client without linking native listener/registry/reactor symbols. The runtime
+server C API returns unsupported (`-1`) when the native server capability is
+disabled. Regression coverage is `flvm[84]`; the isolated runtime lifecycle
+harness `flvm[15]` explicitly disables the server capability because it links
+only the runtime lifecycle sources.

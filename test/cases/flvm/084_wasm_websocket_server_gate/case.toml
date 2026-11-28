@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 84
+desc = "browser WASM keeps the WebSocket client but excludes native server dependencies"
+kind = "exec"
+cmd = "{root}/test/cases/flvm/084_wasm_websocket_server_gate/check_wasm_gate.sh {root} {tmp}"
+expect_exit = 0
+stdout_contains = "wasm-websocket-server-gate-ok"
