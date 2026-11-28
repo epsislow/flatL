@@ -1524,3 +1524,19 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Producers still do not execute VM code.
 - `task.spawnFor()`, automatic event-to-task dispatch, serial/parallel policies, and FLEditor persistent sessions remain unimplemented.
 - Validation: `make -j2 bin/flc bin/flvm` PASS; focused broker integration test PASS. `bin/run_tests` was absent from the supplied archive and was not run.
+
+
+### Event-driven task dispatch (archive 361)
+- Added `flat_runtime_event_spawn_next()` to convert one queued subscription event into a standard runnable task. Event payload is argument 0; bound values follow. Dispatch is guarded per subscription, and failed task creation does not consume the event.
+- Added `flvm[59]` integration coverage. This is a C runtime primitive only; the FlatL `task.spawnFor()` native API and automatic scheduler-driven dispatch are not yet implemented.
+
+- Archive 362 adds `flvm[60]` for multiple queued events dispatched into separate runnable tasks before scheduling. It verifies distinct task IDs, FIFO event delivery, bound argument delivery, and successful completion of both handlers. This remains a C-level dispatch test; public `task.spawnFor()` is not yet implemented.
+
+
+### Event-driven tasks — archive 363
+
+- Added `flat_runtime_event_subscribe_handler()` for persistent runtime-owned handler registrations, including handler arity validation and deep-copied bound arguments.
+- Integrated one-event-at-a-time dispatch into the cooperative scheduler; each event creates a normal isolated runnable task with event payload first and bound arguments after it.
+- Unsubscribe is blocked during dispatch and releases queued events plus persistent argument copies.
+- Added `flvm[61]` automatic-dispatch integration test. Existing event broker and dispatch tests 58–60 pass.
+- The public FlatL `task.spawnFor()` native, cancellation native, serial mode, maxActive/overflow configuration and source adapters remain pending.

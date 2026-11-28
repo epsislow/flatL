@@ -1125,3 +1125,5 @@ The Termux rerun of archive 312 reached `[stage:run-harness]` in all seven faili
 ### Event-driven task dispatch update (archive 360)
 
 The event broker now exposes per-subscription pending depth and wakes the runtime ready-queue wait primitive after successful event publication. This is notification plumbing only; automatic event-to-task dispatch and FlatL `task.spawnFor()` remain pending.
+
+- Event-driven task dispatch: archive 361 adds the runtime primitive that turns one queued event into a normal runnable handler task with event-first positional binding; public `task.spawnFor()` and automatic subscription scheduling remain pending. See `66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md`.

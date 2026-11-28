@@ -3,6 +3,7 @@
 
 #include "flat_runtime.h"
 #include "flat_value.h"
+#include "vm.h"
 #include <stdint.h>
 
 struct FlatFileTable;
@@ -26,6 +27,17 @@ int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
  * subscriptions cannot be destroyed; unsubscribe each one first. */
 int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
                                    FlatEventSubscriptionId subscription_id);
+/* Register a persistent runtime-owned handler. The handler is dispatched by the
+ * scheduler whenever matching events are queued. bound_args are deep-copied at
+ * registration and follow the event payload as positional handler parameters. */
+int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_id,
+                                         const char *source_kind, const char *event_name,
+                                         const FlatBytecode *bc, const char *handler_label,
+                                         const FlatValue *bound_args, size_t bound_arg_count,
+                                         FlatCollectionPool *source_coll,
+                                         FlatStringPool *source_pool,
+                                         struct FlatFileTable *source_files,
+                                         FlatEventSubscriptionId *out_subscription_id);
 /* Publish one value to every matching subscription. Values are deep-copied;
  * file handles cannot be published. Returns the number of matching subscriptions,
  * 0 when there are no listeners, -1 on invalid/error, or -2 on queue overflow. */
@@ -48,6 +60,20 @@ int flat_runtime_event_next(FlatRuntime *runtime,
                             FlatStringPool *destination_pool,
                             struct FlatFileTable *destination_files,
                             FlatValue *out_value);
+/* Consume one queued event and create a normal runnable task for handler_label.
+ * The event is bound as parameter 0; bound_args follow it positionally. The
+ * event remains queued if validation, copying or task creation fails. Returns
+ * 1 when a task was created, 0 when no event is queued, -1 on runtime/dispatch
+ * error, and -2 when the handler parameter count does not match. Only one
+ * dispatcher may consume a given subscription at a time. */
+int flat_runtime_event_spawn_next(FlatRuntime *runtime,
+                                  FlatEventSubscriptionId subscription_id,
+                                  const FlatBytecode *bc, const char *handler_label,
+                                  const FlatValue *bound_args, size_t bound_arg_count,
+                                  FlatCollectionPool *source_coll,
+                                  FlatStringPool *source_pool,
+                                  struct FlatFileTable *source_files,
+                                  uint64_t *out_task_id);
 
 #ifdef __cplusplus
 }

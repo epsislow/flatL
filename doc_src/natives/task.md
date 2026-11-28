@@ -29,6 +29,7 @@ A native host normally creates and starts the root task through the C `FlatRunti
 | Call | Arguments | Returns | Behavior |
 |---|---|---|---|
 | `task.spawn(#block, arg1, …)` | Literal block label followed by zero or more value expressions; count must exactly match the block's named parameters | NUMBER — runtime-local task ID | Evaluates arguments in the parent, deep-copies them into the child's private VM context, and makes it RUNNABLE |
+| `task.spawnFor(...)` | Not yet exposed as a FlatL native | — | The runtime C event-handler registration API is an implementation step toward this native; its public syntax is still pending |
 | `task.wait(taskId)` | Positive whole NUMBER task ID | BOOL — `true` when the wait request is accepted | If the target is non-terminal, the current task enters WAITING and yields to the scheduler. It resumes after the target reaches COMPLETED, FAILED, or CANCELLED. If the target is already terminal, execution continues immediately |
 | `task.state(taskId)` | Positive whole NUMBER task ID | NUMBER — `FlatTaskState` numeric value | Queries a task's current lifecycle state |
 | `task.result(taskId)` | Positive whole NUMBER task ID | OBJECT — `{ state, exitCode, termination, diagnostic }` | Returns a terminal task's result summary. It fails while the task is non-terminal or unknown |
@@ -56,3 +57,9 @@ The state numbers match the public C enum in `include/flat_task.h`:
 Task natives are only available when the VM has a task bridge installed by a runtime-owned task. The FLEditor WASM adapter uses the single-threaded cooperative scheduler; it does not enable `flat_runtime_workers_start()` or browser Web Workers. Native runtime worker mode is a separate host capability and is subject to platform and native-module capability checks. Wait-cycle detection, Channel contention retry, cancellation, and worker-pool lifecycle are implemented and covered by the FLVM integration suite. Runtime Channels are available through `use native channel`; see [channel.md](./channel.md). A Channel ID can be passed as a normal numeric argument to `task.spawn()`.
 
 Runnable FLEditor examples are shipped under `docs/fleditor_site/examples/task_channel/`: `parallel_inventory.fl`, `transaction_rollback.fl`, and `task_results.fl`. The Node.js WASM smoke test executes all three through the same browser-facing run API.
+
+## Runtime event-handler registration (C API)
+
+The runtime event broker now also exposes `flat_runtime_event_subscribe_handler()`. It registers a persistent handler against `(sourceId, sourceKind, eventName)`, validates that the target block accepts one event parameter plus the bound arguments, and deep-copies those bound arguments into runtime-owned storage. The scheduler automatically converts queued events for registered handlers into ordinary runnable tasks. The event payload is parameter 0; bound arguments follow it.
+
+The bytecode pointer supplied to the C API must remain valid until the subscription is removed. `flat_runtime_event_unsubscribe()` rejects removal while a handler dispatch is in progress and releases the stored argument copies and queued events. This is a host/runtime API only: the FlatL `task.spawnFor()` native wrapper, cancellation native, execution-mode options, and bounded concurrency policies are not yet exposed.

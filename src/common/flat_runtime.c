@@ -43,6 +43,14 @@ typedef struct FlatRuntimeEventSubscription {
     FlatRuntimeEventNode *head;
     FlatRuntimeEventNode *tail;
     size_t queued;
+    int dispatching;
+    int handler_dispatching;
+    const FlatBytecode *handler_bc;
+    char handler_label[FGIR_MAX_LABEL];
+    FlatValue *bound_args;
+    size_t bound_arg_count;
+    FlatCollectionPool *bound_coll;
+    FlatStringPool *bound_pool;
     struct FlatRuntimeEventSubscription *next;
 } FlatRuntimeEventSubscription;
 
@@ -425,6 +433,14 @@ static void runtime_event_subscription_destroy(FlatRuntimeEventSubscription *sub
         runtime_event_node_destroy(node);
         node = next;
     }
+    if (sub->bound_args && sub->bound_coll && sub->bound_pool) {
+        size_t i;
+        for (i = 0; i < sub->bound_arg_count; ++i)
+            flat_value_release(sub->bound_coll, sub->bound_pool, &sub->bound_args[i]);
+    }
+    free(sub->bound_args);
+    if (sub->bound_coll) flat_coll_destroy(sub->bound_coll);
+    if (sub->bound_pool) flat_pool_destroy(sub->bound_pool);
     free(sub);
 }
 
@@ -462,6 +478,69 @@ int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
     return 0;
 }
 
+int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_id,
+                                         const char *source_kind, const char *event_name,
+                                         const FlatBytecode *bc, const char *handler_label,
+                                         const FlatValue *bound_args, size_t bound_arg_count,
+                                         FlatCollectionPool *source_coll,
+                                         FlatStringPool *source_pool,
+                                         FlatFileTable *source_files,
+                                         FlatEventSubscriptionId *out_subscription_id) {
+    FlatRuntimeEventSubscription *sub;
+    FlatCollectionPool *copy_coll = NULL;
+    FlatStringPool *copy_pool = NULL;
+    FlatValue *copies = NULL;
+    size_t bi, i, expected = 0;
+    if (!runtime || !bc || !handler_label || handler_label[0] != '#' ||
+        !out_subscription_id || (bound_arg_count && (!bound_args || !source_coll || !source_pool)) ||
+        bound_arg_count >= FGIR_MAX_PARAMS) return -1;
+    for (bi = 0; bi < bc->block_count; ++bi) {
+        if (bc->block_labels && strcmp(bc->block_labels[bi], handler_label) == 0) {
+            expected = bc->block_params ? bc->block_params[bi].param_count : 0;
+            break;
+        }
+    }
+    if (bi >= bc->block_count || expected != bound_arg_count + 1 ||
+        strlen(handler_label) >= sizeof sub->handler_label) return -2;
+    if (bound_arg_count) {
+        copy_coll = flat_coll_create();
+        copy_pool = flat_pool_create();
+        copies = (FlatValue *)calloc(bound_arg_count, sizeof *copies);
+        if (!copy_coll || !copy_pool || !copies) goto fail;
+        for (i = 0; i < bound_arg_count; ++i) {
+            if (flat_value_deep_copy_between(&bound_args[i], &copies[i], source_coll,
+                                             source_pool, source_files, copy_coll,
+                                             copy_pool, NULL) != 0) goto fail;
+        }
+    }
+    if (flat_runtime_event_subscribe(runtime, source_id, source_kind, event_name,
+                                     out_subscription_id) != 0) goto fail;
+    runtime_lock(runtime);
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
+        if (sub->id == *out_subscription_id) break;
+    if (!sub) {
+        runtime_unlock(runtime);
+        (void)flat_runtime_event_unsubscribe(runtime, *out_subscription_id);
+        goto fail;
+    }
+    sub->handler_bc = bc;
+    snprintf(sub->handler_label, sizeof sub->handler_label, "%s", handler_label);
+    sub->bound_args = copies;
+    sub->bound_arg_count = bound_arg_count;
+    sub->bound_coll = copy_coll;
+    sub->bound_pool = copy_pool;
+    copies = NULL; copy_coll = NULL; copy_pool = NULL;
+    runtime_unlock(runtime);
+    return 0;
+fail:
+    if (copies) for (i = 0; i < bound_arg_count; ++i)
+        flat_value_release(copy_coll, copy_pool, &copies[i]);
+    free(copies);
+    if (copy_coll) flat_coll_destroy(copy_coll);
+    if (copy_pool) flat_pool_destroy(copy_pool);
+    return -1;
+}
+
 int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
                                    FlatEventSubscriptionId subscription_id) {
     FlatRuntimeEventSubscription **link, *sub;
@@ -471,7 +550,7 @@ int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
         if ((*link)->id == subscription_id) break;
     }
     sub = *link;
-    if (!sub) {
+    if (!sub || sub->dispatching || sub->handler_dispatching) {
         runtime_unlock(runtime);
         return -1;
     }
@@ -889,6 +968,108 @@ int flat_runtime_task_create(FlatRuntime *runtime, const FlatBytecode *bc,
                                         NULL, NULL, NULL, out_id);
 }
 
+int flat_runtime_event_spawn_next(FlatRuntime *runtime,
+                                  FlatEventSubscriptionId subscription_id,
+                                  const FlatBytecode *bc, const char *handler_label,
+                                  const FlatValue *bound_args, size_t bound_arg_count,
+                                  FlatCollectionPool *source_coll,
+                                  FlatStringPool *source_pool,
+                                  FlatFileTable *source_files,
+                                  uint64_t *out_task_id) {
+    FlatRuntimeEventSubscription *sub;
+    FlatRuntimeEventNode *node;
+    FlatCollectionPool *tmp_coll = NULL;
+    FlatStringPool *tmp_pool = NULL;
+    FlatValue *args = NULL;
+    size_t i;
+    size_t bi;
+    size_t expected = 0;
+    int rc = -1;
+    uint64_t task_id = 0;
+    if (!runtime || !subscription_id || !bc || !handler_label || handler_label[0] != '#' ||
+        !out_task_id || (bound_arg_count && (!bound_args || !source_coll || !source_pool)) ||
+        bound_arg_count >= FGIR_MAX_PARAMS) return -1;
+    *out_task_id = 0;
+    for (bi = 0; bi < bc->block_count; ++bi) {
+        if (bc->block_labels && strcmp(bc->block_labels[bi], handler_label) == 0) {
+            expected = bc->block_params ? bc->block_params[bi].param_count : 0;
+            break;
+        }
+    }
+    if (bi >= bc->block_count || expected != bound_arg_count + 1) return -2;
+
+    tmp_coll = flat_coll_create();
+    tmp_pool = flat_pool_create();
+    args = (FlatValue *)calloc(bound_arg_count + 1, sizeof *args);
+    if (!tmp_coll || !tmp_pool || !args) goto done;
+
+    runtime_lock(runtime);
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
+        if (sub->id == subscription_id) break;
+    if (!sub || sub->dispatching || runtime->lifecycle != FLAT_RUNTIME_RUNNING) {
+        runtime_unlock(runtime);
+        rc = -1;
+        goto done;
+    }
+    if (!sub->head) {
+        runtime_unlock(runtime);
+        rc = 0;
+        goto done;
+    }
+    sub->dispatching = 1;
+    node = sub->head;
+    if (flat_value_deep_copy_between(&node->value, &args[0], node->coll, node->pool, NULL,
+                                     tmp_coll, tmp_pool, NULL) != 0) {
+        sub->dispatching = 0;
+        runtime_unlock(runtime);
+        goto done;
+    }
+    for (i = 0; i < bound_arg_count; ++i) {
+        if (flat_value_deep_copy_between(&bound_args[i], &args[i + 1], source_coll, source_pool,
+                                         source_files, tmp_coll, tmp_pool, NULL) != 0) {
+            sub->dispatching = 0;
+            runtime_unlock(runtime);
+            goto done;
+        }
+    }
+    runtime_unlock(runtime);
+
+    rc = runtime_task_create_internal(runtime, bc, NULL, handler_label, FLAT_TASK_RUNNABLE,
+                                      args, bound_arg_count + 1, tmp_coll, tmp_pool, NULL,
+                                      &task_id);
+    runtime_lock(runtime);
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
+        if (sub->id == subscription_id) break;
+    if (!sub || !sub->dispatching || sub->head != node) {
+        /* Unsubscribe is blocked while dispatching, so this is defensive only. */
+        if (sub) sub->dispatching = 0;
+        runtime_unlock(runtime);
+        rc = -1;
+        goto done;
+    }
+    sub->dispatching = 0;
+    if (rc == 0) {
+        sub->head = node->next;
+        if (!sub->head) sub->tail = NULL;
+        if (sub->queued) sub->queued--;
+    }
+    runtime_unlock(runtime);
+    if (rc == 0) {
+        runtime_event_node_destroy(node);
+        *out_task_id = task_id;
+        rc = 1;
+    }
+done:
+    if (args) {
+        for (i = 0; i < bound_arg_count + 1; ++i)
+            flat_value_release(tmp_coll, tmp_pool, &args[i]);
+    }
+    free(args);
+    if (tmp_coll) flat_coll_destroy(tmp_coll);
+    if (tmp_pool) flat_pool_destroy(tmp_pool);
+    return rc;
+}
+
 static int runtime_task_native_spawn(void *user, uint64_t parent_id, const FlatBytecode *bc,
                                      const char *entry_label, const FlatValue *args,
                                      size_t arg_count, FlatCollectionPool *source_coll,
@@ -1284,6 +1465,70 @@ static int runtime_task_is_terminal(const FlatTaskRecord *task) {
                     task->state == FLAT_TASK_CANCELLED);
 }
 
+/* Convert one pending event into a normal runnable task. */
+static int runtime_dispatch_one_event_handler(FlatRuntime *runtime) {
+    FlatRuntimeEventSubscription *sub;
+    FlatEventSubscriptionId id = 0;
+    const FlatBytecode *bc = NULL;
+    char label[FGIR_MAX_LABEL];
+    FlatCollectionPool *snap_coll = NULL;
+    FlatStringPool *snap_pool = NULL;
+    FlatValue *snap_args = NULL;
+    size_t arg_count = 0, i;
+    uint64_t task_id = 0;
+    int rc;
+    runtime_lock(runtime);
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING) {
+        runtime_unlock(runtime);
+        return 0;
+    }
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
+        if (sub->handler_bc && sub->head && !sub->dispatching && !sub->handler_dispatching) break;
+    }
+    if (!sub) { runtime_unlock(runtime); return 0; }
+    sub->handler_dispatching = 1;
+    id = sub->id;
+    bc = sub->handler_bc;
+    snprintf(label, sizeof label, "%s", sub->handler_label);
+    arg_count = sub->bound_arg_count;
+    if (arg_count) {
+        snap_coll = flat_coll_create();
+        snap_pool = flat_pool_create();
+        snap_args = (FlatValue *)calloc(arg_count, sizeof *snap_args);
+        if (!snap_coll || !snap_pool || !snap_args) {
+            sub->handler_dispatching = 0;
+            runtime_unlock(runtime);
+            rc = -1;
+            goto done;
+        }
+        for (i = 0; i < arg_count; ++i) {
+            if (flat_value_deep_copy_between(&sub->bound_args[i], &snap_args[i],
+                                             sub->bound_coll, sub->bound_pool, NULL,
+                                             snap_coll, snap_pool, NULL) != 0) {
+                sub->handler_dispatching = 0;
+                runtime_unlock(runtime);
+                rc = -1;
+                goto done;
+            }
+        }
+    }
+    runtime_unlock(runtime);
+    rc = flat_runtime_event_spawn_next(runtime, id, bc, label, snap_args, arg_count,
+                                       snap_coll, snap_pool, NULL, &task_id);
+    runtime_lock(runtime);
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
+        if (sub->id == id) break;
+    if (sub) sub->handler_dispatching = 0;
+    runtime_unlock(runtime);
+done:
+    if (snap_args) for (i = 0; i < arg_count; ++i)
+        flat_value_release(snap_coll, snap_pool, &snap_args[i]);
+    free(snap_args);
+    if (snap_coll) flat_coll_destroy(snap_coll);
+    if (snap_pool) flat_pool_destroy(snap_pool);
+    return rc < 0 ? -1 : rc;
+}
+
 static int runtime_schedule_internal(FlatRuntime *runtime, uint64_t quantum,
                                      uint64_t max_quanta, uint64_t *out_quanta,
                                      int worker_mode) {
@@ -1310,6 +1555,10 @@ static int runtime_schedule_internal(FlatRuntime *runtime, uint64_t quantum,
         int rc;
         int requeue = 0;
         int cancellation_cleanup = 0;
+
+        /* Convert one pending external event into a normal runnable task. */
+        rc = runtime_dispatch_one_event_handler(runtime);
+        if (rc < 0) { scheduler_error = 1; break; }
 
         /* Queue pop and dispatch claim share scheduler_mutex with every state
          * transition. This prevents a popped stale ID from being reused after a

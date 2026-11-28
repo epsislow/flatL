@@ -265,8 +265,8 @@ Agreed direction from design discussion:
 
 Still open:
 
-- exact `spawnFor` syntax and options representation;
-- event payload binding order relative to bound spawn arguments;
+- exact `spawnFor` native syntax and options representation;
+- whether subscription cancellation is named `task.cancelFor` or uses another explicit API;
 - default mode, queue capacity and overflow policy;
 - whether `wait` overflow can pause each source or must degrade to bounded host buffering;
 - registration cancellation versus cancellation of already-running handler tasks;
@@ -300,3 +300,33 @@ Archive 360 adds `flat_runtime_event_pending()` for observing one subscription's
 This increment does not yet create FlatL handler tasks or provide `task.spawnFor()`. Queue consumption and dispatch remain host-driven until the scheduler-owned subscription integration is implemented.
 
 Validation: `make -j2 bin/flc bin/flvm` PASS; `make -s test-runtime-event-source-broker TEST_BIN=/tmp/runtime_event_source_broker_test` and the resulting test binary PASS. The repository `bin/run_tests` executable is not included in the supplied archive, so the suite selector could not be invoked in this workspace.
+
+
+## 11. Archive 361 — event-to-task dispatch primitive
+
+Archive 361 adds `flat_runtime_event_spawn_next()`. It consumes at most one queued event for a subscription and creates a normal runnable runtime task at a selected bytecode block. The event payload is deep-copied as handler parameter 0; bound arguments are deep-copied after it using the same positional parameter-count validation as `task.spawn()`.
+
+The queued event is retained if argument validation, deep-copying or task creation fails. An empty queue returns 0; successful task creation returns 1 and the new numeric `taskId`. A per-subscription dispatch guard prevents concurrent consumers from dispatching the same head event, and unsubscribe is rejected while a dispatch operation is in progress. Each created handler runs in the standard task VM/VCX isolation path.
+
+Validation added as `flvm[59]`: the C integration harness publishes a socket-kind receive event, dispatches it to `#onEvent(event, user)`, runs the scheduler, and verifies event-first argument binding and task completion. Existing broker test `flvm[58]` remains passing.
+
+**Still pending:** public FlatL `task.spawnFor()` registration from a running task, persistent handler/block and bound-argument storage, automatic scheduler draining of registered event queues, serial/parallel policies, maxActive/overflow configuration, and socket adapters. Archive 361 is the runtime dispatch primitive, not the complete public API.
+
+## Archive 362 — multiple-event parallel dispatch validation
+
+Archive 362 adds `flvm[60]`, an integration test that publishes two events to one subscription, converts both queued events into distinct runnable tasks before the scheduler runs, and verifies FIFO payload delivery plus independent task completion. This establishes the low-level parallel-dispatch primitive expected by the future `task.spawnFor(..., mode='parallel')` behavior.
+
+This is validation of the C dispatch primitive only. It does not add the public FlatL `task.spawnFor()` API, automatic scheduler draining, serial mode, or subscription cancellation from FlatL.
+
+
+## Archive 363 — persistent runtime event handlers and scheduler dispatch
+
+Archive 363 adds `flat_runtime_event_subscribe_handler()`, a runtime-owned persistent registration that stores the handler bytecode pointer, block label and deep-copied bound arguments. Registration validates that the handler declares exactly one event parameter plus the bound argument count. The bytecode must remain alive until unsubscribe.
+
+The cooperative scheduler now checks for pending events on registered handler subscriptions and converts one event at a time into a normal runnable task using the existing `flat_runtime_event_spawn_next()` path. The event payload is parameter 0 and the registered arguments follow. The event remains queued if task creation fails; dispatch is protected against concurrent unsubscribe. The scheduler stops dispatching external events once runtime shutdown leaves RUNNING.
+
+Added `flvm[61]` to validate automatic scheduler dispatch, event-first argument binding, completion, pending-queue drain and unsubscribe. Existing `flvm[58-60]` regression harnesses remain passing.
+
+**Not yet implemented:** the public FlatL `task.spawnFor()` native wrapper, a FlatL cancellation native, serial mode, `maxActive`, configurable overflow policies, and sockets adapters. This increment establishes persistent C-level handler registration and automatic scheduler dispatch, not the complete user-facing API.
+
+Validation: `make -j2 bin/flc bin/flvm` PASS; `flvm[58]`, `flvm[59]`, `flvm[60]`, and new `flvm[61]` C integration harnesses PASS; `make docs` PASS. The supplied workspace does not contain `bin/run_tests`, so the test selector and full suite were not run. Sanitizers were not run.

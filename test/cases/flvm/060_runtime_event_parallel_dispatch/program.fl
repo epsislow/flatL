@@ -1,0 +1,7 @@
+#main
+  OK
+
+#onEvent(event, user)
+  io.outln(event)
+  io.outln(user)
+  OK
