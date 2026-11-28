@@ -1304,3 +1304,11 @@ backends remain future work.
 - [ ] Add outgoing queues/backpressure and publish peer lifecycle/data events to the socket event broker.
 
 **Archive 393 boundary:** FlatRuntime now owns the registry and reactor resources, but the wrappers still delegate to the synchronous registry. No server descriptor is registered with the reactor yet, and no background I/O loop or FlatL `sockets.wsListen()` exists. See `plans/72_RUNTIME_OWNED_WEBSOCKET_SERVER.md`.
+
+### Archive 394 — single-thread I/O service foundation
+- [x] Add reusable `FlatIoService` above `FlatIoReactor`, with one optional owner thread.
+- [x] Dispatch readiness callbacks outside service locks; callbacks must never execute VM code.
+- [x] Add thread-safe registration mutation, wake, idempotent stop and join.
+- [x] Add `flvm[83]` for readiness dispatch, token delivery, removal and shutdown.
+- [ ] Integrate the service into `FlatRuntime` and register listener descriptors.
+- [ ] Implement nonblocking accept and incremental HTTP/WebSocket parsing.

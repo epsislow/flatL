@@ -1750,3 +1750,11 @@ FlatRuntime now creates and owns one `FlatWsServerRegistry` and one `FlatIoReact
 Important boundary: these wrappers are synchronous and currently delegate to the registry. Although the reactor is now runtime-owned, listener/peer descriptors are not yet registered with it and there is no background I/O thread. No WebSocket events are yet published by the server, and no FlatL `sockets.wsListen()` API exists. The next milestone is a single runtime-owned reactor service, beginning with listener readiness and nonblocking accept, followed by incremental handshake/frame processing and bounded outgoing queues.
 
 Validation: `make -j2 all` PASS; `make docs` PASS; `test-runtime-websocket-ownership` PASS. Full targeted `flvm[76-82]` validation is recorded after the final run.
+
+### Archive 394 — single-thread I/O service foundation
+
+Added `FlatIoService` (`include/flat_io_service.h`, `src/common/flat_io_service.c`) above the portable `FlatIoReactor`. The service owns one reactor and can start one owner thread. That thread waits for readiness notifications and invokes a caller-supplied callback outside service locks. Registration add/modify/remove, explicit wake, idempotent stop and join are provided. Registration is rejected after stop begins. The service does not own registered descriptors; callers must serialize destroy against all external API calls. Callbacks run on the I/O thread and must not execute VM code or stop/destroy their own service.
+
+Added `flvm[83]` to verify readiness dispatch on the owner thread, token delivery, descriptor removal, stop wakeup/join, and repeated stop. The POSIX focused test uses a socketpair and drains readiness in its callback. The Windows build uses the same service implementation, while this focused socketpair test is POSIX-specific.
+
+Important integration boundary: this archive adds the reusable I/O service but does not yet replace `FlatRuntime`'s direct `FlatIoReactor` field. WebSocket listeners are not yet registered with the service, and it does not yet accept clients or publish WebSocket events. Those are the next integration tasks. No `sockets.wsListen()` API is exposed yet.

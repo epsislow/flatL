@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 83
+desc = "single-thread I/O service dispatch, wake, stop and join lifecycle"
+kind = "exec"
+cmd = "make -s test-io-service TEST_BIN={tmp}/io_service_test && {tmp}/io_service_test"
+expect_exit = 0
+stdout_contains = "io-service-ok"

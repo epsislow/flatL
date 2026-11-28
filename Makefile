@@ -206,7 +206,7 @@ HTTP_CFLAGS =
 HTTP_LIBS =
 ENSURE_LIBZ_1 =
 else
-HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_curl.c src/http/flat_ws_transport.c src/http/flat_ws_event_client.c src/http/flat_ws_server_transport.c src/http/flat_ws_server_frames.c src/http/flat_ws_server_registry.c src/common/flat_io_reactor.c
+HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_curl.c src/http/flat_ws_transport.c src/http/flat_ws_event_client.c src/http/flat_ws_server_transport.c src/http/flat_ws_server_frames.c src/http/flat_ws_server_registry.c src/common/flat_io_reactor.c src/common/flat_io_service.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 # MSYS2 UCRT64: libcurl PE imports libz-1.dll; mingw zlib package ships zlib1.dll.
@@ -1204,3 +1204,8 @@ test-runtime-event-worker-wakeup:
 .PHONY: test-runtime-websocket-ownership
 test-runtime-websocket-ownership:
 	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(FLVM_TEST_EXTRA_CPPFLAGS) -pthread -Iinclude -o $(TEST_BIN) test/cases/flvm/082_runtime_websocket_ownership/runtime_websocket_ownership_test.c $(FLVM_TEST_COMMON_SRC) $(VM_EXTRA_LIBS) $(HTTP_LIBS) -lm
+
+# Runtime-owned single-thread I/O service over the portable readiness reactor.
+.PHONY: test-io-service
+test-io-service:
+	$(CC) $(CFLAGS) -pthread -Iinclude -o $(TEST_BIN) test/cases/flvm/083_io_service/io_service_test.c src/common/flat_io_service.c src/common/flat_io_reactor.c $(LDFLAGS)

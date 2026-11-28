@@ -177,6 +177,11 @@
       "file": "WEBSOCKET_TRANSPORT.md"
     },
     {
+      "id": "io-service",
+      "label": "Native I/O service",
+      "file": "IO_SERVICE.md"
+    },
+    {
       "id": "task-native",
       "label": "Native task",
       "file": "natives/task.md"
