@@ -1148,3 +1148,6 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [ ] Expose native FlatL `sockets.wsConnect()`, `sockets.wsSend()` and `sockets.wsClose()` over the host adapter and numeric socket ID registry.
 - [ ] Validate a live handshake on a libcurl build that advertises `ws` and `wss`; the current environment's libcurl 8.10.1 does not advertise these protocols.
 - [ ] Add the browser WebSocket host bridge and persistent FLEditor WASM runtime session.
+
+- [x] Runtime-owned numeric WebSocket registry and lifecycle API (archive 372).
+- [ ] Expose WebSocket connect/send/close through the FlatL `sockets` native module.

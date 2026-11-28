@@ -419,3 +419,16 @@ Added `flvm[72]` for libcurl initialization, URL scheme validation, refused-conn
 - The host must stop every WebSocket event client before destroying its `FlatRuntime`; this lifetime rule is documented. This remains a C host API, not yet `sockets.wsConnect()` in FlatL.
 - Added `flvm[73]`. On hosts whose libcurl advertises `ws` and `wss`, it runs a local loopback WebSocket handshake and checks open/receive/close delivery. When the linked libcurl lacks either protocol, it verifies an explicit early capability error instead of hanging on a handshake that cannot be supported.
 - Validation in the current environment: `make -j2 all`, `make docs`, and `bin/run_tests 'flvm[71-73]' -v -e` PASS (3/3). The local libcurl 8.10.1 build does not advertise `ws`/`wss`, so the live handshake branch could not be exercised here. Full suite and ASan/UBSan remain pending.
+
+
+## Archive 372 — runtime-owned numeric WebSocket registry
+
+Added `include/flat_runtime_socket.h` and runtime-owned WebSocket connection registration in `src/common/flat_runtime.c`. The runtime assigns monotonically increasing numeric `socketId` values, owns each `FlatWsEventClient`, serializes send/close against registry removal, and refuses destruction while any socket remains registered. `flat_runtime_ws_connect/send/close` provide the C host boundary; events continue to use `sourceKind = "socket"` and the existing broker.
+
+Added `flvm[74]` to validate registry ownership, event delivery through runtime-assigned IDs, active-socket destruction protection, and explicit close. `make -j2 all`, `make docs`, and `bin/run_tests 'flvm[71-74]' -v -e` pass. The local libcurl build does not advertise `ws`/`wss`, so the test validates the explicit unsupported-capability path here; the existing `flvm[73]` loopback path runs when those protocols are available. An exploratory `make http=0` build remains blocked by the pre-existing unguarded `flat_http_prepare()` reference in `src/common/flat_vm_handle.c`; this is not treated as a successful validation.
+
+**Still pending:** FlatL `sockets` native wrappers and bridge callbacks, then live FlatL integration tests for `sockets.wsConnect/wsSend/wsClose` with `task.spawnFor`.
+
+## Validation note — archive 370 full suite (user-reported)
+
+The user ran the full default test suite on archive 370 and reported: `Passed: 1191 Failed: 0 Total: 1191` (total test time 2:29.769). This is user-reported validation of archive 370, not a test run performed in this workspace.

@@ -1601,3 +1601,8 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Added `flvm[73]` loopback WebSocket integration test, with a capability fallback for libcurl builds without `ws`/`wss`. Current linked libcurl 8.10.1 lacks both protocols, so only the explicit unsupported-capability path was exercised here.
 - Validation: `make -j2 all`, `make docs`, `bin/run_tests 'flvm[71-73]' -v -e` PASS (3/3). Live WebSocket path, full suite and ASan/UBSan remain unverified.
 - Still pending: FlatL `sockets` native functions and ID registry, browser WebSocket bridge, persistent FLEditor WASM runtime session.
+
+
+### Event sources / sockets — archive 372
+
+Runtime-owned WebSocket registry implemented at the C host boundary. Numeric socket IDs are allocated by `FlatRuntime`; send/close are synchronized; runtime destruction is rejected while registered sockets remain. `flvm[74]` covers the registry lifecycle and capability-dependent WebSocket path. The FlatL `sockets` native module is not yet exposed.

@@ -11,3 +11,5 @@
 **Browser playground (fleditor):** see **[FLEDITOR.md](./FLEDITOR.md)** — site in **`docs/fleditor_site/`**; full stack rebuild: **`make rebuild`** (includes **`make fleditor-wasm`**).
 
 **GitHub Pages:** publish folder **`docs/`** on branch `main` (see FLEDITOR.md).
+
+- [Runtime WebSocket registry](RUNTIME_WEBSOCKET_REGISTRY.md)

@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 74
+desc = "FlatRuntime owns numeric WebSocket IDs and closes registered clients"
+kind = "exec"
+cmd = "make -s test-runtime-websocket-registry TEST_BIN={tmp}/runtime_websocket_registry_test && {tmp}/runtime_websocket_registry_test"
+expect_exit = 0
+stdout_contains = "runtime-websocket-registry-validated"
