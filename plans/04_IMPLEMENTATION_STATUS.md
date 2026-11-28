@@ -1691,3 +1691,11 @@ Validation: `make -j2 all` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5).
 - Fixed browser peer-close cleanup: the JS WebSocket handle is removed before publishing `socket/close`; the C event bridge then removes the runtime-owned socket registry entry. This is required because the WASM runner also waits for the runtime socket count to reach zero.
 - Validation: `node --check test/fleditor/wasm_websocket_e2e.mjs` PASS; equivalent FlatL program compiles via `bin/flc` PASS; `make -j2 all` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5); `make docs` PASS (53 sections).
 - Environment limitation: Node.js 22.16.0 is available, but `emcc` is absent. Therefore the Emscripten build and live `make fleditor-wasm-websocket-e2e` have NOT been run here. The harness is implemented, but its runtime assertions remain to be verified on the user's Emscripten build.
+
+
+### Archive 386 — WASM WebSocket callback BigInt ABI fix
+
+- Fixed the first Termux E2E failure: the browser adapter previously declared `socket_id` as `double` in its EM_JS start/send/close bridges, then passed that JavaScript Number to the exported C event callback whose parameter is `uint64_t`. Under Emscripten WASM BigInt ABI this must be a JavaScript BigInt; the callback threw `TypeError: Cannot convert 1 to a BigInt` on `open`.
+- Changed all three EM_JS socket-ID parameters to `uint64_t`, allowing Emscripten to preserve the identifier as BigInt across the JS/C boundary and avoiding precision loss from Number conversion.
+- Replaced the empty JavaScript character literal in `WebSocket.close()` with an empty string, removing the `-Wempty-character-constant` warning.
+- Validation: pending in this environment; the live E2E must be rerun on Termux with `make fleditor-wasm-websocket-e2e`.

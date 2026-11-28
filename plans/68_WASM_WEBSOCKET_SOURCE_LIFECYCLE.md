@@ -29,3 +29,12 @@ The browser `onclose` callback now removes its JavaScript socket handle before p
 The separate `test/fleditor/wasm_websocket_e2e.mjs` now executes a FlatL source program with `task.spawnFor()` handlers for `open`, `receive`, and `close`. Its local Node RFC6455 server sends text/binary messages, validates FlatL text/binary sends, echoes them, and performs a peer-initiated close. The Makefile target is `fleditor-wasm-websocket-e2e`; the existing JavaScript-only smoke remains separate.
 
 Validation in this environment: `node --check test/fleditor/wasm_websocket_e2e.mjs` PASS; the FlatL program used by the E2E compiles with `bin/flc` PASS; `make -j2 all` PASS; `bin/run_tests 'flvm[71-75]' -v -e` PASS (5/5); `make docs` PASS (53 sections). Node.js 22.16.0 is available. `emcc` is not installed, so the actual WASM link and live E2E run have not been executed here. Do not mark the E2E runtime assertions as passing until the user runs the new target with their Emscripten SDK.
+
+
+## Archive 386 follow-up — Emscripten `uint64_t` callback ABI
+
+The first Termux execution of `make fleditor-wasm-websocket-e2e` reached the browser `open` callback and failed with `TypeError: Cannot convert 1 to a BigInt`. The EM_JS bridge had declared the socket identifier as a JavaScript `double`, then passed it to the exported C callback `flat_wasm_ws_event(uintptr_t, uint64_t, ...)`. With Emscripten's WASM BigInt ABI, the exported callback expects a JavaScript `BigInt` for the `uint64_t` argument.
+
+The browser start/send/close EM_JS signatures now carry `uint64_t` directly instead of round-tripping socket identifiers through `double`. The `open`/`receive`/`close` publisher therefore receives a BigInt socket ID and forwards it unchanged to the C callback. This also avoids losing precision for identifiers above JavaScript's safe-integer range. The empty character literal in the close reason was replaced with a JavaScript string literal to remove the Emscripten lexer warning.
+
+Validation in this environment: pending native build, focused regression tests, docs generation, and JavaScript syntax checks. The actual Emscripten link and live E2E still require the user's Termux SDK.

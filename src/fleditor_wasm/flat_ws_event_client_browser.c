@@ -29,11 +29,12 @@ EM_JS(int, flat_wasm_ws_supported_js, (), {
 });
 
 EM_JS(int, flat_wasm_ws_start_js,
-      (uintptr_t runtime_ptr, double socket_id, const char *url_ptr,
+      (uintptr_t runtime_ptr, uint64_t socket_id, const char *url_ptr,
        int connect_timeout_ms, double max_frame_bytes), {
     if (typeof WebSocket === 'undefined') return -1;
     var url = UTF8ToString(url_ptr);
     var key = String(runtime_ptr) + ':' + String(socket_id);
+    var socketId64 = socket_id;
     var ws;
     try {
         ws = new WebSocket(url);
@@ -52,13 +53,13 @@ EM_JS(int, flat_wasm_ws_start_js,
         if (len) {
             ptr = _malloc(len);
             if (!ptr) {
-                _flat_wasm_ws_event(runtime_ptr, socket_id, 4, 0, 0, 0);
+                _flat_wasm_ws_event(runtime_ptr, socketId64, 4, 0, 0, 0);
                 try { ws.close(1011, 'out of memory'); } catch (_) {}
                 return;
             }
             HEAPU8.set(bytes, ptr);
         }
-        var publishRc = _flat_wasm_ws_event(runtime_ptr, socket_id, kind, opcode, ptr, len);
+        var publishRc = _flat_wasm_ws_event(runtime_ptr, socketId64, kind, opcode, ptr, len);
         if (ptr) _free(ptr);
         if (kind === 2 && publishRc < 0 && !entry.terminal) {
             entry.terminal = true;
@@ -125,7 +126,7 @@ EM_JS(int, flat_wasm_ws_start_js,
 });
 
 EM_JS(int, flat_wasm_ws_send_js,
-      (uintptr_t runtime_ptr, double socket_id, int opcode, const unsigned char *data, size_t length), {
+      (uintptr_t runtime_ptr, uint64_t socket_id, int opcode, const unsigned char *data, size_t length), {
     var key = String(runtime_ptr) + ':' + String(socket_id);
     var entry = Module.__flatWsSockets && Module.__flatWsSockets[key];
     if (!entry || entry.terminal || entry.ws.readyState !== WebSocket.OPEN) return -1;
@@ -144,7 +145,7 @@ EM_JS(int, flat_wasm_ws_send_js,
     }
 });
 
-EM_JS(int, flat_wasm_ws_close_js, (uintptr_t runtime_ptr, double socket_id), {
+EM_JS(int, flat_wasm_ws_close_js, (uintptr_t runtime_ptr, uint64_t socket_id), {
     var key = String(runtime_ptr) + ':' + String(socket_id);
     var entry = Module.__flatWsSockets && Module.__flatWsSockets[key];
     if (!entry) return -1;
@@ -155,7 +156,7 @@ EM_JS(int, flat_wasm_ws_close_js, (uintptr_t runtime_ptr, double socket_id), {
     entry.cleanup();
     try {
         if (entry.ws.readyState === WebSocket.OPEN || entry.ws.readyState === WebSocket.CONNECTING)
-            entry.ws.close(1000, '');
+            entry.ws.close(1000, "");
     } catch (e) {}
     return 0;
 });
@@ -245,7 +246,7 @@ int flat_ws_event_client_start(FlatRuntime *runtime, uint64_t socket_id,
     client->runtime = runtime;
     client->socket_id = socket_id;
     client->max_frame_bytes = max_frame_bytes;
-    rc = flat_wasm_ws_start_js((uintptr_t)runtime, (double)socket_id, url,
+    rc = flat_wasm_ws_start_js((uintptr_t)runtime, socket_id, url,
                                (int)(connect_timeout_ms > INT32_MAX ? INT32_MAX : connect_timeout_ms),
                                (double)max_frame_bytes);
     if (rc != 0) {
@@ -268,7 +269,7 @@ int flat_ws_event_client_send(FlatWsEventClient *client, FlatWsOpcode opcode,
         browser_error(error, error_capacity, "invalid browser WebSocket send arguments");
         return -1;
     }
-    rc = flat_wasm_ws_send_js((uintptr_t)client->runtime, (double)client->socket_id,
+    rc = flat_wasm_ws_send_js((uintptr_t)client->runtime, client->socket_id,
                               (int)opcode, (const unsigned char *)data, length);
     if (rc != 0) browser_error(error, error_capacity, "browser WebSocket is not open or send failed");
     else if (error && error_capacity) error[0] = '\0';
@@ -279,7 +280,7 @@ void flat_ws_event_client_stop(FlatWsEventClient *client) {
     if (!client) return;
     if (!client->stopped) {
         client->stopped = 1;
-        (void)flat_wasm_ws_close_js((uintptr_t)client->runtime, (double)client->socket_id);
+        (void)flat_wasm_ws_close_js((uintptr_t)client->runtime, client->socket_id);
     }
     free(client);
 }
