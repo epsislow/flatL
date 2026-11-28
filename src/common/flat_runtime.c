@@ -45,7 +45,11 @@ typedef struct FlatRuntimeEventSubscription {
     size_t queued;
     int dispatching;
     int handler_dispatching;
+    size_t active_handlers;
+    FlatEventDispatchMode dispatch_mode;
     const FlatBytecode *handler_bc;
+    FlatBytecode handler_bytecode;
+    int owns_handler_bytecode;
     char handler_label[FGIR_MAX_LABEL];
     FlatValue *bound_args;
     size_t bound_arg_count;
@@ -63,6 +67,8 @@ typedef struct FlatTaskRecord {
     FlatChannelId waiting_channel_id;
     int cleanup_owned;
     int cancel_requested;
+    FlatEventSubscriptionId event_subscription_id;
+    int event_handler_accounted;
     FlatTaskDispatchState dispatch;
     struct FlatTaskRecord *next;
 } FlatTaskRecord;
@@ -160,12 +166,24 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
                                         FlatTaskState initial_state, const FlatValue *args,
                                         size_t arg_count, FlatCollectionPool *source_coll,
                                         FlatStringPool *source_pool, FlatFileTable *source_files,
+                                        FlatEventSubscriptionId event_subscription_id,
                                         FlatTaskId *out_id);
+static void runtime_event_handler_task_finished_locked(FlatRuntime *runtime,
+                                                        FlatTaskRecord *task);
 static int runtime_task_native_spawn(void *user, uint64_t parent_id, const FlatBytecode *bc,
                                      const char *entry_label, const FlatValue *args,
                                      size_t arg_count, FlatCollectionPool *source_coll,
                                      FlatStringPool *source_pool, FlatFileTable *source_files,
                                      uint64_t *out_id);
+static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const FlatBytecode *bc,
+                                         uint64_t source_id, const char *source_kind,
+                                         const char *event_name, const char *handler_label,
+                                         const FlatValue *args, size_t arg_count,
+                                         FlatCollectionPool *source_coll, FlatStringPool *source_pool,
+                                         FlatFileTable *source_files, int dispatch_mode,
+                                         uint64_t *out_subscription_id);
+static int runtime_task_native_stop_for(void *user, uint64_t parent_id,
+                                        uint64_t subscription_id);
 static int runtime_task_native_wait(void *user, uint64_t waiter_id, uint64_t target_id);
 static int runtime_task_native_state(void *user, uint64_t task_id, int *out_state);
 static int runtime_task_native_result(void *user, uint64_t task_id,
@@ -441,6 +459,7 @@ static void runtime_event_subscription_destroy(FlatRuntimeEventSubscription *sub
     free(sub->bound_args);
     if (sub->bound_coll) flat_coll_destroy(sub->bound_coll);
     if (sub->bound_pool) flat_pool_destroy(sub->bound_pool);
+    if (sub->owns_handler_bytecode) flat_fb_free(&sub->handler_bytecode);
     free(sub);
 }
 
@@ -478,22 +497,24 @@ int flat_runtime_event_subscribe(FlatRuntime *runtime, uint64_t source_id,
     return 0;
 }
 
-int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_id,
-                                         const char *source_kind, const char *event_name,
+int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t source_id,
+                                              const char *source_kind, const char *event_name,
                                          const FlatBytecode *bc, const char *handler_label,
                                          const FlatValue *bound_args, size_t bound_arg_count,
                                          FlatCollectionPool *source_coll,
                                          FlatStringPool *source_pool,
                                          FlatFileTable *source_files,
+                                         FlatEventDispatchMode mode,
                                          FlatEventSubscriptionId *out_subscription_id) {
     FlatRuntimeEventSubscription *sub;
     FlatCollectionPool *copy_coll = NULL;
     FlatStringPool *copy_pool = NULL;
     FlatValue *copies = NULL;
     size_t bi, i, expected = 0;
-    if (!runtime || !bc || !handler_label || handler_label[0] != '#' ||
+    if (!runtime || source_id == 0 || !bc || !handler_label || handler_label[0] != '#' ||
         !out_subscription_id || (bound_arg_count && (!bound_args || !source_coll || !source_pool)) ||
-        bound_arg_count >= FGIR_MAX_PARAMS) return -1;
+        bound_arg_count >= FGIR_MAX_PARAMS ||
+        (mode != FLAT_EVENT_DISPATCH_PARALLEL && mode != FLAT_EVENT_DISPATCH_SERIAL)) return -1;
     for (bi = 0; bi < bc->block_count; ++bi) {
         if (bc->block_labels && strcmp(bc->block_labels[bi], handler_label) == 0) {
             expected = bc->block_params ? bc->block_params[bi].param_count : 0;
@@ -502,6 +523,18 @@ int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_i
     }
     if (bi >= bc->block_count || expected != bound_arg_count + 1 ||
         strlen(handler_label) >= sizeof sub->handler_label) return -2;
+    {
+        FlatBytecode bytecode_copy;
+        memset(&bytecode_copy, 0, sizeof bytecode_copy);
+        if (!bc->data || bc->size == 0 || flat_fb_load_buffer(bc->data, bc->size, &bytecode_copy) != 0)
+            return -1;
+        /* Ownership is transferred to the subscription after it is created. */
+        sub = (FlatRuntimeEventSubscription *)calloc(1, sizeof *sub);
+        if (!sub) { flat_fb_free(&bytecode_copy); return -1; }
+        sub->handler_bytecode = bytecode_copy;
+        sub->owns_handler_bytecode = 1;
+        sub->handler_bc = &sub->handler_bytecode;
+    }
     if (bound_arg_count) {
         copy_coll = flat_coll_create();
         copy_pool = flat_pool_create();
@@ -513,32 +546,54 @@ int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_i
                                              copy_pool, NULL) != 0) goto fail;
         }
     }
-    if (flat_runtime_event_subscribe(runtime, source_id, source_kind, event_name,
-                                     out_subscription_id) != 0) goto fail;
-    runtime_lock(runtime);
-    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
-        if (sub->id == *out_subscription_id) break;
-    if (!sub) {
-        runtime_unlock(runtime);
-        (void)flat_runtime_event_unsubscribe(runtime, *out_subscription_id);
-        goto fail;
-    }
-    sub->handler_bc = bc;
+    if (!runtime_event_name_valid(source_kind, sizeof sub->source_kind) ||
+        !runtime_event_name_valid(event_name, sizeof sub->event_name)) goto fail;
+    sub->source_id = source_id;
+    sub->dispatch_mode = mode;
+    snprintf(sub->source_kind, sizeof sub->source_kind, "%s", source_kind);
+    snprintf(sub->event_name, sizeof sub->event_name, "%s", event_name);
     snprintf(sub->handler_label, sizeof sub->handler_label, "%s", handler_label);
     sub->bound_args = copies;
     sub->bound_arg_count = bound_arg_count;
     sub->bound_coll = copy_coll;
     sub->bound_pool = copy_pool;
     copies = NULL; copy_coll = NULL; copy_pool = NULL;
+    runtime_lock(runtime);
+    if (runtime->lifecycle != FLAT_RUNTIME_RUNNING || runtime->next_event_subscription_id == 0) {
+        runtime_unlock(runtime);
+        goto fail_sub;
+    }
+    sub->id = runtime->next_event_subscription_id++;
+    sub->next = runtime->event_subscriptions;
+    runtime->event_subscriptions = sub;
+    runtime->event_subscription_count++;
+    *out_subscription_id = sub->id;
     runtime_unlock(runtime);
     return 0;
+fail_sub:
+    runtime_event_subscription_destroy(sub);
+    return -1;
 fail:
+    if (sub) runtime_event_subscription_destroy(sub);
     if (copies) for (i = 0; i < bound_arg_count; ++i)
         flat_value_release(copy_coll, copy_pool, &copies[i]);
     free(copies);
     if (copy_coll) flat_coll_destroy(copy_coll);
     if (copy_pool) flat_pool_destroy(copy_pool);
     return -1;
+}
+
+int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_id,
+                                         const char *source_kind, const char *event_name,
+                                         const FlatBytecode *bc, const char *handler_label,
+                                         const FlatValue *bound_args, size_t bound_arg_count,
+                                         FlatCollectionPool *source_coll,
+                                         FlatStringPool *source_pool,
+                                         FlatFileTable *source_files,
+                                         FlatEventSubscriptionId *out_subscription_id) {
+    return flat_runtime_event_subscribe_handler_mode(runtime, source_id, source_kind, event_name,
+        bc, handler_label, bound_args, bound_arg_count, source_coll, source_pool, source_files,
+        FLAT_EVENT_DISPATCH_PARALLEL, out_subscription_id);
 }
 
 int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
@@ -550,7 +605,7 @@ int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
         if ((*link)->id == subscription_id) break;
     }
     sub = *link;
-    if (!sub || sub->dispatching || sub->handler_dispatching) {
+    if (!sub || sub->dispatching || sub->handler_dispatching || sub->active_handlers != 0) {
         runtime_unlock(runtime);
         return -1;
     }
@@ -842,6 +897,7 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
                                         FlatTaskState initial_state, const FlatValue *args,
                                         size_t arg_count, FlatCollectionPool *source_coll,
                                         FlatStringPool *source_pool, FlatFileTable *source_files,
+                                        FlatEventSubscriptionId event_subscription_id,
                                         FlatTaskId *out_id) {
     FlatTaskRecord *task;
     FlatVmOptions task_opts;
@@ -898,6 +954,8 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
     bridge.user = runtime;
     bridge.task_id = id;
     bridge.spawn = runtime_task_native_spawn;
+    bridge.spawn_for = runtime_task_native_spawn_for;
+    bridge.stop_for = runtime_task_native_stop_for;
     bridge.wait = runtime_task_native_wait;
     bridge.state = runtime_task_native_state;
     bridge.result = runtime_task_native_result;
@@ -945,8 +1003,31 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
         free(task);
         return -1;
     }
+    if (event_subscription_id) {
+        FlatRuntimeEventSubscription *event_sub;
+        for (event_sub = runtime->event_subscriptions; event_sub; event_sub = event_sub->next)
+            if (event_sub->id == event_subscription_id) break;
+        if (!event_sub) {
+            runtime_unlock(runtime);
+            runtime_release_task_channel_refs(runtime, id);
+            flat_vm_destroy(task->vm);
+            free(task);
+            return -1;
+        }
+        event_sub->active_handlers++;
+        task->event_subscription_id = event_subscription_id;
+        task->event_handler_accounted = 1;
+    }
     if (initial_state == FLAT_TASK_RUNNABLE &&
         flat_ready_queue_push(&runtime->ready_queue, task->id) != 0) {
+        if (task->event_handler_accounted) {
+            FlatRuntimeEventSubscription *event_sub;
+            for (event_sub = runtime->event_subscriptions; event_sub; event_sub = event_sub->next)
+                if (event_sub->id == task->event_subscription_id) break;
+            if (event_sub && event_sub->active_handlers) event_sub->active_handlers--;
+            task->event_handler_accounted = 0;
+            task->event_subscription_id = 0;
+        }
         runtime_unlock(runtime);
         runtime_release_task_channel_refs(runtime, id);
         flat_vm_destroy(task->vm);
@@ -965,7 +1046,7 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
 int flat_runtime_task_create(FlatRuntime *runtime, const FlatBytecode *bc,
                              const FlatVmOptions *opts, FlatTaskId *out_id) {
     return runtime_task_create_internal(runtime, bc, opts, NULL, FLAT_TASK_CREATED, NULL, 0,
-                                        NULL, NULL, NULL, out_id);
+                                        NULL, NULL, NULL, 0, out_id);
 }
 
 int flat_runtime_event_spawn_next(FlatRuntime *runtime,
@@ -1011,7 +1092,8 @@ int flat_runtime_event_spawn_next(FlatRuntime *runtime,
         rc = -1;
         goto done;
     }
-    if (!sub->head) {
+    if (!sub->head || (sub->dispatch_mode == FLAT_EVENT_DISPATCH_SERIAL &&
+                       sub->active_handlers != 0)) {
         runtime_unlock(runtime);
         rc = 0;
         goto done;
@@ -1035,7 +1117,7 @@ int flat_runtime_event_spawn_next(FlatRuntime *runtime,
     runtime_unlock(runtime);
 
     rc = runtime_task_create_internal(runtime, bc, NULL, handler_label, FLAT_TASK_RUNNABLE,
-                                      args, bound_arg_count + 1, tmp_coll, tmp_pool, NULL,
+                                      args, bound_arg_count + 1, tmp_coll, tmp_pool, NULL, subscription_id,
                                       &task_id);
     runtime_lock(runtime);
     for (sub = runtime->event_subscriptions; sub; sub = sub->next)
@@ -1097,7 +1179,53 @@ static int runtime_task_native_spawn(void *user, uint64_t parent_id, const FlatB
     if (arg_count > 0 && (!args || !source_coll || !source_pool)) return -2;
     return runtime_task_create_internal(runtime, bc, NULL, entry_label, FLAT_TASK_RUNNABLE,
                                         args, arg_count, source_coll, source_pool, source_files,
-                                        out_id);
+                                        0, out_id);
+}
+
+static int runtime_task_native_spawn_for(void *user, uint64_t parent_id, const FlatBytecode *bc,
+                                         uint64_t source_id, const char *source_kind,
+                                         const char *event_name, const char *handler_label,
+                                         const FlatValue *args, size_t arg_count,
+                                         FlatCollectionPool *source_coll, FlatStringPool *source_pool,
+                                         FlatFileTable *source_files, int dispatch_mode,
+                                         uint64_t *out_subscription_id) {
+    FlatRuntime *runtime = (FlatRuntime *)user;
+    FlatTaskRecord *parent;
+    if (!runtime || !bc || !out_subscription_id) return -1;
+    runtime_lock(runtime);
+    parent = runtime_find_task(runtime, parent_id);
+    if (!parent || parent->cleanup_owned || parent->state != FLAT_TASK_RUNNING ||
+        runtime->lifecycle != FLAT_RUNTIME_RUNNING) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime_unlock(runtime);
+    if (dispatch_mode == FLAT_EVENT_DISPATCH_PARALLEL)
+        return flat_runtime_event_subscribe_handler(runtime, source_id, source_kind, event_name,
+                                                    bc, handler_label, args, arg_count,
+                                                    source_coll, source_pool, source_files,
+                                                    out_subscription_id);
+    if (dispatch_mode != FLAT_EVENT_DISPATCH_SERIAL) return -1;
+    return flat_runtime_event_subscribe_handler_mode(runtime, source_id, source_kind, event_name,
+                                                     bc, handler_label, args, arg_count,
+                                                     source_coll, source_pool, source_files,
+                                                     (FlatEventDispatchMode)dispatch_mode,
+                                                     out_subscription_id);
+}
+
+static int runtime_task_native_stop_for(void *user, uint64_t parent_id,
+                                        uint64_t subscription_id) {
+    FlatRuntime *runtime = (FlatRuntime *)user;
+    FlatTaskRecord *parent;
+    if (!runtime || !subscription_id) return -1;
+    runtime_lock(runtime);
+    parent = runtime_find_task(runtime, parent_id);
+    if (!parent || parent->cleanup_owned || parent->state != FLAT_TASK_RUNNING) {
+        runtime_unlock(runtime);
+        return -1;
+    }
+    runtime_unlock(runtime);
+    return flat_runtime_event_unsubscribe(runtime, subscription_id);
 }
 
 static int runtime_task_native_wait(void *user, uint64_t waiter_id, uint64_t target_id) {
@@ -1437,10 +1565,25 @@ int flat_runtime_task_cancel(FlatRuntime *runtime, FlatTaskId id) {
     runtime_abort_task_channel_transactions_locked(runtime, id);
     runtime_release_task_channel_refs_locked(runtime, id);
     task->state = FLAT_TASK_CANCELLED;
+    runtime_event_handler_task_finished_locked(runtime, task);
     task->cleanup_owned = 0;
     runtime_wake_waiters_locked(runtime, id);
     runtime_unlock(runtime);
     return 0;
+}
+
+/* Caller holds scheduler_mutex. A serial subscription advances only after the
+ * previous handler task reaches a terminal state (including cancellation). */
+static void runtime_event_handler_task_finished_locked(FlatRuntime *runtime,
+                                                        FlatTaskRecord *task) {
+    FlatRuntimeEventSubscription *sub;
+    if (!runtime || !task || !task->event_handler_accounted ||
+        task->event_subscription_id == 0) return;
+    for (sub = runtime->event_subscriptions; sub; sub = sub->next)
+        if (sub->id == task->event_subscription_id) break;
+    if (sub && sub->active_handlers) sub->active_handlers--;
+    task->event_handler_accounted = 0;
+    task->event_subscription_id = 0;
 }
 
 /* Caller holds scheduler_mutex. Cancellation becomes terminal only after VM
@@ -1454,6 +1597,7 @@ static void runtime_cancel_commit_locked(FlatRuntime *runtime, FlatTaskRecord *t
     runtime_abort_task_channel_transactions_locked(runtime, task->id);
     runtime_release_task_channel_refs_locked(runtime, task->id);
     task->state = FLAT_TASK_CANCELLED;
+    runtime_event_handler_task_finished_locked(runtime, task);
     task->cancel_requested = 0;
     task->cleanup_owned = 0;
     runtime_wake_waiters_locked(runtime, task->id);
@@ -1483,7 +1627,8 @@ static int runtime_dispatch_one_event_handler(FlatRuntime *runtime) {
         return 0;
     }
     for (sub = runtime->event_subscriptions; sub; sub = sub->next) {
-        if (sub->handler_bc && sub->head && !sub->dispatching && !sub->handler_dispatching) break;
+        if (sub->handler_bc && sub->head && !sub->dispatching && !sub->handler_dispatching &&
+            (sub->dispatch_mode != FLAT_EVENT_DISPATCH_SERIAL || sub->active_handlers == 0)) break;
     }
     if (!sub) { runtime_unlock(runtime); return 0; }
     sub->handler_dispatching = 1;
@@ -1682,6 +1827,8 @@ static int runtime_schedule_internal(FlatRuntime *runtime, uint64_t quantum,
         } else if (runtime_task_is_terminal(task)) {
             task->cancel_requested = 0;
         }
+        if (runtime_task_is_terminal(task))
+            runtime_event_handler_task_finished_locked(runtime, task);
         if (task->state == FLAT_TASK_COMPLETED || task->state == FLAT_TASK_FAILED) {
             runtime_abort_task_channel_transactions_locked(runtime, task->id);
             runtime_release_task_channel_refs_locked(runtime, task->id);

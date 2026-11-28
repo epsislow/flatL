@@ -449,3 +449,12 @@ The host can register/unregister subscriptions, publish a `FlatValue` to all mat
 Archive 360 adds the queue-depth query and worker/event-loop wake notification on successful publication. It does not yet create handler tasks.
 
 This is the broker foundation only. Archive 359 does **not** yet implement FlatL `task.spawnFor()`, handler task creation, serial/parallel policies, or persistent FLEditor sessions. Those are subsequent milestones. Existing `task.spawn()` semantics are unchanged.
+
+
+## Archive 364 — FlatL `task.spawnFor()` native integration
+
+`task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)` and `task.stopFor(subscriptionId)` are exposed through `use native task`. Source IDs remain ordinary numeric values and source kinds are explicit strings; socket transports share the `socket` kind. A subscription ID is separate from task IDs assigned to individual handler executions.
+
+The runtime subscription owns a parsed bytecode snapshot and deep-copied bound arguments. This allows the registering task and its VM to be destroyed without invalidating the handler. Every matching event is dispatched by the scheduler into a fresh normal task/VM/VCX; the event payload is parameter zero and bound arguments follow. `task.stopFor()` unregisters the subscription and discards queued events, but rejects removal while dispatch is in progress.
+
+`flvm[62]` validates native registration, native unregistration, event-first argument binding, automatic scheduler dispatch, and handler execution after the registering root task has been destroyed. This increment still uses the broker's fixed 256-event queue and parallel task creation. Serial mode, `maxActive`, configurable overflow/backpressure and real source adapters remain future work.

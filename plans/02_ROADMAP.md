@@ -157,9 +157,11 @@ Nu intră aici un toolkit UI complet, layout engine sau binding la React.
 
 Scop: asocierea unui block FlatL cu un event source prin `task.spawnFor()`, astfel încât fiecare eveniment să poată crea o execuție FlatL nouă, fără polling și fără a lega Task runtime de un anumit transport.
 
-- [x] Definește primul contract runtime generic: `(sourceId, sourceKind, eventName)` și ownership prin deep-copy în cozi bounded (arhiva 359); integrarea cu task dispatch rămâne deschisă.
-- [ ] Implementează API-ul `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)` și dezînregistrarea handlerului.
-- [ ] Definește modurile `serial` și `parallel`, `maxActive`, coada bounded și overflow/backpressure.
+- [x] Definește primul contract runtime generic: `(sourceId, sourceKind, eventName)` și ownership prin deep-copy în cozi bounded (arhiva 359).
+- [x] Implementează brokerul, dispatch-ul automat în scheduler și API-ul C pentru handler persistent (arhivele 359–363).
+- [x] Expune `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)` și `task.stopFor(subscriptionId)` în FlatL (arhiva 364).
+- [x] Definește și implementează în API-ul C modurile `parallel` (implicit) și `serial`, cu FIFO și cel mult un handler activ pentru abonările seriale (arhiva 365).
+- [ ] Expune selectarea modului în native-ul FlatL și implementează `maxActive`, coada bounded configurabilă și overflow/backpressure.
 - [ ] Definește failure isolation, panic, cancellation, source close și runtime shutdown.
 - [ ] Implementează dispatch generic folosind un event source intern de test.
 - [ ] Integrează un prim event source nativ/socket după alegerea backend-ului de event loop.
@@ -168,7 +170,7 @@ Scop: asocierea unui block FlatL cu un event source prin `task.spawnFor()`, astf
 
 Capabilitățile trebuie raportate explicit per platformă: TCP/UDP raw sunt disponibile numai pe backend-uri native; browser WASM poate expune WebSocket, SSE, Fetch completion, timer și UI events prin API-urile browserului. Nu se emulează raw TCP/UDP în browser.
 
-Contractul conceptual stabilit pentru `task.spawnFor()` este `task.spawnFor(sourceId, sourceKind, eventName, #handler, arg1, ...)`: `sourceId` este NUMBER, iar `sourceKind` este explicit. Toate transporturile din `sockets` folosesc același kind `'socket'`; WebSocket/TCP/UDP rămân detalii ale adaptorului sockets. Nu introducem obiecte sau resurse OO. Ordinea și criteriile detaliate, inclusiv testarea exclusiv prin `bin/run_tests` și `test/cases/`, sunt în [66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md](66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md). Implementarea începe cu infrastructura generică runtime de înregistrare/livrare a evenimentelor; semantica existentă `task.spawn`, `task.wait` și `task.result` trebuie să rămână neschimbată.
+Contractul conceptual stabilit pentru `task.spawnFor()` este `task.spawnFor(sourceId, sourceKind, eventName, #handler, arg1, ...)`: `sourceId` este NUMBER, iar `sourceKind` este explicit. Toate transporturile din `sockets` folosesc același kind `'socket'`; WebSocket/TCP/UDP rămân detalii ale adaptorului sockets. Nu introducem obiecte sau resurse OO. Ordinea și criteriile detaliate, inclusiv testarea exclusiv prin `bin/run_tests` și `test/cases/`, sunt în [66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md](66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md). Implementarea a început cu infrastructura generică runtime de înregistrare/livrare a evenimentelor; arhiva 364 expune deja API-ul FlatL `spawnFor`/`stopFor`. Semantica existentă `task.spawn`, `task.wait` și `task.result` rămâne neschimbată.
 
 ## Ordine tehnică de lucru
 

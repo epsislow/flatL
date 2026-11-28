@@ -1,0 +1,14 @@
+use native task
+
+#main
+  sub = task.spawnFor(17, 'socket', 'receive', #onEvent, 'bound-arg')
+  stopped = task.spawnFor(18, 'socket', 'receive', #onEvent, 'should-not-run')
+  task.stopFor(stopped)
+  io.outln(sub)
+  io.outln(stopped)
+  OK
+
+#onEvent(event, extra)
+  io.outln(event)
+  io.outln(extra)
+  OK

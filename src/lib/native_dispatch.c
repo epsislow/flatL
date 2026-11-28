@@ -10,6 +10,9 @@ static int flat_native_invoke_inner(uint16_t id, FlatNativeCtx *ctx) {
     if (id == FLAT_NATIVE_TASK_WAIT) return flat_native_task_wait(ctx);
     if (id == FLAT_NATIVE_TASK_STATE) return flat_native_task_state(ctx);
     if (id == FLAT_NATIVE_TASK_RESULT) return flat_native_task_result(ctx);
+    if (id == FLAT_NATIVE_TASK_SPAWN_FOR) return flat_native_task_spawn_for(ctx);
+    if (id == FLAT_NATIVE_TASK_SPAWN_FOR_MODE) return flat_native_task_spawn_for_mode(ctx);
+    if (id == FLAT_NATIVE_TASK_STOP_FOR) return flat_native_task_stop_for(ctx);
     if (id == FLAT_NATIVE_CHANNEL_CREATE) return flat_native_channel_create(ctx);
     if (id == FLAT_NATIVE_CHANNEL_SET) return flat_native_channel_set(ctx);
     if (id == FLAT_NATIVE_CHANNEL_VAR) return flat_native_channel_var(ctx);

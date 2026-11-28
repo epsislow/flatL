@@ -14,6 +14,11 @@ extern "C" {
 
 typedef uint64_t FlatEventSubscriptionId;
 
+typedef enum FlatEventDispatchMode {
+    FLAT_EVENT_DISPATCH_PARALLEL = 0,
+    FLAT_EVENT_DISPATCH_SERIAL = 1
+} FlatEventDispatchMode;
+
 /* The first event-broker increment is deliberately host-driven: source IDs are
  * ordinary numeric values and source_kind identifies their namespace. */
 #define FLAT_RUNTIME_EVENT_QUEUE_MAX 256
@@ -29,7 +34,8 @@ int flat_runtime_event_unsubscribe(FlatRuntime *runtime,
                                    FlatEventSubscriptionId subscription_id);
 /* Register a persistent runtime-owned handler. The handler is dispatched by the
  * scheduler whenever matching events are queued. bound_args are deep-copied at
- * registration and follow the event payload as positional handler parameters. */
+ * registration and follow the event payload as positional handler parameters.
+ * This compatibility entry point selects PARALLEL mode. */
 int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_id,
                                          const char *source_kind, const char *event_name,
                                          const FlatBytecode *bc, const char *handler_label,
@@ -38,6 +44,17 @@ int flat_runtime_event_subscribe_handler(FlatRuntime *runtime, uint64_t source_i
                                          FlatStringPool *source_pool,
                                          struct FlatFileTable *source_files,
                                          FlatEventSubscriptionId *out_subscription_id);
+/* Same as subscribe_handler, with explicit dispatch policy. SERIAL keeps at most
+ * one non-terminal handler task active per subscription; queued events remain FIFO. */
+int flat_runtime_event_subscribe_handler_mode(FlatRuntime *runtime, uint64_t source_id,
+                                              const char *source_kind, const char *event_name,
+                                              const FlatBytecode *bc, const char *handler_label,
+                                              const FlatValue *bound_args, size_t bound_arg_count,
+                                              FlatCollectionPool *source_coll,
+                                              FlatStringPool *source_pool,
+                                              struct FlatFileTable *source_files,
+                                              FlatEventDispatchMode mode,
+                                              FlatEventSubscriptionId *out_subscription_id);
 /* Publish one value to every matching subscription. Values are deep-copied;
  * file handles cannot be published. Returns the number of matching subscriptions,
  * 0 when there are no listeners, -1 on invalid/error, or -2 on queue overflow. */

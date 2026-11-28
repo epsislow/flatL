@@ -2,7 +2,7 @@
 
 **Ultima actualizare:** 2026-11-28  
 **Arhivă de referință:** `flatL-main-351-fleditor-wasm-task-channel.zip`
-**Arhivă curentă:** `flatL-main-356-dom-clone.zip`  
+**Arhivă curentă:** `flatL-main-365-event-serial-dispatch.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 
@@ -21,6 +21,14 @@
 - Existing Task/Channel runtime and FLEditor WASM one-shot Task/Channel runner remain as documented. The one-shot WASM runner is not a persistent event-driven session.
 - Plan 66 now defines the agreed numeric source contract for event-driven dispatch: `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...)`. `sourceId` is a NUMBER, `sourceKind` is explicit, and every sockets transport uses the shared kind `'socket'`. No OO resource objects are introduced. Implementation is starting with generic runtime event registration/delivery; `spawnFor` and socket event delivery are not implemented yet in this checkpoint.
 - Test policy remains unchanged: use `bin/run_tests` and the repository's `test/cases/` format. Do not add Python tests or standalone Python test runners.
+
+## Current checkpoint — archive 364 (2026-11-28)
+
+- Archives 357–363 introduced the event-driven Task plan, numeric source-kind contract, runtime event broker, queue wakeup, event-to-task dispatch, parallel dispatch coverage, and persistent C-level handler registration.
+- Archive 364 exposes `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)` and `task.stopFor(subscriptionId)` as FlatL natives. Source IDs remain NUMBER values; socket transports use the shared `socket` kind. Subscription IDs are distinct from per-event task IDs.
+- Persistent subscriptions own a bytecode snapshot and deep-copied bound arguments, so the registering task VM can be destroyed while the subscription remains active. Events create ordinary isolated tasks through the scheduler; the event payload is parameter 0.
+- `flvm[58-62]` passed (5/5). `make all` passed. Full suite and ASan/UBSan were not run for this checkpoint.
+- Archive 365 adds C runtime dispatch modes `FLAT_EVENT_DISPATCH_PARALLEL` (default) and `FLAT_EVENT_DISPATCH_SERIAL`; serial waits for each handler task to become terminal before dispatching the next FIFO event. `flvm[63]` covers the serial behavior. The FlatL native still defaults to parallel; selecting the mode from FlatL, `maxActive`, configurable queue/overflow policies, source-close/failure semantics, native socket adapters and persistent FLEditor WASM sessions remain open.
 
 ## Ce este prezent în arhiva 252 (bază)
 
@@ -1540,3 +1548,16 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Unsubscribe is blocked during dispatch and releases queued events plus persistent argument copies.
 - Added `flvm[61]` automatic-dispatch integration test. Existing event broker and dispatch tests 58–60 pass.
 - The public FlatL `task.spawnFor()` native, cancellation native, serial mode, maxActive/overflow configuration and source adapters remain pending.
+
+
+### Event-driven tasks — archive 365
+- Added `FlatEventDispatchMode` and `flat_runtime_event_subscribe_handler_mode()` with parallel and serial policies; the existing C registration function remains backward-compatible and defaults to parallel.
+- Serial subscriptions maintain an active-handler count. The scheduler and direct C event-to-task dispatch both enforce one active non-terminal handler task per serial subscription, preserving FIFO event order. Completion, failure and cancellation release the active slot; unsubscribe is rejected while a handler is active.
+- Added `flvm[63]` to verify that a second event remains queued until the first serial handler reaches a terminal state, then is delivered in FIFO order.
+- The FlatL `task.spawnFor()` native still uses parallel mode; native mode options, `maxActive`, configurable overflow/backpressure and source adapters remain pending.
+- Validation: `make -j2 bin/flc bin/flvm` PASS; `flvm[63]` C integration harness PASS. `bin/run_tests` is absent from this supplied workspace, so the selector/full suite was not run.
+
+### Event-driven tasks — archive 366
+- Added `task.spawnForMode(sourceId, sourceKind, eventName, #handler, mode, ...args)` to expose `parallel` and `serial` policies through the FlatL native API.
+- Kept `task.spawnFor()` unchanged and parallel by default, avoiding ambiguity with existing bound arguments.
+- Added `flvm[64]` for native serial-mode FIFO dispatch and bound-argument delivery.

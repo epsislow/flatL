@@ -330,3 +330,38 @@ Added `flvm[61]` to validate automatic scheduler dispatch, event-first argument 
 **Not yet implemented:** the public FlatL `task.spawnFor()` native wrapper, a FlatL cancellation native, serial mode, `maxActive`, configurable overflow policies, and sockets adapters. This increment establishes persistent C-level handler registration and automatic scheduler dispatch, not the complete user-facing API.
 
 Validation: `make -j2 bin/flc bin/flvm` PASS; `flvm[58]`, `flvm[59]`, `flvm[60]`, and new `flvm[61]` C integration harnesses PASS; `make docs` PASS. The supplied workspace does not contain `bin/run_tests`, so the test selector and full suite were not run. Sanitizers were not run.
+
+
+### FlatL native registration (archive 364)
+
+The initial FlatL surface is now implemented:
+
+```flat
+subscriptionId = task.spawnFor(sourceId, sourceKind, eventName, #handler, arg1, ...)
+task.stopFor(subscriptionId)
+
+#handler(event, arg1, ...)
+  -- process one event
+  OK
+```
+
+`spawnFor` returns a runtime-local subscription ID, not a task ID. Each event creates a distinct ordinary task ID. The subscription owns a bytecode snapshot and deep-copied bound arguments, so it outlives the registering task. `stopFor` unregisters it and drops queued events; it is rejected while dispatch is in progress. The initial native integration uses the fixed broker queue capacity (256) and parallel dispatch. `serial`, `maxActive`, configurable queue/overflow behavior, source adapters and persistent WASM sessions remain unimplemented. `flvm[62]` covers native registration/unregistration and delivery after the registering root task is destroyed.
+
+
+## Archive 365 — serial event-handler dispatch in the runtime C API
+
+Archive 365 adds `FlatEventDispatchMode` with `FLAT_EVENT_DISPATCH_PARALLEL` and `FLAT_EVENT_DISPATCH_SERIAL`, plus `flat_runtime_event_subscribe_handler_mode()`. The existing `flat_runtime_event_subscribe_handler()` remains source-compatible and selects parallel mode by default.
+
+For serial subscriptions, the scheduler dispatches the next FIFO event only when the previous handler task reaches a terminal state (COMPLETED, FAILED, or CANCELLED). The runtime tracks active handler tasks by subscription; task completion and both cancellation paths release that accounting. `unsubscribe` is rejected while any handler task is still active. The lower-level `flat_runtime_event_spawn_next()` also enforces the serial gate, so callers cannot bypass the policy.
+
+Added `flvm[63]` to publish two events and verify that the second remains queued until the first handler finishes, then verify FIFO output. The FlatL `task.spawnFor()` native still defaults to parallel mode; native mode selection syntax, `maxActive`, configurable queue/overflow policy and source adapters remain pending.
+
+## Archive 366 — FlatL native dispatch-mode selection
+
+Added `task.spawnForMode(sourceId, sourceKind, eventName, #handler, mode, ...args)` as an explicit, backward-compatible mode-selecting companion to `task.spawnFor()`. `mode` must be `'parallel'` or `'serial'`. The original `task.spawnFor()` signature and behavior remain unchanged, avoiding ambiguity between a mode string and a legitimate first bound argument.
+
+Both native entry points use the same runtime registration bridge. `parallel` allows multiple handler tasks from one subscription to be active; `serial` permits only one non-terminal handler task and preserves FIFO delivery. Added `flvm[64]` to verify the FlatL native serial mode with two published events, including event-first and bound-argument delivery.
+
+Still pending: `maxActive`, configurable queue capacity/overflow policy, explicit source-adapter APIs, and persistent FLEditor WASM sessions.
+
+Validation: `make -j2 bin/flc bin/flvm` PASS; the new serial C integration harness PASS. `bin/run_tests` is not present in the supplied archive, so the repository test selector and full suite were not run.

@@ -161,3 +161,96 @@ int flat_native_task_result(FlatNativeCtx *ctx) {
     *ctx->io_status = FLAT_IO_OK;
     return 0;
 }
+
+
+static int task_spawn_for_impl(FlatNativeCtx *ctx, int with_mode) {
+    char buf[FGIR_MAX_LINE];
+    char *parts[FGIR_MAX_PARAMS + 5];
+    char label[FGIR_MAX_LABEL];
+    char source_kind[32];
+    char event_name[48];
+    char mode_name[16] = "parallel";
+    FlatValue values[FGIR_MAX_PARAMS];
+    FlatValue kind_value, event_value;
+    uint64_t source_id = 0, subscription_id = 0;
+    int part_count = 0, arg_count, arg_start, parsed = 0, i, rc;
+    int dispatch_mode = 0;
+    memset(values, 0, sizeof values);
+    memset(&kind_value, 0, sizeof kind_value);
+    memset(&event_value, 0, sizeof event_value);
+    if (!ctx || !ctx->task_bridge || !ctx->task_bridge->spawn_for || !ctx->bc ||
+        !ctx->inner || !ctx->out || !ctx->io_status || !ctx->pool || !ctx->coll ||
+        !ctx->vars || task_split_spawn_args((snprintf(buf, sizeof buf, "%s", ctx->inner), buf),
+                                             parts, FGIR_MAX_PARAMS + 5, &part_count) != 0 ||
+        part_count < 4 || task_parse_id(ctx, parts[0], &source_id) != 0)
+        return task_fail(ctx, "task.spawnFor.args");
+    if (flat_native_parse_rhs(ctx, parts[1], &kind_value) != 0 ||
+        flat_value_get_cstr(&kind_value, ctx->pool, source_kind, sizeof source_kind) != 0 ||
+        flat_native_parse_rhs(ctx, parts[2], &event_value) != 0 ||
+        flat_value_get_cstr(&event_value, ctx->pool, event_name, sizeof event_name) != 0) {
+        flat_native_parse_rhs_release(ctx, &kind_value);
+        flat_native_parse_rhs_release(ctx, &event_value);
+        return task_fail(ctx, "task.spawnFor.source");
+    }
+    flat_native_parse_rhs_release(ctx, &kind_value);
+    flat_native_parse_rhs_release(ctx, &event_value);
+    if (strlen(parts[3]) >= sizeof label) return task_fail(ctx, "task.spawnFor.handler");
+    snprintf(label, sizeof label, "%s", parts[3]);
+    if (label[0] != '#' || label[1] == '\0' || strpbrk(label, " \t\r\n"))
+        return task_fail(ctx, "task.spawnFor.handler");
+    arg_start = 4;
+    if (with_mode) {
+        FlatValue mode_value;
+        memset(&mode_value, 0, sizeof mode_value);
+        if (part_count < 5 || flat_native_parse_rhs(ctx, parts[4], &mode_value) != 0 ||
+            flat_value_get_cstr(&mode_value, ctx->pool, mode_name, sizeof mode_name) != 0) {
+            flat_native_parse_rhs_release(ctx, &mode_value);
+            return task_fail(ctx, "task.spawnForMode.mode");
+        }
+        flat_native_parse_rhs_release(ctx, &mode_value);
+        if (strcmp(mode_name, "parallel") == 0) dispatch_mode = 0;
+        else if (strcmp(mode_name, "serial") == 0) dispatch_mode = 1;
+        else return task_fail(ctx, "task.spawnForMode.mode");
+        arg_start = 5;
+    }
+    arg_count = part_count - arg_start;
+    if (arg_count >= FGIR_MAX_PARAMS) return task_fail(ctx, "task.spawnFor.args");
+    for (i = 0; i < arg_count; ++i) {
+        if (flat_native_parse_rhs(ctx, parts[i + arg_start], &values[i]) != 0) {
+            int j;
+            for (j = 0; j < parsed; ++j) flat_native_parse_rhs_release(ctx, &values[j]);
+            return task_fail(ctx, "task.spawnFor.value");
+        }
+        parsed++;
+    }
+    rc = ctx->task_bridge->spawn_for(ctx->task_bridge->user, ctx->task_bridge->task_id,
+                                     ctx->bc, source_id, source_kind, event_name, label,
+                                     values, (size_t)arg_count, ctx->coll, ctx->pool,
+                                     ctx->file_tbl, dispatch_mode, &subscription_id);
+    for (i = 0; i < parsed; ++i) flat_native_parse_rhs_release(ctx, &values[i]);
+    if (rc == -2) return task_fail(ctx, "task.spawnFor.args");
+    if (rc != 0 || subscription_id == 0) return task_fail(ctx, "task.spawnFor.failed");
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_number(ctx->out, (double)subscription_id);
+}
+
+int flat_native_task_spawn_for(FlatNativeCtx *ctx) {
+    return task_spawn_for_impl(ctx, 0);
+}
+
+int flat_native_task_spawn_for_mode(FlatNativeCtx *ctx) {
+    return task_spawn_for_impl(ctx, 1);
+}
+
+int flat_native_task_stop_for(FlatNativeCtx *ctx) {
+    uint64_t subscription_id;
+    int rc;
+    if (!ctx || !ctx->task_bridge || !ctx->task_bridge->stop_for || !ctx->inner ||
+        !ctx->out || !ctx->io_status || task_parse_id(ctx, ctx->inner, &subscription_id) != 0)
+        return task_fail(ctx, "task.stopFor.id");
+    rc = ctx->task_bridge->stop_for(ctx->task_bridge->user, ctx->task_bridge->task_id,
+                                    subscription_id);
+    if (rc != 0) return task_fail(ctx, "task.stopFor.invalid");
+    *ctx->io_status = FLAT_IO_OK;
+    return flat_value_set_bool(ctx->out, 1);
+}

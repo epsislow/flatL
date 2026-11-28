@@ -1,0 +1,13 @@
+use native task
+
+#main
+  sub = task.spawnForMode(17, 'socket', 'receive', #onEvent, 'serial', 'bound')
+  parallelSub = task.spawnForMode(18, 'socket', 'receive', #onEvent, 'parallel', 'parallel-bound')
+  io.outln(sub)
+  io.outln(parallelSub)
+  OK
+
+#onEvent(event, extra)
+  io.outln(event)
+  io.outln(extra)
+  OK
