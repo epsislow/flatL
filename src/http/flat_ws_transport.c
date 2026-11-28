@@ -45,6 +45,20 @@ int flat_ws_prepare(void) {
     return state > 0 ? 0 : -1;
 }
 
+int flat_ws_supported(void) {
+    const curl_version_info_data *info;
+    const char * const *protocol;
+    int have_ws = 0, have_wss = 0;
+    if (flat_ws_prepare() != 0) return 0;
+    info = curl_version_info(CURLVERSION_NOW);
+    if (!info || !info->protocols) return 0;
+    for (protocol = info->protocols; *protocol; ++protocol) {
+        if (strcmp(*protocol, "ws") == 0) have_ws = 1;
+        else if (strcmp(*protocol, "wss") == 0) have_wss = 1;
+    }
+    return have_ws && have_wss;
+}
+
 #define FLAT_WS_WAIT_READ 1
 #define FLAT_WS_WAIT_WRITE 2
 
@@ -100,6 +114,10 @@ int flat_ws_connect(const char *url, long timeout_ms,
     }
     if (flat_ws_prepare() != 0) {
         set_error(error, error_capacity, "libcurl initialization failed");
+        return -1;
+    }
+    if (!flat_ws_supported()) {
+        set_error(error, error_capacity, "linked libcurl build does not enable ws/wss protocols");
         return -1;
     }
     connection = (FlatWsConnection *)calloc(1, sizeof *connection);

@@ -1139,3 +1139,12 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 - [x] Implement `wait` backpressure, `dropOldest`, `dropNewest` and `error` overflow behavior in the runtime event broker.
 - [x] Preserve C compatibility APIs and keep `task.spawnForMode()` / `task.spawnForLimit()` as compatibility helpers.
 - [ ] Add host source adapters (sockets first), source-close/error lifecycle, and persistent FLEditor WASM sessions.
+
+
+### Event-driven Task / WebSocket progress (archive 371)
+
+- [x] Add a native WebSocket background reader and bridge lifecycle/frame events into the runtime broker using the shared `socket` source kind.
+- [x] Preserve text/binary opcode in `{ opcode, data }` payloads; answer ping frames with pong; retry `wait` backpressure without entering the VM.
+- [ ] Expose native FlatL `sockets.wsConnect()`, `sockets.wsSend()` and `sockets.wsClose()` over the host adapter and numeric socket ID registry.
+- [ ] Validate a live handshake on a libcurl build that advertises `ws` and `wss`; the current environment's libcurl 8.10.1 does not advertise these protocols.
+- [ ] Add the browser WebSocket host bridge and persistent FLEditor WASM runtime session.

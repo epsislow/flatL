@@ -23,6 +23,8 @@ typedef struct FlatWsMessage {
 
 /* Initialize libcurl's process-wide state. Safe to call more than once. */
 int flat_ws_prepare(void);
+/* Returns 1 only when the linked libcurl build advertises ws and wss protocols. */
+int flat_ws_supported(void);
 
 /* Connect to ws:// or wss://. This performs the HTTP Upgrade handshake and
  * returns a connected transport. timeout_ms must be positive. */

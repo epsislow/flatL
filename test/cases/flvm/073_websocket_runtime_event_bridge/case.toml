@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 73
+desc = "native WebSocket reader publishes open, receive and close through runtime socket events"
+kind = "exec"
+cmd = "make -s test-websocket-runtime-event-bridge TEST_BIN={tmp}/websocket_runtime_event_bridge_test && {tmp}/websocket_runtime_event_bridge_test"
+expect_exit = 0
+stdout_contains = "websocket-runtime-event-bridge-validated"

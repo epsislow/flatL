@@ -1590,3 +1590,14 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 - Archive 370 adds a synchronous native libcurl WebSocket transport foundation in `include/flat_ws_transport.h` / `src/http/flat_ws_transport.c`. It supports `ws://` and `wss://`, text/binary frame send, bounded individual-frame receive, timeouts and explicit close. Native HTTP-enabled builds require libcurl 7.86.0+.
 - This is not yet the FlatL `sockets` module: no `sockets.wsConnect()` native, numeric socket ID registry, background/event-loop reader, or direct publication to `FlatRuntime` exists yet. Browser WebSocket support also remains a separate JS bridge.
 - Validation: `make -j2 all` PASS; `make docs` PASS; `bin/run_tests 'flvm[71-72]' -v -e` PASS (2/2). No live WebSocket echo test, full suite, WASM build or ASan/UBSan validation was run.
+
+
+## Archive 371 — WebSocket runtime event bridge
+
+- Added `FlatWsEventClient` host API with background reader thread, synchronized send and explicit stop/join lifecycle.
+- Reader publishes `socket/open`, `socket/receive`, `socket/close`, and `socket/error` through the existing runtime socket adapter. Receive payload is `{ opcode: NUMBER, data: STRING }`; ping/pong are handled by transport.
+- `wait` queue backpressure is retried by retaining the current frame; no FlatL VM is executed by the transport thread.
+- Runtime must outlive all event clients; stop clients before runtime destruction.
+- Added `flvm[73]` loopback WebSocket integration test, with a capability fallback for libcurl builds without `ws`/`wss`. Current linked libcurl 8.10.1 lacks both protocols, so only the explicit unsupported-capability path was exercised here.
+- Validation: `make -j2 all`, `make docs`, `bin/run_tests 'flvm[71-73]' -v -e` PASS (3/3). Live WebSocket path, full suite and ASan/UBSan remain unverified.
+- Still pending: FlatL `sockets` native functions and ID registry, browser WebSocket bridge, persistent FLEditor WASM runtime session.

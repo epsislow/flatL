@@ -1,6 +1,6 @@
 # Event-driven Task Dispatch and Host Event Sources — roadmap
 
-**Status:** generic runtime broker, persistent FlatL `task.spawnFor()` handlers and configurable dispatch/queue policies are implemented through archive 368. Archive 369 adds the shared socket event adapter; archive 370 adds a synchronous native libcurl WebSocket transport foundation. The asynchronous transport-to-runtime bridge, FlatL `sockets` module, browser WebSocket bridge and persistent FLEditor WASM sessions remain pending.
+**Status:** generic runtime broker, persistent FlatL `task.spawnFor()` handlers and configurable dispatch/queue policies are implemented through archive 368. Archive 369 adds the shared socket event adapter; archive 370 adds the synchronous libcurl WebSocket transport; archive 371 adds a background reader that publishes WebSocket lifecycle/frame events into the runtime broker. The FlatL `sockets` native module, browser WebSocket bridge and persistent FLEditor WASM sessions remain pending. The linked libcurl build must advertise both `ws` and `wss`; version alone does not guarantee protocol support.
 **Baseline:** archive 358 (`flatL-main-358-event-source-kind-contract.zip`).
 **Next plan:** generic source adapters, beginning with sockets, plus persistent event-driven FLEditor WASM sessions.
 
@@ -14,7 +14,7 @@ The intended public concept is `task.spawnFor()`. Its parameter order is now agr
  task.spawnFor(sourceId, sourceKind, eventName, #handler, arg1, arg2, ...)
 ```
 
-This is a proposed API contract for implementation; exact event-payload binding, options syntax, registration cancellation and lifecycle details remain to be finalized and tested. The first parameter is the ordinary numeric ID used by FlatL modules, not an object or an OO resource handle.
+The public API contract is implemented and documented in `doc_src/natives/task.md`; the event payload is the first handler parameter, followed by bound arguments. The options OBJECT configures `mode`, `maxActive`, `queueCapacity` and `overflow`. The first parameter is the ordinary numeric ID used by FlatL modules, not an object or an OO resource handle.
 
 This mechanism must not be limited to sockets. Candidate sources include TCP/UDP/WebSocket, timers, browser UI events, SSE, filesystem watchers and asynchronous HTTP completion events, subject to host capabilities.
 
@@ -52,7 +52,7 @@ wsId = sockets.wsConnect(...)
 handlerId = task.spawnFor(wsId, 'socket', 'receive', #onMessage, userId)
 ```
 
-The handler block receives the event payload plus the explicitly bound values. The exact event-payload parameter position and options representation are not frozen by this roadmap. Bound user arguments must retain the existing `task.spawn()` positional binding and deep-copy semantics.
+The handler block receives the event payload plus the explicitly bound values. The event payload is the first handler parameter; bound arguments follow it. The optional options OBJECT follows the handler block before bound arguments. Bound user arguments must retain the existing `task.spawn()` positional binding and deep-copy semantics.
 
 ## 4. Execution policies
 
@@ -84,7 +84,7 @@ The API needs an explicit bounded queue capacity and an overflow policy. Candida
 - `dropNewest`: discard the newly arriving event.
 - `error`: fail/disable the registration and expose a diagnostic.
 
-These names are candidates, not a finalized API. The design must define counters/diagnostics for dropped events and ensure that browser event callbacks never block the browser event loop waiting for FlatL work.
+These policies are exposed by the current `task.spawnFor()` options OBJECT. The runtime broker returns `-2` for `wait` so host adapters can retain and retry the pending event; browser callbacks must not block the browser event loop.
 
 For sources that cannot be paused (notably browser WebSocket message delivery), a finite queue limit and deterministic overflow behavior are mandatory.
 
@@ -409,3 +409,13 @@ Added `include/flat_ws_transport.h` and `src/http/flat_ws_transport.c`, using li
 The implementation is compiled only in native HTTP-enabled builds. The Emscripten Fetch path does not compile it; browser WebSocket requires a separate JS bridge. This is intentionally a synchronous transport primitive: it does not yet allocate FlatL `socketId` values, run a background reader, publish runtime events, or expose `sockets.wsConnect()`/`wsSend()`/`wsClose()`.
 
 Added `flvm[72]` for libcurl initialization, URL scheme validation, refused-connection cleanup, and API argument validation. `flvm[71-72]` PASS; `make -j2 all` PASS; `make docs` PASS. A live WebSocket echo handshake, ASan/UBSan and WASM build have not yet been validated.
+
+
+## Archive 371 — native WebSocket runtime event bridge
+
+- Added `include/flat_ws_event_client.h` and `src/http/flat_ws_event_client.c`. The host can start a WebSocket client with an ordinary numeric `socketId`; a background reader publishes `open`, `receive`, `close` and `error` through the shared `sourceKind = 'socket'` adapter.
+- Receive payloads are OBJECT values `{ opcode: NUMBER, data: STRING }`; text and binary frames remain distinguishable. Ping is answered with pong and pong is consumed internally.
+- `overflow = 'wait'` is handled by retaining the current frame and retrying publication rather than blocking the VM or executing FlatL code on the reader thread.
+- The host must stop every WebSocket event client before destroying its `FlatRuntime`; this lifetime rule is documented. This remains a C host API, not yet `sockets.wsConnect()` in FlatL.
+- Added `flvm[73]`. On hosts whose libcurl advertises `ws` and `wss`, it runs a local loopback WebSocket handshake and checks open/receive/close delivery. When the linked libcurl lacks either protocol, it verifies an explicit early capability error instead of hanging on a handshake that cannot be supported.
+- Validation in the current environment: `make -j2 all`, `make docs`, and `bin/run_tests 'flvm[71-73]' -v -e` PASS (3/3). The local libcurl 8.10.1 build does not advertise `ws`/`wss`, so the live handshake branch could not be exercised here. Full suite and ASan/UBSan remain pending.
