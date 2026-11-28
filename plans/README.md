@@ -2,7 +2,9 @@
 
 Acest director păstrează deciziile de arhitectură, direcția și ordinea de implementare pentru Task Runtime, Channel și viitoarea integrare UI. Scopul este ca lucrul să poată continua într-o conversație nouă fără să depindă de istoricul chatului.
 
-**Ultima arhivă:** `flatL-main-354-dom-set-html.zip`. Arhiva 351 Task/Channel WASM este validată de utilizator atât prin `make fleditor-wasm-test` în Termux, cât și prin rularea manuală a celor trei exemple în browser. Arhiva 352 implementează `#panic.#target.any`, inclusiv caller-chain și child-task VM. Lucrul se oprește după etapa B; UI Runtime și validarea worker pool pe Windows rămân pentru o etapă viitoare.
+**Ultima arhivă:** `flatL-main-356-dom-clone.zip`. Arhiva 351 Task/Channel WASM este validată de utilizator atât prin `make fleditor-wasm-test` în Termux, cât și prin rularea manuală a celor trei exemple în browser. Arhiva 352 implementează `#panic.#target.any`, inclusiv caller-chain și child-task VM. Lucrul se oprește după etapa B; UI Runtime și validarea worker pool pe Windows rămân pentru o etapă viitoare.
+
+- [66 — Event-driven Task Dispatch and Host Event Sources](66_EVENT_DRIVEN_TASKS_AND_EVENT_SOURCES.md): roadmap pentru `task.spawnFor()`, surse generice de evenimente, politici serial/parallel, sockets native și browser/WASM.
 
 ## Documente
 
@@ -58,6 +60,8 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 ## Reguli pentru continuarea lucrului
 
+- Testele automatizate se scriu exclusiv în framework-ul existent `bin/run_tests`, în structura `test/cases/`; nu se creează teste sau runner-e Python.
+
 1. Citește acest director înainte de orice modificare majoră la Task Runtime.
 2. Verifică sursele curente; documentele descriu intenția și constatările la momentul arhivei indicate, nu înlocuiesc auditul codului actual.
 3. Păstrează API-urile și semantica marcate ca decizii agreate. Orice schimbare trebuie documentată aici.
@@ -68,7 +72,7 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 
 **Baseline inițial:** `flatL-main-251-task-runtime-foundation.zip`, derivată din `flatL-main(57).zip`.
 
-**Ultima arhivă:** `flatL-main-354-dom-set-html.zip`.
+**Ultima arhivă:** `flatL-main-356-dom-clone.zip`.
 
 **Ultimul checkpoint validat de utilizator:** arhiva 351 Task/Channel WASM este validată prin `make fleditor-wasm-test` în Termux și prin rularea manuală a celor trei exemple în browser. Arhiva 352 implementează block-scoped panic `.any`, cu fallback pe caller chain și test în child-task VM. Validarea focalizată este 9/9 pentru `panic[1-9]` și 1/1 pentru `flvm[57]`; `make all -j2` și `make docs` trec. Suita completă nu este declarată PASS. Lucrul se oprește după etapa B, conform deciziei utilizatorului.
 

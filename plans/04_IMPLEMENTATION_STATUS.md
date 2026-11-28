@@ -2,7 +2,7 @@
 
 **Ultima actualizare:** 2026-11-28  
 **Arhivă de referință:** `flatL-main-351-fleditor-wasm-task-channel.zip`
-**Arhivă curentă:** `flatL-main-355-dom-create-frag.zip`  
+**Arhivă curentă:** `flatL-main-356-dom-clone.zip`  
 **Baseline de proiect:** `flatL-main(57).zip`
 
 
@@ -13,6 +13,14 @@
 - Added `panic[7-9]` for current-block native panic, nested-call caller recovery and explicit `PANIC`; added `flvm[57]` to validate recovery inside a spawned task VM.
 - Focused validation: `make all -j2` PASS; `bin/run_tests 'panic[1-9]' -v -e` PASS (9/9); `bin/run_tests 'flvm[57]' -v -e` PASS (1/1). Full default suite is not claimed.
 - Planned work is paused after stage B as requested. No UI Runtime or further worker-pool expansion is started in this checkpoint.
+
+## Current checkpoint — archive 356 (2026-11-28)
+
+- Archives 353–356 extend the Lexbor-backed DOM API with node creation/mutation, contextual `dom.setHtml`, `dom.createFrag`, and shallow/deep `dom.clone`; see plans 63–65.
+- The user reports the full default test suite completed on archive 356: `Passed: 1176 Failed: 0 Total: 1176`.
+- Existing Task/Channel runtime and FLEditor WASM one-shot Task/Channel runner remain as documented. The one-shot WASM runner is not a persistent event-driven session.
+- Plan 66 now defines the agreed numeric source contract for event-driven dispatch: `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...)`. `sourceId` is a NUMBER, `sourceKind` is explicit, and every sockets transport uses the shared kind `'socket'`. No OO resource objects are introduced. Implementation is starting with generic runtime event registration/delivery; `spawnFor` and socket event delivery are not implemented yet in this checkpoint.
+- Test policy remains unchanged: use `bin/run_tests` and the repository's `test/cases/` format. Do not add Python tests or standalone Python test runners.
 
 ## Ce este prezent în arhiva 252 (bază)
 

@@ -1,0 +1,278 @@
+# Event-driven Task Dispatch and Host Event Sources — roadmap
+
+**Status:** design roadmap only; no runtime/API implementation in this plan revision.
+**Baseline:** archive 356 (`flatL-main-356-dom-clone.zip`).
+**Proposed next plan:** `task.spawnFor()` and a generic event-source contract, with sockets as the first transport integration.
+
+## 1. Goal
+
+Add an event-driven way to start FlatL task executions when an external event arrives. The event source owns event production; the Task runtime owns dispatch, task creation, scheduling, concurrency policy, queueing and handler lifecycle.
+
+The intended public concept is `task.spawnFor()`. Its parameter order is now agreed at the conceptual level:
+
+```flat
+ task.spawnFor(sourceId, sourceKind, eventName, #handler, arg1, arg2, ...)
+```
+
+This is a proposed API contract for implementation; exact event-payload binding, options syntax, registration cancellation and lifecycle details remain to be finalized and tested. The first parameter is the ordinary numeric ID used by FlatL modules, not an object or an OO resource handle.
+
+This mechanism must not be limited to sockets. Candidate sources include TCP/UDP/WebSocket, timers, browser UI events, SSE, filesystem watchers and asynchronous HTTP completion events, subject to host capabilities.
+
+## 2. Existing foundations (archive 356)
+
+- `task.spawn(#block, arg1, ...)` already creates a child task and binds positional values to the named parameters declared by the block.
+- Spawn arguments are evaluated in the parent and copied into the child's private VM/VCX. Scalars, strings, LIST and OBJECT are supported by the existing deep-copy rules; VM-local file handles are not transferable.
+- The cooperative scheduler already supports task lifecycle, WAITING/RUNNABLE transitions, `task.wait`, cancellation, task result metadata and scheduler-aware Channel operations.
+- Channels provide explicit shared data and transaction semantics; they are useful for application-level coordination but should not be mandatory for every event handler.
+- FLEditor currently uses `flat_runtime_run_scheduled()` as a **one-shot** adapter. It creates a runtime, executes runnable tasks, then cleans up the runtime before returning. It does not expose a persistent runtime session that can accept later browser events.
+- The browser/WASM execution path is single-threaded cooperative execution. It does not start pthread workers or browser Web Workers.
+- The existing `task.spawn()` and `task.wait()` semantics must remain unchanged.
+
+## 3. Proposed `spawnFor` model
+
+An event registration associates:
+
+1. `sourceId`: a NUMBER containing the source's ordinary FlatL numeric ID (the same value model used by `vcxId`, `csvId`, `taskId`, `chanId`, and IDs accepted by `mem.infoResId()`);
+2. `sourceKind`: an explicit namespace/category string used to interpret `sourceId`;
+3. `eventName`: the event selected from that source;
+4. a FlatL block to execute;
+5. zero or more bound user arguments, following the same positional binding/deep-copy rules as `task.spawn()`;
+6. an execution policy and bounded-queue policy.
+
+There are no resource objects, object methods, or implicit type inference from an ID. The pair `(sourceKind, sourceId)` identifies the source in the same explicit way that `mem.infoResId(id, kind)` requires the caller to provide the kind.
+
+For the `sockets` module, **all socket transports use `sourceKind = 'socket'`**. WebSocket, TCP and UDP are transport details owned by `sockets`; `task` does not need separate kinds such as `sockets.ws`, `sockets.tcp` or `sockets.udp`. `eventName` distinguishes events such as `receive`, `close` and `error`.
+
+When an event is delivered, the runtime creates a new task execution for the handler. The event payload is supplied through a documented binding convention (to be decided: first block parameter before bound arguments, or an explicit event object in a defined parameter position). Each event execution gets its own VM/VCX as a normal spawned task. The source does not execute application handler code itself.
+
+Illustrative syntax only:
+
+```flat
+wsId = sockets.wsConnect(...)
+handlerId = task.spawnFor(wsId, 'socket', 'receive', #onMessage, userId)
+```
+
+The handler block receives the event payload plus the explicitly bound values. The exact event-payload parameter position and options representation are not frozen by this roadmap. Bound user arguments must retain the existing `task.spawn()` positional binding and deep-copy semantics.
+
+## 4. Execution policies
+
+Two policies are required for the initial design:
+
+### `serial`
+
+- At most one handler task for a registration is active at a time.
+- Events arriving while a handler is active are queued in arrival order.
+- The next handler task starts after the previous one reaches a terminal state.
+- The queue is bounded; overflow behavior must be explicit.
+- This is the default candidate because it preserves event processing order and avoids accidental concurrent mutation.
+
+### `parallel`
+
+- An event can create a new handler task while earlier handler tasks are still active.
+- `maxActive` limits the number of active handler tasks for this registration.
+- When the limit is reached, events follow the configured bounded-queue overflow policy.
+- Event arrival order is preserved in dispatch order, but task completion order is not guaranteed.
+
+The initial design should not promise unlimited task creation or unbounded event buffering.
+
+## 5. Queue and backpressure policy
+
+The API needs an explicit bounded queue capacity and an overflow policy. Candidates:
+
+- `wait`: apply backpressure where the source supports pausing; otherwise the host adapter must define how pending events are retained within a bounded limit.
+- `dropOldest`: discard the oldest queued event and retain the newest.
+- `dropNewest`: discard the newly arriving event.
+- `error`: fail/disable the registration and expose a diagnostic.
+
+These names are candidates, not a finalized API. The design must define counters/diagnostics for dropped events and ensure that browser event callbacks never block the browser event loop waiting for FlatL work.
+
+For sources that cannot be paused (notably browser WebSocket message delivery), a finite queue limit and deterministic overflow behavior are mandatory.
+
+## 6. Registration lifecycle
+
+The design must specify:
+
+- registration handle returned by `spawnFor`;
+- explicit unregister/cancel operation (candidate: `task.cancelFor(handlerId)`);
+- behavior when the source closes or errors;
+- whether unregister prevents new dispatch only or also cancels already-running handler tasks;
+- source-handle lifetime and ownership (the registration must not outlive a destroyed source silently);
+- runtime shutdown behavior and cleanup of queued event payloads;
+- handler failure policy (one failed event task must not silently disable unrelated registrations);
+- panic and cancellation behavior;
+- whether one event name can have multiple independent registrations.
+
+Prefer explicit lifecycle semantics over implicit destruction. Do not overload `task.cancel()` for registration handles unless the type distinction is unambiguous.
+
+## 7. Event-source abstraction
+
+The Task runtime should depend on a small generic host event-source contract, not on socket-specific types. The source namespace is explicit (`sourceKind`) and the source identifier is a plain NUMBER (`sourceId`). For sockets, every transport registers under the shared kind `socket`; the socket adapter resolves the numeric ID to its own internal connection record. This follows the existing FlatL convention used by `mem.infoResId(id, kind)` and avoids introducing resource objects.
+
+A source adapter should be able to:
+
+- register/unregister an event subscription;
+- deliver an event name plus owned payload to the runtime;
+- notify source close/error;
+- stop delivery during runtime shutdown;
+- transfer or copy payloads safely into task-owned VM values.
+
+The runtime then applies `serial`/`parallel`, queueing and task lifecycle rules uniformly. Socket, timer, UI and filesystem modules remain responsible for their platform-specific event production.
+
+This is a conceptual boundary; archive 356 does not yet contain a generic event-source registry or external-I/O wait/wakeup API.
+
+## 8. Platform capability matrix (proposed)
+
+| Event source / transport | Native hosts | FLEditor WASM/browser | Notes |
+|---|---|---|---|
+| TCP client | Yes, subject to OS/network policy | No raw TCP | Native socket backend only |
+| TCP listener/server | Yes | No | Browser cannot bind/listen on TCP ports |
+| UDP | Yes, subject to OS/network policy | No raw UDP | Native socket backend only |
+| WebSocket client | Yes, via native networking backend | Yes, browser `WebSocket` API | First socket event-source target |
+| WebSocket server | Possible with native implementation/library | No direct browser server | Separate server-side capability |
+| SSE client | Possible via HTTP streaming backend | Yes, browser `EventSource` where permitted | Server-to-client event stream |
+| HTTP Fetch completion | Native HTTP backend | Yes, browser Fetch with existing host constraints | One-shot async completion event, not a socket |
+| Browser UI events | Not a generic native capability | Yes, through a future browser UI bridge | Depends on the UI Runtime/DOM bridge |
+| Timer events | Yes | Yes | Host timer adapter; define cancellation and drift semantics |
+| Filesystem watcher | Platform-specific | No general host filesystem watcher in browser sandbox | Native capability varies by OS |
+| WebTransport | Platform/library dependent | Browser support where available and secure-context/server requirements are met | Later candidate, not initial scope |
+
+Capability checks must be explicit. Unsupported operations should return a stable, documented error rather than emulate raw TCP/UDP in browser code.
+
+## 9. FLEditor/WASM architecture prerequisites
+
+The current one-shot `flat_runtime_run_scheduled()` adapter cannot by itself support long-lived socket/UI/timer registrations: it destroys task and Channel records when the initial runnable queue drains.
+
+Before browser event sources can work, design a persistent WASM runtime session with explicit host lifecycle, likely operations equivalent to:
+
+- create/start a session and root task;
+- run a bounded cooperative scheduler slice;
+- enqueue a host event into the session;
+- resume scheduling after the event;
+- query completion/diagnostics;
+- cancel and destroy the session deterministically.
+
+The exact C and JavaScript APIs are not specified here. The design must address multiple editor runs, runtime isolation, reentrancy, JS callback ownership, memory growth, event payload lifetime, session replacement, and cleanup when the editor stops or recompiles a program.
+
+Browser callbacks should enqueue owned event data and request a scheduler pump. They must not call into a currently-running VM reentrantly. No polling loop per socket and no browser Web Worker requirement is assumed for the initial single-threaded implementation.
+
+## 10. Implementation sequence
+
+1. **Freeze the FlatL value contract** — use `sourceId` NUMBER + explicit `sourceKind` + `eventName` + handler block + bound arguments. The socket namespace is exactly `socket` for WebSocket, TCP and UDP. No OO resources or inferred kinds.
+2. **Implement generic runtime registration and event delivery** — add runtime-owned registration records and a host-facing event enqueue/delivery API. Keep source adapters outside the scheduler and ensure event payload ownership is explicit.
+3. **Implement Task dispatch semantics** — create one normal isolated task per delivered event, preserving `task.spawn()` parameter binding and deep-copy behavior; add serial/parallel and bounded queue policy.
+4. **Add deterministic runtime tests** using the existing `bin/run_tests` framework and `test/cases/` conventions. Cover ID/kind validation, event order, payload copying, task isolation, queue limits, cancellation and shutdown.
+5. **Add the first source adapter** — sockets, initially WebSocket where supported, then native TCP/UDP as the host backend permits.
+6. **Add persistent FLEditor WASM sessions** before browser event sources; the current one-shot adapter is not sufficient.
+
+Implementation must proceed in small independently tested stages. Do not introduce a sockets-only scheduler path. Do not add Python tests or standalone Python runners.
+
+## 11. Native host event loop
+
+Native TCP/UDP/WebSocket adapters need a host event notification mechanism. The implementation must not create one busy polling loop per socket or one thread per connection by default.
+
+Select a portable abstraction after an audit of current platform/build support. Candidate backends include epoll on Linux, kqueue where available, IOCP on Windows, and an appropriate fallback for other supported targets. The first implementation may deliberately support a smaller platform set, but capability reporting and unsupported behavior must be explicit.
+
+The event loop must hand events to the runtime without executing FlatL blocks on the I/O callback thread. The scheduler remains the owner of FlatL task execution. Cross-thread event enqueue/wakeup synchronization must be specified and tested before enabling real worker concurrency for event delivery.
+
+## 11. Phased implementation roadmap
+
+### Phase A — contract and audit (no code until approved)
+
+- Audit `FlatRuntime`, task creation/terminal cleanup, scheduler wakeup, Channel ownership and the FLEditor one-shot runner.
+- Define the generic event-source C contract and ownership of event payloads.
+- Finalize `spawnFor` argument binding, return handle and unregister semantics.
+- Finalize `serial`/`parallel`, `maxActive`, queue capacity and overflow behavior.
+- Define failure, panic, cancellation, source-close and runtime-shutdown semantics.
+- Define native versus browser capability reporting.
+
+Exit: API/spec and ownership/lifecycle diagrams reviewed; existing `task.spawn` behavior unchanged.
+
+### Phase B — generic runtime dispatch (no sockets dependency)
+
+- Implement event registration and event-to-task dispatch for an internal/test event source.
+- Implement serial dispatch and FIFO bounded queue.
+- Implement parallel dispatch and `maxActive`.
+- Implement unregister, source close, handler failure isolation and runtime cleanup.
+- Add deterministic diagnostics for queued, dispatched, dropped and active events.
+
+Exit: all behavior is exercised through the existing `bin/run_tests` harness and `test/cases/` conventions.
+
+### Phase C — native event source and sockets
+
+- Implement a first native socket event source (recommend WebSocket client or TCP stream, after transport/backend selection).
+- Add TCP/UDP only where the native backend and test environment support them.
+- Validate close/error, partial reads, message boundaries, backpressure, queue overflow and cleanup.
+
+Exit: focused native tests plus full relevant suites; no Python tests or standalone Python test runners.
+
+### Phase D — persistent FLEditor WASM session
+
+- Replace the one-shot-only limitation with an explicitly managed persistent session API while preserving the existing one-shot `flat_wasm_run()` compatibility path.
+- Add browser event enqueue and non-reentrant scheduler pumping.
+- Add WebSocket client, SSE, timer and (after UI Runtime design) UI event adapters.
+- Validate session restart/stop, multiple sequential runs, queued events, close/error, memory limits and cleanup.
+
+Exit: Node/browser smoke tests integrated with existing project test/build targets and manual FLEditor examples; no Python-based tests.
+
+### Phase E — additional sources
+
+- Filesystem watcher on native hosts.
+- HTTP async completion integration if the existing HTTP module is extended beyond its current request model.
+- WebTransport where platform support and practical use justify it.
+
+## 12. Testing policy
+
+All automated tests must use the repository's existing `bin/run_tests` framework and established `test/cases/<category>/<id>/` case layout, including the existing case metadata/fixtures conventions. Do not create Python tests, Python runners, or a parallel test framework.
+
+Test layers should include:
+
+- focused task/event runtime cases for registration, argument binding, serial order, parallel concurrency, maxActive, queue overflow and cancellation;
+- source adapter cases for message/open/close/error and payload ownership;
+- lifecycle/failure cases for panic, handler failure, source close, runtime cancel/destroy and repeated sessions;
+- WASM smoke tests integrated with existing Makefile targets and the current Node/browser harness conventions;
+- manual FLEditor examples for interactive behavior.
+
+Run focused categories first, then broader relevant suites. A full-suite result is reported only when `bin/run_tests` completes and reports its final totals.
+
+## 13. Out of scope for the first implementation
+
+- browser raw TCP/UDP sockets;
+- browser WebSocket server;
+- mandatory Channel use for every event handler;
+- callbacks executed directly inside host I/O callbacks;
+- unbounded event queues or unbounded parallel task creation;
+- automatic shared mutable state between event tasks;
+- browser Web Workers or pthreads as a prerequisite;
+- promise/callback syntax changes to the FlatL language;
+- silently changing the existing `task.spawn`, `task.wait` or `task.result` contract.
+
+## 14. Current decisions and open questions
+
+Agreed direction from design discussion:
+
+- Public API direction: `task.spawnFor(sourceId, sourceKind, eventName, #handler, ...args)`.
+- `sourceId` is a NUMBER; it is not an object or an OO resource.
+- `sourceKind` is explicit, following the `mem.infoResId(id, kind)` convention.
+- Every socket transport uses the common `sourceKind = 'socket'`; transport differences stay inside the sockets adapter.
+- It is generic over event sources, not specific to WebSocket or sockets.
+- A new event creates a new FlatL task execution.
+- Initial execution modes: `serial` and `parallel`.
+- `maxActive` is needed to bound parallel handler executions.
+- Event queues must be bounded and overflow behavior explicit.
+- Native and browser backends expose different capabilities; raw TCP/UDP are not available in browser WASM.
+- WebSocket is a first-class browser event source candidate.
+- Tests must use `bin/run_tests` and the existing `test/cases/` format; no Python tests.
+
+Still open:
+
+- exact `spawnFor` syntax and options representation;
+- event payload binding order relative to bound spawn arguments;
+- default mode, queue capacity and overflow policy;
+- whether `wait` overflow can pause each source or must degrade to bounded host buffering;
+- registration cancellation versus cancellation of already-running handler tasks;
+- source-handle ownership and event payload type mapping;
+- native event-loop backend and supported OS matrix;
+- persistent FLEditor WASM session C/JS API;
+- whether event source adapters should be exposed as `sockets`, `timer`, `ui`, `fs.watch`, or other module APIs.
+
+No item in this document claims implementation or test completion. This is a roadmap for a future design and implementation phase.
