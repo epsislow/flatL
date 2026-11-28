@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 81
+desc = "publishing an event from an external producer wakes an idle runtime worker"
+kind = "exec"
+cmd = "{root}/bin/flc -o {tmp}/runtime_event_worker_wakeup.fb {root}/test/cases/flvm/081_runtime_event_worker_wakeup/program.fl && make -s test-runtime-event-worker-wakeup TEST_BIN={tmp}/runtime_event_worker_wakeup_test && {tmp}/runtime_event_worker_wakeup_test {tmp}/runtime_event_worker_wakeup.fb"
+expect_exit = 0
+stdout_contains = "runtime-event-worker-wakeup-ok"

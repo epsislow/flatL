@@ -206,7 +206,7 @@ HTTP_CFLAGS =
 HTTP_LIBS =
 ENSURE_LIBZ_1 =
 else
-HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_curl.c src/http/flat_ws_transport.c src/http/flat_ws_event_client.c src/http/flat_ws_server_transport.c src/http/flat_ws_server_frames.c src/http/flat_ws_server_registry.c
+HTTP_SRC = src/lib/mod_http.c src/lib/mod_sockets.c src/common/flat_http_boundary.c src/http/flat_http_curl.c src/http/flat_ws_transport.c src/http/flat_ws_event_client.c src/http/flat_ws_server_transport.c src/http/flat_ws_server_frames.c src/http/flat_ws_server_registry.c src/common/flat_io_reactor.c
 HTTP_CFLAGS ?= $(shell pkg-config --cflags libcurl 2>/dev/null)
 HTTP_LIBS ?= $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
 # MSYS2 UCRT64: libcurl PE imports libz-1.dll; mingw zlib package ships zlib1.dll.
@@ -1192,3 +1192,15 @@ test-websocket-server-frames:
 test-websocket-server-registry:
 	@test -n "$(TEST_BIN)" || (echo "TEST_BIN is required" >&2; exit 2)
 	$(CC) $(CFLAGS) -pthread -Iexternal/hash -Iinclude -o $(TEST_BIN) test/cases/flvm/079_websocket_server_registry/websocket_server_registry_test.c src/http/flat_ws_server_registry.c src/http/flat_ws_server_transport.c src/http/flat_ws_server_frames.c src/common/flat_hash.c external/hash/WjCryptLib_Md5.c external/hash/WjCryptLib_Sha1.c external/hash/WjCryptLib_Sha256.c external/hash/WjCryptLib_Sha512.c $(LDFLAGS)
+
+.PHONY: test-io-reactor
+test-io-reactor:
+	$(CC) $(CFLAGS) -pthread -Iinclude -o $(TEST_BIN) test/cases/flvm/080_io_reactor/io_reactor_test.c src/common/flat_io_reactor.c $(LDFLAGS)
+
+.PHONY: test-runtime-event-worker-wakeup
+test-runtime-event-worker-wakeup:
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(FLVM_TEST_EXTRA_CPPFLAGS) -pthread -Iinclude -o $(TEST_BIN) test/cases/flvm/081_runtime_event_worker_wakeup/runtime_event_worker_wakeup_test.c $(FLVM_TEST_COMMON_SRC) $(VM_EXTRA_LIBS) $(HTTP_LIBS) -lm
+
+.PHONY: test-runtime-websocket-ownership
+test-runtime-websocket-ownership:
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(LDFLAGS) $(FLVM_TEST_EXTRA_CPPFLAGS) -pthread -Iinclude -o $(TEST_BIN) test/cases/flvm/082_runtime_websocket_ownership/runtime_websocket_ownership_test.c $(FLVM_TEST_COMMON_SRC) $(VM_EXTRA_LIBS) $(HTTP_LIBS) -lm

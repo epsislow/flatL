@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 82
+desc = "FlatRuntime owns WebSocket registry and reactor lifecycle"
+kind = "exec"
+cmd = "make -s test-runtime-websocket-ownership TEST_BIN={tmp}/runtime_websocket_ownership_test && {tmp}/runtime_websocket_ownership_test"
+expect_exit = 0
+stdout_contains = "runtime-websocket-ownership-ok"

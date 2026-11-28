@@ -91,3 +91,65 @@ reactor, or provide `sockets.wsListen()` / `sockets.wsStop()`. The host currentl
 drives accept and receive. See `plans/70_WEBSOCKET_SERVER_REGISTRY_LIFECYCLE.md`.
 
 Run the focused native server tests with `bin/run_tests 'flvm[76-79]' -v -e`.
+
+## Portable I/O reactor and runtime event wakeup (archive 392)
+
+`flat_io_reactor.h` introduces a reusable readiness abstraction for native
+networking. The initial backend uses `poll()` on POSIX and `WSAPoll()` on
+Windows. It supports add/modify/remove, READ/WRITE/ERROR/HANGUP notifications,
+and a private wake channel (nonblocking pipe on POSIX, loopback UDP socket pair
+on Windows). Registrations carry opaque 64-bit tokens rather than exposing
+file descriptors as application identities. A caller must validate returned
+tokens against its live registry because a removal racing with an in-progress
+wait may produce one already-snapshotted stale event. The owner must join the
+wait thread before destroying the reactor.
+
+The reactor is deliberately readiness-only: it does not execute FlatL code or
+publish runtime values. The future networking loop will translate readiness
+into transport work, then publish through the generic runtime event broker.
+The scheduler remains responsible for creating and running handler tasks.
+
+The event-source audit also found that publishing a runtime event did not wake
+worker-mode schedulers blocked on the ready queue. `flat_runtime_event_publish()`
+now wakes workers after successful queue publication and after releasing the
+runtime lock. Registering a persistent handler also wakes workers because the
+subscription may receive replayed `open`/`receive` events. `flvm[81]` verifies
+that a worker waiting idle is woken by an external producer and dispatches the
+handler without an unrelated task wake.
+
+The `poll`/`WSAPoll` backend is a portable baseline. Linux `epoll`, BSD/macOS
+`kqueue`, and Windows IOCP remain possible optimized implementations behind
+the same API; none is claimed by this increment.
+
+Run the focused checks with:
+
+```sh
+bin/run_tests 'flvm[76-81]' -v -e
+```
+
+## FlatRuntime ownership boundary (archive 393)
+
+When native WebSocket support is enabled, each `FlatRuntime` now owns one
+`FlatWsServerRegistry` and one `FlatIoReactor`. Runtime-scoped host operations
+are declared in `flat_runtime_ws_server.h`: listen, accept, upgrade, send,
+receive, close peer and close listener. The runtime destroys the registry
+before destroying the reactor, so any descriptors still owned by the registry
+are closed before the reactor's wake channel and registration storage are
+released. The host must continue to prevent new API calls from racing with
+`flat_runtime_destroy()`, consistent with the general runtime lifetime contract.
+
+This increment is intentionally an ownership/API-boundary step, not the
+asynchronous server loop. These runtime wrappers still call the synchronous
+registry operations; the reactor does not yet monitor the listener or peers.
+There is no background I/O thread, no server-generated socket event publication,
+and no FlatL `sockets.wsListen()` / `sockets.wsStop()` implementation yet.
+New listener/accept and peer I/O operations are rejected once runtime shutdown
+starts, while close operations remain available to release resources.
+
+`flvm[82]` verifies runtime-owned listener creation, explicit close, repeated
+ephemeral binds, and implicit cleanup of a listener left open at runtime
+destruction. Run focused checks with:
+
+```sh
+bin/run_tests 'flvm[76-82]' -v -e
+```

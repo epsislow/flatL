@@ -1279,3 +1279,28 @@ The FLEditor one-shot WASM runner now keeps a completed root run alive while eve
 - [ ] Expose FlatL `sockets.wsListen()` / `sockets.wsStop()` and add multi-client FlatL E2E coverage.
 
 **Archive 391 boundary:** transport ownership and teardown are implemented, but this registry is not yet FlatRuntime-owned and does not publish Task events. Accept and receive are host-driven; there is no background I/O reactor. See `plans/70_WEBSOCKET_SERVER_REGISTRY_LIFECYCLE.md`.
+
+## Native WebSocket server / generic I/O checkpoint — archive 392
+
+Archive 392 adds the reusable `FlatIoReactor` readiness API with POSIX `poll`
+and Windows `WSAPoll` backends, plus cross-thread wake channels. It also fixes
+a scheduler wakeup gap: successful runtime event publication and handler
+subscription replay now wake worker-mode schedulers after releasing the runtime
+lock. `flvm[80]` covers reactor readiness/modify/remove/wake and `flvm[81]`
+proves an idle worker dispatches an externally published event. This is not yet
+a FlatRuntime-owned WebSocket server or a background accept/read/write loop.
+The next step is to define the server-side event payloads and bridge reactor
+readiness to the transport registry while preserving registry ownership,
+backpressure, and scheduler-only VM execution. Optimized epoll/kqueue/IOCP
+backends remain future work.
+
+### Archive 393 — FlatRuntime-owned WebSocket server resources
+- [x] Make native FlatRuntime own one WebSocket registry and one generic I/O reactor.
+- [x] Add runtime-scoped C wrappers for listen, accept, upgrade, send, receive and close operations.
+- [x] Reject new listener/peer I/O operations after runtime shutdown begins while retaining explicit close operations.
+- [x] Destroy the server registry before the reactor during runtime teardown; verify implicit listener cleanup.
+- [ ] Register listener descriptors with the reactor and add a single runtime-owned I/O service thread.
+- [ ] Implement nonblocking accept and incremental HTTP Upgrade/frame state machines.
+- [ ] Add outgoing queues/backpressure and publish peer lifecycle/data events to the socket event broker.
+
+**Archive 393 boundary:** FlatRuntime now owns the registry and reactor resources, but the wrappers still delegate to the synchronous registry. No server descriptor is registered with the reactor yet, and no background I/O loop or FlatL `sockets.wsListen()` exists. See `plans/72_RUNTIME_OWNED_WEBSOCKET_SERVER.md`.

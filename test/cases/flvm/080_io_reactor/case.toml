@@ -1,0 +1,7 @@
+suite = "flvm"
+id = 80
+desc = "portable I/O reactor readiness, modify/remove, and cross-thread wake"
+kind = "exec"
+cmd = "make -s test-io-reactor TEST_BIN={tmp}/io_reactor_test && {tmp}/io_reactor_test"
+expect_exit = 0
+stdout_contains = "io-reactor-ok"

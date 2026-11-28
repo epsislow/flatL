@@ -3,6 +3,11 @@
 #include "flat_runtime_socket.h"
 #include "flat_native_mods.h"
 #if FLAT_WITH_WEBSOCKET
+#include "flat_io_reactor.h"
+#include "flat_ws_server_registry.h"
+#include "flat_runtime_ws_server.h"
+#endif
+#if FLAT_WITH_WEBSOCKET
 #include "flat_ws_event_client.h"
 #endif
 #include "flat_vcx.h"
@@ -111,6 +116,8 @@ struct FlatRuntime {
     FlatMutex scheduler_mutex;
 #if FLAT_WITH_WEBSOCKET
     FlatMutex socket_mutex;
+    FlatIoReactor *io_reactor;
+    FlatWsServerRegistry *ws_server_registry;
     FlatRuntimeSocketEntry *sockets;
     size_t socket_count;
     uint64_t next_socket_id;
@@ -804,6 +811,9 @@ int flat_runtime_event_subscribe_handler_config(FlatRuntime *runtime, uint64_t s
     runtime->event_subscription_count++;
     *out_subscription_id = sub->id;
     runtime_unlock(runtime);
+    /* A handler subscription may have received replayed open/receive events.
+     * Wake worker-mode schedulers after releasing the runtime lock. */
+    (void)flat_ready_queue_wake_all(&runtime->ready_queue);
     return 0;
 fail_sub:
     runtime_event_subscription_destroy(sub);
@@ -996,6 +1006,10 @@ int flat_runtime_event_publish(FlatRuntime *runtime, uint64_t source_id,
     }
     free(prepared);
     runtime_unlock(runtime);
+    /* External producers (network reactors, host callbacks) can publish while
+     * worker threads are asleep. The event broker is scheduler input, so make
+     * the worker condition observable only after the queue mutation is visible. */
+    (void)flat_ready_queue_wake_all(&runtime->ready_queue);
     return (int)matched;
 publish_fail:
     runtime_unlock(runtime);
@@ -1074,9 +1088,27 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         free(runtime);
         return NULL;
     }
+    runtime->io_reactor = flat_io_reactor_create();
+    if (!runtime->io_reactor) {
+        (void)flat_mutex_destroy(&runtime->socket_mutex);
+        (void)flat_mutex_destroy(&runtime->scheduler_mutex);
+        free(runtime);
+        return NULL;
+    }
+    runtime->ws_server_registry = flat_ws_server_registry_create();
+    if (!runtime->ws_server_registry) {
+        (void)flat_io_reactor_destroy(runtime->io_reactor);
+        runtime->io_reactor = NULL;
+        (void)flat_mutex_destroy(&runtime->socket_mutex);
+        (void)flat_mutex_destroy(&runtime->scheduler_mutex);
+        free(runtime);
+        return NULL;
+    }
 #endif
     if (flat_ready_queue_init(&runtime->ready_queue, 16) != 0) {
 #if FLAT_WITH_WEBSOCKET
+        (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
+        (void)flat_io_reactor_destroy(runtime->io_reactor);
         (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1096,6 +1128,8 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
             (void)flat_ready_queue_close(&runtime->ready_queue);
             (void)flat_ready_queue_destroy(&runtime->ready_queue);
 #if FLAT_WITH_WEBSOCKET
+            (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
+            (void)flat_io_reactor_destroy(runtime->io_reactor);
             (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
             (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1108,6 +1142,8 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
             (void)flat_ready_queue_close(&runtime->ready_queue);
             (void)flat_ready_queue_destroy(&runtime->ready_queue);
 #if FLAT_WITH_WEBSOCKET
+            (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
+            (void)flat_io_reactor_destroy(runtime->io_reactor);
             (void)flat_mutex_destroy(&runtime->socket_mutex);
 #endif
             (void)flat_mutex_destroy(&runtime->scheduler_mutex);
@@ -1118,6 +1154,11 @@ FlatRuntime *flat_runtime_create(const FlatHostConfig *config) {
         flat_host_config_destroy(&runtime->host);
         (void)flat_ready_queue_close(&runtime->ready_queue);
         (void)flat_ready_queue_destroy(&runtime->ready_queue);
+#if FLAT_WITH_WEBSOCKET
+        (void)flat_ws_server_registry_destroy(runtime->ws_server_registry);
+        (void)flat_io_reactor_destroy(runtime->io_reactor);
+        (void)flat_mutex_destroy(&runtime->socket_mutex);
+#endif
         (void)flat_mutex_destroy(&runtime->scheduler_mutex);
         free(runtime);
         return NULL;
@@ -2928,6 +2969,60 @@ int flat_runtime_ws_close(FlatRuntime *runtime, uint64_t id) {
 size_t flat_runtime_socket_count(FlatRuntime *runtime) { (void)runtime; return 0; }
 #endif
 
+#if FLAT_WITH_WEBSOCKET
+int flat_runtime_ws_server_listen(FlatRuntime *runtime, const char *host,
+                                  uint16_t port, int backlog,
+                                  uint64_t *out_listener_id, uint16_t *out_bound_port,
+                                  char *error, unsigned long error_capacity) {
+    if (!runtime || !runtime->ws_server_registry ||
+        flat_runtime_lifecycle(runtime) != FLAT_RUNTIME_RUNNING) return -1;
+    return flat_ws_server_registry_listen(runtime->ws_server_registry, host, port,
+        backlog, out_listener_id, out_bound_port, error, error_capacity);
+}
+int flat_runtime_ws_server_accept(FlatRuntime *runtime, uint64_t listener_id,
+                                  long timeout_ms, uint64_t *out_peer_id,
+                                  char *error, unsigned long error_capacity) {
+    if (!runtime || !runtime->ws_server_registry ||
+        flat_runtime_lifecycle(runtime) != FLAT_RUNTIME_RUNNING) return -1;
+    return flat_ws_server_registry_accept(runtime->ws_server_registry, listener_id,
+        timeout_ms, out_peer_id, error, error_capacity);
+}
+int flat_runtime_ws_server_upgrade(FlatRuntime *runtime, uint64_t peer_id,
+                                   long timeout_ms, char *error,
+                                   unsigned long error_capacity) {
+    if (!runtime || !runtime->ws_server_registry ||
+        flat_runtime_lifecycle(runtime) != FLAT_RUNTIME_RUNNING) return -1;
+    return flat_ws_server_registry_upgrade(runtime->ws_server_registry, peer_id,
+        timeout_ms, error, error_capacity);
+}
+int flat_runtime_ws_server_send(FlatRuntime *runtime, uint64_t peer_id,
+                                FlatWsServerOpcode opcode, const void *data,
+                                unsigned long length, char *error,
+                                unsigned long error_capacity) {
+    if (!runtime || !runtime->ws_server_registry ||
+        flat_runtime_lifecycle(runtime) != FLAT_RUNTIME_RUNNING) return -1;
+    return flat_ws_server_registry_send(runtime->ws_server_registry, peer_id,
+        opcode, data, length, error, error_capacity);
+}
+int flat_runtime_ws_server_receive(FlatRuntime *runtime, uint64_t peer_id,
+                                   long timeout_ms, unsigned long max_message_bytes,
+                                   FlatWsServerMessage *out_message, char *error,
+                                   unsigned long error_capacity) {
+    if (!runtime || !runtime->ws_server_registry ||
+        flat_runtime_lifecycle(runtime) != FLAT_RUNTIME_RUNNING) return -1;
+    return flat_ws_server_registry_receive(runtime->ws_server_registry, peer_id,
+        timeout_ms, max_message_bytes, out_message, error, error_capacity);
+}
+int flat_runtime_ws_server_close_peer(FlatRuntime *runtime, uint64_t peer_id) {
+    if (!runtime || !runtime->ws_server_registry) return -1;
+    return flat_ws_server_registry_close_peer(runtime->ws_server_registry, peer_id);
+}
+int flat_runtime_ws_server_close_listener(FlatRuntime *runtime, uint64_t listener_id) {
+    if (!runtime || !runtime->ws_server_registry) return -1;
+    return flat_ws_server_registry_close_listener(runtime->ws_server_registry, listener_id);
+}
+#endif
+
 int flat_runtime_destroy(FlatRuntime *runtime) {
     int busy;
 #if FLAT_WITH_WEBSOCKET
@@ -2974,6 +3069,16 @@ int flat_runtime_destroy(FlatRuntime *runtime) {
         }
         free(entry);
     }
+#if FLAT_WITH_WEBSOCKET
+    if (runtime->ws_server_registry) {
+        if (flat_ws_server_registry_destroy(runtime->ws_server_registry) != 0) return -1;
+        runtime->ws_server_registry = NULL;
+    }
+    if (runtime->io_reactor) {
+        if (flat_io_reactor_destroy(runtime->io_reactor) != 0) return -1;
+        runtime->io_reactor = NULL;
+    }
+#endif
     flat_host_config_destroy(&runtime->host);
 #if FLAT_WITH_WEBSOCKET
     if (flat_mutex_destroy(&runtime->socket_mutex) != 0) return -1;

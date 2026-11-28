@@ -161,3 +161,6 @@ Acest director păstrează deciziile de arhitectură, direcția și ordinea de i
 - [57 — FGIR Export Storage Audit](57_FGIR_EXPORT_STORAGE_AUDIT.md): measures and audits the fixed 256-entry export manifest, its `.fmod` consumption boundary, and the isolated dynamic-storage conversion.
 - [58 — FGIR Dynamic Export Storage](58_FGIR_DYNAMIC_EXPORT_STORAGE.md): converts the fixed export manifest to owned geometric storage while preserving `.fmod` behavior and the 256-symbol limit.
 - [59 — FGIR Optional-Native Storage Audit](59_FGIR_OPTIONAL_NATIVE_STORAGE_AUDIT.md): audits the remaining fixed FGIR optional-native union, its relationship to per-unit declarations and the separate bytecode FNAT manifest, and selects an isolated dynamic conversion.
+
+- [70 — WebSocket Server Registry Lifecycle](70_WEBSOCKET_SERVER_REGISTRY_LIFECYCLE.md): ownership, active-operation tracking, interruptible close and deterministic teardown for native WebSocket listeners and peers.
+- [71 — Runtime I/O Reactor and Event Wakeup](71_RUNTIME_IO_REACTOR_AND_EVENT_WAKEUP.md): portable readiness reactor, cross-thread wakeup, scheduler event publication wake semantics, and the planned bridge into the WebSocket server transport.
