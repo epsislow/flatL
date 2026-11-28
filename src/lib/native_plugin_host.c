@@ -1,4 +1,5 @@
 #include "flat_native_plugin.h"
+#include "flat_sockets_native.h"
 #include "flat_native.h"
 #include "flat_native_mod.h"
 #include "flat_native_mods.h"
@@ -300,6 +301,11 @@ static void register_embedded_dom(void) {
 #if FLAT_WITH_HTTP
 static void register_embedded_http(void) {
     flat_native_plugin_register(FLAT_NATIVE_HTTP_CREATE, flat_native_http_create);
+    flat_native_plugin_register(FLAT_NATIVE_SOCKETS_WS_SUPPORTED, flat_native_sockets_ws_supported);
+    flat_native_plugin_register(FLAT_NATIVE_SOCKETS_WS_CONNECT, flat_native_sockets_ws_connect);
+    flat_native_plugin_register(FLAT_NATIVE_SOCKETS_WS_SEND, flat_native_sockets_ws_send);
+    flat_native_plugin_register(FLAT_NATIVE_SOCKETS_WS_SEND_BINARY, flat_native_sockets_ws_send_binary);
+    flat_native_plugin_register(FLAT_NATIVE_SOCKETS_WS_CLOSE, flat_native_sockets_ws_close);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_HEADER, flat_native_http_header);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_REQUEST_BODY, flat_native_http_request_body);
     flat_native_plugin_register(FLAT_NATIVE_HTTP_RESPONSE_BODY, flat_native_http_response_body);

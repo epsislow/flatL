@@ -46,6 +46,12 @@ typedef struct FlatTaskNativeBridge {
     int (*channel_unlock)(void *user, uint64_t task_id, uint64_t channel_id);
     int (*channel_revert)(void *user, uint64_t task_id, uint64_t channel_id);
     int (*channel_destroy)(void *user, uint64_t task_id, uint64_t channel_id);
+    int (*socket_supported)(void *user);
+    int (*socket_connect)(void *user, const char *url, long connect_timeout_ms,
+                          size_t max_frame_bytes, uint64_t *out_socket_id);
+    int (*socket_send)(void *user, uint64_t socket_id, int opcode,
+                       const void *data, size_t length);
+    int (*socket_close)(void *user, uint64_t socket_id);
 } FlatTaskNativeBridge;
 
 #endif

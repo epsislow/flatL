@@ -1,0 +1,21 @@
+use native task
+use native sockets
+
+#main
+  child = task.spawn(#socketProbe)
+  task.wait(child)
+  io.outln('sockets-native-bridge-ok')
+  OK
+
+#socketProbe
+  supported = sockets.wsSupported()
+  io.outln('websocket-supported:')
+  io.outln(supported)
+  OK
+
+#socketApiCompileProbe
+  wsId = sockets.wsConnect('ws://127.0.0.1:9', 2500, 4096)
+  textSent = sockets.wsSend(wsId, 'hello')
+  binarySent = sockets.wsSendBinary(wsId, 'abc')
+  closed = sockets.wsClose(wsId)
+  OK

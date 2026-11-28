@@ -1606,3 +1606,15 @@ Archive 322: added `flvm[49]` for converging wait-graph DAG cancellation stress.
 ### Event sources / sockets — archive 372
 
 Runtime-owned WebSocket registry implemented at the C host boundary. Numeric socket IDs are allocated by `FlatRuntime`; send/close are synchronized; runtime destruction is rejected while registered sockets remain. `flvm[74]` covers the registry lifecycle and capability-dependent WebSocket path. The FlatL `sockets` native module is not yet exposed.
+
+
+### WebSocket FlatL native bridge (archive 373)
+
+Initial FlatL API is available in runtime-owned task VMs: `sockets.wsSupported()`, `sockets.wsConnect(url)`, `sockets.wsSend(socketId, message)`, and `sockets.wsClose(socketId)`. Connection IDs are numeric and event subscriptions continue to use `sourceKind = 'socket'`. The connect handshake is synchronous; text send is supported. A real network handshake and end-to-end receive test still depend on a libcurl build with WebSocket protocol support.
+
+
+Validation update: user-reported archive 372 FLVM suite result: 73 passed, 0 failed. Archive 373 local validation: 75/75 FLVM tests passed.
+
+
+### WebSocket native API follow-up — archive 374
+The sockets native API now supports `sockets.wsSendBinary(socketId, bytes)` in addition to text sends. `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)` accepts optional bounded positive-integer settings (defaults: 10000 ms and 1 MiB). The task-native bridge now carries the frame opcode and connect settings. The existing send timeout remains 10 seconds. A real network round-trip remains pending on a libcurl build with WebSocket protocol support.

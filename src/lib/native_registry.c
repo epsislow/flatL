@@ -391,6 +391,11 @@ static const NativeMeta NATIVES[FLAT_NATIVE_COUNT] = {
     META_SIG("channel", "unlock", "channel.unlock(channelId)"),
     META_SIG("channel", "revert", "channel.revert(channelId)"),
     META_SIG("channel", "destroy", "channel.destroy(channelId)"),
+    META_SIG("sockets", "wsSupported", "sockets.wsSupported()"),
+    META_SIG("sockets", "wsConnect", "sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)"),
+    META_SIG("sockets", "wsSend", "sockets.wsSend(socketId, message)"),
+    META_SIG("sockets", "wsSendBinary", "sockets.wsSendBinary(socketId, bytes)"),
+    META_SIG("sockets", "wsClose", "sockets.wsClose(socketId)"),
 };
 
 int flat_native_is_core_module(const char *mod) {
@@ -432,6 +437,7 @@ int flat_native_is_module_id(const char *mod) {
         FLAT_NATIVE_MODULE_CSV,
         FLAT_NATIVE_MODULE_TASK,
         FLAT_NATIVE_MODULE_CHANNEL,
+        FLAT_NATIVE_MODULE_SOCKETS,
         NULL,
     };
     int i;

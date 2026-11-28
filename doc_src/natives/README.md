@@ -66,6 +66,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | Module | Doc |
 |--------|-----|
 | `http` | [http.md](./http.md) — synchronous HTTP/HTTPS requests |
+| `sockets` | [sockets.md](./sockets.md) — runtime-owned WebSocket connections and event delivery |
 | `dom` | [dom.md](./dom.md) — HTML5 parsing, DOM, CSS selectors |
 | `env` | [env.md](./env.md) — process / override env + program argv |
 | `path` | [path.md](./path.md) — string path join / base / dir / ext / normalize |
@@ -106,6 +107,7 @@ Uses the **`use native` table of the file where the call appears** (not program-
 | `mem` | ✅ | ✅ | |
 | `file` | ✅ | partial | FlEditor: project **MEMFS** (`/fleditor`), not host disk — [file.md](./file.md) |
 | `http` | ✅ | partial | native **libcurl**; WASM **Fetch + Asyncify** + **CORS** — [http.md](./http.md) |
+| `sockets` | 🟡 | initial WebSocket client | native libcurl WebSocket support; runtime task bridge — [sockets.md](./sockets.md) |
 | `dom` | ✅ | ✅ | WASM requires **bundled** Lexbor (`dom_compile=1`) — [dom.md](./dom.md) |
 | `env` | ✅ | partial | WASM: **Settings → Env** / Program args only (no OS `getenv`) — [env.md](./env.md) |
 | `path` | ✅ | ✅ | pure strings; sep via `file.sep` / Settings → Path — [path.md](./path.md) |

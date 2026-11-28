@@ -432,3 +432,25 @@ Added `flvm[74]` to validate registry ownership, event delivery through runtime-
 ## Validation note — archive 370 full suite (user-reported)
 
 The user ran the full default test suite on archive 370 and reported: `Passed: 1191 Failed: 0 Total: 1191` (total test time 2:29.769). This is user-reported validation of archive 370, not a test run performed in this workspace.
+
+
+## Increment 373 — FlatL sockets native bridge
+
+- Added `sockets.wsSupported()`, `sockets.wsConnect(url)`, `sockets.wsSend(socketId, message)` and `sockets.wsClose(socketId)` to the embedded native registry.
+- The operations use the runtime task bridge; socket IDs remain ordinary numeric values and all events use `sourceKind = 'socket'`.
+- `wsConnect` currently performs a synchronous handshake (10 s timeout, 1 MiB maximum frame); incoming events remain asynchronous through the existing reader and event broker.
+- Text send is exposed; binary send, TCP and UDP are not yet exposed.
+- Added an integration test that executes the native capability check from a runtime-owned child task.
+- Standalone VM execution without a runtime task bridge is not supported by these operations yet.
+
+- Validation note: the user reported `bin/run_tests flvm -v -e` on archive 372 with 73/73 passing.
+
+
+### Archive 374 — WebSocket binary send and connection options
+
+- Extended `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)`; defaults remain 10000 ms and 1 MiB, with bounded positive-integer validation.
+- Added `sockets.wsSendBinary(socketId, bytes)` using the binary WebSocket opcode and the FlatL string's stored byte length.
+- Kept `sockets.wsSend()` as the text-frame operation and retained the 10-second send timeout.
+- Extended the task-native bridge to carry connection options and the outgoing frame opcode.
+- Extended the sockets native compile probe to cover the new signatures.
+- A live network round-trip still requires a libcurl build advertising WebSocket support; this increment's automated test validates compilation and bridge/module behavior, not a remote handshake.

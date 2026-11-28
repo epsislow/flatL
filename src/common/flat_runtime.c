@@ -227,6 +227,12 @@ static int runtime_task_native_channel_lock(void *user, uint64_t task_id, uint64
 static int runtime_task_native_channel_unlock(void *user, uint64_t task_id, uint64_t channel_id);
 static int runtime_task_native_channel_revert(void *user, uint64_t task_id, uint64_t channel_id);
 static int runtime_task_native_channel_destroy(void *user, uint64_t task_id, uint64_t channel_id);
+static int runtime_task_native_socket_supported(void *user);
+static int runtime_task_native_socket_connect(void *user, const char *url, long connect_timeout_ms,
+                                              size_t max_frame_bytes, uint64_t *out_id);
+static int runtime_task_native_socket_send(void *user, uint64_t socket_id, int opcode,
+                                           const void *data, size_t length);
+static int runtime_task_native_socket_close(void *user, uint64_t socket_id);
 static FlatChannel *runtime_channel_acquire(FlatRuntime *runtime, FlatChannelId id);
 static FlatChannel *runtime_channel_acquire_for_owner(FlatRuntime *runtime, FlatChannelId id,
                                                        FlatTaskId owner_id);
@@ -1082,6 +1088,10 @@ static int runtime_task_create_internal(FlatRuntime *runtime, const FlatBytecode
     bridge.channel_unlock = runtime_task_native_channel_unlock;
     bridge.channel_revert = runtime_task_native_channel_revert;
     bridge.channel_destroy = runtime_task_native_channel_destroy;
+    bridge.socket_supported = runtime_task_native_socket_supported;
+    bridge.socket_connect = runtime_task_native_socket_connect;
+    bridge.socket_send = runtime_task_native_socket_send;
+    bridge.socket_close = runtime_task_native_socket_close;
     if (flat_vm_set_task_bridge(task->vm, &bridge) != 0) {
         flat_vm_destroy(task->vm);
         free(task);
@@ -2582,6 +2592,26 @@ int flat_runtime_channel_revert(FlatRuntime *runtime, FlatChannelId id, FlatTask
 
 int flat_runtime_channel_destroy(FlatRuntime *runtime, FlatChannelId id) {
     return runtime_channel_destroy_owned(runtime, id, 0);
+}
+
+static int runtime_task_native_socket_supported(void *user) {
+    (void)user;
+    return flat_runtime_ws_supported();
+}
+static int runtime_task_native_socket_connect(void *user, const char *url, long connect_timeout_ms,
+                                              size_t max_frame_bytes, uint64_t *out_id) {
+    char error[256];
+    return flat_runtime_ws_connect((FlatRuntime *)user, url, connect_timeout_ms, max_frame_bytes,
+                                   out_id, error, sizeof error);
+}
+static int runtime_task_native_socket_send(void *user, uint64_t socket_id, int opcode,
+                                           const void *data, size_t length) {
+    char error[256];
+    return flat_runtime_ws_send((FlatRuntime *)user, socket_id, opcode, data, length,
+                                10000, error, sizeof error);
+}
+static int runtime_task_native_socket_close(void *user, uint64_t socket_id) {
+    return flat_runtime_ws_close((FlatRuntime *)user, socket_id);
 }
 
 #if FLAT_WITH_HTTP

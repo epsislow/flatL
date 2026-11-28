@@ -1151,3 +1151,12 @@ The event broker now exposes per-subscription pending depth and wakes the runtim
 
 - [x] Runtime-owned numeric WebSocket registry and lifecycle API (archive 372).
 - [ ] Expose WebSocket connect/send/close through the FlatL `sockets` native module.
+
+- [x] Expose initial FlatL WebSocket operations through the runtime task bridge (`sockets.wsSupported`, `wsConnect`, `wsSend`, `wsClose`).
+- [ ] Validate a real WebSocket handshake and end-to-end `task.spawnFor` receive flow on a libcurl build with `ws`/`wss` enabled.
+
+
+### WebSocket native API follow-up (archive 374)
+- [x] Add binary WebSocket frame sending through `sockets.wsSendBinary(socketId, bytes)`.
+- [x] Make connect timeout and inbound maximum frame size configurable in `sockets.wsConnect(url, connectTimeoutMs?, maxFrameBytes?)`.
+- [ ] Add a live WebSocket round-trip test on a build with libcurl `ws`/`wss` support.
